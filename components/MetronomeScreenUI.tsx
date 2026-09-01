@@ -21,7 +21,7 @@ import { EasterEggQuiz } from "@/components/EasterEggQuiz";
 import { PitchQuizModal } from "@/components/PitchQuizModal";
 import { SubdivisionBar, DragGhost } from "@/components/SubdivisionBar";
 import { StopwatchTimer } from "@/components/StopwatchTimer";
-import { SettingsModal } from "@/components/SettingsModal";
+import { SettingsModal, type SettingsScope } from "@/components/SettingsModal";
 import { SignalGeneratorModal, TuningGuideModal } from "@/components/SignalGeneratorModal";
 import { PracticeBookModal } from "@/components/PracticeBookModal";
 import { WorkUpOverviewModal } from "@/components/WorkUpOverviewModal";
@@ -67,6 +67,7 @@ import { stopAllScoreNotes } from "@/lib/score-audio";
 import * as Haptics from "expo-haptics";
 import { useEasterEggGesture } from "@/hooks/useEasterEggGesture";
 import { usesSharedEasterEggGesture } from "@/lib/easter-egg-gesture";
+import { saveModeKeyBindings } from "@/lib/keyboard-bindings";
 
 type Props = ReturnType<typeof useMetronomeScreen>;
 
@@ -196,6 +197,7 @@ export function MetronomeScreenUI(props: Props) {
   );
   const [pitchQuizVisible, setPitchQuizVisible] = useState(false);
   const [pitchQuizMode, setPitchQuizMode] = useState<PitchQuizMode | null>(null);
+  const [settingsScope, setSettingsScope] = useState<SettingsScope>("global");
   const rapidMicTapRef = useRef<number[]>([]);
   const pitchQuizEntryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -247,6 +249,12 @@ export function MetronomeScreenUI(props: Props) {
     markMenuItemReturn();
     open();
   };
+
+  const openScopedSettings = useCallback((scope: SettingsScope) => {
+    settingsReturnModalRef.current = null;
+    setSettingsScope(scope);
+    openExclusive("settings");
+  }, [openExclusive, settingsReturnModalRef]);
 
   const openModeDial = () => {
     // 사용자가 다이얼에서 새 모드를 고르면 메뉴 복귀 흐름을 벗어난다.
@@ -534,6 +542,7 @@ export function MetronomeScreenUI(props: Props) {
             }}
             onSettings={() => {
               settingsReturnModalRef.current = "menu";
+              setSettingsScope("global");
               openExclusive("settings");
             }}
             onSignalGen={() => {
@@ -838,9 +847,11 @@ export function MetronomeScreenUI(props: Props) {
       {showSettings && (
       <SettingsModal
         visible={showSettings}
+        scope={settingsScope}
         onClose={() => {
           const returnTo = settingsReturnModalRef.current;
           settingsReturnModalRef.current = null;
+          setSettingsScope("global");
           setActiveModal(returnTo);
         }}
         volume={volume}
@@ -934,6 +945,9 @@ export function MetronomeScreenUI(props: Props) {
         onKeyBindingsChange={(kb) => {
           setKeyBindings(kb);
           keyBindingsRef.current = kb;
+          if (settingsScope !== "global") {
+            void saveModeKeyBindings(settingsScope, kb);
+          }
         }}
       />
       )}
@@ -987,6 +1001,7 @@ export function MetronomeScreenUI(props: Props) {
             onReset={handleNoteReset}
             onExitNoteMode={handleExitNoteMode}
             onQueueItemImageChange={handleNoteQueueItemImageChange}
+            onOpenSettings={() => openScopedSettings("note")}
           />
         ) : (
         <>
@@ -1011,6 +1026,7 @@ export function MetronomeScreenUI(props: Props) {
             isPreparing={isPreparing}
             onBeatsChange={updateTimeSignature}
             onTogglePlay={togglePlayPause}
+            onOpenSettings={() => openScopedSettings(barMode ? "bar" : "beat")}
             onPlayLongPress={scoreMode === null && !barMode ? handleBeatQuickSaveOpen : undefined}
             beatTypes={beatTypes}
             onBeatTypeChange={handleBeatTypeChange}
@@ -1527,6 +1543,7 @@ export function MetronomeScreenUI(props: Props) {
         activeEntryId={activeStagePracticeEntryId}
         noteCurrentIndex={noteCurrentIndex}
         onOpenScheduledStart={() => openExclusive("scheduledStart")}
+        onOpenModeSettings={() => openScopedSettings("stage")}
         onQueueSeamlessNext={(next) => { seamlessNextEntryRef.current = next; }}
         onSelectEntry={(entry) => {
           seamlessNextEntryRef.current = null; // 수동 전환 시 예약된 seamless 취소

@@ -249,6 +249,40 @@ test("bar random strategy is restored and included in later settings snapshots",
   expect(savedSettings.at(-1)?.barRandomStrategy).toBe("shuffle-bag");
 });
 
+test("switching modes restores each independent profile without overwriting the destination", async () => {
+  const { loadSettings } = require("@/lib/storage");
+  loadSettings.mockResolvedValueOnce({
+    bpm: 120,
+    beatsPerMeasure: 4,
+    subdivisions: 1,
+    modeSettings: {
+      beat: { volume: 0.25, soundSet: "classic", flashMode: "accent" },
+      bar: { volume: 0.75, soundSet: "woodblock", flashMode: "off" },
+    },
+  });
+
+  const params = buildParams();
+  const { result, rerender } = renderHook(
+    ({ mode }: { mode: "beat" | "bar" }) => useSettings({ ...params, mode }),
+    { initialProps: { mode: "beat" as "beat" | "bar" } },
+  );
+  await waitFor(() => expect(result.current.volume).toBe(0.25));
+
+  rerender({ mode: "bar" });
+  await waitFor(() => {
+    expect(result.current.volume).toBe(0.75);
+    expect(result.current.soundSet).toBe("woodblock");
+    expect(result.current.flashMode).toBe("off");
+  });
+
+  rerender({ mode: "beat" });
+  await waitFor(() => {
+    expect(result.current.volume).toBe(0.25);
+    expect(result.current.soundSet).toBe("classic");
+    expect(result.current.flashMode).toBe("accent");
+  });
+});
+
 test("failed persistence is exposed to the UI and clears after the next success", () => {
   jest.useFakeTimers();
   const params = buildParams();

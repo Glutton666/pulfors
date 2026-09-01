@@ -27,8 +27,10 @@ import { make_styles } from "@/components/SettingsModal.styles";
 import { getTripleOptions, TripleSelector } from "@/components/SettingsModal.helpers";
 import { HelpIcon } from "@/components/HelpIcon";
 import { AnimatedModal } from "@/components/AnimatedModal";
+import type { SettingsScope } from "@/components/SettingsModal";
 
 interface SettingsThemeTabProps {
+  scope: SettingsScope;
   loggingEnabled: boolean;
   onLoggingEnabledChange: (val: boolean) => void;
   landscapeReversed: boolean;
@@ -52,6 +54,7 @@ interface SettingsThemeTabProps {
 }
 
 export function SettingsThemeTab({
+  scope,
   loggingEnabled,
   onLoggingEnabledChange,
   landscapeReversed,
@@ -80,6 +83,9 @@ export function SettingsThemeTab({
   const [showCustomPicker, setShowCustomPicker] = useState(themeColor === "custom");
   const [hexInput, setHexInput] = useState(customHex);
   const [showLoggingInfo, setShowLoggingInfo] = useState(false);
+  const isGlobal = scope === "global";
+  const showsBeatControls = isGlobal || scope === "beat";
+  const showsBarControls = isGlobal || scope === "bar";
 
   const hueTrackRef = React.useRef<View>(null);
   const hueTrackWidthRef = React.useRef(0);
@@ -180,6 +186,7 @@ export function SettingsThemeTab({
 
   return (
     <>
+      {isGlobal && <>
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Ionicons name={themeMode === "day" ? "sunny" : "moon"} size={S.ms(18, 0.4)} color={C.accent} />
@@ -318,8 +325,9 @@ export function SettingsThemeTab({
         )}
       </View>
 
-      <View style={[styles.divider, { backgroundColor: C.border }]} />
+      </>}
 
+      {showsBeatControls && <>
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Ionicons name="image-outline" size={S.ms(18, 0.4)} color={C.accent} />
@@ -424,8 +432,6 @@ export function SettingsThemeTab({
         </Pressable>
       </View>
 
-      <View style={[styles.divider, { backgroundColor: C.border }]} />
-
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Ionicons name="refresh-outline" size={S.ms(18, 0.4)} color={C.accent} />
@@ -457,6 +463,8 @@ export function SettingsThemeTab({
         </View>
       </View>
 
+      </>}
+
       <View style={[styles.divider, { backgroundColor: C.border }]} />
 
       <View style={styles.section}>
@@ -486,8 +494,7 @@ export function SettingsThemeTab({
         </View>
       </View>
 
-      <View style={[styles.divider, { backgroundColor: C.border }]} />
-
+      {showsBarControls && <>
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Ionicons name="layers-outline" size={S.ms(18, 0.4)} color={C.accent} />
@@ -578,6 +585,7 @@ export function SettingsThemeTab({
           })}
         </View>
       </View>
+      </>}
 
       <View style={[styles.divider, { backgroundColor: C.border }]} />
 
@@ -601,6 +609,7 @@ export function SettingsThemeTab({
         <TripleSelector value={hapticMode} onChange={onHapticModeChange} accentColor={C.accent} accentDimColor={C.accentDim} options={TRIPLE_OPTS} />
       </View>
 
+      {isGlobal && <>
       <View style={[styles.divider, { backgroundColor: C.border }]} />
 
       <View style={styles.section}>
@@ -623,6 +632,7 @@ export function SettingsThemeTab({
         </View>
         <Text style={[styles.offsetHint, { color: C.textTertiary }]}>{t("settings", "loggingHint")}</Text>
       </View>
+      </>}
 
       {/* Logging info sub-modal */}
       <AnimatedModal

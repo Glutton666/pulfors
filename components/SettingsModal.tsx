@@ -25,10 +25,13 @@ import { SettingsProfileTab } from "./settings/SettingsProfileTab";
 import { SettingsKeyboardTab } from "./settings/SettingsKeyboardTab";
 
 type SettingsTab = "theme" | "sound" | "profile" | "keyboard";
+export type SettingsScope = "global" | "beat" | "bar" | "note" | "stage";
 
 interface SettingsModalProps {
   visible: boolean;
   onClose: () => void;
+  /** The screen from which settings were opened. Global settings retain the profile tab. */
+  scope?: SettingsScope;
   volume: number;
   onVolumeChange: (volume: number) => void;
   sampleVolume: number;
@@ -83,6 +86,7 @@ interface SettingsModalProps {
 export function SettingsModal({
   visible,
   onClose,
+  scope = "global",
   volume,
   onVolumeChange,
   sampleVolume,
@@ -153,6 +157,12 @@ export function SettingsModal({
     }
   }, [visible]);
 
+  useEffect(() => {
+    if (scope !== "global" && activeTab === "profile") {
+      setActiveTab("theme");
+    }
+  }, [scope, activeTab]);
+
   const playSoundPreview = useCallback((set: SoundSet) => {
     soundPreviewRef.current?.playSoundPreview(set);
   }, []);
@@ -196,8 +206,8 @@ export function SettingsModal({
   const TAB_ITEMS: { key: SettingsTab; icon: string; label: string }[] = [
     { key: "theme", icon: "color-palette-outline", label: t("settings", "themeTab") },
     { key: "sound", icon: "musical-notes-outline", label: t("settings", "soundTab") },
-    { key: "profile", icon: "person-circle-outline", label: t("settings", "profileTab") },
-    ...(Platform.OS === "web" ? [{ key: "keyboard" as SettingsTab, icon: "keypad-outline", label: t("keyboard", "tabLabel") }] : []),
+    ...(scope === "global" ? [{ key: "profile" as SettingsTab, icon: "person-circle-outline", label: t("settings", "profileTab") }] : []),
+    ...(Platform.OS === "web" && scope !== "stage" ? [{ key: "keyboard" as SettingsTab, icon: "keypad-outline", label: t("keyboard", "tabLabel") }] : []),
   ];
 
   const renderTabContent = () => {
@@ -205,6 +215,7 @@ export function SettingsModal({
       case "theme":
         return (
           <SettingsThemeTab
+            scope={scope}
             loggingEnabled={loggingEnabled}
             onLoggingEnabledChange={onLoggingEnabledChange}
             landscapeReversed={landscapeReversed}
@@ -230,6 +241,7 @@ export function SettingsModal({
       case "sound":
         return (
           <SettingsSoundTab
+            scope={scope}
             volume={volume}
             onVolumeChange={onVolumeChange}
             sampleVolume={sampleVolume}
@@ -272,6 +284,7 @@ export function SettingsModal({
           <SettingsKeyboardTab
             keyBindings={keyBindingsProp}
             onKeyBindingsChange={onKeyBindingsChange}
+            scope={scope}
           />
         );
     }

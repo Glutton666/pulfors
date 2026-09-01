@@ -336,6 +336,8 @@ export interface StageModeOverlayProps {
   noSetlistContent?: React.ReactNode;
   /** 재생 버튼 길게 누르기 → 동시 시작 모달 열기 */
   onOpenScheduledStart?: () => void;
+  /** Opens the shared mode-scoped audio, feedback and keyboard settings. */
+  onOpenModeSettings?: () => void;
   /**
    * 현재 항목이 유한(bar-once / note-once)이고 autoAdvance가 켜져 있을 때
    * 다음 항목을 seamless 전환용으로 등록/해제한다.
@@ -379,6 +381,7 @@ export function StageModeOverlay({
   onSelectEntry,
   noSetlistContent,
   onOpenScheduledStart,
+  onOpenModeSettings,
   onQueueSeamlessNext,
 }: StageModeOverlayProps) {
   const { t } = useLanguage();
@@ -1387,6 +1390,19 @@ export function StageModeOverlay({
       >
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.settingsPanelContent}>
           <Text style={[styles.settingsPanelTitle, { color: text }]}>{t("stageMode", "settingsPanel")}</Text>
+          {onOpenModeSettings ? (
+            <Pressable
+              onPress={() => {
+                setSettingsOpen(false);
+                onOpenModeSettings();
+              }}
+              testID="open-stage-mode-settings"
+              style={[styles.segment, { borderColor: btnBdr, marginBottom: 16 }]}
+            >
+              <Ionicons name="options-outline" size={18} color={text} />
+              <Text style={[styles.segmentText, { color: text }]}>{t("settings", "title")}</Text>
+            </Pressable>
+          ) : null}
 
           {/* 테마 */}
           <SettingRow label={t("stageMode", "theme")} textColor={text} faintColor={faint}>

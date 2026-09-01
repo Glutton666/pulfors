@@ -18,7 +18,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { loadSettings, saveSettings } from "@/lib/storage";
-import type { MetronomeSettings, FlashMode, HapticMode, SoundSet } from "@/lib/storage";
+import type { MetronomeSettings, ModeSettings, MetronomeMode, FlashMode, HapticMode, SoundSet } from "@/lib/storage";
 import {
   createDebouncedPersister,
   type DebouncedPersister,
@@ -38,6 +38,8 @@ import type { BarRandomStrategy } from "@/lib/bar-random-session";
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface UseSettingsParams {
+  /** Active profile. Practice and score surfaces intentionally use note settings. */
+  mode?: MetronomeMode;
   /** Metronome engine ref — needed during settings load and update callbacks. */
   engineRef: React.MutableRefObject<MetronomeEngine | null>;
   /**
@@ -176,6 +178,7 @@ export interface UseSettingsResult {
 
 export function useSettings(params: UseSettingsParams): UseSettingsResult {
   const {
+    mode = "beat",
     engineRef, baseBpmRef,
     volumeRef, sampleVolumeRef, beatDenominatorRef,
     noteSampleSoundsRef, clickPCMCacheRef, webClickReadyRef, soundSetRef,
@@ -254,21 +257,48 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
 
   // Snapshot ref — updated inline every render so the persister always reads
   // the latest values when it flushes (debounced async write).
+  const loadedSettingsRef = useRef<MetronomeSettings | null>(null);
+  const snapshotModeRef = useRef(mode);
   const persistSnapshotRef = useRef<MetronomeSettings>({
     bpm, beatsPerMeasure, beatDenominator, subdivisions: 1, subdivisionPattern, beatSubdivisions,
     volume, sampleVolume, soundSet, layerSoundSets, flashMode, hapticMode,
     audioOffsetMs, timerStopMode, landscapeReversed, beatDirection, username,
     barMetronomeChannel, barCellOpacity, barRowHeight, barRandomStrategy,
+    modeSettings: {
+      [mode]: {
+        volume, sampleVolume, soundSet, layerSoundSets, flashMode, hapticMode,
+        audioOffsetMs, timerStopMode, landscapeReversed, beatDirection,
+        barMetronomeChannel, barCellOpacity, barRowHeight, barRandomStrategy,
+      },
+    },
     ...externalSnapshotRef.current,
   });
   // Inline update — runs on every render of useMetronomeScreen.
+  const modeChangedThisRender = snapshotModeRef.current !== mode;
   persistSnapshotRef.current = {
     bpm, beatsPerMeasure, beatDenominator, subdivisions: 1, subdivisionPattern, beatSubdivisions,
     volume, sampleVolume, soundSet, layerSoundSets, flashMode, hapticMode,
     audioOffsetMs, timerStopMode, landscapeReversed, beatDirection, username,
     barMetronomeChannel, barCellOpacity, barRowHeight, barRandomStrategy,
+    modeSettings: modeChangedThisRender
+      ? (persistSnapshotRef.current.modeSettings ?? {})
+      : {
+        ...(persistSnapshotRef.current.modeSettings ?? {}),
+        [mode]: {
+        volume, sampleVolume, soundSet, layerSoundSets, flashMode, hapticMode,
+        audioOffsetMs, timerStopMode, landscapeReversed, beatDirection,
+        barMetronomeChannel, barCellOpacity, barRowHeight, barRandomStrategy,
+        } satisfies ModeSettings,
+      },
     ...externalSnapshotRef.current,
   };
+  snapshotModeRef.current = mode;
+  if (loadedSettingsRef.current) {
+    loadedSettingsRef.current = {
+      ...loadedSettingsRef.current,
+      modeSettings: persistSnapshotRef.current.modeSettings,
+    };
+  }
 
   const persistSettingsRef = useRef<DebouncedPersister<MetronomeSettings> | null>(null);
   if (!persistSettingsRef.current) {
@@ -336,8 +366,20 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
 
   useEffect(() => {
     const loadGeneration = settingsLoadGenerationRef.current;
-    loadSettings().then((settings) => {
+    loadSettings().then((loadedSettings) => {
       if (loadGeneration !== settingsLoadGenerationRef.current) return;
+      loadedSettingsRef.current = loadedSettings;
+      persistSnapshotRef.current = {
+        ...persistSnapshotRef.current,
+        ...loadedSettings,
+        modeSettings: loadedSettings.modeSettings,
+      };
+      // Existing top-level values are the migration defaults for every mode.
+      // A mode profile only overrides the settings that are meaningful for it.
+      const settings = {
+        ...loadedSettings,
+        ...(loadedSettings.modeSettings?.[mode] ?? {}),
+      };
       setBpm(settings.bpm);
       const loadedDenom = settings.beatDenominator ?? 4;
       baseBpmRef.current = Math.round(settings.bpm * (loadedDenom / 4));
@@ -419,6 +461,52 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // mount-only: settings are loaded once on startup
+
+  // Switching modes swaps only the mode-scoped controls. BPM, meter and
+  // subdivision data intentionally stay in the editor/session state.
+  useEffect(() => {
+    const loaded = loadedSettingsRef.current;
+    if (!loaded) return;
+    const profile = loaded.modeSettings?.[mode];
+    if (!profile) return;
+    if (profile.volume !== undefined) {
+      setVolume(profile.volume);
+      volumeRef.current = profile.volume;
+    }
+    if (profile.sampleVolume !== undefined) {
+      setSampleVolume(profile.sampleVolume);
+      sampleVolumeRef.current = profile.sampleVolume;
+    }
+    if (profile.soundSet) {
+      setSoundSet(profile.soundSet);
+      soundSetRef.current = profile.soundSet;
+      clearWebClickBuffers();
+      webClickReadyRef.current = false;
+    }
+    if (profile.layerSoundSets) setLayerSoundSets(profile.layerSoundSets);
+    if (profile.flashMode) {
+      setFlashMode(profile.flashMode);
+      flashModeRef.current = profile.flashMode;
+    }
+    if (profile.hapticMode) {
+      setHapticMode(profile.hapticMode);
+      engineRef.current?.setHapticMode(profile.hapticMode);
+    }
+    if (profile.audioOffsetMs !== undefined) {
+      setAudioOffsetMs(profile.audioOffsetMs);
+      engineRef.current?.setAudioOffsetMs(profile.audioOffsetMs);
+    }
+    if (profile.timerStopMode) setTimerStopMode(profile.timerStopMode);
+    if (profile.landscapeReversed !== undefined) setLandscapeReversed(profile.landscapeReversed);
+    if (profile.beatDirection) setBeatDirection(profile.beatDirection);
+    if (profile.barMetronomeChannel) {
+      setBarMetronomeChannel(profile.barMetronomeChannel);
+      barMetronomeChannelRef.current = profile.barMetronomeChannel;
+    }
+    if (profile.barCellOpacity != null) setBarCellOpacity(profile.barCellOpacity);
+    if (profile.barRowHeight != null) setBarRowHeight(profile.barRowHeight);
+    if (profile.barRandomStrategy) setBarRandomStrategy(profile.barRandomStrategy);
+  }, [mode]);
 
   // ── Sample-volume sideEffect ─────────────────────────────────────────────────
   // Sync existing note-sample player volumes whenever sampleVolume state changes.

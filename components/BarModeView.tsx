@@ -107,6 +107,7 @@ export interface BarModeViewProps {
   onReplayRandomBarSession?: () => void;
   onSaveRandomBarSession?: () => Promise<boolean> | void;
   onApplyRandomBarSession?: () => void;
+  onOpenSettings?: () => void;
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -127,6 +128,7 @@ export function BarModeView({
   noteSamples, noteSampleSources, onNoteRecordRequest, onReorderBar, onInsertBarAfter,
   randomBarSession, onRandomViewportCapacityChange,
   onReplayRandomBarSession, onSaveRandomBarSession, onApplyRandomBarSession,
+  onOpenSettings,
 }: BarModeViewProps) {
   const { t } = useLanguage();
   const S = useScale();
@@ -704,6 +706,7 @@ export function BarModeView({
         onBarStartBeatSelect={onBarStartBeatSelect}
         onAddBar={onAddBar ?? (() => {})}
         onBarQuickSave={onBarQuickSave}
+        onOpenSettings={onOpenSettings}
         bpm={bpm}
         onBpmChange={onBpmChange}
         beatDenominator={beatDenominator}

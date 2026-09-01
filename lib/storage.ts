@@ -79,6 +79,7 @@ export type HapticMode = "all" | "accent" | "off";
 export type BuiltinSoundSet = "classic" | "woodblock" | "cowbell" | "digital" | "jamblock" | "sine" | "blip" | "clave" | "cajon" | "marimba" | "stick"
   | "kick" | "snare" | "clap" | "openhat" | "tom" | "crash" | "rimshot" | "triangle" | "hihat";
 export type SoundSet = BuiltinSoundSet | "custom1" | "custom2" | "custom3";
+export type MetronomeMode = "beat" | "bar" | "note" | "stage";
 
 export type SoundRole = "strong" | "high" | "low";
 
@@ -206,6 +207,29 @@ export interface MetronomeSettings {
   barRowHeight?: number;
   beatDenominator?: 2 | 4 | 8;
   barRandomStrategy?: BarRandomStrategy;
+  /**
+   * Per-mode overrides. The legacy top-level fields remain the migration
+   * source and are intentionally kept for older builds.
+   */
+  modeSettings?: Partial<Record<MetronomeMode, ModeSettings>>;
+}
+
+export interface ModeSettings {
+  volume?: number;
+  sampleVolume?: number;
+  soundSet?: SoundSet;
+  layerSoundSets?: Record<number, SoundSet>;
+  flashMode?: FlashMode;
+  hapticMode?: HapticMode;
+  audioOffsetMs?: number;
+  timerStopMode?: "immediate" | "end-of-cycle";
+  landscapeReversed?: boolean;
+  showLandscapeImage?: boolean;
+  beatDirection?: "cw" | "ccw";
+  barMetronomeChannel?: SampleChannel;
+  barCellOpacity?: number;
+  barRowHeight?: number;
+  barRandomStrategy?: BarRandomStrategy;
 }
 
 const DEFAULT_SETTINGS: MetronomeSettings = {
@@ -215,6 +239,7 @@ const DEFAULT_SETTINGS: MetronomeSettings = {
   subdivisionPattern: ["accent"],
   beatSubdivisions: {},
   volume: 0.8,
+  sampleVolume: 0.8,
   backgroundPlay: false,
   soundSet: "classic",
   flashMode: "accent",
@@ -242,6 +267,31 @@ export async function loadSettings(): Promise<MetronomeSettings> {
       if (!isPlainObject(parsed)) return DEFAULT_SETTINGS;
       const merged: MetronomeSettings = { ...DEFAULT_SETTINGS, ...parsed } as MetronomeSettings;
       merged.barMetronomeChannel = normalizeSampleChannel(merged.barMetronomeChannel);
+      const legacyProfile: ModeSettings = {
+        volume: merged.volume,
+        sampleVolume: merged.sampleVolume,
+        soundSet: merged.soundSet,
+        layerSoundSets: merged.layerSoundSets,
+        flashMode: merged.flashMode,
+        hapticMode: merged.hapticMode,
+        audioOffsetMs: merged.audioOffsetMs,
+        timerStopMode: merged.timerStopMode,
+        landscapeReversed: merged.landscapeReversed,
+        showLandscapeImage: merged.showLandscapeImage,
+        beatDirection: merged.beatDirection,
+        barMetronomeChannel: merged.barMetronomeChannel,
+        barCellOpacity: merged.barCellOpacity,
+        barRowHeight: merged.barRowHeight,
+        barRandomStrategy: merged.barRandomStrategy,
+      };
+      const savedProfiles = isPlainObject(merged.modeSettings) ? merged.modeSettings : {};
+      merged.modeSettings = {};
+      for (const mode of ["beat", "bar", "note", "stage"] as MetronomeMode[]) {
+        const saved = isPlainObject(savedProfiles[mode]) ? savedProfiles[mode] : {};
+        const profile = { ...legacyProfile, ...saved } as ModeSettings;
+        profile.barMetronomeChannel = normalizeSampleChannel(profile.barMetronomeChannel);
+        merged.modeSettings[mode] = profile;
+      }
       return merged;
     }
   } catch (e) {

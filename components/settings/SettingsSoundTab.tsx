@@ -33,8 +33,10 @@ import { ensurePermission } from "@/lib/permissions";
 import { make_styles, make_csStyles } from "@/components/SettingsModal.styles";
 import { getSoundSetOptions } from "@/components/SettingsModal.helpers";
 import { HelpIcon } from "@/components/HelpIcon";
+import type { SettingsScope } from "@/components/SettingsModal";
 
 interface SettingsSoundTabProps {
+  scope: SettingsScope;
   volume: number;
   onVolumeChange: (volume: number) => void;
   sampleVolume: number;
@@ -59,6 +61,7 @@ interface SettingsSoundTabProps {
 }
 
 export function SettingsSoundTab({
+  scope,
   volume,
   onVolumeChange,
   sampleVolume,
@@ -85,6 +88,8 @@ export function SettingsSoundTab({
   const styles = make_styles(C);
   const csStyles = make_csStyles(C);
   const { t } = useLanguage();
+  const isGlobal = scope === "global";
+  const showsBarControls = isGlobal || scope === "bar";
 
   // Volume slider state
   const trackRef = useRef<View>(null);
@@ -483,6 +488,7 @@ export function SettingsSoundTab({
 
       <View style={[styles.divider, { backgroundColor: C.border }]} />
 
+      {showsBarControls && <>
       {/* Sample Volume */}
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
@@ -510,6 +516,7 @@ export function SettingsSoundTab({
           <Text style={[styles.volumeWarning]}>{t("settings", "sampleVolumeWarning")}</Text>
         )}
       </View>
+      </>}
 
       <View style={[styles.divider, { backgroundColor: C.border }]} />
 
@@ -552,7 +559,7 @@ export function SettingsSoundTab({
                         <Text style={{ color: C.textSecondary, fontSize: 9 }}>{t("settings", "soundSetLayerBadge").replace("%s", String(ln))}</Text>
                       </View>
                     ))}
-                    {opt.isCustom && (
+                    {isGlobal && opt.isCustom && (
                       <Pressable hitSlop={8} onPress={() => openCustomEditor(opt.key)} style={{ padding: Spacing.xs }}>
                         <Ionicons name="pencil-outline" size={S.ms(14, 0.4)} color={C.textSecondary} />
                       </Pressable>
@@ -562,7 +569,7 @@ export function SettingsSoundTab({
               );
             })}
 
-            {Object.keys(customSoundSets).length < 3 && (
+            {isGlobal && Object.keys(customSoundSets).length < 3 && (
               <Pressable
                 style={{ flexDirection: "row", alignItems: "center", gap: Spacing.sm, paddingVertical: 10, paddingHorizontal: 12, borderRadius: Radius.md, borderWidth: StyleSheet.hairlineWidth, borderColor: C.border, borderStyle: "dashed", marginTop: Spacing.xs }}
                 onPress={() => { const slot = getNextCustomSlot(); if (slot) openCustomEditor(slot); }}
@@ -859,6 +866,7 @@ export function SettingsSoundTab({
 
       <View style={[styles.divider, { backgroundColor: C.border }]} />
 
+      {isGlobal && <>
       {/* Background play */}
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
@@ -891,6 +899,7 @@ export function SettingsSoundTab({
         </View>
         <Text style={[styles.offsetHint, { color: C.textTertiary }]}>{t("settings", "autoResumeAfterInterruptionHint")}</Text>
       </View>
+      </>}
     </>
   );
 }

@@ -40,3 +40,4 @@
 - [Bar reset UI-engine sync](bar-reset-ui-engine-sync.md) — bar resets must clear the editor's staging pattern as well as engine subdivisions, or visuals and audio diverge.
 - [Native feature removal audit](native-feature-removal-audit.md) — removing a local native module needs a directory-level residue check after dependency cleanup.
 - [Stage note photo resolution](stage-note-photo-resolution.md) — prefer a usable parent photo, then the current queue child; ignore unsafe persisted URIs.
+- [Mode settings profile transitions](mode-settings-profile-transitions.md) — preserve the destination profile during a mode-change render; commit outgoing values before applying the target.

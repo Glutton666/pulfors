@@ -66,6 +66,8 @@ export const DEFAULT_BINDINGS: KeyBindingsMap = {
 };
 
 const STORAGE_KEY = "metronome_keyboard_bindings_v1";
+const MODE_STORAGE_KEY = "metronome_keyboard_bindings_by_mode_v1";
+export type KeyboardMode = "beat" | "bar" | "note" | "stage";
 
 export async function loadKeyBindings(): Promise<KeyBindingsMap> {
   try {
@@ -87,6 +89,27 @@ export async function loadKeyBindings(): Promise<KeyBindingsMap> {
 export async function saveKeyBindings(bindings: KeyBindingsMap): Promise<void> {
   try {
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(bindings));
+  } catch {}
+}
+
+export async function loadModeKeyBindings(mode: KeyboardMode): Promise<KeyBindingsMap> {
+  try {
+    const raw = await AsyncStorage.getItem(MODE_STORAGE_KEY);
+    const saved = raw ? JSON.parse(raw) as Partial<Record<KeyboardMode, Partial<KeyBindingsMap>>> : {};
+    // The legacy list is the initial value for each independent mode.
+    const legacy = await loadKeyBindings();
+    return { ...legacy, ...(saved[mode] ?? {}) } as KeyBindingsMap;
+  } catch {
+    return loadKeyBindings();
+  }
+}
+
+export async function saveModeKeyBindings(mode: KeyboardMode, bindings: KeyBindingsMap): Promise<void> {
+  try {
+    const raw = await AsyncStorage.getItem(MODE_STORAGE_KEY);
+    const saved = raw ? JSON.parse(raw) as Partial<Record<KeyboardMode, KeyBindingsMap>> : {};
+    saved[mode] = bindings;
+    await AsyncStorage.setItem(MODE_STORAGE_KEY, JSON.stringify(saved));
   } catch {}
 }
 
@@ -183,13 +206,15 @@ export interface RebindFx {
   onKeyBindingsChange?: (kb: KeyBindingsMap) => void;
   showKbSaved: () => void;
   conflictMessage: string;
+  /** Scoped editors persist through their owner and must not overwrite legacy bindings. */
+  persistLegacy?: boolean;
 }
 
 /**
  * Core logic of handleRebindKeyDown's save/conflict branch.
  * Calls applyRebinding, then either sets the conflict message or
- * commits the change (setLocalKeyBindings + onKeyBindingsChange + saveKeyBindings
- * + clear rebind state + showKbSaved).
+ * commits the change (setLocalKeyBindings + onKeyBindingsChange + optional legacy
+ * persistence + clear rebind state + showKbSaved).
  * Returns true when the rebind succeeded, false when a conflict was found.
  */
 export function executeRebind(
@@ -205,7 +230,7 @@ export function executeRebind(
   }
   fx.setLocalKeyBindings(updated);
   fx.onKeyBindingsChange?.(updated);
-  saveKeyBindings(updated);
+  if (fx.persistLegacy !== false) saveKeyBindings(updated);
   fx.setRebindingAction(null);
   fx.setRebindConflict(null);
   fx.showKbSaved();
@@ -217,17 +242,20 @@ export interface ResetFx {
   setLocalKeyBindings: (kb: KeyBindingsMap) => void;
   onKeyBindingsChange?: (kb: KeyBindingsMap) => void;
   showKbSaved: () => void;
+  bindings?: KeyBindingsMap;
+  persistLegacy?: boolean;
 }
 
 /**
  * Core logic of the reset-to-defaults button in the keyboard settings tab.
- * Applies DEFAULT_BINDINGS and calls saveKeyBindings in the background.
+ * Applies the provided bindings (or DEFAULT_BINDINGS) and optionally persists
+ * them to the legacy global storage.
  */
 export function executeRebindReset(fx: ResetFx): void {
-  const def = { ...DEFAULT_BINDINGS };
+  const def = fx.bindings ?? { ...DEFAULT_BINDINGS };
   fx.setLocalKeyBindings(def);
   fx.onKeyBindingsChange?.(def);
-  saveKeyBindings(def);
+  if (fx.persistLegacy !== false) saveKeyBindings(def);
   fx.showKbSaved();
 }
 

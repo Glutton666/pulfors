@@ -44,6 +44,7 @@ interface NoteModeViewProps {
   onReset: () => void;
   onExitNoteMode: () => void;
   onQueueItemImageChange?: (index: number, imageUri: string | undefined) => void;
+  onOpenSettings?: () => void;
 }
 
 const BEAT_COLORS: Record<BeatType, string> = {
@@ -328,6 +329,7 @@ export function NoteModeView({
   onReset,
   onExitNoteMode,
   onQueueItemImageChange,
+  onOpenSettings,
 }: NoteModeViewProps) {
   const { colors: C } = useTheme();
   const S = useScale();
@@ -774,7 +776,12 @@ export function NoteModeView({
       <View style={[styles.container, { flexDirection: "row" as const, gap: S.ms(8, 0.3) }, S.isTablet && { maxWidth: 900, alignSelf: "center" as const, width: "100%" as const }]}>
         <View style={{ flex: 2 }}>
           <View style={[styles.header, { marginBottom: S.ms(2, 0.3), gap: S.ms(8, 0.3) }]}>
-            <View style={[styles.headerActions, { gap: S.ms(6, 0.3) }]}>
+            <View style={[styles.headerActions, { gap: S.ms(6, 0.3), marginLeft: "auto" }]}>
+              {onOpenSettings && (
+                <Pressable onPress={onOpenSettings} hitSlop={8} testID="open-note-settings" accessibilityRole="button" accessibilityLabel={t("settings", "title")} style={[styles.headerBtn, { borderColor: C.border, width: S.ms(28, 0.4), height: S.ms(28, 0.4) }]}>
+                  <Ionicons name="settings-outline" size={S.ms(13, 0.3)} color={C.textSecondary} />
+                </Pressable>
+              )}
               <Pressable onPress={handleSaveWithFeedback} hitSlop={8} style={[styles.headerBtn, { borderColor: saved ? "#4CAF50" : C.accent, backgroundColor: saved ? "#4CAF5020" : C.surface, width: S.ms(28, 0.4), height: S.ms(28, 0.4) }]}>
                 <Ionicons name={saved ? "checkmark" : "save-outline"} size={S.ms(13, 0.3)} color={saved ? "#4CAF50" : C.accent} />
               </Pressable>
@@ -796,7 +803,12 @@ export function NoteModeView({
   return (
     <View style={[styles.container, S.isTablet && { maxWidth: 720, alignSelf: "center" as const, width: "100%" as const }]}>
       <View style={styles.header}>
-        <View style={styles.headerActions}>
+        <View style={[styles.headerActions, { marginLeft: "auto" }]}>
+          {onOpenSettings && (
+            <Pressable onPress={onOpenSettings} hitSlop={8} testID="open-note-settings" accessibilityRole="button" accessibilityLabel={t("settings", "title")} style={[styles.headerBtn, { borderColor: C.border }]}>
+              <Ionicons name="settings-outline" size={S.ms(16, 0.4)} color={C.textSecondary} />
+            </Pressable>
+          )}
           <Pressable onPress={handleSaveWithFeedback} hitSlop={8} style={[styles.headerBtn, { borderColor: saved ? "#4CAF50" : C.accent, backgroundColor: saved ? "#4CAF5020" : C.surface }]}>
             <Ionicons name={saved ? "checkmark" : "save-outline"} size={S.ms(16, 0.4)} color={saved ? "#4CAF50" : C.accent} />
           </Pressable>

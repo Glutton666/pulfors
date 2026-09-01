@@ -59,7 +59,7 @@ import {
   type BarRandomSession,
 } from "@/lib/bar-random-session";
 import { loadSettings, saveSettings, loadCustomSoundSets, saveCustomSoundSets, loadPracticeBook, savePracticeBook, createPracticeEntry, runStorageMigrations, clearAllAppStorage, type MetronomeSettings } from "@/lib/storage";
-import type { FlashMode, HapticMode, SoundSet, BuiltinSoundSet, CustomSoundSetConfig, CustomSoundSample, FadeOutSettings, PracticeEntry } from "@/lib/storage";
+import type { FlashMode, HapticMode, SoundSet, BuiltinSoundSet, CustomSoundSetConfig, CustomSoundSample, FadeOutSettings, PracticeEntry, MetronomeMode } from "@/lib/storage";
 import type { BarRepeat, LoopBlock } from "@/components/BeatIndicator";
 import type { StopwatchTimerHandle } from "@/components/StopwatchTimer";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -146,8 +146,7 @@ import { syncStereoArtifact, releaseStereoArtifact, releaseAll as releaseAllSter
 import type { ClickPCMs, SamplePCMEntry, TickInfo, DecodedSample } from "@/lib/audio-renderer";
 import type { ActivityLog, Goal } from "@/lib/activity-log";
 import {
-  loadKeyBindings,
-  saveKeyBindings,
+  loadModeKeyBindings,
   matchesBinding,
   isEditableTarget,
   DEFAULT_BINDINGS,
@@ -211,6 +210,7 @@ export function useMetronomeScreen() {
   // ── 주 콘텐츠 모드 — 단일 소스오브트루스 ──────────────────────────────
   // 기존 barMode/noteMode/scoreMode boolean 세 개를 단일 enum 상태로 통합.
   const [coreMode, setCoreMode] = useState<"beat" | "bar" | "note" | "score">("beat");
+  const [settingsMode, setSettingsMode] = useState<MetronomeMode>("beat");
   const activeModeRef = useRef<"beat" | "bar" | "note" | "score">("beat");
   const playbackModeRef = useRef<PlaybackMode>("beat");
   const modeTransitionCoordinatorRef = useRef(createModeTransitionCoordinator());
@@ -228,6 +228,7 @@ export function useMetronomeScreen() {
       }
       activeModeRef.current = mode;
       playbackModeRef.current = mode;
+      setSettingsMode(mode === "bar" ? "bar" : mode === "note" || mode === "score" ? "note" : "beat");
       setCoreMode(mode);
     },
     [], // setCoreMode & activeModeRef are both stable
@@ -589,6 +590,7 @@ export function useMetronomeScreen() {
     updateFlashMode, updateHapticMode, updateAudioOffset,
     updateBpm, updateTimerStopMode, updateUsername,
   } = useSettings({
+    mode: settingsMode,
     engineRef,
     baseBpmRef,
     volumeRef,
@@ -609,7 +611,6 @@ export function useMetronomeScreen() {
       if (settings.showLandscapeImage !== undefined) setShowLandscapeImage(settings.showLandscapeImage);
       if (settings.landscapeContentType) setLandscapeContentType(settings.landscapeContentType);
       loadCustomSoundSets().then(setCustomSoundSets);
-      loadKeyBindings().then((kb) => { setKeyBindings(kb); keyBindingsRef.current = kb; });
       setIsLoaded(true);
       // PCM warmup for the loaded sound-set
       const set = settings.soundSet || "classic";
@@ -623,6 +624,16 @@ export function useMetronomeScreen() {
       }).catch(() => {});
     },
   });
+
+  useEffect(() => {
+    let cancelled = false;
+    loadModeKeyBindings(settingsMode).then((kb) => {
+      if (cancelled) return;
+      setKeyBindings(kb);
+      keyBindingsRef.current = kb;
+    });
+    return () => { cancelled = true; };
+  }, [settingsMode]);
 
   const randomBarConfig = useMemo<BarRandomConfig>(
     () => ({ ...DEFAULT_BAR_RANDOM_CONFIG, strategy: barRandomStrategy }),
@@ -2098,10 +2109,18 @@ export function useMetronomeScreen() {
   const { stageModeActive, enterStageMode, exitStageMode } = useStageMode();
   const enterStageModeForPlayback = useCallback(() => {
     playbackModeRef.current = "stage";
+    setSettingsMode("stage");
     enterStageMode();
   }, [enterStageMode]);
   const exitStageModeForPlayback = useCallback(async () => {
     playbackModeRef.current = activeModeRef.current;
+    setSettingsMode(
+      activeModeRef.current === "bar"
+        ? "bar"
+        : activeModeRef.current === "note" || activeModeRef.current === "score"
+          ? "note"
+          : "beat",
+    );
     await exitStageMode();
   }, [exitStageMode]);
   useEffect(() => {

@@ -13,6 +13,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { kbStyles } from "@/components/SettingsModal.styles";
 import type { KbSectionKey } from "@/lib/i18n";
 import type { TranslationFn } from "@/lib/i18n";
+import type { SettingsScope } from "@/components/SettingsModal";
 import {
   DEFAULT_BINDINGS,
   buildLabel,
@@ -108,9 +109,23 @@ const KB_SECTIONS: { titleKey: KbSectionKey; rows: { action: KeyAction; labelKey
 interface SettingsKeyboardTabProps {
   keyBindings?: KeyBindingsMap;
   onKeyBindingsChange?: (kb: KeyBindingsMap) => void;
+  scope?: SettingsScope;
 }
 
-export function SettingsKeyboardTab({ keyBindings: keyBindingsProp, onKeyBindingsChange }: SettingsKeyboardTabProps) {
+const SCOPE_ACTIONS: Record<SettingsScope, readonly KeyAction[]> = {
+  global: Object.keys(DEFAULT_BINDINGS) as KeyAction[],
+  beat: ["playPause", "tapTempo", "bpmUp", "bpmDown", "bpmLeft", "bpmRight", "addBeatNormal", "addBeatAccent", "addBeatStrong", "addBeatMute", "removeBeat", "cycleBeatTypes", "addSubNormal", "addSubAccent", "addSubStrong", "addSubMute", "removeSub"],
+  bar: ["playPause", "tapTempo", "bpmUp", "bpmDown", "bpmLeft", "bpmRight", "loopToggle", "blockPlayModeNext"],
+  note: ["playPause"],
+  // Stage owns its working digit-to-setlist mappings in StageModeOverlay.
+  stage: [],
+};
+
+export function SettingsKeyboardTab({
+  keyBindings: keyBindingsProp,
+  onKeyBindingsChange,
+  scope = "global",
+}: SettingsKeyboardTabProps) {
   const { colors: C } = useTheme();
   const S = useScale();
   const { t } = useLanguage();
@@ -136,6 +151,7 @@ export function SettingsKeyboardTab({ keyBindings: keyBindingsProp, onKeyBinding
     if (kbSavedTimerRef.current) clearTimeout(kbSavedTimerRef.current);
     kbSavedTimerRef.current = setTimeout(() => setKbSavedToast(false), 1500);
   }, []);
+  const scopedActions = SCOPE_ACTIONS[scope];
 
   const handleRebindPress = (action: KeyAction) => {
     setRebindingAction(action);
@@ -171,6 +187,7 @@ export function SettingsKeyboardTab({ keyBindings: keyBindingsProp, onKeyBinding
       onKeyBindingsChange,
       showKbSaved,
       conflictMessage: t("keyboard", "conflict"),
+      persistLegacy: scope === "global",
     });
   };
 
@@ -193,7 +210,19 @@ export function SettingsKeyboardTab({ keyBindings: keyBindingsProp, onKeyBinding
             {
               text: t("keyboard", "resetBtn"),
               onPress: () => {
-                executeRebindReset({ setLocalKeyBindings, onKeyBindingsChange, showKbSaved });
+                const bindings = scope === "global"
+                  ? { ...DEFAULT_BINDINGS }
+                  : scopedActions.reduce(
+                    (next, action) => ({ ...next, [action]: DEFAULT_BINDINGS[action] }),
+                    { ...localKeyBindings },
+                  );
+                executeRebindReset({
+                  setLocalKeyBindings,
+                  onKeyBindingsChange,
+                  showKbSaved,
+                  bindings,
+                  persistLegacy: scope === "global",
+                });
               },
             },
           ]);
@@ -201,7 +230,10 @@ export function SettingsKeyboardTab({ keyBindings: keyBindingsProp, onKeyBinding
       >
         <Text style={[kbStyles.resetBtnText, { color: C.textSecondary }]}>{t("keyboard", "resetAll")}</Text>
       </Pressable>
-      {KB_SECTIONS.map((section) => (
+      {KB_SECTIONS.map((section) => ({
+        ...section,
+        rows: section.rows.filter((row) => scopedActions.includes(row.action)),
+      })).filter((section) => section.rows.length > 0).map((section) => (
         <View key={section.titleKey} style={kbStyles.section}>
           <Text style={[kbStyles.sectionTitle, { color: C.textSecondary }]}>
             {t("keyboard", section.titleKey)}

@@ -61,6 +61,7 @@ export interface BarEditorPanelProps {
   onBarStartBeatSelect: (beat: number | null) => void;
   onAddBar: (draftRepeat?: BarRepeat) => void;
   onBarQuickSave?: () => Promise<boolean> | void;
+  onOpenSettings?: () => void;
   // Playback controls
   bpm?: number;
   /** Retained for parent compatibility; bar editing only changes a selected bar. */
@@ -97,7 +98,7 @@ const MAX_LAYERS = 6;
 
 export function BarEditorPanel({
   editingBeat, barRepeats, isPlaying, beatsPerMeasure, beatSubdivisions,
-  onBarRepeatChange, onBarMeterChange, onDeleteBar, onBarStartBeatSelect, onAddBar, onBarQuickSave,
+  onBarRepeatChange, onBarMeterChange, onDeleteBar, onBarStartBeatSelect, onAddBar, onBarQuickSave, onOpenSettings,
   bpm, onBpmChange, beatDenominator = 4, onDenominatorCycle, isPreparing, onTogglePlay,
   onRandomPlayRequest, barLoopMode, onBarLoopModeChange, blockPlayMode, onBlockPlayModeChange,
   loopBlocks, onLoopBlocksChange,
@@ -648,6 +649,18 @@ export function BarEditorPanel({
               color={saveFlashVisible ? "#4CAF50" : isPlaying ? C.textTertiary : C.accent}
             />
           </Pressable>
+          {onOpenSettings && (
+            <Pressable
+              onPress={onOpenSettings}
+              hitSlop={10}
+              testID="open-bar-settings"
+              accessibilityRole="button"
+              accessibilityLabel={t("settings", "title")}
+              style={{ paddingHorizontal: 8, paddingVertical: 4 }}
+            >
+              <Ionicons name="settings-outline" size={ms(13, 0.4)} color={C.textSecondary} />
+            </Pressable>
+          )}
           <Pressable onPress={() => setEditorCollapsed(v => !v)} hitSlop={10} style={{ paddingHorizontal: 8, paddingVertical: 4 }}>
             <Ionicons name={editorCollapsed ? "chevron-up" : "chevron-down"} size={ms(13, 0.4)} color={C.textTertiary + "99"} />
           </Pressable>

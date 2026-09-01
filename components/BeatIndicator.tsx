@@ -156,6 +156,7 @@ interface BeatIndicatorProps {
   barRowHeight?: number;
   onEasterEggTrigger?: (isHighRange: boolean) => void;
   easterEggEnabled?: boolean;
+  onOpenSettings?: () => void;
 }
 
 // BlockPill 컴포넌트는 components/BlockPill.tsx 로 분리되었습니다.
@@ -240,6 +241,7 @@ export function BeatIndicator({
   barRowHeight,
   onEasterEggTrigger,
   easterEggEnabled = true,
+  onOpenSettings,
 }: BeatIndicatorProps) {
   const { colors: C, getImageForBeatType, hubImages } = useTheme();
   const { t } = useLanguage();
@@ -1311,6 +1313,7 @@ export function BeatIndicator({
         rowHeight={barRowHeight}
         onExitBarMode={() => onBarModeChange(false)}
         onNoteRecordRequest={onNoteRecordRequest}
+        onOpenSettings={onOpenSettings}
       />
     );
   }
@@ -1331,6 +1334,28 @@ export function BeatIndicator({
           zIndex: 999,
         }, resetFlashStyle]}
       />
+      {onOpenSettings && (
+        <Pressable
+          onPress={onOpenSettings}
+          hitSlop={10}
+          testID="open-beat-settings"
+          accessibilityRole="button"
+          accessibilityLabel={t("settings", "title")}
+          style={{
+            position: "absolute",
+            top: S.ms(8, 0.3),
+            right: S.ms(8, 0.3),
+            zIndex: 2,
+            padding: S.ms(7, 0.3),
+            borderRadius: S.ms(16, 0.3),
+            backgroundColor: C.surface,
+            borderWidth: 1,
+            borderColor: C.border,
+          }}
+        >
+          <Ionicons name="settings-outline" size={S.ms(18, 0.4)} color={C.textSecondary} />
+        </Pressable>
+      )}
       <View style={styles.dialContainer}>
         <View
           ref={dialRef}
