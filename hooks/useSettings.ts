@@ -31,6 +31,7 @@ import type { MetronomeEngine, BeatType } from "@/lib/metronome-engine";
 import type { SampleChannel } from "@/lib/stereo-channel";
 import type { AudioPlayer as ExpoAudioPlayer } from "expo-audio";
 import type { PersistAudioSettingsFn } from "@/hooks/useAudioPipeline";
+import type { BarRandomStrategy } from "@/lib/bar-random-session";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -131,6 +132,8 @@ export interface UseSettingsResult {
   setBarCellOpacity: React.Dispatch<React.SetStateAction<number>>;
   barRowHeight: number;
   setBarRowHeight: React.Dispatch<React.SetStateAction<number>>;
+  barRandomStrategy: BarRandomStrategy;
+  setBarRandomStrategy: React.Dispatch<React.SetStateAction<BarRandomStrategy>>;
   // ── Persistence ────────────────────────────────────────────────────────────
   persistSettings: DebouncedPersister<MetronomeSettings>;
   /** Ignore a settings load that began before a full application reset. */
@@ -226,6 +229,7 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
 
   const [barCellOpacity, setBarCellOpacity] = useState(0.55);
   const [barRowHeight, setBarRowHeight] = useState(44);
+  const [barRandomStrategy, setBarRandomStrategy] = useState<BarRandomStrategy>("independent");
 
   // ── Persistence infrastructure ───────────────────────────────────────────────
 
@@ -254,7 +258,7 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
     bpm, beatsPerMeasure, beatDenominator, subdivisions: 1, subdivisionPattern, beatSubdivisions,
     volume, sampleVolume, soundSet, layerSoundSets, flashMode, hapticMode,
     audioOffsetMs, timerStopMode, landscapeReversed, beatDirection, username,
-    barMetronomeChannel, barCellOpacity, barRowHeight,
+    barMetronomeChannel, barCellOpacity, barRowHeight, barRandomStrategy,
     ...externalSnapshotRef.current,
   });
   // Inline update — runs on every render of useMetronomeScreen.
@@ -262,7 +266,7 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
     bpm, beatsPerMeasure, beatDenominator, subdivisions: 1, subdivisionPattern, beatSubdivisions,
     volume, sampleVolume, soundSet, layerSoundSets, flashMode, hapticMode,
     audioOffsetMs, timerStopMode, landscapeReversed, beatDirection, username,
-    barMetronomeChannel, barCellOpacity, barRowHeight,
+    barMetronomeChannel, barCellOpacity, barRowHeight, barRandomStrategy,
     ...externalSnapshotRef.current,
   };
 
@@ -404,6 +408,7 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
       }
       if (settings.barCellOpacity != null) setBarCellOpacity(settings.barCellOpacity);
       if (settings.barRowHeight != null) setBarRowHeight(settings.barRowHeight);
+      if (settings.barRandomStrategy) setBarRandomStrategy(settings.barRandomStrategy);
       if (settings.username) {
         setUsername(settings.username);
       }
@@ -550,6 +555,7 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
     barMetronomeChannel, setBarMetronomeChannel, barMetronomeChannelRef,
     barCellOpacity, setBarCellOpacity,
     barRowHeight, setBarRowHeight,
+    barRandomStrategy, setBarRandomStrategy,
     persistSettings,
     invalidateSettingsLoad,
     cancelSettingsPersistence,

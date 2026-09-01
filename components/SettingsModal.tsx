@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import type { FlashMode, HapticMode, SoundSet, BuiltinSoundSet, SoundRole, CustomSoundSetConfig } from "@/lib/storage";
+import type { BarRandomConfig } from "@/lib/bar-random-session";
 import { SoundPreviewPlayers, type SoundPreviewHandle } from "./settings/SoundPreviewPlayers";
 import { SettingsThemeTab } from "./settings/SettingsThemeTab";
 import { SettingsSoundTab } from "./settings/SettingsSoundTab";
@@ -71,6 +72,8 @@ interface SettingsModalProps {
   onBarCellOpacityChange: (val: number) => void;
   barRowHeight: number;
   onBarRowHeightChange: (val: number) => void;
+  randomBarConfig: BarRandomConfig;
+  onRandomBarConfigChange: (config: BarRandomConfig) => void;
   onShowOnboarding?: () => void;
   onEnterNoteMode?: () => void;
   keyBindings?: import("@/lib/keyboard-bindings").KeyBindingsMap;
@@ -123,6 +126,8 @@ export function SettingsModal({
   onBarCellOpacityChange,
   barRowHeight,
   onBarRowHeightChange,
+  randomBarConfig,
+  onRandomBarConfigChange,
   onShowOnboarding,
   keyBindings: keyBindingsProp,
   onKeyBindingsChange,
@@ -214,6 +219,8 @@ export function SettingsModal({
             onBarCellOpacityChange={onBarCellOpacityChange}
             barRowHeight={barRowHeight}
             onBarRowHeightChange={onBarRowHeightChange}
+            randomBarConfig={randomBarConfig}
+            onRandomBarConfigChange={onRandomBarConfigChange}
             flashMode={flashMode}
             onFlashModeChange={onFlashModeChange}
             hapticMode={hapticMode}

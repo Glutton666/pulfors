@@ -118,7 +118,7 @@ export function MetronomeScreenUI(props: Props) {
     handleEasterEggGiveUpRef,
     barMode, barBpm, setBarBpm, barBpmRef, handleBarBpmChange, handleBarModeChange, barLoopMode, setBarLoopMode,
      blockPlayMode, setBlockPlayMode, handleRandomBarPlay,
-    randomBarSession, randomBarConfig, setRandomBarConfig, onRandomViewportCapacityChange,
+     randomBarSession, randomBarConfig, onRandomBarConfigChange, onRandomViewportCapacityChange,
     handleReplayRandomBarSession, handleSaveRandomBarSession, handleApplyRandomBarSession,
     barRepeats, loopBlocks,
     barStartBeat, setBarStartBeat,
@@ -926,6 +926,8 @@ export function MetronomeScreenUI(props: Props) {
           setBarRowHeight(val);
           persistSettings({ barRowHeight: val });
         }}
+        randomBarConfig={randomBarConfig}
+        onRandomBarConfigChange={onRandomBarConfigChange}
         onEnterNoteMode={handleEnterNoteMode}
         onShowOnboarding={() => openExclusive("onboarding")}
         keyBindings={keyBindings}
@@ -1032,8 +1034,6 @@ export function MetronomeScreenUI(props: Props) {
             onBlockPlayModeChange={setBlockPlayMode}
             onRandomPlayRequest={handleRandomBarPlay}
             randomBarSession={randomBarSession}
-            randomBarConfig={randomBarConfig}
-            onRandomBarConfigChange={setRandomBarConfig}
             onRandomViewportCapacityChange={onRandomViewportCapacityChange}
             onReplayRandomBarSession={handleReplayRandomBarSession}
             onSaveRandomBarSession={handleSaveRandomBarSession}

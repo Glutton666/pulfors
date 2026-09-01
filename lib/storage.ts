@@ -3,6 +3,7 @@ import * as Crypto from "expo-crypto";
 import type { BeatType } from "./metronome-engine";
 import type { ThemeColor } from "@/constants/colors";
 import type { SampleChannel } from "./stereo-channel";
+import type { BarRandomStrategy } from "./bar-random-session";
 import { normalizeSampleChannel } from "./stereo-channel";
 import { notifyStorageError } from "./storage-notifier";
 import { logger } from "./logger";
@@ -204,6 +205,7 @@ export interface MetronomeSettings {
   barCellOpacity?: number;
   barRowHeight?: number;
   beatDenominator?: 2 | 4 | 8;
+  barRandomStrategy?: BarRandomStrategy;
 }
 
 const DEFAULT_SETTINGS: MetronomeSettings = {
@@ -229,6 +231,7 @@ const DEFAULT_SETTINGS: MetronomeSettings = {
   autoResumeAfterInterruption: true,
   barCellOpacity: 0.55,
   barRowHeight: 44,
+  barRandomStrategy: "independent",
 };
 
 export async function loadSettings(): Promise<MetronomeSettings> {

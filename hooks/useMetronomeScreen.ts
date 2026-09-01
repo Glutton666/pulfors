@@ -291,9 +291,6 @@ export function useMetronomeScreen() {
 
   const [progressInfo, setProgressInfo] = useState<ProgressInfo | null>(null);
   const [layerProgressMap, setLayerProgressMap] = useState<Record<string, number>>({});
-  const [randomBarConfig, setRandomBarConfig] = useState<BarRandomConfig>(DEFAULT_BAR_RANDOM_CONFIG);
-  const randomBarConfigRef = useRef(randomBarConfig);
-  useEffect(() => { randomBarConfigRef.current = randomBarConfig; }, [randomBarConfig]);
   const [randomBarSession, setRandomBarSession] = useState<BarRandomSession | null>(null);
   const randomBarSessionRef = useRef<BarRandomSession | null>(null);
   const randomBarViewportCapacityRef = useRef(4);
@@ -581,6 +578,7 @@ export function useMetronomeScreen() {
     barMetronomeChannel, setBarMetronomeChannel, barMetronomeChannelRef,
     barCellOpacity, setBarCellOpacity,
     barRowHeight, setBarRowHeight,
+    barRandomStrategy, setBarRandomStrategy,
     persistSettings,
     invalidateSettingsLoad,
     cancelSettingsPersistence,
@@ -625,6 +623,17 @@ export function useMetronomeScreen() {
       }).catch(() => {});
     },
   });
+
+  const randomBarConfig = useMemo<BarRandomConfig>(
+    () => ({ ...DEFAULT_BAR_RANDOM_CONFIG, strategy: barRandomStrategy }),
+    [barRandomStrategy],
+  );
+  const randomBarConfigRef = useRef(randomBarConfig);
+  useEffect(() => { randomBarConfigRef.current = randomBarConfig; }, [randomBarConfig]);
+  const setRandomBarConfig = useCallback((config: BarRandomConfig) => {
+    setBarRandomStrategy(config.strategy);
+    persistSettings({ barRandomStrategy: config.strategy });
+  }, [persistSettings, setBarRandomStrategy]);
 
   // ── 비트 모드 빠른 저장 ────────────────────────────────────────────────────
   const {
@@ -3740,7 +3749,7 @@ export function useMetronomeScreen() {
     handleApplyRandomBarSession,
     randomBarSession,
     randomBarConfig,
-    setRandomBarConfig,
+    onRandomBarConfigChange: setRandomBarConfig,
     onRandomViewportCapacityChange: (capacity: number) => {
       randomBarViewportCapacityRef.current = Math.max(1, Math.floor(capacity));
     },

@@ -9,7 +9,7 @@
  *     denominator is preserved.
  */
 
-import { renderHook, act } from "@testing-library/react";
+import { renderHook, act, waitFor } from "@testing-library/react";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Stubs
@@ -220,6 +220,33 @@ test("updateSoundSet synchronously updates the ref read by an already-running au
   expect(params.soundSetRef.current).toBe("woodblock");
   expect(result.current.soundSet).toBe("woodblock");
   expect(savedSettings[savedSettings.length - 1]?.soundSet).toBe("woodblock");
+});
+
+test("bar random strategy is restored and included in later settings snapshots", async () => {
+  const { loadSettings } = require("@/lib/storage");
+  loadSettings.mockResolvedValueOnce({
+    bpm: 120,
+    beatsPerMeasure: 4,
+    beatDenominator: 4,
+    subdivisions: 1,
+    subdivisionPattern: ["accent"],
+    beatSubdivisions: {},
+    barRandomStrategy: "no-consecutive",
+  });
+
+  const { result } = renderHook(() => useSettings(buildParams()));
+  await waitFor(() => {
+    expect(result.current.barRandomStrategy).toBe("no-consecutive");
+  });
+
+  act(() => {
+    result.current.setBarRandomStrategy("shuffle-bag");
+  });
+  act(() => {
+    result.current.persistSettings({ barRandomStrategy: "shuffle-bag" });
+  });
+
+  expect(savedSettings.at(-1)?.barRandomStrategy).toBe("shuffle-bag");
 });
 
 test("failed persistence is exposed to the UI and clears after the next success", () => {

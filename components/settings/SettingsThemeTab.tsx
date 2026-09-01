@@ -22,6 +22,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { LANGUAGE_OPTIONS } from "@/lib/i18n";
 import type { FlashMode, HapticMode } from "@/lib/storage";
 import type { SampleChannel } from "@/lib/stereo-channel";
+import type { BarRandomConfig } from "@/lib/bar-random-session";
 import { make_styles } from "@/components/SettingsModal.styles";
 import { getTripleOptions, TripleSelector } from "@/components/SettingsModal.helpers";
 import { HelpIcon } from "@/components/HelpIcon";
@@ -42,6 +43,8 @@ interface SettingsThemeTabProps {
   onBarCellOpacityChange: (val: number) => void;
   barRowHeight: number;
   onBarRowHeightChange: (val: number) => void;
+  randomBarConfig: BarRandomConfig;
+  onRandomBarConfigChange: (config: BarRandomConfig) => void;
   flashMode: FlashMode;
   onFlashModeChange: (value: FlashMode) => void;
   hapticMode: HapticMode;
@@ -63,6 +66,8 @@ export function SettingsThemeTab({
   onBarCellOpacityChange,
   barRowHeight,
   onBarRowHeightChange,
+  randomBarConfig,
+  onRandomBarConfigChange,
   flashMode,
   onFlashModeChange,
   hapticMode,
@@ -534,6 +539,43 @@ export function SettingsThemeTab({
           >
             <Text style={{ color: C.text, fontSize: 20, fontFamily: "SpaceGrotesk_600SemiBold" }}>+</Text>
           </Pressable>
+        </View>
+      </View>
+
+      <View style={[styles.divider, { backgroundColor: C.border }]} />
+
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Ionicons name="shuffle-outline" size={S.ms(18, 0.4)} color={C.accent} />
+          <Text style={[styles.sectionLabel, { color: C.text }]}>{t("settings", "barRandomStrategy")}</Text>
+        </View>
+        <Text style={[styles.offsetHint, { color: C.textTertiary }]}>{t("settings", "barRandomStrategyHint")}</Text>
+        <View style={styles.tripleRow}>
+          {(["independent", "no-consecutive", "shuffle-bag"] as const).map((strategy) => {
+            const active = randomBarConfig.strategy === strategy;
+            const label = strategy === "independent"
+              ? t("barModeView", "randomIndependent")
+              : strategy === "no-consecutive"
+                ? t("barModeView", "randomNoRepeat")
+                : t("barModeView", "randomShuffleBag");
+            return (
+              <Pressable
+                key={strategy}
+                style={[styles.tripleBtn, active && [styles.tripleBtnActive, { borderColor: C.accent, backgroundColor: C.accentDim }]]}
+                onPress={() => {
+                  onRandomBarConfigChange({ ...randomBarConfig, strategy });
+                  if (Platform.OS !== "web") Haptics.selectionAsync();
+                }}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: active }}
+                accessibilityLabel={label}
+              >
+                <Text style={[styles.tripleBtnText, active && [styles.tripleBtnTextActive, { color: C.accent }]]}>
+                  {label}
+                </Text>
+              </Pressable>
+            );
+          })}
         </View>
       </View>
 

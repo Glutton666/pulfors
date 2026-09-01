@@ -70,6 +70,8 @@ export const translations = {
     barCellOpacityHint: { ko: "비트 셀 위 정보 레이어의 불투명도입니다", en: "Opacity of the info overlay on beat cells" },
     barRowHeight: { ko: "바 행 높이", en: "Bar Row Height" },
     barRowHeightHint: { ko: "바 목록에서 각 행의 높이입니다", en: "Height of each row in the bar list" },
+    barRandomStrategy: { ko: "바 랜덤 재생 방식", en: "Bar Randomization" },
+    barRandomStrategyHint: { ko: "랜덤 재생 시 바를 선택하는 방식을 설정합니다", en: "Choose how bars are selected during random playback" },
     clockwise: { ko: "시계방향", en: "Clockwise" },
     counterclockwise: { ko: "반시계방향", en: "Counter-clockwise" },
     screenFlash: { ko: "화면 플래시", en: "Screen Flash" },

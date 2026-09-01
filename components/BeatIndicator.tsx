@@ -141,8 +141,6 @@ interface BeatIndicatorProps {
   onReorderBar?: (fromIndex: number, toIndex: number) => void;
   onInsertBarAfter?: (beatIndex: number) => void;
   randomBarSession?: import("@/lib/bar-random-session").BarRandomSession | null;
-  randomBarConfig?: import("@/lib/bar-random-session").BarRandomConfig;
-  onRandomBarConfigChange?: (config: import("@/lib/bar-random-session").BarRandomConfig) => void;
   onRandomViewportCapacityChange?: (capacity: number) => void;
   onReplayRandomBarSession?: () => void;
   onSaveRandomBarSession?: () => Promise<boolean> | void;
@@ -227,8 +225,6 @@ export function BeatIndicator({
   onReorderBar,
   onInsertBarAfter,
   randomBarSession,
-  randomBarConfig,
-  onRandomBarConfigChange,
   onRandomViewportCapacityChange,
   onReplayRandomBarSession,
   onSaveRandomBarSession,
@@ -1270,8 +1266,6 @@ export function BeatIndicator({
         onReorderBar={onReorderBar}
         onInsertBarAfter={onInsertBarAfter}
         randomBarSession={randomBarSession}
-        randomBarConfig={randomBarConfig}
-        onRandomBarConfigChange={onRandomBarConfigChange}
         onRandomViewportCapacityChange={onRandomViewportCapacityChange}
         onReplayRandomBarSession={onReplayRandomBarSession}
         onSaveRandomBarSession={onSaveRandomBarSession}

@@ -17,7 +17,7 @@ import { HintBanner } from "@/components/HintTooltip";
 import type { BeatType, BarRepeat, LoopBlock } from "@/components/beat-indicator.types";
 import type { ProgressInfo } from "@/lib/metronome-engine";
 import type { CustomSoundSetConfig } from "@/lib/storage";
-import type { BarRandomConfig, BarRandomSession } from "@/lib/bar-random-session";
+import type { BarRandomSession } from "@/lib/bar-random-session";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useScale } from "@/lib/scale";
 import { FontSize, Spacing } from "@/constants/tokens";
@@ -103,8 +103,6 @@ export interface BarModeViewProps {
   onReorderBar?: (fromIndex: number, toIndex: number) => void;
   onInsertBarAfter?: (beatIndex: number) => void;
   randomBarSession?: BarRandomSession | null;
-  randomBarConfig?: BarRandomConfig;
-  onRandomBarConfigChange?: (config: BarRandomConfig) => void;
   onRandomViewportCapacityChange?: (capacity: number) => void;
   onReplayRandomBarSession?: () => void;
   onSaveRandomBarSession?: () => Promise<boolean> | void;
@@ -127,7 +125,7 @@ export function BarModeView({
   colors: C, ms,
   cellOverlayOpacity, rowHeight,
   noteSamples, noteSampleSources, onNoteRecordRequest, onReorderBar, onInsertBarAfter,
-  randomBarSession, randomBarConfig, onRandomBarConfigChange, onRandomViewportCapacityChange,
+  randomBarSession, onRandomViewportCapacityChange,
   onReplayRandomBarSession, onSaveRandomBarSession, onApplyRandomBarSession,
 }: BarModeViewProps) {
   const { t } = useLanguage();
@@ -690,33 +688,6 @@ export function BarModeView({
               ))}
             </View>
           )}
-        </View>
-      )}
-
-      {!isPlaying && randomBarConfig && (
-        <View style={{ flexDirection: "row", paddingHorizontal: Spacing.sm, paddingVertical: 4, gap: 4 }}>
-          {(["independent", "no-consecutive", "shuffle-bag"] as const).map(strategy => (
-            <Text
-              key={strategy}
-              onPress={() => onRandomBarConfigChange?.({ ...randomBarConfig, strategy })}
-              style={{
-                flex: 1,
-                textAlign: "center",
-                paddingVertical: 5,
-                borderRadius: 7,
-                overflow: "hidden",
-                color: randomBarConfig.strategy === strategy ? C.background : C.textSecondary,
-                backgroundColor: randomBarConfig.strategy === strategy ? C.accent : C.overlay06,
-                fontSize: FontSize.micro,
-              }}
-            >
-              {strategy === "independent"
-                ? t("barModeView", "randomIndependent")
-                : strategy === "no-consecutive"
-                  ? t("barModeView", "randomNoRepeat")
-                  : t("barModeView", "randomShuffleBag")}
-            </Text>
-          ))}
         </View>
       )}
 
