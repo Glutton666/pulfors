@@ -1,7 +1,7 @@
 import { formatBarCenterInfo } from "@/components/bar-mode/BarModeTypes";
 
 describe("bar mode row information", () => {
-  it("uses the bar's own meter when calculating a count repeat duration", () => {
+  it("treats a row as one pulse when calculating a count repeat duration", () => {
     expect(
       formatBarCenterInfo(
         { type: "count", value: 2, bpm: 69 },
@@ -9,10 +9,10 @@ describe("bar mode row information", () => {
         3,
         4,
       ),
-    ).toBe("69 / ×2(00:05)");
+    ).toBe("69 / ×2(00:02)");
   });
 
-  it("uses the bar's own meter when converting a duration to repeats", () => {
+  it("converts duration repeats using one pulse per row", () => {
     expect(
       formatBarCenterInfo(
         { type: "duration", value: 10, bpm: 120 },
@@ -20,7 +20,7 @@ describe("bar mode row information", () => {
         4,
         4,
       ),
-    ).toBe("120 / ×5(00:10)");
+    ).toBe("120 / ×20(00:10)");
   });
 
   it("continues to show a base BPM when a bar has no repeat configuration", () => {
@@ -51,6 +51,6 @@ describe("bar mode row information", () => {
         6,
         8,
       ),
-    ).toBe("90 / ×6(00:12)");
+    ).toBe("90 / ×36(00:12)");
   });
 });

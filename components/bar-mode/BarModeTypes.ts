@@ -81,13 +81,12 @@ export type BarDurationPart = "minutes" | "seconds";
 export function formatBarCenterInfo(
   repeat: BarRepeat | null,
   bpm: number,
-  meterNumerator: number,
+  _meterNumerator: number,
   meterDenominator: 2 | 4 | 8,
 ): string | null {
   const effectiveBpm = (repeat?.bpm && repeat.bpm > 0) ? repeat.bpm : bpm;
   const barSec = (
     (60 / Math.max(1, effectiveBpm))
-    * Math.max(1, meterNumerator)
     * (4 / meterDenominator)
   );
   const bpmStr = String(Math.round(effectiveBpm));
@@ -194,15 +193,12 @@ function getBarTiming(
   const cellCount = Math.max(1, Math.floor(cells?.length || 1));
   // The scheduler treats old rows as one engine beat. Their displayed cells
   // are subdivisions of that beat, not an implicit meter numerator.
-  const numerator = isFinitePositive(repeat?.meterNumerator)
-    ? Math.max(1, Math.min(16, Math.round(repeat.meterNumerator)))
-    : 1;
   const denominator = repeat?.meterDenominator ?? options.beatDenominator ?? 4;
   // Keep the same display-BPM → internal quarter-BPM normalization as the
   // engine, including its guardrail clamp.
   const engineBpm = Math.max(20, Math.min(300, bpm * (4 / denominator)));
   const effectiveBpm = options.halfTime ? engineBpm / 2 : engineBpm;
-  const baseDurationMs = (60_000 / effectiveBpm) * numerator;
+  const baseDurationMs = 60_000 / effectiveBpm;
 
   let totalDurationMs = baseDurationMs;
   if (repeat?.type === "count") {

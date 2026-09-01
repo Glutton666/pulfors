@@ -139,16 +139,16 @@ describe("bar editor control values", () => {
       beatDenominator: 4,
     });
 
-    // Bar 0 is shown once but stands for two 2-second passes.
+    // Bar 0 is one 120 BPM pulse repeated twice.
     for (let cell = 0; cell < 4; cell++) {
       expect(coverage.get(`0-${cell}`)).toBeDefined();
     }
-    // The 60 BPM duration bar contributes the remaining 3.5 seconds; every
-    // displayed subdivision remains occupied before the trim ends.
+    // The 60 BPM duration bar occupies three seconds. The recording continues
+    // into the following one-pulse row under the Bar-mode tuplet timing model.
     for (let cell = 0; cell < 4; cell++) {
       expect(coverage.get(`1-${cell}`)).toBeDefined();
     }
-    expect(coverage.get("2-0")).toBeUndefined();
+    expect(coverage.get("2-0")).toEqual({ source: "recording", kind: "continued" });
   });
 
   test("prefers recording coverage over an overlapping imported start and ignores corrupt samples", () => {

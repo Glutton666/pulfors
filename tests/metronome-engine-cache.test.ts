@@ -228,7 +228,7 @@ test("random 모드 + 블록 없음이면 모든 바를 한 패스에서 중복 
   }
 });
 
-test("random 한 패스에서도 혼합 박자와 BPM을 각 바 설정대로 스케줄한다", () => {
+test("random 한 패스에서도 3개/4개 셀을 각 바 BPM의 한 박 안에 균등 스케줄한다", () => {
   const originalRandom = Math.random;
   const engine = new MetronomeEngine();
   engine.setBeatsPerMeasure(2);
@@ -253,9 +253,9 @@ test("random 한 패스에서도 혼합 박자와 BPM을 각 바 설정대로 �
 
     assert.equal(bar0.length, 3, "3/4 바는 세 tick");
     assert.equal(bar1.length, 4, "4/4 바는 네 tick");
-    assert.equal(Math.round(bar0[1].time - bar0[0].time), 870, "69 BPM 간격");
-    assert.equal(Math.round(bar1[1].time - bar1[0].time), 435, "138 BPM 간격");
-    assert.equal(Math.round(durationMs), 4348, "두 바의 개별 길이를 합산");
+    assert.equal(Math.round(bar0[1].time - bar0[0].time), 290, "69 BPM 3연음 간격");
+    assert.equal(Math.round(bar1[1].time - bar1[0].time), 109, "138 BPM 4연음 간격");
+    assert.equal(Math.round(durationMs), 1304, "각 행은 BPM 기준 한 박 길이");
   } finally {
     Math.random = originalRandom;
   }

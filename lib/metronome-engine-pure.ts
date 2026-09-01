@@ -148,14 +148,11 @@ export function pureGetBarDur(
   beat: number,
   blockBpm?: number,
 ): number {
-  const explicitNumerator = inputs.barRepeats.get(beat)?.meterNumerator;
-  const numerator = Math.max(
-    1,
-    // Before per-bar meter existed, a row's cells were subdivisions of one
-    // engine beat. Do not reinterpret older saved rows as a longer measure.
-    Math.min(16, Math.round(explicitNumerator ?? 1)),
-  );
-  return pureGetBeatDur(inputs, beat, blockBpm) * numerator;
+  // A Bar-mode row is one pulse at its configured BPM. Its visible cells are
+  // subdivisions of that pulse: 3 cells are a triplet, 4 cells a quadruplet.
+  // `meterNumerator` is retained for saved-data/display compatibility, but it
+  // must not stretch the row and turn subdivisions back into quarter notes.
+  return pureGetBeatDur(inputs, beat, blockBpm);
 }
 
 /** 순수 함수: 한 비트에 적용될 서브디비전 패턴을 반환. */

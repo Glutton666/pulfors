@@ -611,7 +611,7 @@ export function useBarMode(p: UseBarModeParams): UseBarModeResult {
             type: draftRepeat.type,
             value: draftRepeat.value,
             bpm: draftRepeat.bpm ?? barBpmRef.current,
-            meterNumerator: draftRepeat.meterNumerator ?? (newSubs[String(newBeat)]?.length || 1),
+            meterNumerator: 1,
             meterDenominator: draftRepeat.meterDenominator ?? p.beatDenominatorRef.current,
           }
         : (() => {
@@ -623,7 +623,7 @@ export function useBarMode(p: UseBarModeParams): UseBarModeResult {
               type: "count",
               value: 1,
               bpm: barBpmRef.current,
-              meterNumerator: newSubs[String(newBeat)]?.length || 1,
+              meterNumerator: 1,
               meterDenominator: p.beatDenominatorRef.current,
               layers: srcLayers.length
                 ? srcLayers.map((l) => ({ ...l }))
@@ -677,7 +677,7 @@ export function useBarMode(p: UseBarModeParams): UseBarModeResult {
          type: srcRepeat?.type ?? "count",
          value: srcRepeat?.value ?? 1,
          bpm: srcRepeat?.bpm ?? barBpmRef.current,
-         meterNumerator: srcRepeat?.meterNumerator ?? (srcSub.length || 1),
+         meterNumerator: 1,
          meterDenominator: srcRepeat?.meterDenominator ?? p.beatDenominatorRef.current,
          layers: srcRepeat?.layers
            ? srcRepeat.layers.map((l) => ({ ...l }))
@@ -744,7 +744,7 @@ export function useBarMode(p: UseBarModeParams): UseBarModeResult {
          type: srcRepeat?.type ?? "count",
          value: srcRepeat?.value ?? 1,
          bpm: srcRepeat?.bpm ?? barBpmRef.current,
-         meterNumerator: srcRepeat?.meterNumerator ?? (srcSub.length || 1),
+         meterNumerator: 1,
          meterDenominator: srcRepeat?.meterDenominator ?? p.beatDenominatorRef.current,
          layers: srcRepeat?.layers
            ? srcRepeat.layers.map((l) => ({ ...l }))

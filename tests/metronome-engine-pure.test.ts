@@ -76,7 +76,7 @@ test("pureGetBeatDur: barBpmOverrides가 blockBpm보다 우선", () => {
   assert.equal(pureGetBeatDur(inputs, 2, 60), 250);
 });
 
-test("pureGetBarDur: 바별 분자는 같은 BPM에서도 각 바의 전체 길이를 독립적으로 정한다", () => {
+test("pureGetBarDur: 셀 3개와 4개는 모두 한 박 안의 연음으로 재생된다", () => {
   const inputs = makeInputs({
     beatTypes: ["accent", "accent"],
     beatSubdivisions: new Map([
@@ -88,8 +88,22 @@ test("pureGetBarDur: 바별 분자는 같은 BPM에서도 각 바의 전체 길�
       [1, { type: "count", value: 1, meterNumerator: 4, meterDenominator: 4 }],
     ]),
   });
-  assert.equal(pureGetBarDur(inputs, 0), 1500);
-  assert.equal(pureGetBarDur(inputs, 1), 2000);
+  assert.equal(pureGetBarDur(inputs, 0), 500);
+  assert.equal(pureGetBarDur(inputs, 1), 500);
+
+  const tripletState = makeState();
+  pureAddBeatTicks(inputs, tripletState, 0, 0, 0, 1, -1, 0);
+  assert.deepEqual(
+    tripletState.ticks.map(tick => Math.round(tick.time)),
+    [0, 167, 333],
+  );
+
+  const quadrupletState = makeState();
+  pureAddBeatTicks(inputs, quadrupletState, 1, 0, 0, 1, -1, 0);
+  assert.deepEqual(
+    quadrupletState.ticks.map(tick => Math.round(tick.time)),
+    [0, 125, 250, 375],
+  );
 });
 
 test("pureGetSubPattern: 커스텀 없으면 비트 타입 단일 배열", () => {

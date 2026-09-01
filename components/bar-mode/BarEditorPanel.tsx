@@ -219,7 +219,7 @@ export function BarEditorPanel({
     const current = barRepeats[editingBeat]?.meterDenominator ?? beatDenominator;
     const next: 2 | 4 | 8 = current === 4 ? 8 : current === 8 ? 2 : 4;
     onBarMeterChange?.(editingBeat, {
-      numerator: editingSubdivisionCount,
+      numerator: 1,
       denominator: next,
     });
   }, [
@@ -228,29 +228,6 @@ export function BarEditorPanel({
     editingBeat,
     editingSubdivisionCount,
     isPlaying,
-    onBarMeterChange,
-  ]);
-
-  // Once a bar has an explicit meter, its visual cells are the numerator
-  // editor. Keep the stored meter in lockstep when that cell pattern changes.
-  useEffect(() => {
-    if (
-      editingBeat === null ||
-      !editingRepeat?.meterNumerator ||
-      editingRepeat.meterNumerator === editingSubdivisionCount
-    ) {
-      return;
-    }
-    onBarMeterChange?.(editingBeat, {
-      numerator: editingSubdivisionCount,
-      denominator: editingRepeat.meterDenominator ?? beatDenominator,
-    });
-  }, [
-    beatDenominator,
-    editingBeat,
-    editingRepeat?.meterDenominator,
-    editingRepeat?.meterNumerator,
-    editingSubdivisionCount,
     onBarMeterChange,
   ]);
 
