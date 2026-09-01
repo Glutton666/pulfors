@@ -1701,6 +1701,31 @@ export function useMetronomeScreen() {
   });
 
   const { notifyPlayState: notifyVoicePlayState } = useVoiceAssistant();
+  const randomBarPreviousModeRef = useRef<"sequential" | "loop" | "random" | null>(null);
+  const finishRandomBarPlay = useCallback(() => {
+    const previousMode = randomBarPreviousModeRef.current;
+    if (previousMode === null) return;
+    randomBarPreviousModeRef.current = null;
+    blockPlayModeRef.current = previousMode;
+    setBlockPlayMode(previousMode);
+    engineRef.current?.setBlockPlayMode(previousMode);
+  }, [blockPlayModeRef, engineRef, setBlockPlayMode]);
+  const randomBarPlaybackBecameActiveRef = useRef(false);
+  useEffect(() => {
+    if (randomBarPreviousModeRef.current === null) {
+      randomBarPlaybackBecameActiveRef.current = false;
+      return;
+    }
+    if (isPlaying || isPreparing) {
+      randomBarPlaybackBecameActiveRef.current = true;
+      return;
+    }
+    if (randomBarPlaybackBecameActiveRef.current) {
+      randomBarPlaybackBecameActiveRef.current = false;
+      finishRandomBarPlay();
+    }
+  }, [finishRandomBarPlay, isPlaying, isPreparing]);
+
   const {
     togglePlayPause,
     togglePlayPauseRef,
@@ -1762,10 +1787,17 @@ export function useMetronomeScreen() {
     checkCompletedGoals,
     capturePlaybackError: (message, error, level = "error") =>
       captureBreadcrumb({ category: "metronome", message, level, data: { error: String(error) } }),
+    onPlaybackStopped: finishRandomBarPlay,
   });
 
   const handleRandomBarPlay = useCallback(() => {
-    if (!barMode || isPlaying || isPreparing) return;
+    if (
+      !barMode ||
+      isPlaying ||
+      isPreparing ||
+      randomBarPreviousModeRef.current !== null
+    ) return;
+    randomBarPreviousModeRef.current = blockPlayModeRef.current;
     blockPlayModeRef.current = "random";
     setBlockPlayMode("random");
     engineRef.current?.setBlockPlayMode("random");
@@ -1776,6 +1808,7 @@ export function useMetronomeScreen() {
     engineRef,
     isPlaying,
     isPreparing,
+    randomBarPreviousModeRef,
     setBlockPlayMode,
     togglePlayPauseRef,
   ]);
@@ -2141,6 +2174,7 @@ export function useMetronomeScreen() {
         setIsPreparing(false);
         setIsPlaying(false);
         resetPlaybackVisuals();
+        finishRandomBarPlay();
          markAudioStopped();
          completePracticeSessionRef.current("measure_complete");
         const playback = getPlaybackContext();

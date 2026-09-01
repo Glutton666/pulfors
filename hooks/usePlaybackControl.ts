@@ -83,6 +83,7 @@ export interface UsePlaybackControlParams {
   addPracticeLog: (data: PracticeSessionData) => Promise<unknown>;
   checkCompletedGoals: () => void;
   capturePlaybackError: (message: string, error: unknown, level?: "warning" | "error") => void;
+  onPlaybackStopped?: () => void;
 }
 
 /** Owns ordinary start, stop, and user-toggle playback paths. */
@@ -220,6 +221,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
     p.resetPlaybackVisuals();
     markAudioStopped();
     completePracticeSession("manual");
+    p.onPlaybackStopped?.();
   }, [completePracticeSession, p]);
 
   const togglePlayPause = useCallback(async () => {
@@ -234,6 +236,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
       p.preparingCancelledRef.current = true;
       p.setIsPreparing(false);
       markAudioStopped();
+      p.onPlaybackStopped?.();
       return true;
     }
     if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -252,6 +255,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
       if (!interrupted) markAudioStopped();
       p.showPausedNotification(playback.bpm, playback.modeLabel, p.languageRef.current);
       pausePracticeSession(interrupted);
+      p.onPlaybackStopped?.();
       return;
     }
 
@@ -302,6 +306,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
       p.isPlayingRef.current = false;
       if (getAudioLifecycleSnapshot().phase === "recovering") markAudioRecoveryFailed("interruption");
       else markAudioStopped();
+      p.onPlaybackStopped?.();
       return false;
     }
   }, [configureEngine, p, pausePracticeSession, renderWebLoop, startOrResumePracticeSession, seamlessRef]);
@@ -361,6 +366,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
       p.isPlayingRef.current = false;
       if (getAudioLifecycleSnapshot().phase === "recovering") markAudioRecoveryFailed("interruption");
       else markAudioStopped();
+      p.onPlaybackStopped?.();
     }
   }, [configureEngine, p, renderWebLoop, startOrResumePracticeSession]);
 

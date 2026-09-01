@@ -678,15 +678,13 @@ export class MetronomeEngine {
           break;
         }
       }
-      if (candidateCount > 0) {
-        const randomBeat = Math.floor(Math.random() * candidateCount);
-        pureAddBarWithRepeat(inputs, state, randomBeat, 0, -1, 1);
-        if (inputs.barRepeats.get(randomBeat)?.isEnd && state.ticks.length > 0) {
-          state.ticks[state.ticks.length - 1] = {
-            ...state.ticks[state.ticks.length - 1],
-            stopAfterThis: true,
-          };
-        }
+      const shuffledBeats = Array.from({ length: candidateCount }, (_, beat) => beat);
+      for (let i = shuffledBeats.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffledBeats[i], shuffledBeats[j]] = [shuffledBeats[j], shuffledBeats[i]];
+      }
+      for (const beat of shuffledBeats) {
+        pureAddBarWithRepeat(inputs, state, beat, 0, -1, 1);
       }
     } else if (this.blockPlayMode === "random" && sortedBlocks.length >= 2) {
       const outerBlocks: number[] = [];
@@ -1085,6 +1083,15 @@ export class MetronomeEngine {
       if (this.blockPlayMode !== "random") {
         this.cachedSchedule = this.schedule;
         this.cachedMeasureDurationMs = this.measureDurationMs;
+      } else if (this.preRenderedAudio) {
+        // A rendered player contains the previous random pass and would keep
+        // looping that old order. Hand audio back to live tick playback as
+        // soon as the next shuffled pass has been built.
+        if (this.onScheduleRebuild) {
+          this.onScheduleRebuild();
+        } else {
+          this.preRenderedAudio = false;
+        }
       }
       this.scheduleDirty = false;
     } else {

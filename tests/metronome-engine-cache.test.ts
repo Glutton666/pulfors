@@ -194,7 +194,7 @@ test("random 모드 + 외곽 블록 1개는 결정론적이라 캐시 적중", (
   assert.equal(engine._wasLastBuildCacheHit(), true);
 });
 
-test("random 모드 + 블록 없음이면 추가된 바 중 하나만 골라 반복·BPM 설정을 보존한다", () => {
+test("random 모드 + 블록 없음이면 모든 바를 한 패스에서 중복 없이 섞고 반복·BPM 설정을 보존한다", () => {
   const originalRandom = Math.random;
   const engine = new MetronomeEngine();
   engine.setBeatsPerMeasure(4);
@@ -204,21 +204,88 @@ test("random 모드 + 블록 없음이면 추가된 바 중 하나만 골라 반
   engine.setBlockPlayMode("random");
 
   try {
-    Math.random = () => 0.74;
+    Math.random = () => 0;
     engine.buildScheduleOnly();
-    const selectedThirdBar = engine.getScheduleInfo();
-    const mainTicks = selectedThirdBar.ticks.filter((tick) => tick.isMainBeat);
+    const firstPass = engine.getScheduleInfo();
+    const mainTicks = firstPass.ticks.filter((tick) => tick.isMainBeat);
+    const playedBars = mainTicks.map((tick) => tick.beat);
 
     assert.equal(engine._wasLastBuildCacheHit(), false);
-    assert.equal(mainTicks.length, 2, "선택한 바의 count 반복을 유지");
-    assert.ok(mainTicks.every((tick) => tick.beat === 2));
-    assert.equal(selectedThirdBar.durationMs, 2000, "선택한 바의 BPM 오버라이드를 유지");
+    assert.deepEqual(playedBars, [1, 2, 2, 3, 0], "각 바를 한 번씩 재생하고 bar 2의 count 반복 유지");
+    assert.equal(new Set(playedBars).size, 4, "한 패스에 모든 바가 포함됨");
+    assert.equal(firstPass.durationMs, 3500, "bar 2의 BPM 오버라이드를 포함한 전체 패스 길이");
 
-    Math.random = () => 0.1;
+    Math.random = () => 0.99;
     engine.buildScheduleOnly();
-    const selectedFirstBar = engine.getScheduleInfo();
-    assert.equal(engine._wasLastBuildCacheHit(), false, "매 패스마다 다시 랜덤 선택");
-    assert.ok(selectedFirstBar.ticks.every((tick) => tick.beat === 0));
+    const secondPass = engine.getScheduleInfo();
+    assert.equal(engine._wasLastBuildCacheHit(), false, "매 패스마다 새 순서를 생성");
+    assert.deepEqual(
+      secondPass.ticks.filter((tick) => tick.isMainBeat).map((tick) => tick.beat),
+      [0, 1, 2, 2, 3],
+    );
+  } finally {
+    Math.random = originalRandom;
+  }
+});
+
+test("random 한 패스에서도 혼합 박자와 BPM을 각 바 설정대로 스케줄한다", () => {
+  const originalRandom = Math.random;
+  const engine = new MetronomeEngine();
+  engine.setBeatsPerMeasure(2);
+  engine.setBeatTypes(["accent", "accent"]);
+  engine.setAllBeatSubdivisions({
+    0: ["accent", "normal", "normal"],
+    1: ["accent", "normal", "normal", "normal"],
+  });
+  engine.setAllBarRepeats({
+    0: { type: "count", value: 1, meterNumerator: 3, meterDenominator: 4 },
+    1: { type: "count", value: 1, meterNumerator: 4, meterDenominator: 4 },
+  });
+  engine.setAllBarBpmOverrides({ 0: 69, 1: 138 });
+  engine.setBlockPlayMode("random");
+
+  try {
+    Math.random = () => 0.99;
+    engine.buildScheduleOnly();
+    const { ticks, durationMs } = engine.getScheduleInfo();
+    const bar0 = ticks.filter((tick) => tick.beat === 0 && tick.layerIndex === 0);
+    const bar1 = ticks.filter((tick) => tick.beat === 1 && tick.layerIndex === 0);
+
+    assert.equal(bar0.length, 3, "3/4 바는 세 tick");
+    assert.equal(bar1.length, 4, "4/4 바는 네 tick");
+    assert.equal(Math.round(bar0[1].time - bar0[0].time), 870, "69 BPM 간격");
+    assert.equal(Math.round(bar1[1].time - bar1[0].time), 435, "138 BPM 간격");
+    assert.equal(Math.round(durationMs), 4348, "두 바의 개별 길이를 합산");
+  } finally {
+    Math.random = originalRandom;
+  }
+});
+
+test("random 반복 패스가 새 순서를 만들 때 이전 프리렌더 오디오를 해제한다", () => {
+  const originalRandom = Math.random;
+  const engine = new MetronomeEngine();
+  engine.setBeatsPerMeasure(3);
+  engine.setBlockPlayMode("random");
+  let rebuildCount = 0;
+  engine.setOnScheduleRebuild(() => {
+    rebuildCount += 1;
+    engine.setPreRenderedAudio(false);
+  });
+
+  try {
+    Math.random = () => 0.99;
+    engine.buildScheduleOnly();
+    engine.setPreRenderedAudio(true);
+
+    Math.random = () => 0;
+    (engine as any).rolloverToNextMeasure();
+
+    assert.equal(rebuildCount, 1, "이전 랜덤 패스의 렌더 오디오를 정확히 한 번 해제");
+    assert.deepEqual(
+      engine.getScheduleInfo().ticks.filter((tick) => tick.isMainBeat).map((tick) => tick.beat),
+      [1, 2, 0],
+      "다음 패스는 새 셔플 순서",
+    );
   } finally {
     Math.random = originalRandom;
   }
