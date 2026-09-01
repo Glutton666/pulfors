@@ -65,7 +65,6 @@ describe("bar editor control values", () => {
 
   test("uses the engine's denominator-normalized timing for legacy rows", () => {
     const engine = new MetronomeEngine();
-    // 120 displayed BPM at an eighth-note denominator is 60 internal BPM.
     engine.setBpm(60);
     engine.setBeatsPerMeasure(2);
     engine.setBeatSubdivision(0, ["normal", "normal", "normal", "normal"]);

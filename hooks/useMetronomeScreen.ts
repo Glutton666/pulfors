@@ -606,7 +606,9 @@ export function useMetronomeScreen() {
       // `configureEngine` restores playback from this ref, while useSettings
       // restores the visible state separately. Keep the two snapshots aligned
       // after an app restart so saved beat subdivisions are audible.
-      dialConfigRef.current = hydrateDialConfigFromSettings(dialConfigRef.current, settings);
+      if (settingsMode !== "bar") {
+        dialConfigRef.current = hydrateDialConfigFromSettings(dialConfigRef.current, settings);
+      }
       if (settings.themeColor) setThemeColor(settings.themeColor);
       if (settings.showLandscapeImage !== undefined) setShowLandscapeImage(settings.showLandscapeImage);
       if (settings.landscapeContentType) setLandscapeContentType(settings.landscapeContentType);

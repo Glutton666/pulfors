@@ -115,11 +115,10 @@ export interface BlockEmitCacheHandle {
 }
 
 /**
- * 순수 함수: 사용자 표시용 BPM을 엔진 내부 quarter-note BPM으로 변환.
+ * 사용자 표시용 BPM을 엔진 내부 quarter-note BPM으로 변환.
  *
- * 메인 BPM 경로(`updateBpm`의 `clampedBpm * (4 / beatDenominator)`)와 동일한
- * 정규화를 적용한다. 바 BPM 오버라이드를 `setBarBpmOverride` / `setAllBarBpmOverrides`
- * 에 넘기기 전에 반드시 이 함수로 변환해야 한다.
+ * 박자표 분모에 맞춰 표시 BPM과 엔진 BPM을 정규화한다. 메인 BPM과 바별
+ * 오버라이드가 같은 변환을 거쳐야 분모가 4가 아닌 박자에서도 속도가 일치한다.
  *
  * @param displayBpm 사용자가 UI에서 보고 입력한 BPM 값
  * @param denominator 현재 박자 분모 (2 | 4 | 8)

@@ -380,27 +380,30 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
         ...loadedSettings,
         ...(loadedSettings.modeSettings?.[mode] ?? {}),
       };
-      setBpm(settings.bpm);
       const loadedDenom = settings.beatDenominator ?? 4;
-      baseBpmRef.current = Math.round(settings.bpm * (loadedDenom / 4));
-      setBeatsPerMeasure(settings.beatsPerMeasure);
-      if (settings.beatDenominator) {
-        setBeatDenominator(settings.beatDenominator);
-      }
-
       const engine = engineRef.current;
-      if (engine) {
-        // 분모에 따라 실제 엔진 속도 조정 (표시 BPM은 그대로 유지)
-        engine.setBpm(settings.bpm * (4 / loadedDenom));
-        engine.setBeatsPerMeasure(settings.beatsPerMeasure);
-      }
-
-      if (settings.subdivisionPattern && settings.subdivisionPattern.length > 0) {
-        setSubdivisionPattern(settings.subdivisionPattern);
-      }
-      if (settings.beatSubdivisions) {
-        setBeatSubdivisions(settings.beatSubdivisions);
-        engine?.setAllBeatSubdivisions(settings.beatSubdivisions);
+      // Bar mode owns a separate live BPM and rhythm document. Applying the
+      // asynchronous mode-profile snapshot here would overwrite the bar state
+      // restored by useBarMode, leaving the UI and engine on different configs.
+      if (mode !== "bar") {
+        setBpm(settings.bpm);
+        baseBpmRef.current = Math.round(settings.bpm * (loadedDenom / 4));
+        setBeatsPerMeasure(settings.beatsPerMeasure);
+        if (settings.beatDenominator) {
+          setBeatDenominator(settings.beatDenominator);
+        }
+        if (engine) {
+          // 분모에 따라 실제 엔진 속도 조정 (표시 BPM은 그대로 유지)
+          engine.setBpm(settings.bpm * (4 / loadedDenom));
+          engine.setBeatsPerMeasure(settings.beatsPerMeasure);
+        }
+        if (settings.subdivisionPattern && settings.subdivisionPattern.length > 0) {
+          setSubdivisionPattern(settings.subdivisionPattern);
+        }
+        if (settings.beatSubdivisions) {
+          setBeatSubdivisions(settings.beatSubdivisions);
+          engine?.setAllBeatSubdivisions(settings.beatSubdivisions);
+        }
       }
       if (settings.volume !== undefined) {
         setVolume(settings.volume);

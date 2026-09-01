@@ -164,7 +164,7 @@ export function applyEntryToEngine(engine: EntryEngineSetters, entry: PracticeEn
   // (이전 인라인 코드의 truthy 체크와 동일 의도). 엔진은 20~300으로 클램프하므로
   // 0을 흘려보내면 20으로 잘못 강제될 수 있어, 이 경계는 헬퍼에서 막는다.
   // denominator 정규화: 바 오버라이드 BPM도 메인 BPM과 동일하게 quarter-note 단위로
-  // 변환해 엔진에 넘긴다. 미변환 시 6/8 등 비4/4 박자에서 2배 속도 차이가 발생한다.
+  // 변환해 엔진에 넘긴다.
   const bpmOverrides: Record<number, number> = {};
   for (const [k, v] of Object.entries(migratedRepeats)) {
     if (typeof v.bpm === "number" && v.bpm > 0) {

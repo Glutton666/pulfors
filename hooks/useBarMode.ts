@@ -266,8 +266,9 @@ export function useBarMode(p: UseBarModeParams): UseBarModeResult {
     const clamped = Math.max(20, Math.min(300, newBpm));
     setBarBpm(clamped);
     barBpmRef.current = clamped;
+    p.persistSettings({ bpm: clamped });
     p.onBarBpmChange(clamped);
-  }, [p.onBarBpmChange]);
+  }, [p.onBarBpmChange, p.persistSettings]);
 
   // ─────────────────────────────────────────────────────────────────────────
   // handleBarModeChange
