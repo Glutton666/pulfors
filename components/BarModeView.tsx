@@ -264,7 +264,8 @@ export function BarModeView({
     const rh = rowHeight ?? BAR_ROW_H;
     const beatTop = activeListIndex * rh;
     const scrollTarget = Math.max(0, beatTop - barContainerHeight / 2 + rh / 2);
-    barScrollRef.current?.scrollToOffset({ offset: scrollTarget, animated: true });
+    barScrollRef.current?.scrollToOffset({ offset: scrollTarget, animated: false });
+    onBarScrollOffset?.(scrollTarget);
   }, [isPlaying, activeListIndex, barContainerHeight, onBarScrollOffset, rowHeight]);
 
   // ─── Memos ────────────────────────────────────────────────────────────────
