@@ -78,6 +78,7 @@ interface BeatIndicatorProps {
   isPreparing?: boolean;
   onBeatsChange: (beats: number) => void;
   onTogglePlay: () => void;
+  onRandomPlayRequest?: () => void;
   /** 재생 버튼 길게 누름 — 비트 모드 빠른 저장(연습장 저장) 모달 열기 */
   onPlayLongPress?: () => void;
   beatTypes: BeatType[];
@@ -162,6 +163,7 @@ export function BeatIndicator({
   isPreparing = false,
   onBeatsChange,
   onTogglePlay,
+  onRandomPlayRequest,
   onPlayLongPress,
   beatTypes,
   onBeatTypeChange,
@@ -1238,6 +1240,7 @@ export function BeatIndicator({
         currentBeat={currentBeat}
         activeSubNote={activeSubNote}
         onTogglePlay={onTogglePlay}
+        onRandomPlayRequest={onRandomPlayRequest}
         barLoopMode={barLoopMode}
         onBarLoopModeChange={onBarLoopModeChange}
         blockPlayMode={blockPlayMode}

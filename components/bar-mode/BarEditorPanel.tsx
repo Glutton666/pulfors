@@ -69,6 +69,7 @@ export interface BarEditorPanelProps {
   onDenominatorCycle?: () => void;
   isPreparing: boolean;
   onTogglePlay: () => void;
+  onRandomPlayRequest?: () => void;
   barLoopMode: "loop" | "once";
   onBarLoopModeChange: (mode: "loop" | "once") => void;
   blockPlayMode: "sequential" | "loop" | "random";
@@ -98,7 +99,7 @@ export function BarEditorPanel({
   editingBeat, barRepeats, isPlaying, beatsPerMeasure, beatSubdivisions,
   onBarRepeatChange, onBarMeterChange, onDeleteBar, onBarStartBeatSelect, onAddBar, onBarQuickSave,
   bpm, onBpmChange, beatDenominator = 4, onDenominatorCycle, isPreparing, onTogglePlay,
-  barLoopMode, onBarLoopModeChange, blockPlayMode, onBlockPlayModeChange,
+  onRandomPlayRequest, barLoopMode, onBarLoopModeChange, blockPlayMode, onBlockPlayModeChange,
   loopBlocks, onLoopBlocksChange,
   soundSet = "classic", onSoundSetChange, layerSoundSets = {}, onLayerSoundSetsChange,
   onPreviewSoundSet, customSoundSets = {}, onCustomSoundSetsChange,
@@ -584,12 +585,22 @@ export function BarEditorPanel({
   // ─── Render ───────────────────────────────────────────────────────────────
 
   const editorSwipeAnim = useRef(new Animated.Value(0)).current;
+  const randomPlayShakeAnim = useRef(new Animated.Value(0)).current;
   const [displayMinutes, displaySeconds] = formatBarDuration(repMin * 60 + repSec).split(":");
+  const handleRandomPlayRequest = useCallback(() => {
+    randomPlayShakeAnim.stopAnimation();
+    Animated.sequence([
+      Animated.timing(randomPlayShakeAnim, { toValue: -3, duration: 45, useNativeDriver: true }),
+      Animated.timing(randomPlayShakeAnim, { toValue: 3, duration: 90, useNativeDriver: true }),
+      Animated.timing(randomPlayShakeAnim, { toValue: 0, duration: 45, useNativeDriver: true }),
+    ]).start();
+    onRandomPlayRequest?.();
+  }, [onRandomPlayRequest, randomPlayShakeAnim]);
 
   return (
     <>
       <Animated.View
-        style={[styles.editorSection, { borderTopColor: C.overlay08, transform: [{ translateY: editorSwipeAnim }] }]}
+        style={[styles.editorSection, { borderTopColor: C.overlay08, transform: [{ translateY: editorSwipeAnim }, { translateX: randomPlayShakeAnim }] }]}
         {...editorSwipePan.panHandlers}
       >
         {/* Layer tab row */}
@@ -801,6 +812,7 @@ export function BarEditorPanel({
                 isPreparing={isPreparing}
                 barLoopMode={barLoopMode}
                 onTogglePlay={onTogglePlay}
+                onRandomPlayRequest={handleRandomPlayRequest}
                 onBarLoopModeChange={onBarLoopModeChange}
                 blockPlayMode={blockPlayMode}
                 onBlockPlayModeChange={onBlockPlayModeChange}

@@ -57,6 +57,7 @@ export interface BarModeViewProps {
   currentBeat: number;
   activeSubNote: number;
   onTogglePlay: () => void;
+  onRandomPlayRequest?: () => void;
   barLoopMode: "loop" | "once";
   onBarLoopModeChange: (mode: "loop" | "once") => void;
   blockPlayMode: "sequential" | "loop" | "random";
@@ -108,7 +109,7 @@ export function BarModeView({
   beatsPerMeasure, beatTypes, beatSubdivisions,
   barRepeats, onBarRepeatChange, onBarMeterChange, loopBlocks, onLoopBlocksChange,
   isPlaying, isPreparing, currentBeat, onTogglePlay, barLoopMode,
-  onBarLoopModeChange, blockPlayMode, onBlockPlayModeChange, progressInfo,
+  onRandomPlayRequest, onBarLoopModeChange, blockPlayMode, onBlockPlayModeChange, progressInfo,
   barStartBeat, onBarStartBeatSelect, onAddBar, onDeleteBar,
   subdivisionBarElement, onBarQuickSave, onBarScrollOffset,
   bpm, onBpmChange, halfTime, beatDenominator = 4, onDenominatorCycle,
@@ -633,6 +634,7 @@ export function BarModeView({
         onDenominatorCycle={onDenominatorCycle}
         isPreparing={isPreparing}
         onTogglePlay={onTogglePlay}
+        onRandomPlayRequest={onRandomPlayRequest}
         barLoopMode={barLoopMode}
         onBarLoopModeChange={onBarLoopModeChange}
         blockPlayMode={blockPlayMode}

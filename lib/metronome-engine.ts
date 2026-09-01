@@ -670,7 +670,25 @@ export class MetronomeEngine {
     const processOuterCached = (outerIdx: number) =>
       pureProcessOuterCached(inputs, state, durCache, jumpProcessed, cacheHandle, outerIdx);
 
-    if (this.blockPlayMode === "random" && sortedBlocks.length >= 2) {
+    if (this.blockPlayMode === "random" && sortedBlocks.length === 0) {
+      let candidateCount = this.beatsPerMeasure;
+      for (let beat = 0; beat < this.beatsPerMeasure; beat++) {
+        if (inputs.barRepeats.get(beat)?.isEnd) {
+          candidateCount = beat + 1;
+          break;
+        }
+      }
+      if (candidateCount > 0) {
+        const randomBeat = Math.floor(Math.random() * candidateCount);
+        pureAddBarWithRepeat(inputs, state, randomBeat, 0, -1, 1);
+        if (inputs.barRepeats.get(randomBeat)?.isEnd && state.ticks.length > 0) {
+          state.ticks[state.ticks.length - 1] = {
+            ...state.ticks[state.ticks.length - 1],
+            stopAfterThis: true,
+          };
+        }
+      }
+    } else if (this.blockPlayMode === "random" && sortedBlocks.length >= 2) {
       const outerBlocks: number[] = [];
       for (let idx = 0; idx < sortedBlocks.length; idx++) {
         const blk = sortedBlocks[idx];
@@ -762,7 +780,15 @@ export class MetronomeEngine {
         if (outerCount >= 2) return true;
       }
     }
-    return false;
+    if (outerCount > 0) return false;
+    let candidateCount = this.beatsPerMeasure;
+    for (let beat = 0; beat < this.beatsPerMeasure; beat++) {
+      if (this.barRepeats.get(beat)?.isEnd) {
+        candidateCount = beat + 1;
+        break;
+      }
+    }
+    return candidateCount >= 2;
   }
 
   private computeScheduleCacheKey(): string {

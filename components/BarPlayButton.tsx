@@ -1,9 +1,14 @@
-import React, { useRef } from "react";
+import React, { useEffect, useRef } from "react";
 import { View, Pressable, Platform, ActivityIndicator, PanResponder, Animated, type ViewStyle, type StyleProp } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { Spacing } from "@/constants/tokens";
 import type { TranslationFn } from "@/lib/i18n";
+import {
+  createBarPlayGestureState,
+  updateBarPlayGesture,
+  type BarPlayGestureState,
+} from "@/lib/bar-play-gesture";
 
 export interface BarPlayButtonProps {
   isPlaying: boolean;
@@ -13,6 +18,7 @@ export interface BarPlayButtonProps {
   onBarLoopModeChange: (mode: "loop" | "once") => void;
   blockPlayMode?: "sequential" | "loop" | "random";
   onBlockPlayModeChange?: (mode: "sequential" | "loop" | "random") => void;
+  onRandomPlayRequest?: () => void;
   baseStyle: StyleProp<ViewStyle>;
   accentColor: string;
   dangerColor: string;
@@ -31,7 +37,7 @@ export function BarPlayButton({
   onTogglePlay,
   onBarLoopModeChange,
   blockPlayMode,
-  onBlockPlayModeChange,
+  onRandomPlayRequest,
   baseStyle,
   accentColor,
   dangerColor,
@@ -42,46 +48,76 @@ export function BarPlayButton({
   testID = "bar-play-button",
   t,
 }: BarPlayButtonProps) {
-  const shakeXRef = useRef(0);
-  const lastDirRef = useRef<"left" | "right" | null>(null);
-  const dirChangesRef = useRef(0);
+  const gestureStateRef = useRef<BarPlayGestureState>(
+    createBarPlayGestureState(),
+  );
+  const gestureTriggeredRef = useRef(false);
   const shakeAnim = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+
+  const resetGesture = () => {
+    gestureStateRef.current = createBarPlayGestureState();
+    gestureTriggeredRef.current = false;
+  };
+
+  const playEntryFeedback = () => {
+    shakeAnim.stopAnimation();
+    scaleAnim.stopAnimation();
+    Animated.parallel([
+      Animated.sequence([
+        Animated.timing(shakeAnim, { toValue: -7, duration: 55, useNativeDriver: true }),
+        Animated.timing(shakeAnim, { toValue: 7, duration: 110, useNativeDriver: true }),
+        Animated.timing(shakeAnim, { toValue: -4, duration: 75, useNativeDriver: true }),
+        Animated.timing(shakeAnim, { toValue: 0, duration: 55, useNativeDriver: true }),
+      ]),
+      Animated.sequence([
+        Animated.timing(scaleAnim, { toValue: 1.06, duration: 110, useNativeDriver: true }),
+        Animated.timing(scaleAnim, { toValue: 1, duration: 220, useNativeDriver: true }),
+      ]),
+    ]).start();
+  };
+
+  useEffect(() => {
+    if (isPlaying || isPreparing) resetGesture();
+  }, [isPlaying, isPreparing]);
+
+  useEffect(() => {
+    return () => {
+      resetGesture();
+      shakeAnim.stopAnimation();
+      scaleAnim.stopAnimation();
+    };
+  }, [scaleAnim, shakeAnim]);
 
   const shakePanel = PanResponder.create({
     onStartShouldSetPanResponder: () => false,
     onMoveShouldSetPanResponder: (_e, g) =>
-      !isPlaying && Math.abs(g.dx) > 8 && Math.abs(g.dx) > Math.abs(g.dy) * 1.2,
+      !isPlaying &&
+      !isPreparing &&
+      !gestureTriggeredRef.current &&
+      !!onRandomPlayRequest &&
+      Math.abs(g.dx) > 8 &&
+      Math.abs(g.dx) > Math.abs(g.dy) * 1.2,
     onPanResponderGrant: () => {
-      shakeXRef.current = 0;
-      lastDirRef.current = null;
-      dirChangesRef.current = 0;
+      gestureStateRef.current = createBarPlayGestureState();
+      gestureTriggeredRef.current = false;
     },
     onPanResponderMove: (_e, g) => {
-      const dx = g.dx - shakeXRef.current;
-      const curDir: "left" | "right" = dx < 0 ? "left" : "right";
-      if (lastDirRef.current && curDir !== lastDirRef.current && Math.abs(dx) > 12) {
-        dirChangesRef.current++;
-        shakeXRef.current = g.dx;
-        if (dirChangesRef.current >= 2 && onBlockPlayModeChange) {
-          dirChangesRef.current = 0;
-          const next = blockPlayMode === "random" ? "sequential" : "random";
-          onBlockPlayModeChange(next);
-          if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-          Animated.sequence([
-            Animated.timing(shakeAnim, { toValue: -8, duration: 60, useNativeDriver: true }),
-            Animated.timing(shakeAnim, { toValue: 8, duration: 60, useNativeDriver: true }),
-            Animated.timing(shakeAnim, { toValue: 0, duration: 60, useNativeDriver: true }),
-          ]).start();
-        }
-      }
-      if (lastDirRef.current !== curDir && Math.abs(dx) > 6) {
-        lastDirRef.current = curDir;
+      if (isPlaying || isPreparing || gestureTriggeredRef.current) return;
+      const result = updateBarPlayGesture(gestureStateRef.current, g.dx);
+      gestureStateRef.current = result.state;
+      if (result.triggered) {
+        gestureTriggeredRef.current = true;
+        playEntryFeedback();
+        if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+        onRandomPlayRequest?.();
       }
     },
     onPanResponderRelease: () => {
-      shakeXRef.current = 0;
-      lastDirRef.current = null;
-      dirChangesRef.current = 0;
+      resetGesture();
+    },
+    onPanResponderTerminate: () => {
+      resetGesture();
     },
   });
 
@@ -110,7 +146,7 @@ export function BarPlayButton({
     : barLoopModeLabel;
 
   return (
-    <Animated.View style={{ transform: [{ translateX: shakeAnim }] }} {...shakePanel.panHandlers}>
+    <Animated.View style={{ transform: [{ translateX: shakeAnim }, { scale: scaleAnim }] }} {...shakePanel.panHandlers}>
       <Pressable
         onPress={onTogglePlay}
         onLongPress={handleLongPress}

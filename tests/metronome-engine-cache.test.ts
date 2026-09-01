@@ -194,6 +194,36 @@ test("random 모드 + 외곽 블록 1개는 결정론적이라 캐시 적중", (
   assert.equal(engine._wasLastBuildCacheHit(), true);
 });
 
+test("random 모드 + 블록 없음이면 추가된 바 중 하나만 골라 반복·BPM 설정을 보존한다", () => {
+  const originalRandom = Math.random;
+  const engine = new MetronomeEngine();
+  engine.setBeatsPerMeasure(4);
+  engine.setBeatTypes(["strong", "accent", "normal", "mute"]);
+  engine.setBarRepeat(2, { type: "count", value: 2 });
+  engine.setBarBpmOverride(2, 60);
+  engine.setBlockPlayMode("random");
+
+  try {
+    Math.random = () => 0.74;
+    engine.buildScheduleOnly();
+    const selectedThirdBar = engine.getScheduleInfo();
+    const mainTicks = selectedThirdBar.ticks.filter((tick) => tick.isMainBeat);
+
+    assert.equal(engine._wasLastBuildCacheHit(), false);
+    assert.equal(mainTicks.length, 2, "선택한 바의 count 반복을 유지");
+    assert.ok(mainTicks.every((tick) => tick.beat === 2));
+    assert.equal(selectedThirdBar.durationMs, 2000, "선택한 바의 BPM 오버라이드를 유지");
+
+    Math.random = () => 0.1;
+    engine.buildScheduleOnly();
+    const selectedFirstBar = engine.getScheduleInfo();
+    assert.equal(engine._wasLastBuildCacheHit(), false, "매 패스마다 다시 랜덤 선택");
+    assert.ok(selectedFirstBar.ticks.every((tick) => tick.beat === 0));
+  } finally {
+    Math.random = originalRandom;
+  }
+});
+
 test("블록 한 개만 편집해도 미변경 outer 블록의 ticks는 재사용된다", () => {
   const engine = new MetronomeEngine();
   engine.setBeatsPerMeasure(8);

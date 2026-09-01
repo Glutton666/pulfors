@@ -1763,6 +1763,23 @@ export function useMetronomeScreen() {
     capturePlaybackError: (message, error, level = "error") =>
       captureBreadcrumb({ category: "metronome", message, level, data: { error: String(error) } }),
   });
+
+  const handleRandomBarPlay = useCallback(() => {
+    if (!barMode || isPlaying || isPreparing) return;
+    blockPlayModeRef.current = "random";
+    setBlockPlayMode("random");
+    engineRef.current?.setBlockPlayMode("random");
+    void togglePlayPauseRef.current();
+  }, [
+    barMode,
+    blockPlayModeRef,
+    engineRef,
+    isPlaying,
+    isPreparing,
+    setBlockPlayMode,
+    togglePlayPauseRef,
+  ]);
+
   stopIfPlayingRef.current = stopMetronome;
   const completePracticeSessionRef = useRef(completePracticeSession);
   useEffect(() => { completePracticeSessionRef.current = completePracticeSession; }, [completePracticeSession]);
@@ -3427,6 +3444,8 @@ export function useMetronomeScreen() {
     setBarLoopMode,
     blockPlayMode,
     setBlockPlayMode,
+    blockPlayModeRef,
+    handleRandomBarPlay,
     barRepeats,
     loopBlocks,
     barStartBeat,
