@@ -448,7 +448,9 @@ export function SettingsThemeTab({
         </Pressable>
       </View>
 
-      <View style={[styles.section, styles.sectionSpaced]}>
+      <View style={[styles.divider, { backgroundColor: C.border }]} />
+
+      <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Ionicons name="refresh-outline" size={S.ms(18, 0.4)} color={C.accent} />
           <Text style={[styles.sectionLabel, { color: C.text }]}>{t("settings", "beatDirection")}</Text>
@@ -511,6 +513,7 @@ export function SettingsThemeTab({
       </View>
 
       {showsBarControls && <>
+      <View style={[styles.divider, { backgroundColor: C.border }]} />
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Ionicons name="layers-outline" size={S.ms(18, 0.4)} color={C.accent} />

@@ -70,9 +70,6 @@ export const make_styles = (C: typeof Colors) => StyleSheet.create({
   section: {
     gap: 14,
   },
-  sectionSpaced: {
-    marginTop: 22,
-  },
   sectionHeader: {
     flexDirection: "row",
     alignItems: "center",
