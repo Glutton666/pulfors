@@ -89,7 +89,7 @@ export function SettingsSoundTab({
   const csStyles = make_csStyles(C);
   const { t } = useLanguage();
   const isGlobal = scope === "global";
-  const showsBarControls = isGlobal || scope === "bar";
+  const showsBarControls = scope === "bar";
 
   // Volume slider state
   const trackRef = useRef<View>(null);
