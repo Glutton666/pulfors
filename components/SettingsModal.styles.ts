@@ -68,12 +68,12 @@ export const make_styles = (C: typeof Colors) => StyleSheet.create({
     color: C.textSecondary,
   },
   section: {
-    gap: 10,
+    gap: 14,
   },
   sectionHeader: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: 10,
   },
   sectionLabel: {
     fontFamily: "SpaceGrotesk_500Medium",
@@ -107,7 +107,7 @@ export const make_styles = (C: typeof Colors) => StyleSheet.create({
   divider: {
     height: 1,
     backgroundColor: C.border,
-    marginVertical: 16,
+    marginVertical: 20,
   },
   sliderContainer: {
     height: 48,
@@ -206,7 +206,7 @@ export const make_styles = (C: typeof Colors) => StyleSheet.create({
   tripleBtn: {
     flex: 1,
     alignItems: "center" as const,
-    paddingVertical: 10,
+    paddingVertical: 14,
     borderRadius: 10,
     borderWidth: 1,
     borderColor: C.border,
@@ -228,7 +228,7 @@ export const make_styles = (C: typeof Colors) => StyleSheet.create({
     flexDirection: "row" as const,
     alignItems: "center" as const,
     gap: 10,
-    paddingVertical: 12,
+    paddingVertical: 14,
     paddingHorizontal: 16,
     borderRadius: 10,
     borderWidth: 1,
