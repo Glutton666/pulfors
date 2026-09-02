@@ -448,7 +448,7 @@ export function SettingsThemeTab({
         </Pressable>
       </View>
 
-      <View style={styles.section}>
+      <View style={[styles.section, styles.sectionSpaced]}>
         <View style={styles.sectionHeader}>
           <Ionicons name="refresh-outline" size={S.ms(18, 0.4)} color={C.accent} />
           <Text style={[styles.sectionLabel, { color: C.text }]}>{t("settings", "beatDirection")}</Text>
