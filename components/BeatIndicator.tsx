@@ -1346,14 +1346,12 @@ export function BeatIndicator({
           accessibilityLabel={t("settings", "title")}
           style={{
             position: "absolute",
-            top: S.ms(8, 0.3),
-            right: S.ms(8, 0.3),
+            top: 0,
+            right: 0,
             zIndex: 2,
             padding: S.ms(7, 0.3),
             borderRadius: S.ms(16, 0.3),
             backgroundColor: C.surface,
-            borderWidth: 1,
-            borderColor: C.border,
           }}
         >
           <Ionicons name="settings-outline" size={S.ms(18, 0.4)} color={C.textSecondary} />
