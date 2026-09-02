@@ -107,7 +107,8 @@ export function ScoreListScreen({ defaultBpm, onClose, onOpenEditor, onTitleSubm
       await refresh();
       onOpenEditor(result.doc);
     } else if (result.errorCode && result.errorCode !== "cancelled") {
-      Alert.alert(t("scoreMode", "importJson"), t("scoreMode", "importFail"));
+      const detail = result.errorMessage ? `\n\n${result.errorMessage}` : "";
+      Alert.alert(t("scoreMode", "importJson"), `${t("scoreMode", "importFail")}${detail}`);
     }
   }
 

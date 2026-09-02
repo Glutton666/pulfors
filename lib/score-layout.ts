@@ -365,7 +365,9 @@ export function layoutMeasure(
       // 오버라이드 값은 사용자가 실제로 터치한 "중심(center)" 좌표를 의미함
       // (ScoreCanvas의 ghost.x/measureRelX는 항상 음표 중심 기준으로 계산됨).
       // 오버라이드가 없는 fallback 값(seqLeftX)은 왼쪽 끝(left edge) 기준이므로 폭의 절반을 더해 중심으로 변환.
-      const ov = overrides?.[el.id];
+      const ov = overrides && Object.prototype.hasOwnProperty.call(overrides, el.id)
+        ? overrides[el.id]
+        : undefined;
       const x = ov != null
         ? startX + ov
         : (seqLeftX.get(el.id) ?? startX + leftPad) + w / 2;

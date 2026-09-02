@@ -32,6 +32,7 @@ import {
   importScoreFromJson,
   importReferenceImage,
   extractParts,
+  validateScoreTimeSignature,
 } from "@/lib/score-io";
 import { paginateScoreDoc } from "@/lib/score-layout";
 import { measureBeatTotal } from "@/lib/score-playback";
@@ -433,7 +434,8 @@ export function ScoreEditorScreen({
       setCanRedo(false);
       onSaved(result.doc);
     } else if (result.errorCode && result.errorCode !== "cancelled") {
-      Alert.alert(t("scoreMode", "importJson"), t("scoreMode", "importFail"));
+      const detail = result.errorMessage ? `\n\n${result.errorMessage}` : "";
+      Alert.alert(t("scoreMode", "importJson"), `${t("scoreMode", "importFail")}${detail}`);
     }
   }
 
@@ -1019,7 +1021,7 @@ export function ScoreEditorScreen({
       const parts = value.trim().split("/");
       const num = parseInt(parts[0] ?? "", 10);
       const den = parseInt(parts[1] ?? "", 10);
-      if (num > 0 && den > 0) {
+      if (validateScoreTimeSignature({ numerator: num, denominator: den }) === null) {
         if (isDraft) {
           setDraftMeasure((d) => ({ ...d, timeSignature: { numerator: num, denominator: den } }));
         } else {
