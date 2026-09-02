@@ -70,3 +70,4 @@ export const MicWebView = forwardRef<MicWebViewHandle, MicWebViewProps>(
     );
   }
 );
+MicWebView.displayName = "MicWebView";

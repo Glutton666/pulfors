@@ -6,12 +6,14 @@ export default defineConfig({
   timeout: process.env.CI ? 120000 : 30000,
   expect: { timeout: 8000 },
   fullyParallel: false,
-  retries: 0,
+  retries: process.env.CI ? 1 : 0,
   workers: 1,
   reporter: "list",
   use: {
     baseURL: "http://localhost:8081",
-    trace: "on-first-retry",
+    trace: process.env.CI ? "retain-on-failure" : "on-first-retry",
+    video: process.env.CI ? "retain-on-failure" : "off",
+    screenshot: process.env.CI ? "only-on-failure" : "off",
   },
   projects: [
     {

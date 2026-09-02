@@ -125,3 +125,4 @@ export const SpeechWebView = forwardRef<SpeechWebViewHandle, Props>(({ onEvent, 
     />
   );
 });
+SpeechWebView.displayName = "SpeechWebView";

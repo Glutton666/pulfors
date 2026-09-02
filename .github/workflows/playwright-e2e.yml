@@ -33,6 +33,15 @@ jobs:
       - name: 단위 테스트 실행
         run: npm test -- --runInBand
 
+      - name: 프런트엔드 TypeScript 검사
+        run: npm run typecheck
+
+      - name: 서버 TypeScript 검사
+        run: npm run typecheck:server
+
+      - name: 정적 분석
+        run: npm run lint
+
       # Playwright 브라우저가 필요로 하는 Ubuntu 공유 라이브러리를 설치한다.
       - name: Playwright 시스템 의존성 설치
         run: npx playwright install-deps chromium
@@ -42,11 +51,7 @@ jobs:
 
       # playwright.config.ts의 webServer가 Expo 웹 앱을 포트 8081에서 기동한다.
       - name: 웹 E2E 테스트 실행
-        run: |
-          npx playwright test \
-            e2e/score-note-preview-setting.spec.ts \
-            e2e/modal-open-close.spec.ts \
-            e2e/subdivision-type-picker.spec.ts
+        run: npm run test:e2e
         env:
           CI: "true"
           EXPO_NO_DOCTOR: "1"

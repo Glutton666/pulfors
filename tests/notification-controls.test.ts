@@ -59,13 +59,13 @@ afterEach(() => {
   jest.useRealTimers();
 });
 
-test("BPM actions stay backgrounded while TOGGLE_PLAY keeps its own foreground policy", () => {
+test("all notification actions stay backgrounded", () => {
   const actions = buildNotificationActions(false, "en");
   const byId = Object.fromEntries(actions.map((action) => [action.identifier, action]));
 
   assert.equal(byId.BPM_UP.options.opensAppToForeground, false);
   assert.equal(byId.BPM_DOWN.options.opensAppToForeground, false);
-  assert.equal(byId.TOGGLE_PLAY.options.opensAppToForeground, true);
+  assert.equal(byId.TOGGLE_PLAY.options.opensAppToForeground, false);
 });
 
 test("notification category registration preserves action options", async () => {
@@ -77,7 +77,7 @@ test("notification category registration preserves action options", async () => 
   const byId = Object.fromEntries(actions.map((action) => [action.identifier, action]));
   assert.equal(byId.BPM_UP.options.opensAppToForeground, false);
   assert.equal(byId.BPM_DOWN.options.opensAppToForeground, false);
-  assert.equal(byId.TOGGLE_PLAY.options.opensAppToForeground, true);
+  assert.equal(byId.TOGGLE_PLAY.options.opensAppToForeground, false);
 });
 
 test("live notification responses dispatch supported actions without changing the listener flow", async () => {

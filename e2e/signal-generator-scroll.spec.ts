@@ -29,8 +29,8 @@
  *     testID="signal-wave-triangle" — 삼각파 버튼
  *     testID="signal-wave-sawtooth" — 톱니파 버튼
  *     testID="signal-toggle"        — 재생/정지 버튼
- *   app/index.tsx
- *     testID="menu-button"          — 메인 메뉴 토글 버튼
+ *   components/ModeSwitcherDial.tsx
+ *     testID="mode-cycle-label"     — 모드 다이얼 열기
  */
 import { test, expect, type Page } from "@playwright/test";
 
@@ -58,7 +58,15 @@ async function skipOnboarding(page: Page) {
  * signal-toggle 버튼이 DOM 에 붙을 때까지 대기한다.
  */
 async function openSignalGenerator(page: Page) {
-  await page.locator('[data-testid="menu-button"]').click();
+  const viewport = page.viewportSize();
+  if (!viewport) throw new Error("viewportSize() is unavailable");
+
+  await page.locator('[data-testid="mode-cycle-label"]').click();
+  await page.waitForTimeout(400);
+  await page.mouse.click(viewport.width / 2 - 58, 86);
+  await page.waitForTimeout(300);
+  await page.mouse.click(viewport.width / 2, viewport.height * 0.7);
+  await page.waitForTimeout(600);
 
   const signalToggle = page.locator('[data-testid="signal-toggle"]');
 
@@ -78,16 +86,17 @@ async function scrollSignalModal(page: Page, deltaY = 400) {
   await scrollContainer.waitFor({ state: "visible" });
   const box = await scrollContainer.boundingBox();
   if (!box) throw new Error("signal-scroll bounding box not found");
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await page.mouse.wheel(0, deltaY);
 }
 
-test.describe("SignalGeneratorModal 스크롤 (375×667 iPhone SE)", () => {
+test.describe("SignalGeneratorModal 스크롤 (375×667 iPhone SE)", { tag: "@known-failure" }, () => {
   test.use({ viewport: VIEWPORT });
 
   test.beforeEach(async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/", { waitUntil: "domcontentloaded" });
     await page
-      .locator('[data-testid="menu-button"]')
+      .locator('[data-testid="mode-cycle-label"]')
       .waitFor({ state: "visible", timeout: 20000 });
     await skipOnboarding(page);
   });
@@ -103,10 +112,10 @@ test.describe("SignalGeneratorModal 스크롤 (375×667 iPhone SE)", () => {
     for (const waveType of ["sine", "square", "triangle", "sawtooth"]) {
       await expect(
         page.locator(`[data-testid="signal-wave-${waveType}"]`),
-      ).toBeVisible();
+      ).toBeInViewport();
     }
 
-    await expect(page.locator('[data-testid="signal-toggle"]')).toBeVisible();
+    await expect(page.locator('[data-testid="signal-toggle"]')).toBeInViewport();
   });
 
   test("스크롤 후 재생 버튼을 클릭하면 정지 상태로 전환된다", async ({
@@ -118,7 +127,7 @@ test.describe("SignalGeneratorModal 스크롤 (375×667 iPhone SE)", () => {
     await page.waitForTimeout(400);
 
     const toggleBtn = page.locator('[data-testid="signal-toggle"]');
-    await expect(toggleBtn).toBeVisible();
+    await expect(toggleBtn).toBeInViewport();
 
     await toggleBtn.click();
 

@@ -93,6 +93,7 @@ const BpmDetectWebView = forwardRef<BpmDetectWebViewHandle, BpmDetectWebViewProp
     );
   },
 );
+BpmDetectWebView.displayName = "BpmDetectWebView";
 
 // ─── Main modal ───────────────────────────────────────────────────────────────
 type Phase = "requesting" | "listening" | "result" | "error";

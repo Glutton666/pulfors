@@ -911,7 +911,7 @@ export function PracticeBookModal({
           <View style={styles.goalOverlay}>
             <View style={[styles.goalDialog, { borderColor: C.accent }]}>
               <Text style={styles.goalDialogTitle}>{t("practiceBook", "goalTitle")}</Text>
-              <Text style={styles.goalDialogSub}>"{goalEntry.label}" {t("practiceBook", "goalSub")}</Text>
+              <Text style={styles.goalDialogSub}>&quot;{goalEntry.label}&quot; {t("practiceBook", "goalSub")}</Text>
               <View style={styles.goalInputRow}>
                 <TextInput
                   style={[styles.goalInput, { borderColor: C.accent }]}
