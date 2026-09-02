@@ -481,38 +481,34 @@ export function SettingsThemeTab({
 
       </>}
 
-      {(isGlobal || scope === "bar") && (
-        <>
-          <View style={[styles.divider, { backgroundColor: C.border }]} />
+      <View style={[styles.divider, { backgroundColor: C.border }]} />
 
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Ionicons name="headset-outline" size={S.ms(18, 0.4)} color={C.accent} />
-              <Text style={[styles.sectionLabel, { color: C.text }]}>{t("settings", "barMetronomeChannel")}</Text>
-            </View>
-            <Text style={[styles.offsetHint, { color: C.textTertiary }]}>{t("settings", "barMetronomeChannelHint")}</Text>
-            <View style={styles.tripleRow}>
-              {(["both", "left", "right"] as const).map((opt) => {
-                const active = barMetronomeChannel === opt;
-                return (
-                  <Pressable
-                    key={opt}
-                    style={[styles.tripleBtn, active && [styles.tripleBtnActive, { borderColor: C.accent, backgroundColor: C.accentDim }]]}
-                    onPress={() => {
-                      onBarMetronomeChannelChange(opt);
-                      if (Platform.OS !== "web") Haptics.selectionAsync();
-                    }}
-                  >
-                    <Text style={[styles.tripleBtnText, active && [styles.tripleBtnTextActive, { color: C.accent }]]}>
-                      {opt === "left" ? t("noteRecorder", "channel_left") : opt === "right" ? t("noteRecorder", "channel_right") : t("noteRecorder", "channel_both")}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          </View>
-        </>
-      )}
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Ionicons name="headset-outline" size={S.ms(18, 0.4)} color={C.accent} />
+          <Text style={[styles.sectionLabel, { color: C.text }]}>{t("settings", "barMetronomeChannel")}</Text>
+        </View>
+        <Text style={[styles.offsetHint, { color: C.textTertiary }]}>{t("settings", "barMetronomeChannelHint")}</Text>
+        <View style={styles.tripleRow}>
+          {(["both", "left", "right"] as const).map((opt) => {
+            const active = barMetronomeChannel === opt;
+            return (
+              <Pressable
+                key={opt}
+                style={[styles.tripleBtn, active && [styles.tripleBtnActive, { borderColor: C.accent, backgroundColor: C.accentDim }]]}
+                onPress={() => {
+                  onBarMetronomeChannelChange(opt);
+                  if (Platform.OS !== "web") Haptics.selectionAsync();
+                }}
+              >
+                <Text style={[styles.tripleBtnText, active && [styles.tripleBtnTextActive, { color: C.accent }]]}>
+                  {opt === "left" ? t("noteRecorder", "channel_left") : opt === "right" ? t("noteRecorder", "channel_right") : t("noteRecorder", "channel_both")}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      </View>
 
       {showsBarControls && <>
       <View style={styles.section}>
