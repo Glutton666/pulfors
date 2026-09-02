@@ -41,6 +41,7 @@ function SubdivDots({
   activeIndex,
   maxWidth,
   testID,
+  accessibilityLabel,
 }: {
   types: BeatType[];
   theme: "dark" | "light";
@@ -50,6 +51,7 @@ function SubdivDots({
   /** 사용 가능한 가로 폭 — 점 개수가 많아도 잘리지 않도록 크기를 줄인다 */
   maxWidth?: number;
   testID?: string;
+  accessibilityLabel?: string;
 }) {
   if (types.length === 0) return null;
   // 활성 인덱스가 표시 패턴 범위를 벗어나면(예: 블록 자체 서브디비전 재생 중)
@@ -70,14 +72,19 @@ function SubdivDots({
   }
   const gap = size * ratio;
   const strongBg  = theme === "dark" ? "#ffffff" : "#111111";
-  const strongFg  = theme === "dark" ? "#111111" : "#ffffff";
   const accentCol = theme === "dark" ? "#FFD54F" : "#B8860B";
   const muteEdge  = theme === "dark" ? "rgba(255,255,255,0.55)" : "rgba(0,0,0,0.45)";
   return (
-    <View style={[styles.subdivRow, { gap }]} testID={testID ?? "stage-subdiv-dots"}>
+    <View
+      style={[styles.subdivRow, { gap }]}
+      testID={testID ?? "stage-subdiv-dots"}
+      accessible={!!accessibilityLabel}
+      accessibilityLabel={accessibilityLabel}
+    >
       {types.map((t, i) => {
         const isActive = activeIndex === i;
-        // 타입별 약호: strong=흰 바탕 S, accent=노란 채움 A, mute=속 빈 링, normal=회색 점
+        // 타입별 시각 언어: strong=큰 흰 점, accent=노란 점, mute=속 빈 링.
+        // 문자 약호는 제거해 멀리서도 점 배열 자체가 먼저 보이게 한다.
         const color =
           t === "accent" ? accentCol
           : t === "mute"   ? "transparent"
@@ -86,21 +93,20 @@ function SubdivDots({
           : dotBase;
         const w = isActive ? size * 1.6 : i === 0 ? size * 1.5 : size;
         const h = isActive ? size * 1.3 : size;
-        const label = t === "strong" ? "S" : t === "accent" ? "A" : null;
+        const isStrong = t === "strong";
+        const dotWidth = isActive ? w : isStrong ? size * 1.25 : w;
+        const dotHeight = isStrong && !isActive ? size * 1.15 : h;
         // 활성 점은 링만 두르지 않고 노란색으로 꽉 채워 확실히 강조
         const bg = isActive
           ? activeRing
           : t === "mute" ? "transparent" : color;
-        const labelColor = isActive
-          ? "#3a2c00"
-          : t === "strong" ? strongFg : theme === "dark" ? "#3a2c00" : "#fff8e1";
         return (
           <View
             key={i}
             style={{
-              width: w,
-              height: h,
-              borderRadius: h / 2,
+              width: dotWidth,
+              height: dotHeight,
+              borderRadius: dotHeight / 2,
               backgroundColor: bg,
               opacity: isActive ? 1 : i === 0 ? 1 : 0.9,
               borderWidth: !isActive && t === "mute" ? 2 : 0,
@@ -109,19 +115,6 @@ function SubdivDots({
               justifyContent: "center",
             }}
           >
-            {label != null && size >= 12 && (
-              <Text
-                style={{
-                  color: labelColor,
-                  fontSize: Math.round(h * 0.62),
-                  lineHeight: Math.round(h * 0.8),
-                  fontWeight: "800",
-                  includeFontPadding: false,
-                }}
-              >
-                {label}
-              </Text>
-            )}
           </View>
         );
       })}
@@ -230,9 +223,12 @@ export function StageBeatColumn({
   const detailHeight = Math.max(28, Math.round(58 * fit));
   const cardPadding = Math.max(4, Math.round(12 * fit));
   const stackGap = Math.max(3, Math.round(10 * fit));
-  const labelMargin = Math.max(2, Math.round(6 * fit));
   const currentSubdiv = subdivisionTypes ?? [];
   const nextSubdiv = nextSubdivisionTypes ?? [];
+  const subdivisionA11y = (types: BeatType[]) =>
+    types.length === 0
+      ? labels.subdivision
+      : `${labels.subdivision}: ${types.map((type) => type).join(", ")}`;
 
   const SubdivisionLine = ({
     types,
@@ -245,21 +241,27 @@ export function StageBeatColumn({
     testID: string;
     muted?: boolean;
   }) => (
-    <View style={[styles.detailRow, { minHeight: detailHeight }]}>
-      <Text style={[styles.detailLabel, { color: muted ? nextColor : curColor }]}>
-        {labels.subdivision}
-      </Text>
+    <View
+      style={[styles.subdivOnlyRow, { minHeight: detailHeight }]}
+      accessible
+      accessibilityLabel={subdivisionA11y(types)}
+    >
       {types.length > 0 ? (
         <SubdivDots
           types={types}
           theme={theme}
           size={subSize}
-          maxWidth={rootW > 0 ? rootW - 132 : undefined}
+          maxWidth={rootW > 0 ? rootW - 32 : undefined}
           activeIndex={activeIndex}
           testID={testID}
+          accessibilityLabel={subdivisionA11y(types)}
         />
       ) : (
-        <Text testID={testID} style={[styles.emptyDetail, { color: muted ? nextColor : curColor }]}>
+        <Text
+          testID={testID}
+          accessibilityLabel={subdivisionA11y(types)}
+          style={[styles.emptyDetail, { color: muted ? nextColor : curColor }]}
+        >
           —
         </Text>
       )}
@@ -286,10 +288,10 @@ export function StageBeatColumn({
                 : "rgba(0,0,0,0.035)",
             },
           ]}
+          accessible
+          accessibilityLabel={`${labels.current}, ${labels.beat} ${cur0 + 1}. ${subdivisionA11y(currentSubdiv)}`}
         >
-          <Text style={[styles.groupLabel, { color: curColor, marginBottom: labelMargin }]}>{labels.current}</Text>
-          <View style={[styles.detailRow, { minHeight: detailHeight }]}>
-            <Text style={[styles.detailLabel, { color: curColor }]}>{labels.beat}</Text>
+          <View style={[styles.beatOnlyRow, { minHeight: detailHeight }]}>
             <Text
               testID="stage-current-beat"
               style={[styles.beatNum, styles.currentBeatNum, { color: curColor, fontSize: curFont, lineHeight: curFont + 4 }]}
@@ -319,10 +321,10 @@ export function StageBeatColumn({
                 : "rgba(0,0,0,0.018)",
             },
           ]}
+          accessible
+          accessibilityLabel={`${labels.next}, ${labels.beat} ${next0 + 1}. ${subdivisionA11y(nextSubdiv)}`}
         >
-          <Text style={[styles.groupLabel, { color: nextColor, marginBottom: labelMargin }]}>{labels.next}</Text>
-          <View style={[styles.detailRow, { minHeight: detailHeight }]}>
-            <Text style={[styles.detailLabel, { color: nextColor }]}>{labels.beat}</Text>
+          <View style={[styles.beatOnlyRow, { minHeight: detailHeight }]}>
             <Text
               testID="stage-next-beat"
               style={[styles.beatNum, styles.nextBeatNum, { color: nextColor, fontSize: nextFont, lineHeight: nextFont + 4 }]}
@@ -364,23 +366,17 @@ const styles = StyleSheet.create({
   nextCountGroup: {
     opacity: 0.9,
   },
-  groupLabel: {
-    alignSelf: "center",
-    fontSize: 12,
-    fontFamily: "SpaceGrotesk_600SemiBold",
-    letterSpacing: 1.2,
-    textTransform: "uppercase",
-  },
-  detailRow: {
+  beatOnlyRow: {
     width: "100%",
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
   },
-  detailLabel: {
-    width: 112,
-    fontSize: 14,
-    fontFamily: "SpaceGrotesk_500Medium",
-    opacity: 0.72,
+  subdivOnlyRow: {
+    width: "100%",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
   },
   emptyDetail: {
     fontSize: 22,
@@ -433,8 +429,7 @@ const styles = StyleSheet.create({
   subdivRow: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "flex-end",
-    flex: 1,
+    justifyContent: "center",
     minHeight: 24,
   },
 });

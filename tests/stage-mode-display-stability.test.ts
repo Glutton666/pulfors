@@ -12,6 +12,20 @@ describe("stage beat display stability", () => {
     assert.equal(beatColumnSrc.includes("withTiming"), false);
   });
 
+  test("keeps explanatory labels out of the visual beat cards", () => {
+    const visualLabelPattern = /<Text[^>]*>\s*\{labels\.(current|next|beat|subdivision)\}\s*<\/Text>/s;
+    assert.equal(visualLabelPattern.test(beatColumnSrc), false);
+    assert.ok(beatColumnSrc.includes("accessibilityLabel={`${labels.current}"));
+    assert.ok(beatColumnSrc.includes("accessibilityLabel={`${labels.next}"));
+  });
+
+  test("uses dot-only subdivision visuals", () => {
+    assert.equal(beatColumnSrc.includes('const label = t === "strong"'), false);
+    assert.equal(beatColumnSrc.includes("<Text\n                style={{"), false);
+    assert.ok(beatColumnSrc.includes("const isStrong = t === \"strong\""));
+    assert.ok(beatColumnSrc.includes("rootW - 32"));
+  });
+
   test("scales the complete card stack from the measured container height", () => {
     assert.ok(beatColumnSrc.includes("rootH / 370"));
     assert.ok(beatColumnSrc.includes("detailHeight"));
