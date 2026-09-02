@@ -11,14 +11,20 @@ import {
   playWebRenderedLoop,
   renderMeasure,
 } from "@/lib/audio-renderer";
-import type { ClickPCMs, TickInfo } from "@/lib/audio-renderer";
+import type { ClickPCMs, SamplePCMEntry, TickInfo } from "@/lib/audio-renderer";
 import type { MetronomeEngine } from "@/lib/metronome-engine";
 import type { BarConfig, DialConfig } from "@/app/index.helpers";
 import type { PracticeEntry, SoundSet } from "@/lib/storage";
 import { PracticeSessionTracker, type PracticeSessionData } from "@/lib/activity-log";
 import type { Language } from "@/lib/i18n";
 import type { SampleChannel } from "@/lib/stereo-channel";
-import type { NoteSampleMetroChannelMap } from "@/lib/note-samples";
+import type {
+  NoteSampleChannelMap,
+  NoteSampleMap,
+  NoteSampleMetroChannelMap,
+  NoteSampleSpeedMap,
+  NoteSampleVolumeMap,
+} from "@/lib/note-samples";
 import type { PlaybackContext } from "@/lib/playback-context";
 import type { AudioPlayer } from "expo-audio";
 import {
@@ -59,13 +65,20 @@ export interface UsePlaybackControlParams {
   resetPlaybackVisuals: () => void;
   renderedPlayerRef: Ref<AudioPlayer | null>;
   webRenderedLoopRef: Ref<{ stop: () => void } | null>;
+  renderGenerationRef: Ref<number>;
   buildRenderedPlayer: () => Promise<AudioPlayer | null>;
   clearAudioWatchdogRef: Ref<() => void>;
   armAudioWatchdogRef: Ref<() => void>;
   soundSetRef: Ref<SoundSet>;
   volumeRef: Ref<number>;
+  sampleVolumeRef: Ref<number>;
+  noteSamplesRef: Ref<NoteSampleMap>;
+  noteSampleChannelsRef: Ref<NoteSampleChannelMap>;
+  noteSampleVolumesRef: Ref<NoteSampleVolumeMap>;
+  noteSampleSpeedsRef: Ref<NoteSampleSpeedMap>;
   webClickReadyRef: Ref<boolean>;
   getClickPCMs: (soundSet: SoundSet) => Promise<ClickPCMs>;
+  getSamplePCMs: (samples: NoteSampleMap) => Promise<Map<string, SamplePCMEntry>>;
   getLayerClickPCMsForSchedule: (ticks: TickInfo[]) => Promise<Map<string, ClickPCMs>>;
   barMetronomeChannelRef: Ref<SampleChannel>;
   noteSampleMetroChannelsRef: Ref<NoteSampleMetroChannelMap>;
@@ -90,6 +103,7 @@ export interface UsePlaybackControlParams {
 export function usePlaybackControl(p: UsePlaybackControlParams) {
   const seamlessNextEntryRef = useRef<PracticeEntry | null>(null);
   const seamlessRef = p.seamlessNextEntryRef ?? seamlessNextEntryRef;
+  const renderGenerationRef = p.renderGenerationRef;
 
   const startOrResumePracticeSession = useCallback(() => {
     if (!p.loggingEnabled) return;
@@ -120,7 +134,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
     if (!session) return;
     if (interrupted) session.interrupt();
     else session.pause();
-  }, [p]);
+  }, [p, renderGenerationRef]);
 
   const completePracticeSession = useCallback((
     endReason: NonNullable<PracticeSessionData["endReason"]> = "manual",
@@ -174,21 +188,29 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
   }, [p]);
 
   const renderWebLoop = useCallback(async (engine: MetronomeEngine, atMeasureBoundary: boolean) => {
+    const generation = ++renderGenerationRef.current;
     if (atMeasureBoundary && !p.engineRef.current?.getIsRunning()) return;
     const scheduleInfo = engine.getScheduleInfo();
     const ticks = scheduleInfo.ticks as TickInfo[];
-    const [clickPCMs, layerClickPCMs] = await Promise.all([
+    const [clickPCMs, layerClickPCMs, samplePCMs] = await Promise.all([
       p.getClickPCMs(p.soundSetRef.current),
       p.getLayerClickPCMsForSchedule(ticks),
+      p.getSamplePCMs(p.noteSamplesRef.current),
     ]);
-    if (atMeasureBoundary && !p.engineRef.current?.getIsRunning()) return;
+    if (
+      generation !== renderGenerationRef.current ||
+      (atMeasureBoundary && !p.engineRef.current?.getIsRunning())
+    ) return;
     const pcm = renderMeasure({
       schedule: ticks,
       measureDurationMs: scheduleInfo.durationMs,
       clickPCMs,
-      samplePCMs: new Map(),
+      samplePCMs,
       clickVolume: Math.max(1, p.volumeRef.current),
-      sampleVolume: 0,
+      sampleVolume: samplePCMs.size > 0 ? p.sampleVolumeRef.current : 0,
+      sampleVolumes: p.noteSampleVolumesRef.current,
+      sampleSpeeds: p.noteSampleSpeedsRef.current,
+      sampleChannels: p.noteSampleChannelsRef.current,
       metronomeChannel: p.barModeRef.current ? p.barMetronomeChannelRef.current : "both",
       metroChannelsByBeat: p.barModeRef.current ? p.noteSampleMetroChannelsRef.current : undefined,
       layerClickPCMs,
@@ -199,20 +221,24 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
     }
     if (atMeasureBoundary) {
       engine.setPendingMeasureStartAction(() => {
-        if (!p.engineRef.current?.getIsRunning()) return;
+        if (
+          generation !== renderGenerationRef.current ||
+          !p.engineRef.current?.getIsRunning()
+        ) return;
         try { p.webRenderedLoopRef.current?.stop(); } catch {}
-        p.webRenderedLoopRef.current = playWebRenderedLoop(pcm);
+        p.webRenderedLoopRef.current = playWebRenderedLoop(pcm, undefined, "both", p.volumeRef.current);
         p.engineRef.current?.setPreRenderedAudio(true);
       });
     } else {
       p.webRenderedLoopRef.current?.stop();
-      p.webRenderedLoopRef.current = playWebRenderedLoop(pcm);
+      p.webRenderedLoopRef.current = playWebRenderedLoop(pcm, undefined, "both", p.volumeRef.current);
       engine.setPreRenderedAudio(true);
     }
   }, [p]);
 
   const stopMetronome = useCallback(() => {
     if (!p.isPlayingRef.current) return;
+    renderGenerationRef.current += 1;
     p.engineRef.current?.stop();
     p.stopRenderedAudio();
     p.clearSamplePlayStates();
@@ -222,7 +248,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
     markAudioStopped();
     completePracticeSession("manual");
     p.onPlaybackStopped?.();
-  }, [completePracticeSession, p]);
+  }, [completePracticeSession, p, renderGenerationRef]);
 
   const togglePlayPause = useCallback(async () => {
     const engine = p.engineRef.current;
@@ -233,6 +259,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
       return true;
     }
     if (p.isPreparing && !p.isPlaying) {
+      renderGenerationRef.current += 1;
       p.preparingCancelledRef.current = true;
       p.setIsPreparing(false);
       markAudioStopped();
@@ -241,6 +268,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
     }
     if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     if (p.isPlaying) {
+      renderGenerationRef.current += 1;
       const playback = p.getPlaybackContext();
       seamlessRef.current = null;
       p.clearAudioWatchdogRef.current();
@@ -292,7 +320,6 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
           if (!player || !p.engineRef.current?.getIsRunning()) { try { player?.release(); } catch {} return; }
           p.stopRenderedAudio();
           p.renderedPlayerRef.current = player;
-          player.volume = 1;
           engine.setPreRenderedAudio(true);
           safePlay(player, "metronome.start.native");
         }).catch(() => {});
@@ -309,7 +336,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
       p.onPlaybackStopped?.();
       return false;
     }
-  }, [configureEngine, p, pausePracticeSession, renderWebLoop, startOrResumePracticeSession, seamlessRef]);
+  }, [configureEngine, p, pausePracticeSession, renderGenerationRef, renderWebLoop, startOrResumePracticeSession, seamlessRef]);
 
   const togglePlayPauseRef = useRef(togglePlayPause);
   useEffect(() => { togglePlayPauseRef.current = togglePlayPause; }, [togglePlayPause]);
@@ -352,7 +379,6 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
         if (player) {
           p.stopRenderedAudio();
           p.renderedPlayerRef.current = player;
-          player.volume = 1;
           engine.setPreRenderedAudio(true);
         } else engine.setPreRenderedAudio(false);
         p.setIsPlaying(true); engine.start(); markAudioPlaying(); p.armAudioWatchdogRef.current();
@@ -372,6 +398,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
 
   const retryAudioRecovery = useCallback(async () => {
     if (p.isPreparingRef.current) return;
+    renderGenerationRef.current += 1;
     markAudioRecovering("watchdog");
     p.practiceSessionRef.current?.interrupt();
     p.engineRef.current?.stop();
@@ -382,7 +409,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
     p.setIsPreparing(false);
     p.isPreparingRef.current = false;
     await startMetronome();
-  }, [p, startMetronome]);
+  }, [p, renderGenerationRef, startMetronome]);
 
   return {
     togglePlayPause,

@@ -63,6 +63,8 @@ export interface UseAudioPipelineParams {
   webClickReadyRef: React.MutableRefObject<boolean>;
   /** Per-note sample players — created in useMetronomeScreen, shared with useSettings. */
   noteSampleSoundsRef: React.MutableRefObject<Record<string, ExpoAudioPlayer>>;
+  /** Shared epoch invalidating every initial/scheduled pre-render producer. */
+  renderGenerationRef: React.MutableRefObject<number>;
   isPlayingRef: React.MutableRefObject<boolean>;
   bpmRef: React.MutableRefObject<number>;
   t: TranslationFn;
@@ -134,6 +136,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
     layerSoundSetsRef, noteSamplesRef, noteSampleChannelsRef, noteSampleVolumesRef, noteSampleSpeedsRef, barModeRef,
     barMetronomeChannelRef, noteSampleMetroChannelsRef, volumeRef, sampleVolumeRef,
     isPlayingRef, bpmRef, t, showRecoveryToast, persistAudioSettingsCallbackRef,
+    renderGenerationRef,
   } = params;
 
   // ── Player pool ownership (moved from useMetronomeScreen) ───────────────────
@@ -201,6 +204,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
   // ── Owned refs ──────────────────────────────────────────────────────────────
   const renderedPlayerRef = useRef<ExpoAudioPlayer | null>(null);
   const samplePCMCacheRef = useRef<Map<string, SamplePCMEntry>>(new Map());
+  const samplePCMUriRef = useRef<Map<string, string>>(new Map());
   const renderedUrlRef = useRef<string | null>(null);
   const webRenderedLoopRef = useRef<{ stop: () => void } | null>(null);
   const lastAudioFireRef = useRef(0);
@@ -213,6 +217,13 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
   const armTimeRef = useRef<number | null>(null);
   const showRecoveryToastRef = useRef(showRecoveryToast);
   useEffect(() => { showRecoveryToastRef.current = showRecoveryToast; }, [showRecoveryToast]);
+  useEffect(() => () => {
+    renderGenerationRef.current += 1;
+    if (reRenderTimerRef.current) {
+      clearTimeout(reRenderTimerRef.current);
+      reRenderTimerRef.current = null;
+    }
+  }, [renderGenerationRef]);
 
   // ── Web click-buffer preload (re-runs on soundSet change) ───────────────────
   useEffect(() => {
@@ -278,21 +289,27 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
     if (entries.length === 0) return map;
     await Promise.all(entries.map(async ([key, uri]) => {
       const cached = samplePCMCacheRef.current.get(key);
-      if (cached) { map.set(key, cached); return; }
+      if (cached && samplePCMUriRef.current.get(key) === uri) {
+        map.set(key, cached);
+        return;
+      }
       try {
         const pcm = await decodeSampleFile(uri);
         if (pcm) {
           const { trimStartMs, trimDurationMs } = parseTrimInfo(uri);
           const entry: SamplePCMEntry = { pcm, trimStartMs, trimDurationMs };
           map.set(key, entry);
-          samplePCMCacheRef.current.set(key, entry);
+          if (noteSamplesRef.current[key] === uri) {
+            samplePCMCacheRef.current.set(key, entry);
+            samplePCMUriRef.current.set(key, uri);
+          }
         }
       } catch (e) {
         captureBreadcrumb({ category: "pre-render", message: "Failed to decode sample", level: "warning", data: { key, error: String(e) } });
       }
     }));
     return map;
-  }, []);
+  }, [noteSamplesRef]);
 
   const getLayerClickPCMsForSchedule = useCallback(async (ticks: TickInfo[]): Promise<Map<string, ClickPCMs>> => {
     const soundSetByName = new Set<string>();
@@ -326,15 +343,18 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
   const buildRenderedPlayer = useCallback(async (): Promise<ExpoAudioPlayer | null> => {
     const engine = engineRef.current;
     if (!engine) return null;
+    const generation = ++renderGenerationRef.current;
     try {
       const scheduleInfo = engine.getScheduleInfo();
       const ticks = scheduleInfo.ticks as TickInfo[];
-      const [clickPCMs, layerClickPCMs] = await Promise.all([
+      const [clickPCMs, layerClickPCMs, samplePCMs] = await Promise.all([
         getClickPCMs(soundSetRef.current),
         getLayerClickPCMsForSchedule(ticks),
+        getSamplePCMs(noteSamplesRef.current),
       ]);
-      const samplePCMs = new Map<string, SamplePCMEntry>();
+      if (generation !== renderGenerationRef.current) return null;
       await new Promise(r => setTimeout(r, 0));
+      if (generation !== renderGenerationRef.current) return null;
       const pcm = renderMeasure({
         schedule: ticks,
         measureDurationMs: scheduleInfo.durationMs,
@@ -344,6 +364,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
         sampleVolume: samplePCMs.size > 0 ? sampleVolumeRef.current : 0,
         sampleVolumes: noteSampleVolumesRef.current,
         sampleSpeeds: noteSampleSpeedsRef.current,
+        sampleChannels: noteSampleChannelsRef.current,
         metronomeChannel: barModeRef.current ? barMetronomeChannelRef.current : "both",
         metroChannelsByBeat: barModeRef.current ? noteSampleMetroChannelsRef.current : undefined,
         layerClickPCMs,
@@ -353,6 +374,12 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
         else { applySoftClip(pcm.left); applySoftClip(pcm.right); }
       }
       const wavUri = await saveRenderedWav(pcm);
+      if (generation !== renderGenerationRef.current) {
+        if (Platform.OS === "web") {
+          try { URL.revokeObjectURL(wavUri); } catch {}
+        }
+        return null;
+      }
       if (Platform.OS === "web" && renderedUrlRef.current) {
         try { URL.revokeObjectURL(renderedUrlRef.current); } catch {}
       }
@@ -369,7 +396,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
       captureBreadcrumb({ category: "pre-render", message: "Failed, falling back to per-tick audio", level: "warning", data: { error: String(e) } });
       return null;
     }
-  }, [getClickPCMs, getLayerClickPCMsForSchedule]);
+  }, [getClickPCMs, getLayerClickPCMsForSchedule, getSamplePCMs]);
 
   const warmupAudioPlayers = useCallback(async () => {
     try {
@@ -394,6 +421,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
   }, []);
 
   const stopRenderedAudio = useCallback(() => {
+    renderGenerationRef.current += 1;
     if (webRenderedLoopRef.current) {
       webRenderedLoopRef.current.stop();
       webRenderedLoopRef.current = null;
@@ -411,6 +439,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
   }, []);
 
   const scheduleReRender = useCallback(() => {
+    renderGenerationRef.current += 1;
     if (reRenderTimerRef.current) clearTimeout(reRenderTimerRef.current);
     reRenderTimerRef.current = setTimeout(async () => {
       const engine = engineRef.current;
@@ -419,22 +448,26 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
       engine.setPendingMeasureStartAction(null);
 
       if (Platform.OS === "web") {
+        const generation = ++renderGenerationRef.current;
         try {
           const scheduleInfo = engine.getScheduleInfo();
           const ticks = scheduleInfo.ticks as TickInfo[];
-          const [clickPCMs, layerClickPCMs] = await Promise.all([
+          const [clickPCMs, layerClickPCMs, samplePCMs] = await Promise.all([
             getClickPCMs(soundSetRef.current),
             getLayerClickPCMsForSchedule(ticks),
+            getSamplePCMs(noteSamplesRef.current),
           ]);
-          if (!engine.getIsRunning()) return;
+          if (generation !== renderGenerationRef.current || !engine.getIsRunning()) return;
           const pcm = renderMeasure({
             schedule: ticks,
             measureDurationMs: scheduleInfo.durationMs,
             clickPCMs,
-            samplePCMs: new Map(),
+            samplePCMs,
             clickVolume: Math.max(1.0, volumeRef.current),
-            sampleVolume: 0,
+            sampleVolume: samplePCMs.size > 0 ? sampleVolumeRef.current : 0,
+            sampleVolumes: noteSampleVolumesRef.current,
             sampleSpeeds: noteSampleSpeedsRef.current,
+            sampleChannels: noteSampleChannelsRef.current,
             metronomeChannel: barModeRef.current ? barMetronomeChannelRef.current : "both",
             metroChannelsByBeat: barModeRef.current ? noteSampleMetroChannelsRef.current : undefined,
             layerClickPCMs,
@@ -443,10 +476,11 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
             if (pcm instanceof Float32Array) { applySoftClip(pcm); }
             else { applySoftClip(pcm.left); applySoftClip(pcm.right); }
           }
+          if (generation !== renderGenerationRef.current || !engine.getIsRunning()) return;
           engine.setPendingMeasureStartAction(() => {
-            if (!engine.getIsRunning()) return;
+            if (generation !== renderGenerationRef.current || !engine.getIsRunning()) return;
             if (webRenderedLoopRef.current) { try { webRenderedLoopRef.current.stop(); } catch {} webRenderedLoopRef.current = null; }
-            const loop = playWebRenderedLoop(pcm);
+            const loop = playWebRenderedLoop(pcm, undefined, "both", volumeRef.current);
             webRenderedLoopRef.current = loop;
             engine.setPreRenderedAudio(true);
           });
@@ -455,27 +489,36 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
         try {
           const player = await buildRenderedPlayer();
           if (!player) return;
+          const generation = renderGenerationRef.current;
           if (!engine.getIsRunning()) { try { player.release(); } catch {} return; }
           engine.setPendingMeasureStartAction(() => {
-            if (!engine.getIsRunning()) { try { player.release(); } catch {} return; }
+            if (generation !== renderGenerationRef.current || !engine.getIsRunning()) {
+              try { player.release(); } catch {}
+              return;
+            }
             if (renderedPlayerRef.current) {
               try { renderedPlayerRef.current.pause(); renderedPlayerRef.current.release(); } catch {}
               renderedPlayerRef.current = null;
             }
             renderedPlayerRef.current = player;
-            player.volume = 1.0;
             engine.setPreRenderedAudio(true);
             safePlay(player, "preRender.initial");
           });
         } catch {}
       }
     }, 300);
-  }, [stopRenderedAudio, buildRenderedPlayer, getClickPCMs, getLayerClickPCMsForSchedule]);
+  }, [stopRenderedAudio, buildRenderedPlayer, getClickPCMs, getLayerClickPCMsForSchedule, getSamplePCMs]);
 
   const invalidateSamplePCMCache = useCallback((key?: string) => {
-    if (key) { samplePCMCacheRef.current.delete(key); }
-    else { samplePCMCacheRef.current.clear(); }
-  }, []);
+    renderGenerationRef.current += 1;
+    if (key) {
+      samplePCMCacheRef.current.delete(key);
+      samplePCMUriRef.current.delete(key);
+    } else {
+      samplePCMCacheRef.current.clear();
+      samplePCMUriRef.current.clear();
+    }
+  }, [renderGenerationRef]);
 
   // ── Note sample player management ───────────────────────────────────────────
   const preloadNoteSampleSounds = useCallback(async (samples: NoteSampleMap, keepExisting?: boolean) => {

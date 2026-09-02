@@ -41,3 +41,4 @@
 - [Native feature removal audit](native-feature-removal-audit.md) — removing a local native module needs a directory-level residue check after dependency cleanup.
 - [Stage note photo resolution](stage-note-photo-resolution.md) — prefer a usable parent photo, then the current queue child; ignore unsafe persisted URIs.
 - [Mode settings profile transitions](mode-settings-profile-transitions.md) — preserve the destination profile during a mode-change render; commit outgoing values before applying the target.
+- [Pre-render audio epoch](pre-render-audio-epoch.md) — initial and scheduled audio renders across hooks must share one epoch; sample caches must validate URI identity.

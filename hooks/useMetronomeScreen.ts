@@ -358,6 +358,7 @@ export function useMetronomeScreen() {
   /** 폴리곤 모드 비트 핸들러 ref — 엔진 오디오 콜백에서 매 비트마다 호출된다 */
   const polygonOnBeatRef = useRef<(() => void) | null>(null);
   const sampleVolumeRef = useRef(0.8);
+  const renderGenerationRef = useRef(0);
   // 단일 활성 모달 상태 머신: null = 모달 없음. openExclusive로만 전환해 mutual exclusion 보장.
   const [activeModal, setActiveModal] = useState<ActiveModal>(null);
   const {
@@ -682,6 +683,7 @@ export function useMetronomeScreen() {
     layerSoundSetsRef, noteSamplesRef, noteSampleChannelsRef, noteSampleVolumesRef, noteSampleSpeedsRef, barModeRef,
     barMetronomeChannelRef, noteSampleMetroChannelsRef, volumeRef, sampleVolumeRef,
     clickPCMCacheRef, webClickReadyRef, noteSampleSoundsRef,
+    renderGenerationRef,
     isPlayingRef, bpmRef, t, showRecoveryToast, persistAudioSettingsCallbackRef,
   });
 
@@ -1846,13 +1848,20 @@ export function useMetronomeScreen() {
     resetPlaybackVisuals,
     renderedPlayerRef,
     webRenderedLoopRef,
+    renderGenerationRef,
     buildRenderedPlayer,
     clearAudioWatchdogRef,
     armAudioWatchdogRef,
     soundSetRef,
     volumeRef,
+    sampleVolumeRef,
+    noteSamplesRef,
+    noteSampleChannelsRef,
+    noteSampleVolumesRef,
+    noteSampleSpeedsRef,
     webClickReadyRef,
     getClickPCMs,
+    getSamplePCMs,
     getLayerClickPCMsForSchedule,
     barMetronomeChannelRef,
     noteSampleMetroChannelsRef,

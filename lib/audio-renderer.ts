@@ -950,6 +950,7 @@ export function playWebRenderedLoop(
   pcm: Float32Array | StereoPCM,
   onEnded?: () => void,
   channel: SampleChannel = "both",
+  volume: number = 1,
 ): { stop: () => void } {
   if (Platform.OS !== "web") return { stop: () => {} };
   const ctx = getSharedAudioContext();
@@ -973,14 +974,17 @@ export function playWebRenderedLoop(
   const source = ctx.createBufferSource();
   source.buffer = audioBuffer;
   source.loop = true;
+  const gain = ctx.createGain();
+  gain.gain.value = Math.max(0, Math.min(1, volume));
   if (!stereo && channel !== "both" && hasStereoPanner(ctx)) {
     const panner = ctx.createStereoPanner();
     panner.pan.value = channel === "left" ? -1 : 1;
     source.connect(panner);
-    panner.connect(ctx.destination);
+    panner.connect(gain);
   } else {
-    source.connect(ctx.destination);
+    source.connect(gain);
   }
+  gain.connect(ctx.destination);
   source.start(0);
 
   let stopped = false;
@@ -993,6 +997,7 @@ export function playWebRenderedLoop(
       stopped = true;
       try { source.stop(); } catch {}
       try { source.disconnect(); } catch {}
+      try { gain.disconnect(); } catch {}
     },
   };
 }
