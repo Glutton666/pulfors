@@ -34,9 +34,6 @@ import {
 } from "react-native";
 import Animated, {
   useAnimatedStyle,
-  useSharedValue,
-  withTiming,
-  Easing,
 } from "react-native-reanimated";
 import type { SharedValue } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -405,6 +402,7 @@ export function StageModeOverlay({
   const [scoreDoc, setScoreDoc] = useState<ScoreDocument | null>(null);
   const scoreIdRef = useRef<string | undefined>(undefined);
   const scoreScrollRef = useRef<ScrollView>(null);
+  const [failedPhotoUri, setFailedPhotoUri] = useState<string | null>(null);
 
   // ── 내부 루프 카운터 (currentBeat 순환 감지) ─────────────────────
   const [internalLoopCount, setInternalLoopCount] = useState(0);
@@ -512,19 +510,6 @@ export function StageModeOverlay({
     saveStageSetlist(next).catch(() => {});
   }, []);
 
-  // ── 설정 패널 슬라이드 애니메이션 ─────────────────────────────────
-  const settingsPanelX = useSharedValue(320);
-  useEffect(() => {
-    settingsPanelX.value = withTiming(settingsOpen ? 0 : 320, {
-      duration: 280,
-      easing: Easing.inOut(Easing.quad),
-    });
-  }, [settingsOpen]);
-
-  const settingsPanelStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: settingsPanelX.value }],
-  }));
-
   // ── 플래시 오버레이 ───────────────────────────────────────────────
   const flashStyle = useAnimatedStyle(() => ({
     opacity: flashOpacity.value,
@@ -620,22 +605,36 @@ export function StageModeOverlay({
   );
   // 악보 모드 또는 사진이 있는 노트 모드 → 전체화면 컨텐츠 표시
   const stageNoteImageUri = getStageNoteImageUri(activeEntry, noteCurrentIndex);
-  const hasPhoto    = activeMode === "note" && !!stageNoteImageUri;
-  const isFullscreen = activeMode === "score" || hasPhoto;
+  const hasPhoto = activeMode === "note"
+    && !!stageNoteImageUri
+    && failedPhotoUri !== stageNoteImageUri;
+  const hasScoreContent = activeMode === "score"
+    && !!scoreDoc
+    && scoreDoc.parts.some((part) => part.measures.length > 0);
+  // 실제 콘텐츠가 준비된 경우에만 전체화면으로 전환한다. 로드 실패/대기 중에는
+  // 재생 조작이 가능한 기본 무대 화면을 보여 빈 중앙 영역을 만들지 않는다.
+  const isFullscreen = hasScoreContent || hasPhoto;
+
+  useEffect(() => {
+    setFailedPhotoUri(null);
+  }, [activeEntryId, stageNoteImageUri]);
 
   // ── 악보 문서 로드 ────────────────────────────────────────────────
   useEffect(() => {
     const sid = activeEntry?.scoreId;
-    if (sid && sid !== scoreIdRef.current) {
-      scoreIdRef.current = sid;
-      loadScore(sid).then((doc) => {
-        setScoreDoc(doc);
-        setInternalLoopCount(0);
-      }).catch(() => setScoreDoc(null));
-    } else if (!sid) {
-      scoreIdRef.current = undefined;
-      setScoreDoc(null);
-    }
+    scoreIdRef.current = sid;
+    setScoreDoc(null);
+    if (!sid) return;
+
+    let cancelled = false;
+    loadScore(sid).then((doc) => {
+      if (cancelled || scoreIdRef.current !== sid) return;
+      setScoreDoc(doc);
+      setInternalLoopCount(0);
+    }).catch(() => {
+      if (!cancelled && scoreIdRef.current === sid) setScoreDoc(null);
+    });
+    return () => { cancelled = true; };
   }, [activeEntry?.scoreId]);
 
   // ── 악보 현재 마디 계산 (내부 루프 카운터 → measureIdx) ──────────
@@ -667,7 +666,7 @@ export function StageModeOverlay({
       offset = approxViewportH - 80;
     }
     const scrollY = Math.max(0, measureY - offset);
-    scoreScrollRef.current.scrollTo({ y: scrollY, animated: true });
+    scoreScrollRef.current.scrollTo({ y: scrollY, animated: false });
   }, [currentMeasureIdx, scoreDoc, settings.scoreHighlight, winWidth]);
 
   // ── 셋 리스트 조작 ───────────────────────────────────────────────
@@ -1032,6 +1031,7 @@ export function StageModeOverlay({
                 source={{ uri: stageNoteImageUri }}
                 style={styles.notePhoto}
                 resizeMode="contain"
+                onError={() => setFailedPhotoUri(stageNoteImageUri)}
               />
             ) : null}
           </View>
@@ -1369,8 +1369,15 @@ export function StageModeOverlay({
       <View style={{ height: bottomPad }} />
 
       {/* ── 설정 패널 ─────────────────────────────────────────────── */}
-      <Animated.View
-        style={[styles.settingsPanel, { backgroundColor: panelBg, paddingTop: topPad + 44 }, settingsPanelStyle]}
+      <View
+        style={[
+          styles.settingsPanel,
+          {
+            backgroundColor: panelBg,
+            paddingTop: topPad + 44,
+            transform: [{ translateX: settingsOpen ? 0 : 320 }],
+          },
+        ]}
       >
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.settingsPanelContent}>
           <Text style={[styles.settingsPanelTitle, { color: text }]}>{t("stageMode", "settingsPanel")}</Text>
@@ -1501,13 +1508,13 @@ export function StageModeOverlay({
             );
           })}
         </ScrollView>
-      </Animated.View>
+      </View>
 
       {/* ── 셋 리스트 피커 모달 ───────────────────────────────────── */}
       <Modal
         visible={pickerOpen}
         transparent
-        animationType="slide"
+        animationType="none"
         onRequestClose={() => setPickerOpen(false)}
       >
         <View style={styles.pickerOverlay}>
@@ -1597,7 +1604,7 @@ export function StageModeOverlay({
       <Modal
         visible={keyPickerTarget !== null}
         transparent
-        animationType="slide"
+        animationType="none"
         onRequestClose={() => setKeyPickerTarget(null)}
       >
         <View style={styles.pickerOverlay}>

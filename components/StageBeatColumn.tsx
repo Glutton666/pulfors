@@ -4,7 +4,7 @@
  *
  * 현재/다음 재생을 각각 비트와 서브디비전의 2줄 그룹으로 표시한다.
  * 현재 그룹은 강하게, 다음 그룹은 낮은 대비로 표시한다.
- * 비트가 바뀔 때마다 슬라이드-업 애니메이션이 발생한다.
+ * 비트가 바뀌면 애니메이션 없이 즉시 갱신한다.
  *
  * currentBeat: 0-based (엔진 기준). -1 = 멈춤.
  * beatsPerMeasure: 전체 마디 내 비트 수.
@@ -14,12 +14,6 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import { View, Text, StyleSheet, PanResponder } from "react-native";
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withTiming,
-  Easing,
-} from "react-native-reanimated";
 import type { BeatType } from "@/lib/metronome-engine";
 
 const BEAT_COLOR_DARK: Record<BeatType, string> = {
@@ -177,8 +171,6 @@ export function StageBeatColumn({
 }: StageBeatColumnProps) {
   const total     = Math.max(1, beatsPerMeasure);
   const stopped   = currentBeat < 0;
-  const slideY    = useSharedValue(0);
-  const prevRef   = useRef(currentBeat);
 
   // ── 스와이프 제스처 (좌: 다음 항목, 우: 이전 항목) ────────────────
   const onSwipeLeftRef  = useRef(onSwipeLeft);
@@ -207,21 +199,6 @@ export function StageBeatColumn({
     })
   ).current;
 
-  useEffect(() => {
-    if (!stopped && currentBeat !== prevRef.current) {
-      slideY.value = 80;
-      slideY.value = withTiming(0, {
-        duration: 180,
-        easing: Easing.out(Easing.cubic),
-      });
-    }
-    prevRef.current = currentBeat;
-  }, [currentBeat, stopped]);
-
-  const slideStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: slideY.value }],
-  }));
-
   const colorMap = theme === "dark" ? BEAT_COLOR_DARK : BEAT_COLOR_LIGHT;
 
   const cur0  = stopped ? 0 : currentBeat;
@@ -244,10 +221,16 @@ export function StageBeatColumn({
   // 작은 화면에서도 모두 보이도록 한다.
   const [rootH, setRootH] = useState(0);
   const [rootW, setRootW] = useState(0);
-  const fit = rootH > 0 ? Math.min(1, rootH / 330) : 1;
+  // 숫자뿐 아니라 행·패딩·간격까지 함께 줄여 작은 iPhone에서도
+  // 현재/다음 카드 전체가 overflow 영역 안에 들어오게 한다.
+  const fit = rootH > 0 ? Math.max(0.45, Math.min(1, rootH / 370)) : 1;
   const curFont  = Math.round(78 * fit);
   const nextFont = Math.round(58 * fit);
-  const subSize  = Math.max(12, Math.round(21 * fit));
+  const subSize  = Math.max(8, Math.round(21 * fit));
+  const detailHeight = Math.max(28, Math.round(58 * fit));
+  const cardPadding = Math.max(4, Math.round(12 * fit));
+  const stackGap = Math.max(3, Math.round(10 * fit));
+  const labelMargin = Math.max(2, Math.round(6 * fit));
   const currentSubdiv = subdivisionTypes ?? [];
   const nextSubdiv = nextSubdivisionTypes ?? [];
 
@@ -262,7 +245,7 @@ export function StageBeatColumn({
     testID: string;
     muted?: boolean;
   }) => (
-    <View style={styles.detailRow}>
+    <View style={[styles.detailRow, { minHeight: detailHeight }]}>
       <Text style={[styles.detailLabel, { color: muted ? nextColor : curColor }]}>
         {labels.subdivision}
       </Text>
@@ -289,12 +272,13 @@ export function StageBeatColumn({
       onLayout={(e) => { setRootH(e.nativeEvent.layout.height); setRootW(e.nativeEvent.layout.width); }}
       {...swipePR.panHandlers}
     >
-      <Animated.View style={[styles.inner, slideStyle]}>
+      <View style={[styles.inner, { gap: stackGap }]}>
 
         <View
           testID="stage-current-count"
           style={[
             styles.countGroup,
+            { paddingVertical: cardPadding },
             {
               borderColor: dividerColor,
               backgroundColor: theme === "dark"
@@ -303,8 +287,8 @@ export function StageBeatColumn({
             },
           ]}
         >
-          <Text style={[styles.groupLabel, { color: curColor }]}>{labels.current}</Text>
-          <View style={styles.detailRow}>
+          <Text style={[styles.groupLabel, { color: curColor, marginBottom: labelMargin }]}>{labels.current}</Text>
+          <View style={[styles.detailRow, { minHeight: detailHeight }]}>
             <Text style={[styles.detailLabel, { color: curColor }]}>{labels.beat}</Text>
             <Text
               testID="stage-current-beat"
@@ -327,6 +311,7 @@ export function StageBeatColumn({
           style={[
             styles.countGroup,
             styles.nextCountGroup,
+            { paddingVertical: cardPadding },
             {
               borderColor: dividerColor,
               backgroundColor: theme === "dark"
@@ -335,8 +320,8 @@ export function StageBeatColumn({
             },
           ]}
         >
-          <Text style={[styles.groupLabel, { color: nextColor }]}>{labels.next}</Text>
-          <View style={styles.detailRow}>
+          <Text style={[styles.groupLabel, { color: nextColor, marginBottom: labelMargin }]}>{labels.next}</Text>
+          <View style={[styles.detailRow, { minHeight: detailHeight }]}>
             <Text style={[styles.detailLabel, { color: nextColor }]}>{labels.beat}</Text>
             <Text
               testID="stage-next-beat"
@@ -352,7 +337,7 @@ export function StageBeatColumn({
           />
         </View>
 
-      </Animated.View>
+      </View>
     </View>
   );
 }
@@ -368,7 +353,6 @@ const styles = StyleSheet.create({
   inner: {
     alignItems: "center",
     width: "100%",
-    gap: 10,
   },
   countGroup: {
     width: "100%",
@@ -376,7 +360,6 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: 18,
     paddingHorizontal: 18,
-    paddingVertical: 12,
   },
   nextCountGroup: {
     opacity: 0.9,
@@ -387,10 +370,8 @@ const styles = StyleSheet.create({
     fontFamily: "SpaceGrotesk_600SemiBold",
     letterSpacing: 1.2,
     textTransform: "uppercase",
-    marginBottom: 6,
   },
   detailRow: {
-    minHeight: 58,
     width: "100%",
     flexDirection: "row",
     alignItems: "center",
