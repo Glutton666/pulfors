@@ -1,6 +1,5 @@
 /**
- * Stage settings should use the shared settings modal for common controls,
- * while retaining a discoverable path for stage-only options.
+ * Stage settings should use one shared modal for common and stage-only controls.
  */
 import fs from "node:fs";
 import assert from "node:assert";
@@ -9,12 +8,14 @@ const overlaySource = fs.readFileSync("components/StageModeOverlay.tsx", "utf8")
 const uiSource = fs.readFileSync("components/MetronomeScreenUI.tsx", "utf8");
 const modalSource = fs.readFileSync("components/SettingsModal.tsx", "utf8");
 const themeSource = fs.readFileSync("components/settings/SettingsThemeTab.tsx", "utf8");
+const stageSectionSource = fs.readFileSync("components/settings/SettingsStageSection.tsx", "utf8");
+const storageSource = fs.readFileSync("lib/storage.ts", "utf8");
 
 describe("Stage shared settings flow", () => {
   test("stage top-bar settings opens the shared scoped modal", () => {
     assert.ok(
-      overlaySource.includes("if (onOpenModeSettings) {\n              onOpenModeSettings();"),
-      "stage settings button must prefer the shared settings callback",
+      overlaySource.includes("onOpenModeSettings?.();"),
+      "stage settings button must open the shared settings callback",
     );
     assert.ok(
       uiSource.includes('onOpenModeSettings={() => openScopedSettings("stage")}'),
@@ -22,19 +23,26 @@ describe("Stage shared settings flow", () => {
     );
   });
 
-  test("stage-only settings remain reachable from the shared Theme tab", () => {
+  test("stage-only settings render directly inside the shared Theme tab", () => {
     assert.ok(
-      modalSource.includes("onOpenStageOptions={onOpenStageOptions}"),
-      "SettingsModal must pass the stage-only options callback",
+      modalSource.includes("onStageSettingsChange={onStageSettingsChange}"),
+      "SettingsModal must pass the shared stage settings updater",
     );
     assert.ok(
-      themeSource.includes('testID="open-stage-only-settings"'),
-      "stage scope must expose a stage-only settings entry point",
+      themeSource.includes('testID="stage-settings-inline"'),
+      "stage scope must render stage-only settings inline",
     );
     assert.ok(
-      uiSource.includes("stageOptionsRequest={stageOptionsRequest}"),
-      "stage-only options must be able to reopen the Stage panel",
+      stageSectionSource.includes('testID="stage-settings-section"'),
+      "the integrated section must own all stage-only controls",
     );
+    assert.ok(!uiSource.includes("stageOptionsRequest="), "the old panel reopen request must be removed");
+  });
+
+  test("legacy stage settings migrate into the shared stage profile without overriding new values", () => {
+    assert.ok(storageSource.includes("...legacyStageOptions,\n            ...sanitizeStageSettings(profile.stageOptions)"));
+    assert.ok(storageSource.includes("!isPlainObject(savedStageProfile.stageOptions)"));
+    assert.ok(storageSource.includes("void saveSettings(merged, { notifyOnError: false })"));
   });
 
   test("shared Stage settings do not let the Stage back handler intercept modal dismissal", () => {

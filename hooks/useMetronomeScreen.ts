@@ -584,6 +584,7 @@ export function useMetronomeScreen() {
     barCellOpacity, setBarCellOpacity,
     barRowHeight, setBarRowHeight,
     barRandomStrategy, setBarRandomStrategy,
+    stageSettings, updateStageSettings,
     persistSettings,
     invalidateSettingsLoad,
     cancelSettingsPersistence,
@@ -3866,6 +3867,8 @@ export function useMetronomeScreen() {
     barMetronomeChannel,
     setBarMetronomeChannel,
     barMetronomeChannelRef,
+    stageSettings,
+    updateStageSettings,
     currentBarConfig,
     // Note mode
     noteMode,

@@ -129,6 +129,7 @@ export function MetronomeScreenUI(props: Props) {
     handleAddBar, handleDeleteBar, handleCopyBar, handleReorderBar, handleInsertBarAfter,
     barCellOpacity, setBarCellOpacity, barRowHeight, setBarRowHeight,
     barMetronomeChannel, setBarMetronomeChannel, barMetronomeChannelRef,
+    stageSettings, updateStageSettings,
     currentBarConfig,
     noteMode, handleEnterNoteMode, handleExitNoteMode,
     noteQueue, noteBarEntries, notePlayMode, noteCurrentIndex, noteIsPlaying, noteMeasureCount,
@@ -199,7 +200,6 @@ export function MetronomeScreenUI(props: Props) {
   const [pitchQuizVisible, setPitchQuizVisible] = useState(false);
   const [pitchQuizMode, setPitchQuizMode] = useState<PitchQuizMode | null>(null);
   const [settingsScope, setSettingsScope] = useState<SettingsScope>("global");
-  const [stageOptionsRequest, setStageOptionsRequest] = useState(0);
   const rapidMicTapRef = useRef<number[]>([]);
   const pitchQuizEntryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -258,10 +258,6 @@ export function MetronomeScreenUI(props: Props) {
     openExclusive("settings");
   }, [openExclusive, settingsReturnModalRef]);
 
-  const openStageOptions = useCallback(() => {
-    setStageOptionsRequest((request) => request + 1);
-    setActiveModal(null);
-  }, [setActiveModal]);
 
   const openModeDial = () => {
     // 사용자가 다이얼에서 새 모드를 고르면 메뉴 복귀 흐름을 벗어난다.
@@ -956,7 +952,9 @@ export function MetronomeScreenUI(props: Props) {
             void saveModeKeyBindings(settingsScope, kb);
           }
         }}
-        onOpenStageOptions={openStageOptions}
+        stageSettings={stageSettings}
+        stagePracticeBook={stagePracticeEntries}
+        onStageSettingsChange={updateStageSettings}
       />
       )}
 
@@ -1553,7 +1551,8 @@ export function MetronomeScreenUI(props: Props) {
         noteCurrentIndex={noteCurrentIndex}
         onOpenScheduledStart={() => openExclusive("scheduledStart")}
         onOpenModeSettings={() => openScopedSettings("stage")}
-        stageOptionsRequest={stageOptionsRequest}
+        stageSettings={stageSettings}
+        onStageSettingsChange={updateStageSettings}
         modeSettingsVisible={showSettings && settingsScope === "stage"}
         onQueueSeamlessNext={(next) => { seamlessNextEntryRef.current = next; }}
         onSelectEntry={(entry) => {

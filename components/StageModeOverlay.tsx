@@ -51,7 +51,8 @@ import { loadScore } from "@/lib/score-storage";
 import { computeScoreLayout } from "@/lib/score-layout";
 import { scoreScaleFactor, BASE_LINE_SPACING } from "@/lib/score-scale";
 import type { ScoreDocument } from "@/lib/score-types";
-import type { PracticeEntry, FlashMode, HapticMode } from "@/lib/storage";
+import { DEFAULT_STAGE_SETTINGS } from "@/lib/storage";
+import type { PracticeEntry, FlashMode, HapticMode, StageSettings } from "@/lib/storage";
 import type { BeatType } from "@/lib/metronome-engine";
 import type { ProgressInfo } from "@/lib/metronome-engine-pure";
 import { handleStageModeBackPress, type StageModeBackState } from "@/lib/stage-mode-logic";
@@ -60,42 +61,7 @@ import type { AudioLifecycleSnapshot } from "@/lib/audio-lifecycle";
 import { getStageNoteImageUri } from "@/lib/stage-note-image";
 
 // ─── 스테이지 설정 타입 ──────────────────────────────────────────────
-const STAGE_SETTINGS_KEY = "stage_settings_v1";
 const STAGE_SETLIST_KEY  = "stage_setlist_v1";
-
-interface StageSettings {
-  theme:            "dark" | "light";
-  countdown:        0 | 1 | 2 | 4;
-  autoAdvance:      boolean;
-  keepAwake:        boolean;
-  scoreHighlight:   "top" | "center" | "bottom";
-  /** 블루투스 키보드 키(1~0) → practiceEntry.id 매핑 */
-  keyMappings:      Partial<Record<string, string>>;
-}
-
-const DEFAULT_STAGE_SETTINGS: StageSettings = {
-  theme:          "dark",
-  countdown:      0,
-  autoAdvance:    true,
-  keepAwake:      true,
-  scoreHighlight: "center",
-  keyMappings:    {},
-};
-
-async function loadStageSettings(): Promise<StageSettings> {
-  try {
-    const raw = await AsyncStorage.getItem(STAGE_SETTINGS_KEY);
-    if (raw) {
-      const p = JSON.parse(raw) as Partial<StageSettings>;
-      return { ...DEFAULT_STAGE_SETTINGS, ...p };
-    }
-  } catch {}
-  return DEFAULT_STAGE_SETTINGS;
-}
-
-async function saveStageSettings(s: StageSettings): Promise<void> {
-  try { await AsyncStorage.setItem(STAGE_SETTINGS_KEY, JSON.stringify(s)); } catch {}
-}
 
 async function loadStageSetlist(): Promise<PracticeEntry[]> {
   try {
@@ -338,6 +304,8 @@ export interface StageModeOverlayProps {
   onOpenScheduledStart?: () => void;
   /** Opens the shared mode-scoped audio, feedback and keyboard settings. */
   onOpenModeSettings?: () => void;
+  stageSettings?: StageSettings;
+  onStageSettingsChange?: (patch: Partial<StageSettings>) => void;
   /** Monotonic request value used to reveal stage-only options from shared settings. */
   stageOptionsRequest?: number;
   /** True while the shared stage settings modal is displayed. */
@@ -386,6 +354,8 @@ export function StageModeOverlay({
   noSetlistContent,
   onOpenScheduledStart,
   onOpenModeSettings,
+  stageSettings: settings = DEFAULT_STAGE_SETTINGS,
+  onStageSettingsChange,
   stageOptionsRequest = 0,
   modeSettingsVisible = false,
   onQueueSeamlessNext,
@@ -401,7 +371,6 @@ export function StageModeOverlay({
     : null;
 
   // ── 설정 & 셋 리스트 상태 ──────────────────────────────────────────
-  const [settings, setSettings]       = useState<StageSettings>(DEFAULT_STAGE_SETTINGS);
   const [setlist,  setSetlist]        = useState<PracticeEntry[]>([]);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [pickerOpen,   setPickerOpen]   = useState(false);
@@ -474,7 +443,6 @@ export function StageModeOverlay({
   // ── 마운트 시 로드 ────────────────────────────────────────────────
   useEffect(() => {
     if (!visible) return;
-    loadStageSettings().then(setSettings).catch(() => {});
     loadStageSetlist().then((saved) => {
       // 방어: practiceBook에 없는 ID 항목 제거
       // book이 비어 있으면 아직 비동기 로딩 중이므로 필터링/저장 건너뜀 (데이터 유실 방지)
@@ -536,12 +504,8 @@ export function StageModeOverlay({
   }, [visible, settings.keepAwake]);
 
   const updateSettings = useCallback((patch: Partial<StageSettings>) => {
-    setSettings((prev) => {
-      const next = { ...prev, ...patch };
-      saveStageSettings(next).catch(() => {});
-      return next;
-    });
-  }, []);
+    onStageSettingsChange?.(patch);
+  }, [onStageSettingsChange]);
 
   const updateSetlist = useCallback((next: PracticeEntry[]) => {
     setSetlist(next);
@@ -1025,11 +989,7 @@ export function StageModeOverlay({
         <Pressable
           style={({ pressed }) => [styles.topBarBtn, { minWidth: 44, justifyContent: "flex-end" }, pressed && { opacity: 0.6 }]}
           onPress={() => {
-            if (onOpenModeSettings) {
-              onOpenModeSettings();
-            } else {
-              setSettingsOpen((v) => !v);
-            }
+            onOpenModeSettings?.();
           }}
           accessibilityLabel={t("stageMode", "settings")}
         >

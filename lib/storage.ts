@@ -11,6 +11,7 @@ import { logger } from "./logger";
 const SETTINGS_KEY = "metronome_settings";
 const PRACTICE_BOOK_KEY = "practice_book";
 const FADE_OUT_KEY = "metronome_fade_out";
+export const LEGACY_STAGE_SETTINGS_KEY = "stage_settings_v1";
 
 export interface FadeOutSettings {
   enabled: boolean;
@@ -230,6 +231,47 @@ export interface ModeSettings {
   barCellOpacity?: number;
   barRowHeight?: number;
   barRandomStrategy?: BarRandomStrategy;
+  stageOptions?: StageSettings;
+}
+
+export interface StageSettings {
+  theme: "dark" | "light";
+  countdown: 0 | 1 | 2 | 4;
+  autoAdvance: boolean;
+  keepAwake: boolean;
+  scoreHighlight: "top" | "center" | "bottom";
+  keyMappings: Partial<Record<string, string>>;
+}
+
+export const DEFAULT_STAGE_SETTINGS: StageSettings = {
+  theme: "dark",
+  countdown: 0,
+  autoAdvance: true,
+  keepAwake: true,
+  scoreHighlight: "center",
+  keyMappings: {},
+};
+
+function sanitizeStageSettings(value: unknown): Partial<StageSettings> {
+  if (!isPlainObject(value)) return {};
+  const result: Partial<StageSettings> = {};
+  if (value.theme === "dark" || value.theme === "light") result.theme = value.theme;
+  if (value.countdown === 0 || value.countdown === 1 || value.countdown === 2 || value.countdown === 4) {
+    result.countdown = value.countdown;
+  }
+  if (typeof value.autoAdvance === "boolean") result.autoAdvance = value.autoAdvance;
+  if (typeof value.keepAwake === "boolean") result.keepAwake = value.keepAwake;
+  if (value.scoreHighlight === "top" || value.scoreHighlight === "center" || value.scoreHighlight === "bottom") {
+    result.scoreHighlight = value.scoreHighlight;
+  }
+  if (isPlainObject(value.keyMappings)) {
+    result.keyMappings = Object.fromEntries(
+      Object.entries(value.keyMappings).filter(
+        ([key, entryId]) => /^[0-9]$/.test(key) && typeof entryId === "string",
+      ),
+    ) as Partial<Record<string, string>>;
+  }
+  return result;
 }
 
 const DEFAULT_SETTINGS: MetronomeSettings = {
@@ -261,7 +303,10 @@ const DEFAULT_SETTINGS: MetronomeSettings = {
 
 export async function loadSettings(): Promise<MetronomeSettings> {
   try {
-    const data = await AsyncStorage.getItem(SETTINGS_KEY);
+    const [data, legacyStageData] = await Promise.all([
+      AsyncStorage.getItem(SETTINGS_KEY),
+      AsyncStorage.getItem(LEGACY_STAGE_SETTINGS_KEY),
+    ]);
     if (data) {
       const parsed: unknown = JSON.parse(data);
       if (!isPlainObject(parsed)) return DEFAULT_SETTINGS;
@@ -290,14 +335,46 @@ export async function loadSettings(): Promise<MetronomeSettings> {
         const saved = isPlainObject(savedProfiles[mode]) ? savedProfiles[mode] : {};
         const profile = { ...legacyProfile, ...saved } as ModeSettings;
         profile.barMetronomeChannel = normalizeSampleChannel(profile.barMetronomeChannel);
+        if (mode === "stage") {
+          let legacyStageOptions: Partial<StageSettings> = {};
+          if (legacyStageData) {
+            try {
+              legacyStageOptions = sanitizeStageSettings(JSON.parse(legacyStageData));
+            } catch {}
+          }
+          profile.stageOptions = {
+            ...DEFAULT_STAGE_SETTINGS,
+            ...legacyStageOptions,
+            ...sanitizeStageSettings(profile.stageOptions),
+          };
+        }
         merged.modeSettings[mode] = profile;
+      }
+      const savedStageProfile = isPlainObject(savedProfiles.stage) ? savedProfiles.stage : {};
+      if (legacyStageData && !isPlainObject(savedStageProfile.stageOptions)) {
+        void saveSettings(merged, { notifyOnError: false }).catch(() => {});
       }
       return merged;
     }
   } catch (e) {
     notifyStorageError({ key: SETTINGS_KEY, operation: "load", error: e });
   }
-  return DEFAULT_SETTINGS;
+  let legacyStageOptions: Partial<StageSettings> = {};
+  try {
+    const raw = await AsyncStorage.getItem(LEGACY_STAGE_SETTINGS_KEY);
+    if (raw) legacyStageOptions = sanitizeStageSettings(JSON.parse(raw));
+  } catch {}
+  return {
+    ...DEFAULT_SETTINGS,
+    modeSettings: {
+      stage: {
+        stageOptions: {
+          ...DEFAULT_STAGE_SETTINGS,
+          ...legacyStageOptions,
+        },
+      },
+    },
+  };
 }
 
 export interface SaveSettingsOptions {

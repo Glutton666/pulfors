@@ -17,8 +17,8 @@
  */
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { loadSettings, saveSettings } from "@/lib/storage";
-import type { MetronomeSettings, ModeSettings, MetronomeMode, FlashMode, HapticMode, SoundSet } from "@/lib/storage";
+import { DEFAULT_STAGE_SETTINGS, loadSettings, saveSettings } from "@/lib/storage";
+import type { MetronomeSettings, ModeSettings, MetronomeMode, FlashMode, HapticMode, SoundSet, StageSettings } from "@/lib/storage";
 import {
   createDebouncedPersister,
   type DebouncedPersister,
@@ -136,6 +136,9 @@ export interface UseSettingsResult {
   setBarRowHeight: React.Dispatch<React.SetStateAction<number>>;
   barRandomStrategy: BarRandomStrategy;
   setBarRandomStrategy: React.Dispatch<React.SetStateAction<BarRandomStrategy>>;
+  // ── Stage mode ─────────────────────────────────────────────────────────────
+  stageSettings: StageSettings;
+  updateStageSettings: (patch: Partial<StageSettings>) => void;
   // ── Persistence ────────────────────────────────────────────────────────────
   persistSettings: DebouncedPersister<MetronomeSettings>;
   /** Ignore a settings load that began before a full application reset. */
@@ -233,6 +236,7 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
   const [barCellOpacity, setBarCellOpacity] = useState(0.55);
   const [barRowHeight, setBarRowHeight] = useState(44);
   const [barRandomStrategy, setBarRandomStrategy] = useState<BarRandomStrategy>("independent");
+  const [stageSettings, setStageSettings] = useState<StageSettings>(DEFAULT_STAGE_SETTINGS);
 
   // ── Persistence infrastructure ───────────────────────────────────────────────
 
@@ -269,6 +273,7 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
         volume, sampleVolume, soundSet, layerSoundSets, flashMode, hapticMode,
         audioOffsetMs, timerStopMode, landscapeReversed, beatDirection,
         barMetronomeChannel, barCellOpacity, barRowHeight, barRandomStrategy,
+        ...(mode === "stage" ? { stageOptions: stageSettings } : {}),
       },
     },
     ...externalSnapshotRef.current,
@@ -285,9 +290,11 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
       : {
         ...(persistSnapshotRef.current.modeSettings ?? {}),
         [mode]: {
+        ...(persistSnapshotRef.current.modeSettings?.[mode] ?? {}),
         volume, sampleVolume, soundSet, layerSoundSets, flashMode, hapticMode,
         audioOffsetMs, timerStopMode, landscapeReversed, beatDirection,
         barMetronomeChannel, barCellOpacity, barRowHeight, barRandomStrategy,
+        ...(mode === "stage" ? { stageOptions: stageSettings } : {}),
         } satisfies ModeSettings,
       },
     ...externalSnapshotRef.current,
@@ -454,6 +461,7 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
       if (settings.barCellOpacity != null) setBarCellOpacity(settings.barCellOpacity);
       if (settings.barRowHeight != null) setBarRowHeight(settings.barRowHeight);
       if (settings.barRandomStrategy) setBarRandomStrategy(settings.barRandomStrategy);
+      if (settings.stageOptions) setStageSettings(settings.stageOptions);
       if (settings.username) {
         setUsername(settings.username);
       }
@@ -509,6 +517,7 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
     if (profile.barCellOpacity != null) setBarCellOpacity(profile.barCellOpacity);
     if (profile.barRowHeight != null) setBarRowHeight(profile.barRowHeight);
     if (profile.barRandomStrategy) setBarRandomStrategy(profile.barRandomStrategy);
+    if (mode === "stage" && profile.stageOptions) setStageSettings(profile.stageOptions);
   }, [mode]);
 
   // ── Sample-volume sideEffect ─────────────────────────────────────────────────
@@ -622,6 +631,28 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
     [persistSettings],
   );
 
+  const updateStageSettings = useCallback(
+    (patch: Partial<StageSettings>) => {
+      setStageSettings((previous) => {
+        const next = { ...previous, ...patch };
+        const modeSettings = persistSnapshotRef.current.modeSettings ?? {};
+        persistSnapshotRef.current = {
+          ...persistSnapshotRef.current,
+          modeSettings: {
+            ...modeSettings,
+            stage: {
+              ...(modeSettings.stage ?? {}),
+              stageOptions: next,
+            },
+          },
+        };
+        persistSettings({ modeSettings: persistSnapshotRef.current.modeSettings });
+        return next;
+      });
+    },
+    [persistSettings],
+  );
+
   // ── Return ────────────────────────────────────────────────────────────────────
 
   return {
@@ -647,6 +678,7 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
     barCellOpacity, setBarCellOpacity,
     barRowHeight, setBarRowHeight,
     barRandomStrategy, setBarRandomStrategy,
+    stageSettings, updateStageSettings,
     persistSettings,
     invalidateSettingsLoad,
     cancelSettingsPersistence,

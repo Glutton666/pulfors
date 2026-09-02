@@ -283,6 +283,76 @@ test("switching modes restores each independent profile without overwriting the 
   });
 });
 
+test("editing a Stage option persists it inside the shared Stage profile", async () => {
+  const { loadSettings } = require("@/lib/storage");
+  loadSettings.mockResolvedValueOnce({
+    bpm: 120,
+    beatsPerMeasure: 4,
+    subdivisions: 1,
+    modeSettings: {
+      stage: {
+        volume: 0.5,
+        stageOptions: {
+          theme: "dark",
+          countdown: 0,
+          autoAdvance: true,
+          keepAwake: true,
+          scoreHighlight: "center",
+          keyMappings: {},
+        },
+      },
+    },
+  });
+
+  const { result } = renderHook(() => useSettings({ ...buildParams(), mode: "stage" }));
+  await waitFor(() => expect(result.current.stageSettings.theme).toBe("dark"));
+
+  act(() => result.current.updateStageSettings({ theme: "light", countdown: 2 }));
+
+  const stageProfile = (savedSettings.at(-1)?.modeSettings as any)?.stage;
+  expect(stageProfile.stageOptions).toMatchObject({ theme: "light", countdown: 2 });
+});
+
+test("saving another Stage setting does not erase Stage-only options", async () => {
+  const { loadSettings } = require("@/lib/storage");
+  loadSettings.mockResolvedValueOnce({
+    bpm: 120,
+    beatsPerMeasure: 4,
+    subdivisions: 1,
+    modeSettings: {
+      stage: {
+        volume: 0.5,
+        stageOptions: {
+          theme: "light",
+          countdown: 4,
+          autoAdvance: false,
+          keepAwake: false,
+          scoreHighlight: "bottom",
+          keyMappings: { "1": "entry-a" },
+        },
+      },
+    },
+  });
+
+  const { result } = renderHook(() => useSettings({ ...buildParams(), mode: "stage" }));
+  await waitFor(() => expect(result.current.stageSettings.scoreHighlight).toBe("bottom"));
+
+  act(() => result.current.updateVolume(0.7));
+  await waitFor(() => expect(result.current.volume).toBe(0.7));
+  act(() => result.current.persistSettings());
+
+  const stageProfile = (savedSettings.at(-1)?.modeSettings as any)?.stage;
+  expect(stageProfile.volume).toBe(0.7);
+  expect(stageProfile.stageOptions).toEqual({
+    theme: "light",
+    countdown: 4,
+    autoAdvance: false,
+    keepAwake: false,
+    scoreHighlight: "bottom",
+    keyMappings: { "1": "entry-a" },
+  });
+});
+
 test("failed persistence is exposed to the UI and clears after the next success", () => {
   jest.useFakeTimers();
   const params = buildParams();

@@ -81,8 +81,9 @@ interface SettingsModalProps {
   onEnterNoteMode?: () => void;
   keyBindings?: import("@/lib/keyboard-bindings").KeyBindingsMap;
   onKeyBindingsChange?: (kb: import("@/lib/keyboard-bindings").KeyBindingsMap) => void;
-  /** Opens the stage-only options that are intentionally outside shared settings. */
-  onOpenStageOptions?: () => void;
+  stageSettings?: import("@/lib/storage").StageSettings;
+  stagePracticeBook?: import("@/lib/storage").PracticeEntry[];
+  onStageSettingsChange?: (patch: Partial<import("@/lib/storage").StageSettings>) => void;
 }
 
 export function SettingsModal({
@@ -137,7 +138,9 @@ export function SettingsModal({
   onShowOnboarding,
   keyBindings: keyBindingsProp,
   onKeyBindingsChange,
-  onOpenStageOptions,
+  stageSettings,
+  stagePracticeBook,
+  onStageSettingsChange,
 }: SettingsModalProps) {
   const { colors: C } = useTheme();
   const S = useScale();
@@ -242,7 +245,9 @@ export function SettingsModal({
             onFlashModeChange={onFlashModeChange}
             hapticMode={hapticMode}
             onHapticModeChange={onHapticModeChange}
-            onOpenStageOptions={onOpenStageOptions}
+            stageSettings={stageSettings}
+            stagePracticeBook={stagePracticeBook}
+            onStageSettingsChange={onStageSettingsChange}
           />
         );
       case "sound":

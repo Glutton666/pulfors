@@ -20,7 +20,7 @@ import { useTheme, type BeatTypeKey } from "@/contexts/ThemeContext";
 import { onAccentColor } from "@/lib/color-contrast";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { LANGUAGE_OPTIONS } from "@/lib/i18n";
-import type { FlashMode, HapticMode } from "@/lib/storage";
+import type { FlashMode, HapticMode, PracticeEntry, StageSettings } from "@/lib/storage";
 import type { SampleChannel } from "@/lib/stereo-channel";
 import type { BarRandomConfig } from "@/lib/bar-random-session";
 import { make_styles } from "@/components/SettingsModal.styles";
@@ -28,6 +28,7 @@ import { getTripleOptions, TripleSelector } from "@/components/SettingsModal.hel
 import { HelpIcon } from "@/components/HelpIcon";
 import { AnimatedModal } from "@/components/AnimatedModal";
 import type { SettingsScope } from "@/components/SettingsModal";
+import { SettingsStageSection } from "@/components/settings/SettingsStageSection";
 
 interface SettingsThemeTabProps {
   scope: SettingsScope;
@@ -51,7 +52,9 @@ interface SettingsThemeTabProps {
   onFlashModeChange: (value: FlashMode) => void;
   hapticMode: HapticMode;
   onHapticModeChange: (value: HapticMode) => void;
-  onOpenStageOptions?: () => void;
+  stageSettings?: StageSettings;
+  stagePracticeBook?: PracticeEntry[];
+  onStageSettingsChange?: (patch: Partial<StageSettings>) => void;
 }
 
 export function SettingsThemeTab({
@@ -76,7 +79,9 @@ export function SettingsThemeTab({
   onFlashModeChange,
   hapticMode,
   onHapticModeChange,
-  onOpenStageOptions,
+  stageSettings,
+  stagePracticeBook = [],
+  onStageSettingsChange,
 }: SettingsThemeTabProps) {
   const { themeColor, customHex, themeMode, setThemeColor, setCustomHex, setThemeMode, colors: C, hubImages, addHubImage, removeHubImage, updateHubImageBeatTypes } = useTheme();
   const S = useScale();
@@ -188,27 +193,10 @@ export function SettingsThemeTab({
 
   return (
     <>
-      {scope === "stage" && onOpenStageOptions && (
+      {scope === "stage" && stageSettings && onStageSettingsChange && (
         <>
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Ionicons name="options-outline" size={S.ms(18, 0.4)} color={C.accent} />
-              <Text style={[styles.sectionLabel, { color: C.text }]}>{t("stageMode", "stageOnlySettings")}</Text>
-            </View>
-            <Text style={[styles.offsetHint, { color: C.textTertiary }]}>
-              {t("stageMode", "stageOnlySettingsHint")}
-            </Text>
-            <Pressable
-              testID="open-stage-only-settings"
-              onPress={onOpenStageOptions}
-              style={[styles.toggleRow, { borderColor: C.border, backgroundColor: C.surface }]}
-            >
-              <Ionicons name="settings-outline" size={S.ms(18, 0.4)} color={C.accent} />
-              <Text style={[styles.toggleLabel, { color: C.accent }]}>
-                {t("stageMode", "stageOnlySettings")}
-              </Text>
-              <Ionicons name="chevron-forward" size={S.ms(18, 0.4)} color={C.textTertiary} />
-            </Pressable>
+          <View style={styles.section} testID="stage-settings-inline">
+            <SettingsStageSection settings={stageSettings} practiceBook={stagePracticeBook} onChange={onStageSettingsChange} />
           </View>
           <View style={[styles.divider, { backgroundColor: C.border }]} />
         </>
