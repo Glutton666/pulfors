@@ -1026,7 +1026,6 @@ export function useMetronomeScreen() {
         } catch (e) {}
       }
     );
-
     const layerToggle: Record<string, number> = {};
     engine.setLayerAudioCallback((layerIndex: number, role: "high" | "low" | "strong", soundSet?: string) => {
       if (fadeOutMutedRef.current) return;

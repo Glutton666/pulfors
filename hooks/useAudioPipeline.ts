@@ -20,7 +20,13 @@ import { syncStereoArtifact, releaseStereoArtifact } from "@/lib/sample-cache";
 import { captureBreadcrumb } from "@/lib/error-tracking";
 import { safePlay, notifyAudioPoolFallback } from "@/lib/audio-utils";
 import { isSafeNoteSampleUri } from "@/app/index.helpers";
-import type { ClickPCMs, SamplePCMEntry, TickInfo, DecodedSample } from "@/lib/audio-renderer";
+import type {
+  ClickPCMs,
+  SamplePCMEntry,
+  TickInfo,
+  DecodedSample,
+  WebRenderedLoop,
+} from "@/lib/audio-renderer";
 import type { SoundSet, BuiltinSoundSet, CustomSoundSetConfig } from "@/lib/storage";
 import type { NoteSampleMap, NoteSampleChannelMap, NoteSampleMetroChannelMap, NoteSampleVolumeMap, NoteSampleSpeedMap } from "@/lib/note-samples";
 import type { SampleChannel } from "@/lib/stereo-channel";
@@ -103,7 +109,7 @@ export interface UseAudioPipelineResult {
   renderedPlayerRef: React.MutableRefObject<ExpoAudioPlayer | null>;
   samplePCMCacheRef: React.MutableRefObject<Map<string, SamplePCMEntry>>;
   renderedUrlRef: React.MutableRefObject<string | null>;
-  webRenderedLoopRef: React.MutableRefObject<{ stop: () => void } | null>;
+  webRenderedLoopRef: React.MutableRefObject<WebRenderedLoop | null>;
   lastAudioFireRef: React.MutableRefObject<number>;
   armAudioWatchdogRef: React.MutableRefObject<() => void>;
   clearAudioWatchdogRef: React.MutableRefObject<() => void>;
@@ -206,7 +212,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
   const samplePCMCacheRef = useRef<Map<string, SamplePCMEntry>>(new Map());
   const samplePCMUriRef = useRef<Map<string, string>>(new Map());
   const renderedUrlRef = useRef<string | null>(null);
-  const webRenderedLoopRef = useRef<{ stop: () => void } | null>(null);
+  const webRenderedLoopRef = useRef<WebRenderedLoop | null>(null);
   const lastAudioFireRef = useRef(0);
   const audioWatchdogTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const audioRetryCountRef = useRef(0);
@@ -611,7 +617,10 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
         ? Date.now() - lastAudioFireRef.current
         : Date.now() - (armTimeRef.current ?? Date.now());
       const webCtxSuspended = Platform.OS === "web" && (getWebAudioContext()?.state === "suspended");
-      const isStuck = webCtxSuspended || timeSinceFire > threshold;
+      const renderedOutputHealthy = Platform.OS === "web"
+        ? (webRenderedLoopRef.current?.isRunning() ?? false)
+        : (renderedPlayerRef.current?.playing ?? false);
+      const isStuck = webCtxSuspended || (!renderedOutputHealthy && timeSinceFire > threshold);
 
       if (!isStuck) {
         if (audioRetryCountRef.current > 0) markAudioRecoverySucceeded();

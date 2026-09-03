@@ -12,6 +12,7 @@ import {
   renderMeasure,
 } from "@/lib/audio-renderer";
 import type { ClickPCMs, SamplePCMEntry, TickInfo } from "@/lib/audio-renderer";
+import type { WebRenderedLoop } from "@/lib/audio-renderer";
 import type { MetronomeEngine } from "@/lib/metronome-engine";
 import type { BarConfig, DialConfig } from "@/app/index.helpers";
 import type { PracticeEntry, SoundSet } from "@/lib/storage";
@@ -64,7 +65,7 @@ export interface UsePlaybackControlParams {
   clearSamplePlayStates: () => void;
   resetPlaybackVisuals: () => void;
   renderedPlayerRef: Ref<AudioPlayer | null>;
-  webRenderedLoopRef: Ref<{ stop: () => void } | null>;
+  webRenderedLoopRef: Ref<WebRenderedLoop | null>;
   renderGenerationRef: Ref<number>;
   buildRenderedPlayer: () => Promise<AudioPlayer | null>;
   clearAudioWatchdogRef: Ref<() => void>;

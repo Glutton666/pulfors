@@ -16,7 +16,10 @@ const mockPlayer = {
 };
 const mockRenderMeasure = jest.fn((_params: any) => new Float32Array([0.25, 0.1]));
 const mockPlayWebRenderedLoop = jest.fn(
-  (_pcm: unknown, _onEnded?: () => void, _channel?: string, _volume?: number) => ({ stop: jest.fn() }),
+  (_pcm: unknown, _onEnded?: () => void, _channel?: string, _volume?: number) => ({
+    stop: jest.fn(),
+    isRunning: jest.fn(() => true),
+  }),
 );
 const mockDecodeSampleFile = jest.fn(async (_uri: string) => new Float32Array([0.8, 0.4, 0.2]));
 const mockCreateAudioPlayer = jest.fn((_source: unknown) => ({ ...mockPlayer }));
@@ -229,6 +232,106 @@ describe("pre-rendered playback reliability", () => {
     expect(newLoad.get("0-0")?.pcm[0]).toBeCloseTo(0.9);
     expect(cachedCurrent.get("0-0")?.pcm[0]).toBeCloseTo(0.9);
     expect(mockDecodeSampleFile).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps a healthy web pre-rendered loop without per-tick callbacks", () => {
+    jest.useFakeTimers();
+    (Platform as unknown as { OS: string }).OS = "web";
+    const engine = makeEngine();
+    engine.start();
+    const isPlayingRef = { current: true };
+    const params = {
+      engineRef: { current: engine },
+      soundSet: "classic",
+      soundSetRef: { current: "classic" },
+      customSoundSetsRef: { current: {} },
+      layerSoundSetsRef: { current: {} },
+      noteSamplesRef: { current: {} },
+      noteSampleChannelsRef: { current: {} },
+      noteSampleVolumesRef: { current: {} },
+      noteSampleSpeedsRef: { current: {} },
+      barModeRef: { current: true },
+      barMetronomeChannelRef: { current: "both" },
+      noteSampleMetroChannelsRef: { current: {} },
+      volume: 0.35,
+      volumeRef: { current: 0.35 },
+      sampleVolumeRef: { current: 0.7 },
+      clickPCMCacheRef: { current: { classic: clickPCMs } },
+      webClickReadyRef: { current: true },
+      noteSampleSoundsRef: { current: {} },
+      renderGenerationRef: { current: 0 },
+      isPlayingRef,
+      bpmRef: { current: 120 },
+      t: (key: string) => key,
+      showRecoveryToast: jest.fn(),
+      persistAudioSettingsCallbackRef: { current: jest.fn() },
+    } as any;
+    const { result, unmount } = renderHook(() => useAudioPipeline(params));
+    const renderedStop = jest.fn();
+    result.current.webRenderedLoopRef.current = {
+      stop: renderedStop,
+      isRunning: () => true,
+    };
+
+    act(() => {
+      result.current.armAudioWatchdog();
+      jest.advanceTimersByTime(4000);
+    });
+
+    expect(renderedStop).not.toHaveBeenCalled();
+    expect(params.showRecoveryToast).not.toHaveBeenCalled();
+    act(() => result.current.clearAudioWatchdog());
+    unmount();
+    jest.useRealTimers();
+  });
+
+  it.each([
+    ["web", { stop: jest.fn(), isRunning: () => false }, null],
+    ["ios", null, { ...mockPlayer, playing: false }],
+  ] as const)("recovers a silent %s pre-rendered output", (platform, webLoop, nativePlayer) => {
+    jest.useFakeTimers();
+    (Platform as unknown as { OS: string }).OS = platform;
+    const engine = makeEngine();
+    engine.start();
+    const params = {
+      engineRef: { current: engine },
+      soundSet: "classic",
+      soundSetRef: { current: "classic" },
+      customSoundSetsRef: { current: {} },
+      layerSoundSetsRef: { current: {} },
+      noteSamplesRef: { current: {} },
+      noteSampleChannelsRef: { current: {} },
+      noteSampleVolumesRef: { current: {} },
+      noteSampleSpeedsRef: { current: {} },
+      barModeRef: { current: true },
+      barMetronomeChannelRef: { current: "both" },
+      noteSampleMetroChannelsRef: { current: {} },
+      volume: 0.35,
+      volumeRef: { current: 0.35 },
+      sampleVolumeRef: { current: 0.7 },
+      clickPCMCacheRef: { current: { classic: clickPCMs } },
+      webClickReadyRef: { current: true },
+      noteSampleSoundsRef: { current: {} },
+      renderGenerationRef: { current: 0 },
+      isPlayingRef: { current: true },
+      bpmRef: { current: 120 },
+      t: (key: string) => key,
+      showRecoveryToast: jest.fn(),
+      persistAudioSettingsCallbackRef: { current: jest.fn() },
+    } as any;
+    const { result, unmount } = renderHook(() => useAudioPipeline(params));
+    result.current.webRenderedLoopRef.current = webLoop;
+    result.current.renderedPlayerRef.current = nativePlayer as any;
+
+    act(() => {
+      result.current.armAudioWatchdog();
+      jest.advanceTimersByTime(4000);
+    });
+
+    expect(engine.setPreRenderedAudio).toHaveBeenCalledWith(false);
+    act(() => result.current.clearAudioWatchdog());
+    unmount();
+    jest.useRealTimers();
   });
 
   it.each(["startMetronome", "togglePlayPause"] as const)(

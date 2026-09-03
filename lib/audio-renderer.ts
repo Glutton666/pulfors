@@ -946,15 +946,20 @@ export async function previewClickOnWeb(
   src.start(0);
 }
 
+export interface WebRenderedLoop {
+  stop: () => void;
+  isRunning: () => boolean;
+}
+
 export function playWebRenderedLoop(
   pcm: Float32Array | StereoPCM,
   onEnded?: () => void,
   channel: SampleChannel = "both",
   volume: number = 1,
-): { stop: () => void } {
-  if (Platform.OS !== "web") return { stop: () => {} };
+): WebRenderedLoop {
+  if (Platform.OS !== "web") return { stop: () => {}, isRunning: () => false };
   const ctx = getSharedAudioContext();
-  if (!ctx) return { stop: () => {} };
+  if (!ctx) return { stop: () => {}, isRunning: () => false };
   if (ctx.state === "suspended") {
     ctx.resume().catch(() => {});
   }
@@ -988,11 +993,14 @@ export function playWebRenderedLoop(
   source.start(0);
 
   let stopped = false;
+  let ended = false;
   source.onended = () => {
+    ended = true;
     if (!stopped) onEnded?.();
   };
 
   return {
+    isRunning: () => !stopped && !ended && ctx.state === "running",
     stop: () => {
       stopped = true;
       try { source.stop(); } catch {}
