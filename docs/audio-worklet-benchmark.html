@@ -1,0 +1,115 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>PulFors AudioWorklet scheduling benchmark</title>
+<style>
+  body { font: 16px system-ui, sans-serif; max-width: 60rem; margin: 2rem auto; padding: 0 1rem; background: #0d1117; color: #e6edf3; }
+  button { font: inherit; padding: .6rem 1rem; cursor: pointer; }
+  pre { white-space: pre-wrap; background: #161b22; padding: 1rem; border-radius: .5rem; }
+</style>
+<h1>AudioWorklet scheduling benchmark</h1>
+<p>This fixture intentionally lives outside the Expo bundle. It compares an
+  audio-buffer source fed by a 160 ms main-thread look-ahead with a processor
+  that owns the pulse clock. It is not a product feature.</p>
+<button id="run">Run 2.8 second benchmark</button>
+<pre id="output">Ready.</pre>
+<script>
+  const output = document.querySelector("#output");
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  const busy = (ms) => {
+    const end = performance.now() + ms;
+    while (performance.now() < end) {}
+  };
+
+  function makeClick(ctx) {
+    const buffer = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 0.02), ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < data.length; i++) data[i] = Math.exp(-i / 130) * Math.sin(i * 0.7);
+    return buffer;
+  }
+
+  async function runLookAhead() {
+    const ctx = new AudioContext();
+    await ctx.resume();
+    const click = makeClick(ctx);
+    const gain = ctx.createGain();
+    gain.gain.value = 0;
+    gain.connect(ctx.destination);
+    const start = ctx.currentTime + 0.05;
+    const duration = 2.8;
+    // 300 BPM with four subdivisions: one audible event every 50 ms.
+    const beatSeconds = 0.05;
+    const lookAheadSeconds = 0.16;
+    let nextBeat = 0;
+    let scheduled = 0;
+    let missed = 0;
+    let timer;
+    const pump = () => {
+      const now = ctx.currentTime;
+      while (nextBeat * beatSeconds <= now - start + lookAheadSeconds) {
+        const at = start + nextBeat * beatSeconds;
+        if (at <= now) missed++;
+        else {
+          const source = ctx.createBufferSource();
+          source.buffer = click;
+          source.connect(gain);
+          source.start(at);
+          scheduled++;
+        }
+        nextBeat++;
+      }
+    };
+    timer = setInterval(pump, 25);
+    pump();
+    await sleep(500);
+    const stallStart = performance.now();
+    busy(320);
+    const stallMs = performance.now() - stallStart;
+    await sleep((duration * 1000) - 500);
+    clearInterval(timer);
+    await ctx.close();
+    return { scheduled, missed, mainThreadStallMs: Number(stallMs.toFixed(1)), lookAheadMs: 160 };
+  }
+
+  async function runWorklet() {
+    const ctx = new AudioContext();
+    await ctx.audioWorklet.addModule("./audio-worklet-scheduling-probe.js");
+    const node = new AudioWorkletNode(ctx, "pulfors-scheduling-probe");
+    node.connect(ctx.destination);
+    let report;
+    node.port.onmessage = (event) => { report = event.data; };
+    await ctx.resume();
+    node.port.postMessage({ type: "start", durationFrames: Math.ceil(ctx.sampleRate * 2.8) });
+    await sleep(500);
+    const stallStart = performance.now();
+    busy(320);
+    const stallMs = performance.now() - stallStart;
+    await sleep(2400);
+    node.port.postMessage({ type: "stop" });
+    await sleep(80);
+    await ctx.close();
+    return { ...(report || { renderedPulses: 0, workletReports: 0 }), mainThreadStallMs: Number(stallMs.toFixed(1)) };
+  }
+
+  document.querySelector("#run").onclick = async () => {
+    output.textContent = "Running...";
+    try {
+      const support = {
+        secureContext: window.isSecureContext,
+        audioWorklet: "AudioWorkletNode" in window
+          && !!window.AudioContext
+          && "audioWorklet" in window.AudioContext.prototype,
+      };
+      const lookAhead = await runLookAhead();
+      const worklet = support.audioWorklet ? await runWorklet() : { skipped: "unsupported" };
+      output.textContent = JSON.stringify({
+        browser: navigator.userAgent,
+        support,
+        lookAhead,
+        worklet,
+        interpretation: "A missed look-ahead deadline is a synthetic fallback failure; renderedPulses is worklet-side progress observed after the JS stall.",
+      }, null, 2);
+    } catch (error) {
+      output.textContent = String(error && error.stack || error);
+    }
+  };
+</script>

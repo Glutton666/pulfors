@@ -1,5 +1,9 @@
 # Audio clock synchronization
 
+AudioWorklet 전환 검토 결과와 재검토 조건은
+[`audio-worklet-evaluation.md`](./audio-worklet-evaluation.md)에 기록한다.
+현재 결정은 프리렌더 + 160 ms look-ahead 유지다.
+
 Web pre-rendered playback uses `AudioContext.currentTime` as its master clock. JavaScript
 `performance.now()` remains the fallback clock for per-tick playback and engine scheduling;
 the two epochs are never compared directly. `AudioClockAdapter` records an offset mapping

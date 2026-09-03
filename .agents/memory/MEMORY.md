@@ -43,3 +43,4 @@
 - [Mode settings profile transitions](mode-settings-profile-transitions.md) — preserve the destination profile during a mode-change render; commit outgoing values before applying the target.
 - [Pre-render audio epoch](pre-render-audio-epoch.md) — initial and scheduled audio renders across hooks must share one epoch; sample caches must validate URI identity.
 - [Score import trust boundary](score-import-trust-boundary.md) — validate editor/layout/playback invariants, use own-key allowlists, and share producer/import limits.
+- [AudioWorklet adoption threshold](audio-worklet-adoption-threshold.md) — keep pre-render + 160ms look-ahead until real stalls or graph/memory data justify a second web audio backend.
