@@ -97,6 +97,7 @@ import {
   type EasterEggBarEngineSnapshot,
 } from "@/lib/easter-egg-engine-session";
 import { applyDialConfigToEngine } from "@/lib/dial-engine-boundary";
+import { beatTypeToClickRole } from "@/lib/metronome-engine-pure";
 import { useFadeOutSession } from "@/hooks/useFadeOutSession";
 import { usePermissionRecoveryToast } from "@/hooks/usePermissionRecoveryToast";
 import { useBeatQuickSave } from "@/hooks/useBeatQuickSave";
@@ -981,7 +982,8 @@ export function useMetronomeScreen() {
       Platform.OS === "web"
         ? (tick, atPerformanceTime) => {
             if (fadeOutMutedRef.current) return false;
-            const role = tick.type === "strong" ? "strong" : tick.type === "accent" ? "high" : "low";
+            const role = beatTypeToClickRole(tick.type);
+            if (!role) return true;
             const channel = barModeRef.current
               ? (noteSampleMetroChannelsRef.current[String(tick.beat)] ?? barMetronomeChannelRef.current)
               : "both";

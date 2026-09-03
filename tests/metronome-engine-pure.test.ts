@@ -11,12 +11,20 @@ import {
   pureAddBarWithRepeat,
   pureEmitBeatsInRange,
   pureEmitStackedBlockTicks,
+  beatTypeToClickRole,
   toEngineBpm,
   type ScheduleInputs,
   type EmitState,
   type LoopBlockData,
   type BeatType,
 } from "../lib/metronome-engine";
+
+test("beat types map to exactly one audible role and mute maps to none", () => {
+  assert.equal(beatTypeToClickRole("strong"), "strong");
+  assert.equal(beatTypeToClickRole("accent"), "high");
+  assert.equal(beatTypeToClickRole("normal"), "low");
+  assert.equal(beatTypeToClickRole("mute"), null);
+});
 
 function makeInputs(overrides: Partial<ScheduleInputs> = {}): ScheduleInputs {
   const sortedBlocks: LoopBlockData[] = overrides.sortedBlocks ?? [];

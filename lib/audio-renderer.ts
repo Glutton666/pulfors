@@ -826,6 +826,8 @@ export async function saveStereoSampleWav(
 }
 
 let webClickBuffers: { strong: AudioBuffer; high: AudioBuffer; low: AudioBuffer } | null = null;
+let webClickBufferKey: string | null = null;
+let webClickLoadGeneration = 0;
 
 export function getWebAudioContext(): AudioContext | null {
   return getSharedAudioContext();
@@ -861,11 +863,14 @@ export async function ensureWebClickBuffers(
   const ctx = getSharedAudioContext();
   if (!ctx) return false;
 
-  if (webClickBuffers) return true;
+  const sources = [soundSet.strong, soundSet.high, soundSet.low];
+  const urls = sources.map(resolveWebAssetUrl);
+  const bufferKey = urls.join("\u0000");
+  if (webClickBuffers && webClickBufferKey === bufferKey) return true;
+  const generation = ++webClickLoadGeneration;
 
   try {
-    const loadOne = async (src: number | string): Promise<AudioBuffer> => {
-      const url = resolveWebAssetUrl(src);
+    const loadOne = async (url: string): Promise<AudioBuffer> => {
       if (!url) throw new Error("[WebAudio] Could not resolve URL for asset");
       const resp = await fetch(url);
       if (!resp.ok) throw new Error(`[WebAudio] HTTP ${resp.status} fetching ${url}`);
@@ -873,11 +878,13 @@ export async function ensureWebClickBuffers(
       return ctx.decodeAudioData(ab.slice(0));
     };
     const [strong, high, low] = await Promise.all([
-      loadOne(soundSet.strong),
-      loadOne(soundSet.high),
-      loadOne(soundSet.low),
+      loadOne(urls[0]),
+      loadOne(urls[1]),
+      loadOne(urls[2]),
     ]);
+    if (generation !== webClickLoadGeneration) return false;
     webClickBuffers = { strong, high, low };
+    webClickBufferKey = bufferKey;
     return true;
   } catch (e) {
     logger.warn("[WebAudio] Failed to load click buffers:", e);
@@ -957,7 +964,9 @@ export function playWebClick(
 }
 
 export function clearWebClickBuffers(): void {
+  webClickLoadGeneration += 1;
   webClickBuffers = null;
+  webClickBufferKey = null;
 }
 
 const previewAudioCache = new Map<string, AudioBuffer>();

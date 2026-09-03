@@ -5,6 +5,15 @@
 // ============================================================
 
 export type BeatType = "strong" | "accent" | "normal" | "mute";
+export type ClickRole = "strong" | "high" | "low";
+
+/** Maps the scheduled beat type to its audible click role. Mute has no role. */
+export function beatTypeToClickRole(type: BeatType): ClickRole | null {
+  if (type === "mute") return null;
+  if (type === "strong") return "strong";
+  if (type === "accent") return "high";
+  return "low";
+}
 export type HapticMode = "all" | "accent" | "off";
 
 export interface ProgressInfo {
