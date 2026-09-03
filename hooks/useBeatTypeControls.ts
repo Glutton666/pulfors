@@ -50,6 +50,8 @@ export interface UseBeatTypeControlsParams {
   setBeatSubdivisions: React.Dispatch<React.SetStateAction<Record<string, BeatType[]>>>;
   // Persistence
   persistSettings: DebouncedPersister<MetronomeSettings>;
+  // Rebuild active pre-rendered audio after schedule-affecting changes.
+  scheduleReRender: () => void;
 }
 
 export interface UseBeatTypeControlsResult {
@@ -82,6 +84,7 @@ export function useBeatTypeControls(
     setBeatTypes,
     setBeatSubdivisions,
     persistSettings,
+    scheduleReRender,
   } = params;
 
   // ── updateTimeSignature ──────────────────────────────────────────────────────
@@ -142,9 +145,10 @@ export function useBeatTypeControls(
         dialConfigRef.current.beatSubdivisions = cleaned;
         persistSettings({ beatsPerMeasure: beats, beatSubdivisions: cleaned });
       }
+      scheduleReRender();
     },
     // Intentionally mirrors the original dep array in useMetronomeScreen
-    [persistSettings, beatSubdivisions, beatsPerMeasure, beatTypes, subdivisionPattern]
+    [persistSettings, beatSubdivisions, beatsPerMeasure, beatTypes, subdivisionPattern, scheduleReRender]
   );
 
   // ── handleBeatTypeChange ─────────────────────────────────────────────────────
@@ -184,8 +188,9 @@ export function useBeatTypeControls(
         currentTypes[index] = type;
         engine.setBeatTypes(currentTypes);
       }
+      scheduleReRender();
     },
-    [] // All mutable state is accessed via stable refs or via setter closures
+    [scheduleReRender]
   );
 
   return { updateTimeSignature, handleBeatTypeChange };

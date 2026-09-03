@@ -398,6 +398,25 @@ describe("pre-rendered playback reliability", () => {
     expect(player.play).not.toHaveBeenCalled();
   });
 
+  it("uses the rendered player for Android Beat custom sound sets", async () => {
+    (Platform as unknown as { OS: string }).OS = "android";
+    const engine = makeEngine();
+    const player = { ...mockPlayer, volume: 0.35, play: jest.fn() };
+    const params = makePlaybackParams(engine, player);
+    params.barModeRef.current = false;
+    params.soundSetRef.current = "custom1";
+    const { result } = renderHook(() => usePlaybackControl(params as any));
+
+    await act(async () => {
+      await result.current.togglePlayPause();
+    });
+
+    expect(params.buildRenderedPlayer).toHaveBeenCalledTimes(1);
+    expect(engine.setPreRenderedAudio).toHaveBeenCalledWith(true);
+    expect(engine.start).toHaveBeenCalledTimes(1);
+    expect(player.play).toHaveBeenCalledTimes(1);
+  });
+
   it("web playback renders the same note metadata and applies the user master volume", async () => {
     (Platform as unknown as { OS: string }).OS = "web";
     const engine = makeEngine();

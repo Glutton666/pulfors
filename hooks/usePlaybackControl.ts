@@ -330,7 +330,10 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
         // to a rendered WAV changed the audible role mix on real devices and
         // caused a pronounced volume/timbre drop. Bar mode still needs the
         // rendered loop for its samples and expanded schedule.
-        const useRenderedLoop = Platform.OS !== "android" || p.barModeRef.current;
+        const useRenderedLoop =
+          Platform.OS !== "android" ||
+          p.barModeRef.current ||
+          String(p.soundSetRef.current).startsWith("custom");
         const player = useRenderedLoop ? await p.buildRenderedPlayer() : null;
         if (p.preparingCancelledRef.current) {
           try { player?.release(); } catch {}

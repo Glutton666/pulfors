@@ -1773,6 +1773,7 @@ export function useMetronomeScreen() {
     setBeatTypes,
     setBeatSubdivisions,
     persistSettings,
+    scheduleReRender,
   });
 
   const { notifyPlayState: notifyVoicePlayState } = useVoiceAssistant();

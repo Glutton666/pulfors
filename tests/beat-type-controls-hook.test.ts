@@ -35,6 +35,7 @@ describe("useBeatTypeControls hook smoke test", () => {
         ? updater(beatSubdivisions)
         : updater;
     });
+    const scheduleReRender = jest.fn();
 
     const { result } = renderHook(() => useBeatTypeControls({
       engineRef: { current: engine as any },
@@ -49,6 +50,7 @@ describe("useBeatTypeControls hook smoke test", () => {
       setBeatTypes,
       setBeatSubdivisions,
       persistSettings: jest.fn() as any,
+      scheduleReRender,
     }));
 
     act(() => result.current.handleBeatTypeChange(1, "accent"));
@@ -56,5 +58,6 @@ describe("useBeatTypeControls hook smoke test", () => {
     expect(beatTypes[1]).toBe("accent");
     expect(beatSubdivisions["1"][0]).toBe("accent");
     expect(engine.setBeatTypes).toHaveBeenCalled();
+    expect(scheduleReRender).toHaveBeenCalledTimes(1);
   });
 });
