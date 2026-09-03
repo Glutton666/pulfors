@@ -141,6 +141,7 @@ export const lowClickSource = soundSets.classic.low;
 export const strongClickSource = soundSets.classic.strong;
 
 export class MetronomeEngine {
+  private static readonly REALTIME_LOOKAHEAD_MS = 160;
   private timerId: ReturnType<typeof setTimeout> | null = null;
   private rafId: number | null = null;
   private isRunning = false;
@@ -186,6 +187,9 @@ export class MetronomeEngine {
   private anchorMeasureCount = 0;
   private anchorMeasureDurationMs = 0;
   private pendingOffsetTimers: Set<ReturnType<typeof setTimeout>> = new Set();
+  private realtimeAudioScheduler: ((tick: ScheduledTick, atPerformanceTime: number) => boolean) | null = null;
+  private clearRealtimeAudio: (() => void) | null = null;
+  private realtimeScheduledTicks = new Set<ScheduledTick>();
 
   private static readonly SCHEDULE_CACHE_MAX = 16;
   private scheduleCache: Map<string, { ticks: ScheduledTick[]; durationMs: number }> = new Map();
@@ -231,7 +235,22 @@ export class MetronomeEngine {
   }
 
   setPreRenderedAudio(enabled: boolean) {
+    if (enabled) this.clearRealtimeAudioQueue();
     this.preRenderedAudio = enabled;
+  }
+
+  setRealtimeAudioScheduler(
+    scheduler: ((tick: ScheduledTick, atPerformanceTime: number) => boolean) | null,
+    clear?: (() => void) | null,
+  ) {
+    this.clearRealtimeAudioQueue();
+    this.realtimeAudioScheduler = scheduler;
+    this.clearRealtimeAudio = clear ?? null;
+  }
+
+  private clearRealtimeAudioQueue() {
+    this.realtimeScheduledTicks.clear();
+    try { this.clearRealtimeAudio?.(); } catch {}
   }
 
   /**
@@ -887,6 +906,7 @@ export class MetronomeEngine {
   }
 
   private rebuildSchedule() {
+    this.clearRealtimeAudioQueue();
     const oldSchedule = this.schedule;
     const oldIndex = this.scheduleIndex;
     const oldMeasureStartTime = this.measureStartTime;
@@ -1048,6 +1068,7 @@ export class MetronomeEngine {
     }
 
     const offset = this.audioOffsetMs;
+    const realtimeAudioWasScheduled = this.realtimeScheduledTicks.delete(tick);
 
     // 가청 클릭 발화 통지 — mute가 아닌 모든 경로(일반/레이어/블록/프리렌더)에 대해
     // 동기적으로 한 번씩 호출된다. audioOffsetMs는 시각/햅틱 타이밍 보정용이므로 무시한다.
@@ -1055,7 +1076,7 @@ export class MetronomeEngine {
       try { this.onClickEmitted(Date.now()); } catch {}
     }
 
-    if (this.preRenderedAudio) {
+    if (this.preRenderedAudio || realtimeAudioWasScheduled) {
       if (this.playCustomSample) {
         this.playCustomSample(tick.beat, tick.subBeat);
       }
@@ -1099,6 +1120,7 @@ export class MetronomeEngine {
   }
 
   private rolloverToNextMeasure() {
+    this.clearRealtimeAudioQueue();
     this.onMeasureComplete?.();
     this.measureCount += 1;
     this.measureStartTime =
@@ -1186,6 +1208,7 @@ export class MetronomeEngine {
 
     const now = performance.now();
     const elapsed = now - this.measureStartTime;
+    this.fillRealtimeAudioLookAhead(now);
 
     while (this.isRunning && this.scheduleIndex < this.schedule.length) {
       const tick = this.schedule[this.scheduleIndex];
@@ -1217,6 +1240,29 @@ export class MetronomeEngine {
       this.scheduleNext();
     }
   };
+
+  private fillRealtimeAudioLookAhead(now: number) {
+    if (this.preRenderedAudio || !this.realtimeAudioScheduler) return;
+    const horizon = now + MetronomeEngine.REALTIME_LOOKAHEAD_MS;
+    for (let i = this.scheduleIndex; i < this.schedule.length; i++) {
+      const tick = this.schedule[i];
+      const at = this.measureStartTime + tick.time + Math.max(0, this.audioOffsetMs);
+      if (at > horizon) break;
+      const hasSpecializedAudio =
+        tick.layerIndex > 0 ||
+        (tick.blockIndex >= 0 && Boolean(this.loopBlocks[tick.blockIndex]?.soundSet));
+      const baseAudioSuppressed = this.baseClickMuted && tick.layerIndex === 0;
+      if (
+        tick.type === "mute" ||
+        hasSpecializedAudio ||
+        baseAudioSuppressed ||
+        this.realtimeScheduledTicks.has(tick)
+      ) continue;
+      try {
+        if (this.realtimeAudioScheduler(tick, at)) this.realtimeScheduledTicks.add(tick);
+      } catch {}
+    }
+  }
 
   private scheduleNext() {
     const nextTick = this.schedule[this.scheduleIndex];
@@ -1346,6 +1392,7 @@ export class MetronomeEngine {
     }
     this.cancelRAF();
     this.clearPendingOffsetTimers();
+    this.clearRealtimeAudioQueue();
     this.pendingMeasureStartAction = null;
     this.currentBeat = 0;
     this.currentSubBeat = 0;

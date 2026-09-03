@@ -10,6 +10,11 @@ import {
   getWebAudioContext,
   playWebRenderedLoop,
   renderMeasure,
+  renderMeasureAbortable,
+  beginAbortableRender,
+  abortActiveRender,
+  finishAbortableRender,
+  isRenderAborted,
 } from "@/lib/audio-renderer";
 import type { ClickPCMs, SamplePCMEntry, TickInfo } from "@/lib/audio-renderer";
 import type { WebRenderedLoop } from "@/lib/audio-renderer";
@@ -81,9 +86,9 @@ export interface UsePlaybackControlParams {
   noteSampleVolumesRef: Ref<NoteSampleVolumeMap>;
   noteSampleSpeedsRef: Ref<NoteSampleSpeedMap>;
   webClickReadyRef: Ref<boolean>;
-  getClickPCMs: (soundSet: SoundSet) => Promise<ClickPCMs>;
-  getSamplePCMs: (samples: NoteSampleMap) => Promise<Map<string, SamplePCMEntry>>;
-  getLayerClickPCMsForSchedule: (ticks: TickInfo[]) => Promise<Map<string, ClickPCMs>>;
+  getClickPCMs: (soundSet: SoundSet, signal?: AbortSignal) => Promise<ClickPCMs>;
+  getSamplePCMs: (samples: NoteSampleMap, signal?: AbortSignal) => Promise<Map<string, SamplePCMEntry>>;
+  getLayerClickPCMsForSchedule: (ticks: TickInfo[], signal?: AbortSignal) => Promise<Map<string, ClickPCMs>>;
   barMetronomeChannelRef: Ref<SampleChannel>;
   noteSampleMetroChannelsRef: Ref<NoteSampleMetroChannelMap>;
   notifyVoicePlayState: (playing: boolean) => void;
@@ -201,61 +206,68 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
 
   const renderWebLoop = useCallback(async (engine: MetronomeEngine, atMeasureBoundary: boolean) => {
     const generation = ++renderGenerationRef.current;
-    if (atMeasureBoundary && !p.engineRef.current?.getIsRunning()) return;
-    const scheduleInfo = engine.getScheduleInfo();
-    const ticks = scheduleInfo.ticks as TickInfo[];
-    const [clickPCMs, layerClickPCMs, samplePCMs] = await Promise.all([
-      p.getClickPCMs(p.soundSetRef.current),
-      p.getLayerClickPCMsForSchedule(ticks),
-      p.getSamplePCMs(p.noteSamplesRef.current),
-    ]);
-    if (
-      generation !== renderGenerationRef.current ||
-      (atMeasureBoundary && !p.engineRef.current?.getIsRunning())
-    ) return;
-    const pcm = renderMeasure({
-      schedule: ticks,
-      measureDurationMs: scheduleInfo.durationMs,
-      clickPCMs,
-      samplePCMs,
-      clickVolume: Math.max(1, p.volumeRef.current),
-      sampleVolume: samplePCMs.size > 0 ? p.sampleVolumeRef.current : 0,
-      sampleVolumes: p.noteSampleVolumesRef.current,
-      sampleSpeeds: p.noteSampleSpeedsRef.current,
-      sampleChannels: p.noteSampleChannelsRef.current,
-      metronomeChannel: p.barModeRef.current ? p.barMetronomeChannelRef.current : "both",
-      metroChannelsByBeat: p.barModeRef.current ? p.noteSampleMetroChannelsRef.current : undefined,
-      layerClickPCMs,
-    });
-    if (p.volumeRef.current > 1) {
-      if (pcm instanceof Float32Array) applySoftClip(pcm);
-      else { applySoftClip(pcm.left); applySoftClip(pcm.right); }
-    }
-    if (atMeasureBoundary) {
-      engine.setPendingMeasureStartAction(() => {
-        if (
-          generation !== renderGenerationRef.current ||
-          !p.engineRef.current?.getIsRunning()
-        ) return;
-        const previous = p.webRenderedLoopRef.current;
-        const previousDuration = previous?.getDurationSeconds?.();
-        const nextDuration = (pcm instanceof Float32Array
-          ? pcm.length
-          : Math.min(pcm.left.length, pcm.right.length)) / 44100;
-        const phaseCompatible = previousDuration !== undefined
-          && Math.abs(previousDuration - nextDuration) < 0.001;
-        const boundary = phaseCompatible ? previous?.getNextBoundaryTime?.() : undefined;
-        const next = playWebRenderedLoop(pcm, undefined, "both", p.volumeRef.current, boundary);
-        p.activateWebRenderedLoop(next);
-        if (previous) {
-          try { previous.stop(boundary); } catch {}
-        }
-        p.engineRef.current?.setPreRenderedAudio(true);
-      });
-    } else {
-      p.webRenderedLoopRef.current?.stop();
-      p.activateWebRenderedLoop(playWebRenderedLoop(pcm, undefined, "both", p.volumeRef.current));
-      engine.setPreRenderedAudio(true);
+    const signal = beginAbortableRender(renderGenerationRef);
+    try {
+      if (atMeasureBoundary && !p.engineRef.current?.getIsRunning()) return;
+      const scheduleInfo = engine.getScheduleInfo();
+      const ticks = scheduleInfo.ticks as TickInfo[];
+      const [clickPCMs, layerClickPCMs, samplePCMs] = await Promise.all([
+        p.getClickPCMs(p.soundSetRef.current, signal),
+        p.getLayerClickPCMsForSchedule(ticks, signal),
+        p.getSamplePCMs(p.noteSamplesRef.current, signal),
+      ]);
+      if (
+        generation !== renderGenerationRef.current ||
+        (atMeasureBoundary && !p.engineRef.current?.getIsRunning())
+      ) return;
+      const pcm = await renderMeasureAbortable({
+        schedule: ticks,
+        measureDurationMs: scheduleInfo.durationMs,
+        clickPCMs,
+        samplePCMs,
+        clickVolume: Math.max(1, p.volumeRef.current),
+        sampleVolume: samplePCMs.size > 0 ? p.sampleVolumeRef.current : 0,
+        sampleVolumes: p.noteSampleVolumesRef.current,
+        sampleSpeeds: p.noteSampleSpeedsRef.current,
+        sampleChannels: p.noteSampleChannelsRef.current,
+        metronomeChannel: p.barModeRef.current ? p.barMetronomeChannelRef.current : "both",
+        metroChannelsByBeat: p.barModeRef.current ? p.noteSampleMetroChannelsRef.current : undefined,
+        layerClickPCMs,
+      }, signal);
+      if (p.volumeRef.current > 1) {
+        if (pcm instanceof Float32Array) applySoftClip(pcm);
+        else { applySoftClip(pcm.left); applySoftClip(pcm.right); }
+      }
+      if (atMeasureBoundary) {
+        engine.setPendingMeasureStartAction(() => {
+          if (
+            generation !== renderGenerationRef.current ||
+            !p.engineRef.current?.getIsRunning()
+          ) return;
+          const previous = p.webRenderedLoopRef.current;
+          const previousDuration = previous?.getDurationSeconds?.();
+          const nextDuration = (pcm instanceof Float32Array
+            ? pcm.length
+            : Math.min(pcm.left.length, pcm.right.length)) / 44100;
+          const phaseCompatible = previousDuration !== undefined
+            && Math.abs(previousDuration - nextDuration) < 0.001;
+          const boundary = phaseCompatible ? previous?.getNextBoundaryTime?.() : undefined;
+          const next = playWebRenderedLoop(pcm, undefined, "both", p.volumeRef.current, boundary);
+          p.activateWebRenderedLoop(next);
+          if (previous) {
+            try { previous.stop(boundary); } catch {}
+          }
+          p.engineRef.current?.setPreRenderedAudio(true);
+        });
+      } else {
+        p.webRenderedLoopRef.current?.stop();
+        p.activateWebRenderedLoop(playWebRenderedLoop(pcm, undefined, "both", p.volumeRef.current));
+        engine.setPreRenderedAudio(true);
+      }
+    } catch (error) {
+      if (!isRenderAborted(error)) throw error;
+    } finally {
+      finishAbortableRender(renderGenerationRef, signal);
     }
   }, [p]);
 
@@ -283,6 +295,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
     }
     if (p.isPreparing && !p.isPlaying) {
       renderGenerationRef.current += 1;
+      abortActiveRender(renderGenerationRef);
       p.preparingCancelledRef.current = true;
       p.setIsPreparing(false);
       markAudioStopped();

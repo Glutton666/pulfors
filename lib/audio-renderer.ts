@@ -248,26 +248,33 @@ function abToB64(buf: ArrayBuffer): string {
 }
 
 export async function loadAssetPCM(
-  assetModule: number | string
+  assetModule: number | string,
+  signal?: AbortSignal,
 ): Promise<Float32Array> {
+  if (signal?.aborted) throw new Error("RENDER_ABORTED");
   if (Platform.OS === "web") {
     const url = resolveWebAssetUrl(assetModule);
     if (!url) throw new Error("[AudioRenderer] Could not resolve URL for asset");
-    const resp = await fetch(url);
+    const resp = await fetch(url, { signal });
     const ab = await resp.arrayBuffer();
+    if (signal?.aborted) throw new Error("RENDER_ABORTED");
     try {
       const ctx = getSharedAudioContext();
       if (ctx) {
         const audioBuf = await ctx.decodeAudioData(ab.slice(0));
+        if (signal?.aborted) throw new Error("RENDER_ABORTED");
         const pcm = audioBuf.getChannelData(0);
         return resample(new Float32Array(pcm), audioBuf.sampleRate, RENDER_SR);
       }
-    } catch {}
+    } catch (error) {
+      if (signal?.aborted || (error as Error)?.name === "AbortError") throw new Error("RENDER_ABORTED");
+    }
     const { pcm, sampleRate } = parseWav(ab);
     return resample(pcm, sampleRate, RENDER_SR);
   } else {
     const asset = Asset.fromModule(assetModule as number);
     await asset.downloadAsync();
+    if (signal?.aborted) throw new Error("RENDER_ABORTED");
     if (!asset.localUri) throw new Error("Failed to load asset");
     const file = new File(asset.localUri);
     const ab = await file.arrayBuffer();
@@ -277,9 +284,11 @@ export async function loadAssetPCM(
 }
 
 export async function decodeSampleFile(
-  uri: string
+  uri: string,
+  signal?: AbortSignal,
 ): Promise<Float32Array | null> {
   try {
+    if (signal?.aborted) throw new Error("RENDER_ABORTED");
     const rawUri = uri.split("#")[0];
 
     if (Platform.OS === "web") {
@@ -293,16 +302,20 @@ export async function decodeSampleFile(
         logger.warn("[AudioRenderer] Non-local URI blocked:", rawUri.slice(0, 80));
         return null;
       }
-      const resp = await fetch(rawUri);
+      const resp = await fetch(rawUri, { signal });
       const ab = await resp.arrayBuffer();
+      if (signal?.aborted) throw new Error("RENDER_ABORTED");
       try {
         const ctx = getSharedAudioContext();
         if (ctx) {
           const audioBuf = await ctx.decodeAudioData(ab.slice(0));
+          if (signal?.aborted) throw new Error("RENDER_ABORTED");
           const pcm = audioBuf.getChannelData(0);
           return resample(new Float32Array(pcm), audioBuf.sampleRate, RENDER_SR);
         }
-      } catch {}
+      } catch (error) {
+        if (signal?.aborted || (error as Error)?.name === "AbortError") throw new Error("RENDER_ABORTED");
+      }
       const { pcm, sampleRate } = parseWav(ab);
       return resample(pcm, sampleRate, RENDER_SR);
     } else {
@@ -318,17 +331,48 @@ export async function decodeSampleFile(
           }>;
         };
         const audioBuffer = await decodeNativeAudioData(fileUri, RENDER_SR);
+        if (signal?.aborted) throw new Error("RENDER_ABORTED");
         const pcm = audioBuffer.getChannelData(0);
         return new Float32Array(pcm);
       } catch {
+        if (signal?.aborted) throw new Error("RENDER_ABORTED");
         logger.warn("[AudioRenderer] Unsupported local audio codec:", rawUri.slice(0, 80));
         return null;
       }
     }
   } catch (e) {
+    if (signal?.aborted || (e as Error)?.name === "AbortError" || (e as Error)?.message === "RENDER_ABORTED") {
+      throw new Error("RENDER_ABORTED");
+    }
     logger.warn("[AudioRenderer] decode failed:", uri, e);
     return null;
   }
+}
+
+const activeRenderControllers = new WeakMap<object, AbortController>();
+
+export function beginAbortableRender(owner: object): AbortSignal | undefined {
+  activeRenderControllers.get(owner)?.abort();
+  if (typeof AbortController === "undefined") return undefined;
+  const controller = new AbortController();
+  activeRenderControllers.set(owner, controller);
+  return controller.signal;
+}
+
+export function abortActiveRender(owner: object): void {
+  activeRenderControllers.get(owner)?.abort();
+  activeRenderControllers.delete(owner);
+}
+
+export function finishAbortableRender(owner: object, signal?: AbortSignal): void {
+  const current = activeRenderControllers.get(owner);
+  if (current && current.signal === signal) activeRenderControllers.delete(owner);
+}
+
+export function isRenderAborted(error: unknown): boolean {
+  return (error as Error)?.name === "AbortError"
+    || (error as Error)?.message === "RENDER_ABORTED"
+    || (error as Error)?.message === "EXPORT_ABORTED";
 }
 
 export function parseTrimInfo(uri: string): {

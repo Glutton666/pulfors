@@ -15,6 +15,12 @@ import {
   playWebRenderedLoop,
   getWebAudioContext,
   clearWebClickBuffers,
+  scheduleWebClickAt,
+  beginAbortableRender,
+  abortActiveRender,
+  finishAbortableRender,
+  isRenderAborted,
+  renderMeasureAbortable,
 } from "@/lib/audio-renderer";
 import { syncStereoArtifact, releaseStereoArtifact } from "@/lib/sample-cache";
 import { captureBreadcrumb } from "@/lib/error-tracking";
@@ -35,6 +41,7 @@ import type { BuiltinPlayers, SoundSetPlayers } from "@/hooks/useAudioPlayers";
 import { BUILTIN_POOL_SIZE } from "@/hooks/useAudioPlayers";
 import { setAutoResumeAfterInterruption as setAudioSessionAutoResume } from "@/lib/audio-session";
 import {
+  getAudioLifecycleSnapshot,
   markAudioRecoveryFailed,
   markAudioRecoverySucceeded,
 } from "@/lib/audio-lifecycle";
@@ -126,14 +133,20 @@ export interface UseAudioPipelineResult {
   scheduleReRender: () => void;
   stopRenderedAudio: () => void;
   warmupAudioPlayers: () => Promise<void>;
-  getClickPCMs: (set: SoundSet) => Promise<ClickPCMs>;
-  getSamplePCMs: (samples: NoteSampleMap) => Promise<Map<string, SamplePCMEntry>>;
-  getLayerClickPCMsForSchedule: (ticks: TickInfo[]) => Promise<Map<string, ClickPCMs>>;
+  getClickPCMs: (set: SoundSet, signal?: AbortSignal) => Promise<ClickPCMs>;
+  getSamplePCMs: (samples: NoteSampleMap, signal?: AbortSignal) => Promise<Map<string, SamplePCMEntry>>;
+  getLayerClickPCMsForSchedule: (ticks: TickInfo[], signal?: AbortSignal) => Promise<Map<string, ClickPCMs>>;
   invalidateSamplePCMCache: (key?: string) => void;
   preloadNoteSampleSounds: (samples: NoteSampleMap, keepExisting?: boolean) => Promise<void>;
   clearSamplePlayStates: () => void;
   armAudioWatchdog: () => void;
   clearAudioWatchdog: () => void;
+  scheduleRealtimeWebClick: (
+    role: "strong" | "high" | "low",
+    channel: SampleChannel | "off",
+    atPerformanceTime: number,
+  ) => boolean;
+  clearRealtimeWebAudio: () => void;
 }
 
 /**
@@ -233,10 +246,48 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
   const armAudioWatchdogRef = useRef<() => void>(() => {});
   const clearAudioWatchdogRef = useRef<() => void>(() => {});
   const reRenderTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const realtimeSourcesRef = useRef(new Set<import("@/lib/audio-renderer").ScheduledWebAudio>());
   const samplePlayStateRef = useRef<Record<string, { playing: boolean; endTimer: ReturnType<typeof setTimeout> | null }>>({});
   const armTimeRef = useRef<number | null>(null);
   const showRecoveryToastRef = useRef(showRecoveryToast);
   useEffect(() => { showRecoveryToastRef.current = showRecoveryToast; }, [showRecoveryToast]);
+
+  const clearRealtimeWebAudio = useCallback(() => {
+    realtimeSourcesRef.current.forEach((source) => source.cancel());
+    realtimeSourcesRef.current.clear();
+  }, []);
+
+  const scheduleRealtimeWebClick = useCallback((
+    role: "strong" | "high" | "low",
+    channel: SampleChannel | "off",
+    atPerformanceTime: number,
+  ): boolean => {
+    const ctx = getWebAudioContext();
+    if (!ctx || ctx.state !== "running") return false;
+    let adapter = webClockAdapterRef.current;
+    if (!adapter?.isMapped()) {
+      adapter = new AudioClockAdapter({ nowSeconds: () => ctx.currentTime });
+      adapter.map();
+      webClockAdapterRef.current = adapter;
+    }
+    const atAudioTime = adapter.performanceTimeToAudioSeconds(atPerformanceTime);
+    if (atAudioTime === null) return false;
+    if (outputStateRef.current.snapshot().mode !== "realtime") {
+      outputStateRef.current.transition("realtime");
+    }
+    const generation = outputStateRef.current.snapshot().generation;
+    const source = scheduleWebClickAt(role, channel, volumeRef.current, atAudioTime);
+    if (!source) return false;
+    realtimeSourcesRef.current.add(source);
+    source.onEnded?.(() => {
+      realtimeSourcesRef.current.delete(source);
+      if (outputStateRef.current.owns(generation) && outputStateRef.current.snapshot().mode === "realtime") {
+        lastAudioFireRef.current = Date.now();
+        if (getAudioLifecycleSnapshot().phase === "recovering") markAudioRecoverySucceeded();
+      }
+    });
+    return true;
+  }, [volumeRef]);
 
   const activateWebRenderedLoop = useCallback((loop: WebRenderedLoop) => {
     webRenderedLoopRef.current = loop;
@@ -252,11 +303,13 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
   }, []);
   useEffect(() => () => {
     renderGenerationRef.current += 1;
+    abortActiveRender(renderGenerationRef);
+    clearRealtimeWebAudio();
     if (reRenderTimerRef.current) {
       clearTimeout(reRenderTimerRef.current);
       reRenderTimerRef.current = null;
     }
-  }, [renderGenerationRef]);
+  }, [clearRealtimeWebAudio, renderGenerationRef]);
 
   // ── Web click-buffer preload (re-runs on soundSet change) ───────────────────
   useEffect(() => {
@@ -279,20 +332,21 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
     return { pcm: trimmed, trimStartSamples: decoded.trimStartSamples, trimLenSamples: Math.min(decoded.trimLenSamples, maxSamples) };
   }, []);
 
-  const getClickPCMs = useCallback(async (set: SoundSet): Promise<ClickPCMs> => {
+  const getClickPCMs = useCallback(async (set: SoundSet, signal?: AbortSignal): Promise<ClickPCMs> => {
     if (clickPCMCacheRef.current[set]) return clickPCMCacheRef.current[set];
     const customCfg = customSoundSetsRef.current[set];
     if (customCfg) {
       const loadSample = async (cfg: any) => {
         if (cfg.type === "custom" && cfg.sampleUri) {
           try {
-            const pcm = await decodeSampleFile(cfg.sampleUri);
+            const pcm = await decodeSampleFile(cfg.sampleUri, signal);
             if (pcm) {
               const trimmed = trimPCM({ pcm, trimStartSamples: 0, trimLenSamples: pcm.length }, cfg.duration);
               return trimmed.pcm;
             }
             captureBreadcrumb({ category: "custom-sound", message: "Decode returned null", level: "warning", data: { sampleUri: cfg.sampleUri } });
           } catch (e) {
+            if (isRenderAborted(e)) throw e;
             captureBreadcrumb({ category: "custom-sound", message: "Failed to decode custom sample", level: "warning", data: { error: String(e) } });
           }
         }
@@ -300,7 +354,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
         const srcRole = cfg.sourceRole || "strong";
         const src = (soundSets as Record<string, typeof soundSets.classic>)[srcSet] ?? soundSets.classic;
         const asset = srcRole === "strong" ? src.strong : srcRole === "high" ? src.high : src.low;
-        const raw = await loadAssetPCM(asset);
+        const raw = await loadAssetPCM(asset, signal);
         const trimmed = trimPCM({ pcm: raw, trimStartSamples: 0, trimLenSamples: raw.length }, cfg.duration);
         return trimmed.pcm;
       };
@@ -310,13 +364,13 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
       return result;
     }
     const src = soundSets[set as keyof typeof soundSets] || soundSets.classic;
-    const [strong, high, low] = await Promise.all([loadAssetPCM(src.strong), loadAssetPCM(src.high), loadAssetPCM(src.low)]);
+    const [strong, high, low] = await Promise.all([loadAssetPCM(src.strong, signal), loadAssetPCM(src.high, signal), loadAssetPCM(src.low, signal)]);
     const result: ClickPCMs = { strong, high, low };
     clickPCMCacheRef.current[set] = result;
     return result;
   }, [trimPCM]);
 
-  const getSamplePCMs = useCallback(async (samples: NoteSampleMap): Promise<Map<string, SamplePCMEntry>> => {
+  const getSamplePCMs = useCallback(async (samples: NoteSampleMap, signal?: AbortSignal): Promise<Map<string, SamplePCMEntry>> => {
     const map = new Map<string, SamplePCMEntry>();
     const entries = Object.entries(samples);
     if (entries.length === 0) return map;
@@ -327,7 +381,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
         return;
       }
       try {
-        const pcm = await decodeSampleFile(uri);
+        const pcm = await decodeSampleFile(uri, signal);
         if (pcm) {
           const { trimStartMs, trimDurationMs } = parseTrimInfo(uri);
           const entry: SamplePCMEntry = { pcm, trimStartMs, trimDurationMs };
@@ -338,13 +392,14 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
           }
         }
       } catch (e) {
+        if (isRenderAborted(e)) throw e;
         captureBreadcrumb({ category: "pre-render", message: "Failed to decode sample", level: "warning", data: { key, error: String(e) } });
       }
     }));
     return map;
   }, [noteSamplesRef]);
 
-  const getLayerClickPCMsForSchedule = useCallback(async (ticks: TickInfo[]): Promise<Map<string, ClickPCMs>> => {
+  const getLayerClickPCMsForSchedule = useCallback(async (ticks: TickInfo[], signal?: AbortSignal): Promise<Map<string, ClickPCMs>> => {
     const soundSetByName = new Set<string>();
     const fallbackByIndex = new Map<number, string>();
     for (const tick of ticks) {
@@ -361,7 +416,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
     }
     const loaded = new Map<string, ClickPCMs>();
     await Promise.all([...soundSetByName].map(async (ss) => {
-      const pcms = await getClickPCMs(ss as SoundSet);
+      const pcms = await getClickPCMs(ss as SoundSet, signal);
       loaded.set(ss, pcms);
     }));
     const map = new Map<string, ClickPCMs>(loaded);
@@ -377,19 +432,20 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
     const engine = engineRef.current;
     if (!engine) return null;
     const generation = ++renderGenerationRef.current;
+    const signal = beginAbortableRender(renderGenerationRef);
     outputStateRef.current.transition("rendering");
     try {
       const scheduleInfo = engine.getScheduleInfo();
       const ticks = scheduleInfo.ticks as TickInfo[];
       const [clickPCMs, layerClickPCMs, samplePCMs] = await Promise.all([
-        getClickPCMs(soundSetRef.current),
-        getLayerClickPCMsForSchedule(ticks),
-        getSamplePCMs(noteSamplesRef.current),
+        getClickPCMs(soundSetRef.current, signal),
+        getLayerClickPCMsForSchedule(ticks, signal),
+        getSamplePCMs(noteSamplesRef.current, signal),
       ]);
       if (generation !== renderGenerationRef.current) return null;
       await new Promise(r => setTimeout(r, 0));
       if (generation !== renderGenerationRef.current) return null;
-      const pcm = renderMeasure({
+      const pcm = await renderMeasureAbortable({
         schedule: ticks,
         measureDurationMs: scheduleInfo.durationMs,
         clickPCMs,
@@ -402,7 +458,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
         metronomeChannel: barModeRef.current ? barMetronomeChannelRef.current : "both",
         metroChannelsByBeat: barModeRef.current ? noteSampleMetroChannelsRef.current : undefined,
         layerClickPCMs,
-      });
+      }, signal);
       if (volumeRef.current > 1.0) {
         if (pcm instanceof Float32Array) { applySoftClip(pcm); }
         else { applySoftClip(pcm.left); applySoftClip(pcm.right); }
@@ -428,8 +484,11 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
       outputStateRef.current.transition("prerender");
       return player;
     } catch (e) {
+      if (isRenderAborted(e)) return null;
       captureBreadcrumb({ category: "pre-render", message: "Failed, falling back to per-tick audio", level: "warning", data: { error: String(e) } });
       return null;
+    } finally {
+      finishAbortableRender(renderGenerationRef, signal);
     }
   }, [getClickPCMs, getLayerClickPCMsForSchedule, getSamplePCMs]);
 
@@ -457,6 +516,8 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
 
   const stopRenderedAudio = useCallback(() => {
     renderGenerationRef.current += 1;
+    abortActiveRender(renderGenerationRef);
+    clearRealtimeWebAudio();
     if (webRenderedLoopRef.current) {
       webRenderedLoopRef.current.stop();
       webRenderedLoopRef.current = null;
@@ -473,10 +534,11 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
     if (engine) engine.setPreRenderedAudio(false);
     outputStateRef.current.transition("idle");
     webClockAdapterRef.current?.invalidate();
-  }, []);
+  }, [clearRealtimeWebAudio, renderGenerationRef]);
 
   const scheduleReRender = useCallback(() => {
     renderGenerationRef.current += 1;
+    abortActiveRender(renderGenerationRef);
     if (reRenderTimerRef.current) clearTimeout(reRenderTimerRef.current);
     reRenderTimerRef.current = setTimeout(async () => {
       const engine = engineRef.current;
@@ -495,16 +557,17 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
 
       if (Platform.OS === "web") {
         const generation = ++renderGenerationRef.current;
+        const signal = beginAbortableRender(renderGenerationRef);
         try {
           const scheduleInfo = engine.getScheduleInfo();
           const ticks = scheduleInfo.ticks as TickInfo[];
           const [clickPCMs, layerClickPCMs, samplePCMs] = await Promise.all([
-            getClickPCMs(soundSetRef.current),
-            getLayerClickPCMsForSchedule(ticks),
-            getSamplePCMs(noteSamplesRef.current),
+            getClickPCMs(soundSetRef.current, signal),
+            getLayerClickPCMsForSchedule(ticks, signal),
+            getSamplePCMs(noteSamplesRef.current, signal),
           ]);
           if (generation !== renderGenerationRef.current || !engine.getIsRunning()) return;
-          const pcm = renderMeasure({
+          const pcm = await renderMeasureAbortable({
             schedule: ticks,
             measureDurationMs: scheduleInfo.durationMs,
             clickPCMs,
@@ -517,7 +580,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
             metronomeChannel: barModeRef.current ? barMetronomeChannelRef.current : "both",
             metroChannelsByBeat: barModeRef.current ? noteSampleMetroChannelsRef.current : undefined,
             layerClickPCMs,
-          });
+          }, signal);
           if (volumeRef.current > 1.0) {
             if (pcm instanceof Float32Array) { applySoftClip(pcm); }
             else { applySoftClip(pcm.left); applySoftClip(pcm.right); }
@@ -541,13 +604,16 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
             activateWebRenderedLoop(loop);
             engine.setPreRenderedAudio(true);
           });
-        } catch {
+        } catch (error) {
+          if (isRenderAborted(error)) return;
           if (generation !== renderGenerationRef.current) return;
           try { webRenderedLoopRef.current?.stop(); } catch {}
           webRenderedLoopRef.current = null;
           engine.setPreRenderedAudio(false);
           outputStateRef.current.transition("realtime");
           webClockAdapterRef.current?.invalidate();
+        } finally {
+          finishAbortableRender(renderGenerationRef, signal);
         }
       } else {
         try {
@@ -777,5 +843,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
     clearSamplePlayStates,
     armAudioWatchdog,
     clearAudioWatchdog,
+    scheduleRealtimeWebClick,
+    clearRealtimeWebAudio,
   };
 }

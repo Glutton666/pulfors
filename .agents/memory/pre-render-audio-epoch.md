@@ -14,3 +14,9 @@ For Web Audio replacement, keep the old source alive while the latest generation
 **Why:** Reusing an old buffer boundary after a BPM or meter change offsets the new engine timeline, while preserving an old loop after replacement failure can permanently suppress the updated real-time schedule.
 
 **How to apply:** Treat replacement as a transaction: preserve old output during work, validate generation and duration on success, and explicitly fall back on current-generation failure.
+
+Realtime Web Audio fallback reservations share the same ownership boundary. A schedule rebuild, random-pass rollover, stop, recovery, or prerender takeover must cancel every future source before another output generation can claim the same ticks. Scheduling a source is not proof that audio was heard; watchdog activity begins only when the owned source completes or otherwise confirms output.
+
+**Why:** Future Web Audio sources survive JS timer stalls, but they can also outlive the schedule that created them and double-play against a replacement loop unless cancellation and output generation advance together.
+
+**How to apply:** Reserve only a short audio-clock window, deduplicate ticks inside that window, clear reservations on every timeline ownership transition, and keep result-discard guards for platforms whose decode/render work cannot observe abort signals.

@@ -1,7 +1,24 @@
-import { renderMeasureAbortable } from "../lib/audio-renderer";
+import {
+  abortActiveRender,
+  beginAbortableRender,
+  finishAbortableRender,
+  renderMeasureAbortable,
+} from "../lib/audio-renderer";
 import assert from "node:assert/strict";
 
 describe("renderMeasureAbortable", () => {
+  it("aborts the previous owner request and only finalizes the current one", () => {
+    const owner = {};
+    const first = beginAbortableRender(owner);
+    const second = beginAbortableRender(owner);
+    assert.equal(first?.aborted, true);
+    assert.equal(second?.aborted, false);
+    finishAbortableRender(owner, first);
+    assert.equal(second?.aborted, false);
+    abortActiveRender(owner);
+    assert.equal(second?.aborted, true);
+  });
+
   it("applies per-sample gain for exported audio", async () => {
     const result = await renderMeasureAbortable({
       schedule: [{ beat: 0, subBeat: 0, time: 0, type: "normal", repeatIteration: 0, barRepeatIteration: 0 }],

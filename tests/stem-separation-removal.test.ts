@@ -11,7 +11,7 @@ test("stem separation removal: package, model, and native decoder residue is abs
   const packageJson = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as {
     dependencies?: Record<string, unknown>;
   };
-  const packageLock = readFileSync(join(root, "package-lock.json"), "utf8");
+  const packageLock = readFileSync(join(root, "yarn.lock"), "utf8");
   const metroConfig = readFileSync(join(root, "metro.config.js"), "utf8");
   const jestConfig = readFileSync(join(root, "jest.config.js"), "utf8");
 

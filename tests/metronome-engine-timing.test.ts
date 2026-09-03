@@ -14,6 +14,7 @@ type EngineInternals = {
   pendingOffsetTimers: Set<ReturnType<typeof setTimeout>>;
   rolloverToNextMeasure: () => void;
   fireTick: (tick: unknown) => void;
+  fillRealtimeAudioLookAhead: (now: number) => void;
   schedule: { time: number; beat: number; subBeat: number; type: string; isMainBeat: boolean; layerIndex: number; blockIndex: number; barRepeatIteration: number; barRepeatTotal: number; repeatIteration: number; blockRepeatTotal: number; jumpIteration: number; jumpTotal: number; jumpSourceBlockIndex: number; layerBeat: number }[];
 };
 
@@ -99,6 +100,113 @@ test("timeline resync never reanchors real-time fallback output", () => {
     assert.equal(e.syncToMeasureElapsedMs(700, 40), false);
     assert.equal(e.getMeasureStartTime(), start);
     e.stop();
+  });
+});
+
+test("web fallback reserves a 160ms audio-clock window once and survives a JS stall", () => {
+  withFakeNow(1000, (advance) => {
+    const engine = new MetronomeEngine();
+    engine.setBpm(300);
+    engine.setBeatsPerMeasure(4);
+    engine.setBeatTypes(["accent", "normal", "normal", "normal"]);
+    engine.buildScheduleOnly();
+    const scheduled: Array<{ tick: EngineInternals["schedule"][number]; at: number }> = [];
+    let immediateAudio = 0;
+    engine.setAudioCallbacks(
+      () => { immediateAudio += 1; },
+      () => { immediateAudio += 1; },
+      () => { immediateAudio += 1; },
+    );
+    engine.setRealtimeAudioScheduler((tick, at) => {
+      scheduled.push({ tick: tick as EngineInternals["schedule"][number], at });
+      return true;
+    });
+    engine.start({ measureStartAt: 1100 });
+    const internals = engine as unknown as EngineInternals;
+
+    assert.equal(scheduled.length, 1, "first 160ms window only contains the downbeat");
+    assert.equal(scheduled[0].at, 1100, "deadline is the absolute performance timeline");
+    internals.fillRealtimeAudioLookAhead(1000);
+    assert.equal(scheduled.length, 1, "the same tick is never queued twice");
+
+    advance(220);
+    internals.fireTick(scheduled[0].tick);
+    assert.equal(immediateAudio, 0, "a late JS callback does not replay already-reserved audio");
+    assert.equal(scheduled[0].at, 1100, "the reserved audio deadline does not move with the stall");
+    engine.stop();
+  });
+});
+
+test("fallback reservations are cancelled on schedule replacement and stop", () => {
+  withFakeNow(2000, () => {
+    const engine = new MetronomeEngine();
+    let clears = 0;
+    engine.setRealtimeAudioScheduler(() => true, () => { clears += 1; });
+    engine.start();
+    const afterStart = clears;
+    engine.setBpm(180);
+    assert.ok(clears > afterStart, "a settings rebuild clears stale reservations");
+    const afterRebuild = clears;
+    engine.stop();
+    assert.ok(clears > afterRebuild, "stop clears every future source");
+  });
+});
+
+test("look-ahead does not reclaim Polygon-muted base clicks", () => {
+  withFakeNow(3000, () => {
+    const engine = new MetronomeEngine();
+    const internals = engine as unknown as EngineInternals & { isRunning: boolean };
+    engine.setBaseClickMuted(true);
+    engine.buildScheduleOnly();
+    internals.isRunning = true;
+    internals.measureStartTime = 3000;
+    let reservations = 0;
+    let immediateAudio = 0;
+    engine.setRealtimeAudioScheduler(() => { reservations += 1; return true; });
+    engine.setAudioCallbacks(
+      () => { immediateAudio += 1; },
+      () => { immediateAudio += 1; },
+      () => { immediateAudio += 1; },
+    );
+
+    internals.fillRealtimeAudioLookAhead(3000);
+    internals.fireTick(internals.schedule[0]);
+    assert.equal(reservations, 0, "muted base audio remains outside the reservation queue");
+    assert.equal(immediateAudio, 0, "the ordinary path still honors baseClickMuted");
+    engine.stop();
+  });
+});
+
+test("look-ahead leaves layer and block sound-set ticks on their specialized callbacks", () => {
+  withFakeNow(4000, () => {
+    const engine = new MetronomeEngine();
+    const internals = engine as unknown as EngineInternals & { isRunning: boolean };
+    const baseTick = {
+      time: 0, beat: 0, subBeat: 0, type: "accent", isMainBeat: true,
+      layerIndex: 0, layerBeat: 0, blockIndex: 0,
+      blockRepeatTotal: 0, repeatIteration: 0,
+      barRepeatIteration: 0, barRepeatTotal: 0,
+      jumpIteration: 0, jumpTotal: 0, jumpSourceBlockIndex: -1,
+    } as EngineInternals["schedule"][number];
+    const layerTick = { ...baseTick, layerIndex: 1 } as EngineInternals["schedule"][number];
+    engine.setLoopBlocks([{ startBeat: 0, endBeat: 0, type: "count", value: 1, soundSet: "woodblock" }]);
+    internals.schedule = [baseTick, layerTick];
+    internals.measureStartTime = 4000;
+    internals.isRunning = true;
+    let reservations = 0;
+    let blockCalls = 0;
+    let layerCalls = 0;
+    engine.setRealtimeAudioScheduler(() => { reservations += 1; return true; });
+    engine.setBlockAudioCallback(() => { blockCalls += 1; });
+    engine.setLayerAudioCallback(() => { layerCalls += 1; });
+
+    internals.fillRealtimeAudioLookAhead(4000);
+    internals.fireTick(baseTick);
+    internals.fireTick(layerTick);
+    assert.equal(reservations, 0, "specialized timbres are not claimed by the global click queue");
+    assert.equal(blockCalls, 1);
+    assert.equal(layerCalls, 1);
+    engine.stop();
   });
 });
 

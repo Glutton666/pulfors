@@ -73,6 +73,11 @@ export class AudioClockAdapter {
     if (!this.mapped) return null;
     return this.performanceOriginMs + (audioTimeSeconds - this.audioOriginSeconds) * 1000;
   }
+
+  performanceTimeToAudioSeconds(performanceTimeMs: number): number | null {
+    if (!this.mapped) return null;
+    return this.audioOriginSeconds + (performanceTimeMs - this.performanceOriginMs) / 1000;
+  }
 }
 
 export class AudioTimingDiagnostics {

@@ -33,6 +33,15 @@ jest.mock("@/lib/audio-renderer", () => ({
   loadAssetPCM: jest.fn(async () => new Float32Array([0.5])),
   parseTrimInfo: jest.fn(() => ({ trimStartMs: 0, trimDurationMs: 0 })),
   renderMeasure: (params: any) => mockRenderMeasure(params),
+  renderMeasureAbortable: async (params: any, signal?: AbortSignal) => {
+    if (signal?.aborted) throw new Error("RENDER_ABORTED");
+    return mockRenderMeasure(params);
+  },
+  beginAbortableRender: jest.fn(() => undefined),
+  abortActiveRender: jest.fn(),
+  finishAbortableRender: jest.fn(),
+  isRenderAborted: jest.fn((error: unknown) => (error as Error)?.message === "RENDER_ABORTED"),
+  scheduleWebClickAt: jest.fn(() => null),
   applySoftClip: jest.fn(),
   saveRenderedWav: jest.fn(async () => "file:///rendered.wav"),
   ensureWebClickBuffers: jest.fn(async () => true),

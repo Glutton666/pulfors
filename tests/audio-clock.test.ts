@@ -48,3 +48,17 @@ test("disabled diagnostics and stale output generations do no work", () => {
   assert.equal(state.owns(rendering), false);
   assert.equal(state.snapshot().mode, "transitioning");
 });
+
+test("audio clock converts a future performance deadline to the audio epoch", () => {
+  let audio = 8;
+  let perf = 25;
+  const adapter = new AudioClockAdapter(
+    { nowSeconds: () => audio },
+    { nowSeconds: () => perf },
+  );
+  adapter.map();
+  assert.equal(adapter.performanceTimeToAudioSeconds(25200), 8.2);
+  perf += 1;
+  audio += 1;
+  assert.equal(adapter.performanceTimeToAudioSeconds(26200), 9.2);
+});

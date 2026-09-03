@@ -678,6 +678,7 @@ export function useMetronomeScreen() {
     getClickPCMs, getSamplePCMs, getLayerClickPCMsForSchedule,
     invalidateSamplePCMCache, preloadNoteSampleSounds, clearSamplePlayStates,
     armAudioWatchdog, clearAudioWatchdog,
+    scheduleRealtimeWebClick, clearRealtimeWebAudio,
   } = useAudioPipeline({
     engineRef, soundSet, soundSetRef, volume, customSoundSetsRef,
     layerSoundSetsRef, noteSamplesRef, noteSampleChannelsRef, noteSampleVolumesRef, noteSampleSpeedsRef, barModeRef,
@@ -975,6 +976,20 @@ export function useMetronomeScreen() {
         markAudioRecoverySucceeded();
       }
     };
+
+    engine.setRealtimeAudioScheduler(
+      Platform.OS === "web"
+        ? (tick, atPerformanceTime) => {
+            if (fadeOutMutedRef.current) return false;
+            const role = tick.type === "strong" ? "strong" : tick.type === "accent" ? "high" : "low";
+            const channel = barModeRef.current
+              ? (noteSampleMetroChannelsRef.current[String(tick.beat)] ?? barMetronomeChannelRef.current)
+              : "both";
+            return scheduleRealtimeWebClick(role, channel, atPerformanceTime);
+          }
+        : null,
+      clearRealtimeWebAudio,
+    );
 
     engine.setAudioCallbacks(
       () => {
@@ -1447,9 +1462,17 @@ export function useMetronomeScreen() {
         renderedPlayerRef.current = null;
       }
       engine.setPendingMeasureStartAction(null);
-      // Web keeps the old source audible while a replacement renders, then
-      // swaps both sources at the same AudioContext boundary.
-      if (Platform.OS !== "web") engine.setPreRenderedAudio(false);
+      if (Platform.OS === "web") {
+        // A random pass or failed/replaced schedule must not leave the previous
+        // PCM loop owning output. Hand audio to the look-ahead fallback now;
+        // the debounced render can reclaim ownership at a later boundary.
+        try { webRenderedLoopRef.current?.stop(); } catch {}
+        webRenderedLoopRef.current = null;
+        engine.setPreRenderedAudio(false);
+        scheduleReRenderCallbackRef.current();
+      } else {
+        engine.setPreRenderedAudio(false);
+      }
     });
 
     // unmount 시 보류 중인 frame을 취소하고 엔진 콜백을 분리한다.
