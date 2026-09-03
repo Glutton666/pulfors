@@ -1833,6 +1833,8 @@ export function useMetronomeScreen() {
     bpm,
     getPlaybackContext: () => getPlaybackContext(),
     beatsPerMeasure,
+    beatTypes,
+    beatSubdivisions,
     subdivisionPattern,
     barConfigRef,
     dialConfigRef,
@@ -2606,6 +2608,18 @@ export function useMetronomeScreen() {
       if (pattern && pattern.length > 1) {
         newSubs[String(beatIndex)] = pattern;
         engineRef.current?.setBeatSubdivision(beatIndex, pattern);
+      } else if (pattern?.length === 1) {
+        // A one-note pattern is the beat itself, not a subdivision. Promote its
+        // note type to the visible beat so UI, engine schedule, and audio agree.
+        delete newSubs[String(beatIndex)];
+        engineRef.current?.setBeatSubdivision(beatIndex, null);
+        const type = pattern[0];
+        const nextTypes = [...beatTypes];
+        nextTypes[beatIndex] = type;
+        setBeatTypes(nextTypes);
+        if (barModeRef.current) barConfigRef.current.beatTypes = nextTypes;
+        else dialConfigRef.current.beatTypes = nextTypes;
+        engineRef.current?.setBeatTypes(nextTypes);
       } else {
         delete newSubs[String(beatIndex)];
         engineRef.current?.setBeatSubdivision(beatIndex, null);
@@ -2615,10 +2629,18 @@ export function useMetronomeScreen() {
         barConfigRef.current.beatSubdivisions = newSubs;
       } else {
         dialConfigRef.current.beatSubdivisions = newSubs;
-        persistSettings({ beatSubdivisions: newSubs });
+        persistSettings({
+          beatSubdivisions: newSubs,
+          ...(pattern?.length === 1
+            ? {
+                beatTypes: dialConfigRef.current.beatTypes,
+              }
+            : {}),
+        });
       }
+      scheduleReRender();
     },
-    [beatSubdivisions, persistSettings]
+    [beatSubdivisions, beatTypes, persistSettings, scheduleReRender]
   );
 
   const handlePatternChange = useCallback(

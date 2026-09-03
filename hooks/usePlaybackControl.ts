@@ -13,7 +13,7 @@ import {
 } from "@/lib/audio-renderer";
 import type { ClickPCMs, SamplePCMEntry, TickInfo } from "@/lib/audio-renderer";
 import type { WebRenderedLoop } from "@/lib/audio-renderer";
-import type { MetronomeEngine } from "@/lib/metronome-engine";
+import type { BeatType, MetronomeEngine } from "@/lib/metronome-engine";
 import type { BarConfig, DialConfig } from "@/app/index.helpers";
 import type { PracticeEntry, SoundSet } from "@/lib/storage";
 import { PracticeSessionTracker, type PracticeSessionData } from "@/lib/activity-log";
@@ -53,6 +53,8 @@ export interface UsePlaybackControlParams {
   bpm: number;
   getPlaybackContext: (overrides?: { activeBarIndex?: number }) => PlaybackContext;
   beatsPerMeasure: number;
+  beatTypes: BeatType[];
+  beatSubdivisions: Record<string, BeatType[]>;
   subdivisionPattern: unknown[];
   barConfigRef: Ref<BarConfig>;
   dialConfigRef: Ref<DialConfig>;
@@ -184,7 +186,15 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
       }
       engine.setAllBarBpmOverrides(bpmOverrides);
     } else {
-      applyDialConfigToEngine(engine, p.dialConfigRef.current);
+      // The visible Beat-mode state is the playback source of truth. The
+      // persisted config ref can lag React state by one render after a tap.
+      applyDialConfigToEngine(engine, {
+        beatsPerMeasure: p.beatsPerMeasure,
+        beatTypes: [...p.beatTypes],
+        beatSubdivisions: Object.fromEntries(
+          Object.entries(p.beatSubdivisions).map(([key, pattern]) => [key, [...pattern]]),
+        ),
+      });
     }
     engine.buildScheduleOnly();
   }, [p]);

@@ -539,6 +539,8 @@ function makePlaybackParams(engine: ReturnType<typeof makeEngine>, player: typeo
     bpm: 120,
     getPlaybackContext: jest.fn(() => ({ bpm: 120, modeLabel: "Beat", activityMode: "beat", bpmSource: "global" })),
     beatsPerMeasure: 4,
+    beatTypes: ["strong", "accent", "normal", "mute"],
+    beatSubdivisions: {},
     subdivisionPattern: [],
     barConfigRef: { current: {} },
     dialConfigRef: { current: {} },
