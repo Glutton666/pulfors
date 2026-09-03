@@ -380,6 +380,24 @@ describe("pre-rendered playback reliability", () => {
     expect(player.play).toHaveBeenCalledTimes(1);
   });
 
+  it("keeps Android Beat mode on realtime players so accent roles and level do not change", async () => {
+    (Platform as unknown as { OS: string }).OS = "android";
+    const engine = makeEngine();
+    const player = { ...mockPlayer, volume: 0.35 };
+    const params = makePlaybackParams(engine, player);
+    params.barModeRef.current = false;
+    const { result } = renderHook(() => usePlaybackControl(params as any));
+
+    await act(async () => {
+      await result.current.togglePlayPause();
+    });
+
+    expect(params.buildRenderedPlayer).not.toHaveBeenCalled();
+    expect(engine.setPreRenderedAudio).toHaveBeenCalledWith(false);
+    expect(engine.start).toHaveBeenCalledTimes(1);
+    expect(player.play).not.toHaveBeenCalled();
+  });
+
   it("web playback renders the same note metadata and applies the user master volume", async () => {
     (Platform as unknown as { OS: string }).OS = "web";
     const engine = makeEngine();

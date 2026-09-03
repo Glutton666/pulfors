@@ -326,7 +326,12 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
         void renderWebLoop(engine, true).catch((error) => p.capturePlaybackError("togglePlayPause: Web pre-render failed, using per-tick", error, "warning"));
       } else {
         if (Platform.OS === "android") await androidProbeReady;
-        const player = await p.buildRenderedPlayer();
+        // Android Beat mode keeps the proven per-tick player path. Switching it
+        // to a rendered WAV changed the audible role mix on real devices and
+        // caused a pronounced volume/timbre drop. Bar mode still needs the
+        // rendered loop for its samples and expanded schedule.
+        const useRenderedLoop = Platform.OS !== "android" || p.barModeRef.current;
+        const player = useRenderedLoop ? await p.buildRenderedPlayer() : null;
         if (p.preparingCancelledRef.current) {
           try { player?.release(); } catch {}
           p.setIsPreparing(false);
