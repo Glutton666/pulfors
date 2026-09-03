@@ -31,6 +31,8 @@ import type {
   NoteSampleSpeedMap,
   NoteSampleVolumeMap,
 } from "@/lib/note-samples";
+
+const WEB_REALTIME_START_LEAD_MS = 80;
 import type { PlaybackContext } from "@/lib/playback-context";
 import type { AudioPlayer } from "expo-audio";
 import {
@@ -342,13 +344,18 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
           const source = soundSets[p.soundSetRef.current as keyof typeof soundSets] || soundSets.classic;
           if (await ensureWebClickBuffers(source as never).catch(() => false)) p.webClickReadyRef.current = true;
         }
-        p.setIsPreparing(false); p.setIsPlaying(true); p.notifyVoicePlayState(true); p.isPlayingRef.current = true;
-        engine.start(startBeat ?? undefined);
-        markAudioPlaying();
-        p.armAudioWatchdogRef.current();
         const useRenderedLoop =
           p.barModeRef.current ||
           String(p.soundSetRef.current).startsWith("custom");
+        p.setIsPreparing(false); p.setIsPlaying(true); p.notifyVoicePlayState(true); p.isPlayingRef.current = true;
+        engine.start({
+          startFromBeat: startBeat ?? undefined,
+          measureStartAt: useRenderedLoop
+            ? undefined
+            : performance.now() + WEB_REALTIME_START_LEAD_MS,
+        });
+        markAudioPlaying();
+        p.armAudioWatchdogRef.current();
         if (useRenderedLoop) {
           void renderWebLoop(engine, true).catch((error) => p.capturePlaybackError("togglePlayPause: Web pre-render failed, using per-tick", error, "warning"));
         } else {
@@ -433,7 +440,13 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
         } else {
           engine.setPreRenderedAudio(false);
         }
-        p.setIsPlaying(true); engine.start(); markAudioPlaying(); p.armAudioWatchdogRef.current();
+        p.setIsPlaying(true);
+        engine.start({
+          measureStartAt: useRenderedLoop
+            ? undefined
+            : performance.now() + WEB_REALTIME_START_LEAD_MS,
+        });
+        markAudioPlaying(); p.armAudioWatchdogRef.current();
       } else {
         const useRenderedLoop =
           Platform.OS !== "android" ||
