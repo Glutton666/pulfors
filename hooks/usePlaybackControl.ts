@@ -66,6 +66,7 @@ export interface UsePlaybackControlParams {
   resetPlaybackVisuals: () => void;
   renderedPlayerRef: Ref<AudioPlayer | null>;
   webRenderedLoopRef: Ref<WebRenderedLoop | null>;
+  activateWebRenderedLoop: (loop: WebRenderedLoop) => void;
   renderGenerationRef: Ref<number>;
   buildRenderedPlayer: () => Promise<AudioPlayer | null>;
   clearAudioWatchdogRef: Ref<() => void>;
@@ -226,13 +227,24 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
           generation !== renderGenerationRef.current ||
           !p.engineRef.current?.getIsRunning()
         ) return;
-        try { p.webRenderedLoopRef.current?.stop(); } catch {}
-        p.webRenderedLoopRef.current = playWebRenderedLoop(pcm, undefined, "both", p.volumeRef.current);
+        const previous = p.webRenderedLoopRef.current;
+        const previousDuration = previous?.getDurationSeconds?.();
+        const nextDuration = (pcm instanceof Float32Array
+          ? pcm.length
+          : Math.min(pcm.left.length, pcm.right.length)) / 44100;
+        const phaseCompatible = previousDuration !== undefined
+          && Math.abs(previousDuration - nextDuration) < 0.001;
+        const boundary = phaseCompatible ? previous?.getNextBoundaryTime?.() : undefined;
+        const next = playWebRenderedLoop(pcm, undefined, "both", p.volumeRef.current, boundary);
+        p.activateWebRenderedLoop(next);
+        if (previous) {
+          try { previous.stop(boundary); } catch {}
+        }
         p.engineRef.current?.setPreRenderedAudio(true);
       });
     } else {
       p.webRenderedLoopRef.current?.stop();
-      p.webRenderedLoopRef.current = playWebRenderedLoop(pcm, undefined, "both", p.volumeRef.current);
+      p.activateWebRenderedLoop(playWebRenderedLoop(pcm, undefined, "both", p.volumeRef.current));
       engine.setPreRenderedAudio(true);
     }
   }, [p]);

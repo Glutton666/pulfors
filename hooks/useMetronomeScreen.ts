@@ -671,7 +671,7 @@ export function useMetronomeScreen() {
     updateBackgroundPlay, updateAutoResumeAfterInterruption, applyAudioSettings,
     // PCM / rendered-player refs & functions
     renderedPlayerRef, samplePCMCacheRef, renderedUrlRef,
-    webRenderedLoopRef, lastAudioFireRef,
+    webRenderedLoopRef, activateWebRenderedLoop, lastAudioFireRef,
     armAudioWatchdogRef, clearAudioWatchdogRef,
     samplePlayStateRef,
     buildRenderedPlayer, scheduleReRender, stopRenderedAudio, warmupAudioPlayers,
@@ -1446,13 +1446,10 @@ export function useMetronomeScreen() {
         } catch {}
         renderedPlayerRef.current = null;
       }
-      if (webRenderedLoopRef.current) {
-        try { webRenderedLoopRef.current.stop(); } catch {}
-        webRenderedLoopRef.current = null;
-      }
       engine.setPendingMeasureStartAction(null);
-      // takeover 핸드셰이크: 사전 렌더 audio가 정리됐으니 실시간 발화 short-circuit을 해제한다.
-      engine.setPreRenderedAudio(false);
+      // Web keeps the old source audible while a replacement renders, then
+      // swaps both sources at the same AudioContext boundary.
+      if (Platform.OS !== "web") engine.setPreRenderedAudio(false);
     });
 
     // unmount 시 보류 중인 frame을 취소하고 엔진 콜백을 분리한다.
@@ -1847,6 +1844,7 @@ export function useMetronomeScreen() {
     resetPlaybackVisuals,
     renderedPlayerRef,
     webRenderedLoopRef,
+    activateWebRenderedLoop,
     renderGenerationRef,
     buildRenderedPlayer,
     clearAudioWatchdogRef,

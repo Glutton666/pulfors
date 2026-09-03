@@ -39,6 +39,12 @@ import {
   markAudioRecoverySucceeded,
 } from "@/lib/audio-lifecycle";
 import type { TranslationFn } from "@/lib/i18n";
+import {
+  AUDIO_TIMING_LIMITS,
+  AudioClockAdapter,
+  AudioOutputStateMachine,
+  AudioTimingDiagnostics,
+} from "@/lib/audio-clock";
 
 /** Narrow callback type for audio-specific settings persistence. */
 export type PersistAudioSettingsFn = (s: Partial<{ backgroundPlay: boolean; autoResumeAfterInterruption: boolean }>) => void;
@@ -110,6 +116,7 @@ export interface UseAudioPipelineResult {
   samplePCMCacheRef: React.MutableRefObject<Map<string, SamplePCMEntry>>;
   renderedUrlRef: React.MutableRefObject<string | null>;
   webRenderedLoopRef: React.MutableRefObject<WebRenderedLoop | null>;
+  activateWebRenderedLoop: (loop: WebRenderedLoop) => void;
   lastAudioFireRef: React.MutableRefObject<number>;
   armAudioWatchdogRef: React.MutableRefObject<() => void>;
   clearAudioWatchdogRef: React.MutableRefObject<() => void>;
@@ -205,6 +212,10 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
   // cache directly and also records the value for pools created lazily afterward.
   useEffect(() => {
     setPoolsVolume(volume);
+    webRenderedLoopRef.current?.setVolume?.(volume);
+    if (renderedPlayerRef.current) {
+      renderedPlayerRef.current.volume = Math.max(0, Math.min(1, volume));
+    }
   }, [volume, setPoolsVolume]);
 
   // ── Owned refs ──────────────────────────────────────────────────────────────
@@ -213,6 +224,9 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
   const samplePCMUriRef = useRef<Map<string, string>>(new Map());
   const renderedUrlRef = useRef<string | null>(null);
   const webRenderedLoopRef = useRef<WebRenderedLoop | null>(null);
+  const outputStateRef = useRef(new AudioOutputStateMachine());
+  const webClockAdapterRef = useRef<AudioClockAdapter | null>(null);
+  const timingDiagnosticsRef = useRef(new AudioTimingDiagnostics(__DEV__));
   const lastAudioFireRef = useRef(0);
   const audioWatchdogTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const audioRetryCountRef = useRef(0);
@@ -223,6 +237,19 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
   const armTimeRef = useRef<number | null>(null);
   const showRecoveryToastRef = useRef(showRecoveryToast);
   useEffect(() => { showRecoveryToastRef.current = showRecoveryToast; }, [showRecoveryToast]);
+
+  const activateWebRenderedLoop = useCallback((loop: WebRenderedLoop) => {
+    webRenderedLoopRef.current = loop;
+    const ctx = getWebAudioContext();
+    if (ctx) {
+      const adapter = new AudioClockAdapter({ nowSeconds: () => ctx.currentTime });
+      adapter.map(loop.getPositionSeconds?.() ?? 0);
+      webClockAdapterRef.current = adapter;
+      const sample = adapter.now();
+      if (sample) timingDiagnosticsRef.current.record(sample);
+    }
+    outputStateRef.current.transition("prerender");
+  }, []);
   useEffect(() => () => {
     renderGenerationRef.current += 1;
     if (reRenderTimerRef.current) {
@@ -350,6 +377,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
     const engine = engineRef.current;
     if (!engine) return null;
     const generation = ++renderGenerationRef.current;
+    outputStateRef.current.transition("rendering");
     try {
       const scheduleInfo = engine.getScheduleInfo();
       const ticks = scheduleInfo.ticks as TickInfo[];
@@ -397,6 +425,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
       // (2026-08-25 확인). per-tick 풀 플레이어(setPoolsVolume)와 동일하게
       // 실제 볼륨을 반영한다.
       player.volume = Math.max(0, Math.min(1, volumeRef.current));
+      outputStateRef.current.transition("prerender");
       return player;
     } catch (e) {
       captureBreadcrumb({ category: "pre-render", message: "Failed, falling back to per-tick audio", level: "warning", data: { error: String(e) } });
@@ -442,6 +471,8 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
     }
     const engine = engineRef.current;
     if (engine) engine.setPreRenderedAudio(false);
+    outputStateRef.current.transition("idle");
+    webClockAdapterRef.current?.invalidate();
   }, []);
 
   const scheduleReRender = useCallback(() => {
@@ -450,7 +481,6 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
     reRenderTimerRef.current = setTimeout(async () => {
       const engine = engineRef.current;
       if (!engine?.getIsRunning()) return;
-      stopRenderedAudio();
       engine.setPendingMeasureStartAction(null);
 
       if (Platform.OS === "web") {
@@ -485,12 +515,30 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
           if (generation !== renderGenerationRef.current || !engine.getIsRunning()) return;
           engine.setPendingMeasureStartAction(() => {
             if (generation !== renderGenerationRef.current || !engine.getIsRunning()) return;
-            if (webRenderedLoopRef.current) { try { webRenderedLoopRef.current.stop(); } catch {} webRenderedLoopRef.current = null; }
-            const loop = playWebRenderedLoop(pcm, undefined, "both", volumeRef.current);
-            webRenderedLoopRef.current = loop;
+            const previous = webRenderedLoopRef.current;
+            const previousDuration = previous?.getDurationSeconds?.();
+            const nextDuration = (pcm instanceof Float32Array
+              ? pcm.length
+              : Math.min(pcm.left.length, pcm.right.length)) / 44100;
+            const phaseCompatible = previousDuration !== undefined
+              && Math.abs(previousDuration - nextDuration) < 0.001;
+            const boundary = phaseCompatible ? previous?.getNextBoundaryTime?.() : undefined;
+            outputStateRef.current.transition("transitioning");
+            const loop = playWebRenderedLoop(pcm, undefined, "both", volumeRef.current, boundary);
+            if (previous) {
+              try { previous.stop(boundary); } catch {}
+            }
+            activateWebRenderedLoop(loop);
             engine.setPreRenderedAudio(true);
           });
-        } catch {}
+        } catch {
+          if (generation !== renderGenerationRef.current) return;
+          try { webRenderedLoopRef.current?.stop(); } catch {}
+          webRenderedLoopRef.current = null;
+          engine.setPreRenderedAudio(false);
+          outputStateRef.current.transition("realtime");
+          webClockAdapterRef.current?.invalidate();
+        }
       } else {
         try {
           const player = await buildRenderedPlayer();
@@ -513,7 +561,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
         } catch {}
       }
     }, 300);
-  }, [stopRenderedAudio, buildRenderedPlayer, getClickPCMs, getLayerClickPCMsForSchedule, getSamplePCMs]);
+  }, [activateWebRenderedLoop, buildRenderedPlayer, getClickPCMs, getLayerClickPCMsForSchedule, getSamplePCMs]);
 
   const invalidateSamplePCMCache = useCallback((key?: string) => {
     renderGenerationRef.current += 1;
@@ -623,6 +671,27 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
       const isStuck = webCtxSuspended || (!renderedOutputHealthy && timeSinceFire > threshold);
 
       if (!isStuck) {
+        const sample = webClockAdapterRef.current?.now();
+        if (sample) {
+          timingDiagnosticsRef.current.record(sample);
+          const positionSeconds = webRenderedLoopRef.current?.getPositionSeconds?.();
+          if (positionSeconds !== undefined && outputStateRef.current.snapshot().mode === "prerender") {
+            engine.syncToMeasureElapsedMs(
+              positionSeconds * 1000,
+              AUDIO_TIMING_LIMITS.uiResyncThresholdMs,
+            );
+          }
+          if (__DEV__) {
+            const summary = timingDiagnosticsRef.current.summary(sample.performanceTimeMs);
+            if (summary && summary.sampleCount % 20 === 0) {
+              console.debug("[audio-clock]", {
+                samples: summary.sampleCount,
+                driftPerMinuteMs: Math.round(summary.driftPerMinuteMs * 10) / 10,
+                maxJitterMs: Math.round(summary.maxJitterMs * 10) / 10,
+              });
+            }
+          }
+        }
         if (audioRetryCountRef.current > 0) markAudioRecoverySucceeded();
         audioWatchdogTimerRef.current = setTimeout(runCheck, 3000);
         return;
@@ -643,9 +712,11 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
           }
         }
         stopRenderedAudio();
+        outputStateRef.current.transition("recovering");
         lastAudioFireRef.current = Date.now();
         audioWatchdogTimerRef.current = setTimeout(runCheck, 3500);
       } else {
+        outputStateRef.current.transition("failed");
         markAudioRecoveryFailed("watchdog");
         showRecoveryToastRef.current(t("main", "audioRecoveryFailed"));
         audioWatchdogTimerRef.current = null;
@@ -679,6 +750,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
     samplePCMCacheRef,
     renderedUrlRef,
     webRenderedLoopRef,
+    activateWebRenderedLoop,
     lastAudioFireRef,
     armAudioWatchdogRef,
     clearAudioWatchdogRef,

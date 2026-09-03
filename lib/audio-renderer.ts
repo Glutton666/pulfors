@@ -947,8 +947,13 @@ export async function previewClickOnWeb(
 }
 
 export interface WebRenderedLoop {
-  stop: () => void;
+  stop: (atAudioTime?: number) => void;
   isRunning: () => boolean;
+  setVolume?: (volume: number, atAudioTime?: number) => void;
+  getStartTime?: () => number;
+  getPositionSeconds?: () => number;
+  getNextBoundaryTime?: () => number;
+  getDurationSeconds?: () => number;
 }
 
 export function playWebRenderedLoop(
@@ -956,10 +961,20 @@ export function playWebRenderedLoop(
   onEnded?: () => void,
   channel: SampleChannel = "both",
   volume: number = 1,
+  startAtAudioTime?: number,
 ): WebRenderedLoop {
-  if (Platform.OS !== "web") return { stop: () => {}, isRunning: () => false };
+  const unavailable = {
+    stop: () => {},
+    isRunning: () => false,
+    setVolume: () => {},
+    getStartTime: () => 0,
+    getPositionSeconds: () => 0,
+    getNextBoundaryTime: () => 0,
+    getDurationSeconds: () => 0,
+  };
+  if (Platform.OS !== "web") return unavailable;
   const ctx = getSharedAudioContext();
-  if (!ctx) return { stop: () => {}, isRunning: () => false };
+  if (!ctx) return unavailable;
   if (ctx.state === "suspended") {
     ctx.resume().catch(() => {});
   }
@@ -990,7 +1005,9 @@ export function playWebRenderedLoop(
     source.connect(gain);
   }
   gain.connect(ctx.destination);
-  source.start(0);
+  const startTime = Math.max(ctx.currentTime, startAtAudioTime ?? ctx.currentTime);
+  const durationSeconds = audioBuffer.duration;
+  source.start(startTime);
 
   let stopped = false;
   let ended = false;
@@ -1000,12 +1017,31 @@ export function playWebRenderedLoop(
   };
 
   return {
+    // A source scheduled on a running AudioContext is healthy while it waits
+    // for its absolute start time; watchdogs must not treat that queueing as silence.
     isRunning: () => !stopped && !ended && ctx.state === "running",
-    stop: () => {
+    setVolume: (nextVolume, atAudioTime) => {
+      const next = Math.max(0, Math.min(1, nextVolume));
+      const at = Math.max(ctx.currentTime, atAudioTime ?? ctx.currentTime);
+      if (typeof gain.gain.setValueAtTime === "function") gain.gain.setValueAtTime(next, at);
+      else gain.gain.value = next;
+    },
+    getStartTime: () => startTime,
+    getPositionSeconds: () => Math.max(0, ctx.currentTime - startTime),
+    getDurationSeconds: () => durationSeconds,
+    getNextBoundaryTime: () => {
+      if (durationSeconds <= 0) return ctx.currentTime;
+      const elapsed = Math.max(0, ctx.currentTime - startTime);
+      return startTime + (Math.floor(elapsed / durationSeconds) + 1) * durationSeconds;
+    },
+    stop: (atAudioTime) => {
       stopped = true;
-      try { source.stop(); } catch {}
-      try { source.disconnect(); } catch {}
-      try { gain.disconnect(); } catch {}
+      const stopAt = Math.max(ctx.currentTime, atAudioTime ?? ctx.currentTime);
+      try { source.stop(stopAt); } catch {}
+      if (stopAt <= ctx.currentTime) {
+        try { source.disconnect(); } catch {}
+        try { gain.disconnect(); } catch {}
+      }
     },
   };
 }

@@ -1151,6 +1151,30 @@ export class MetronomeEngine {
     return this.measureStartTime;
   }
 
+  /**
+   * Re-anchor visual/progress scheduling to an external master timeline.
+   * The caller supplies a phase within the current measure; audio playback is
+   * never sought or restarted. This is used only while pre-rendered output owns
+   * the audible timeline.
+   */
+  syncToMeasureElapsedMs(elapsedMs: number, thresholdMs = 40): boolean {
+    if (!this.isRunning || !this.preRenderedAudio || this.measureDurationMs <= 0) return false;
+    const normalized = ((elapsedMs % this.measureDurationMs) + this.measureDurationMs) % this.measureDurationMs;
+    const current = ((this.getMeasureElapsedMs() % this.measureDurationMs) + this.measureDurationMs) % this.measureDurationMs;
+    let delta = normalized - current;
+    if (delta > this.measureDurationMs / 2) delta -= this.measureDurationMs;
+    if (delta < -this.measureDurationMs / 2) delta += this.measureDurationMs;
+    if (Math.abs(delta) < thresholdMs) return false;
+
+    this.measureStartTime = performance.now() - normalized;
+    this.anchorWallTime = this.measureStartTime;
+    this.anchorMeasureCount = this.measureCount;
+    this.anchorMeasureDurationMs = this.measureDurationMs;
+    const nextIndex = this.schedule.findIndex((tick) => tick.time > normalized + 1);
+    this.scheduleIndex = nextIndex >= 0 ? nextIndex : this.schedule.length;
+    return true;
+  }
+
   private loop = () => {
     if (!this.isRunning) return;
 

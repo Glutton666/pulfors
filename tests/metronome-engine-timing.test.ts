@@ -56,6 +56,52 @@ test("measureStartTime: 100마디 진행 후 절대 기준선과 정확히 일�
   });
 });
 
+test("measureStartTime: 비정수 BPM 장시간 rollover도 callback 지연을 누적하지 않는다", () => {
+  withFakeNow(2500, (advance) => {
+    const e = new MetronomeEngine();
+    e.setBpm(137);
+    e.setBeatsPerMeasure(7);
+    e.start();
+    const internals = e as unknown as EngineInternals;
+    const anchor = internals.anchorWallTime;
+    const duration = e.getMeasureDurationMs();
+    for (let i = 0; i < 10000; i++) {
+      advance(i % 3);
+      internals.rolloverToNextMeasure();
+    }
+    assert.equal(internals.measureStartTime, anchor + 10000 * duration);
+    e.stop();
+  });
+});
+
+test("pre-rendered timeline resync follows audio phase after a JS stall", () => {
+  withFakeNow(1000, (advance) => {
+    const e = new MetronomeEngine();
+    e.setBpm(120);
+    e.setBeatsPerMeasure(4);
+    e.start();
+    e.setPreRenderedAudio(true);
+    advance(275);
+    assert.equal(e.syncToMeasureElapsedMs(500, 40), true);
+    assert.equal(e.getMeasureElapsedMs(), 500);
+    assert.equal(e.syncToMeasureElapsedMs(520, 40), false);
+    e.stop();
+  });
+});
+
+test("timeline resync never reanchors real-time fallback output", () => {
+  withFakeNow(1000, (advance) => {
+    const e = new MetronomeEngine();
+    e.setBpm(120);
+    e.start();
+    const start = e.getMeasureStartTime();
+    advance(300);
+    assert.equal(e.syncToMeasureElapsedMs(700, 40), false);
+    assert.equal(e.getMeasureStartTime(), start);
+    e.stop();
+  });
+});
+
 test("measureStartTime: BPM 변경 후 anchor가 재고정되어 새 길이로 누적", () => {
   withFakeNow(0, (advance) => {
     const e = new MetronomeEngine();
