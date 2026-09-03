@@ -303,6 +303,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
     p.resetPlaybackVisuals();
     p.clearSamplePlayStates();
     markAudioPreparing();
+    p.setIsPreparing(true);
     const startBeat = p.barModeRef.current ? p.barStartBeatRef.current : undefined;
     const playback = p.getPlaybackContext({
       activeBarIndex: startBeat ?? 0,
@@ -325,17 +326,25 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
         void renderWebLoop(engine, true).catch((error) => p.capturePlaybackError("togglePlayPause: Web pre-render failed, using per-tick", error, "warning"));
       } else {
         if (Platform.OS === "android") await androidProbeReady;
+        const player = await p.buildRenderedPlayer();
+        if (p.preparingCancelledRef.current) {
+          try { player?.release(); } catch {}
+          p.setIsPreparing(false);
+          markAudioStopped();
+          return true;
+        }
         p.setIsPreparing(false); p.setIsPlaying(true); p.notifyVoicePlayState(true); p.isPlayingRef.current = true;
-        engine.start(startBeat ?? undefined);
-        markAudioPlaying();
-        p.armAudioWatchdogRef.current();
-        void p.buildRenderedPlayer().then((player) => {
-          if (!player || !p.engineRef.current?.getIsRunning()) { try { player?.release(); } catch {} return; }
+        if (player) {
           p.stopRenderedAudio();
           p.renderedPlayerRef.current = player;
           engine.setPreRenderedAudio(true);
-          safePlay(player, "metronome.start.native");
-        }).catch(() => {});
+        } else {
+          engine.setPreRenderedAudio(false);
+        }
+        engine.start(startBeat ?? undefined);
+        markAudioPlaying();
+        p.armAudioWatchdogRef.current();
+        if (player) safePlay(player, "metronome.start.native");
       }
       startOrResumePracticeSession();
       if (p.barModeRef.current && p.barLoopModeRef.current === "once") engine.requestStopAfterMeasure();

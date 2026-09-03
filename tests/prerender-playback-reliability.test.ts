@@ -352,6 +352,34 @@ describe("pre-rendered playback reliability", () => {
     },
   );
 
+  it("native toggle waits for the rendered loop instead of switching audio after realtime ticks start", async () => {
+    const engine = makeEngine();
+    const player = { ...mockPlayer, volume: 0.35 };
+    let resolvePlayer!: (value: typeof player) => void;
+    const params = makePlaybackParams(engine, null);
+    params.buildRenderedPlayer.mockImplementation(
+      () => new Promise((resolve) => { resolvePlayer = resolve; }),
+    );
+    const { result } = renderHook(() => usePlaybackControl(params as any));
+
+    let pendingStart!: Promise<unknown>;
+    act(() => {
+      pendingStart = result.current.togglePlayPause();
+    });
+
+    expect(params.setIsPreparing).toHaveBeenCalledWith(true);
+    expect(engine.start).not.toHaveBeenCalled();
+
+    await act(async () => {
+      resolvePlayer(player);
+      await pendingStart;
+    });
+
+    expect(engine.setPreRenderedAudio).toHaveBeenCalledWith(true);
+    expect(engine.start).toHaveBeenCalledTimes(1);
+    expect(player.play).toHaveBeenCalledTimes(1);
+  });
+
   it("web playback renders the same note metadata and applies the user master volume", async () => {
     (Platform as unknown as { OS: string }).OS = "web";
     const engine = makeEngine();
