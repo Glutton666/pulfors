@@ -323,7 +323,14 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
         engine.start(startBeat ?? undefined);
         markAudioPlaying();
         p.armAudioWatchdogRef.current();
-        void renderWebLoop(engine, true).catch((error) => p.capturePlaybackError("togglePlayPause: Web pre-render failed, using per-tick", error, "warning"));
+        const useRenderedLoop =
+          p.barModeRef.current ||
+          String(p.soundSetRef.current).startsWith("custom");
+        if (useRenderedLoop) {
+          void renderWebLoop(engine, true).catch((error) => p.capturePlaybackError("togglePlayPause: Web pre-render failed, using per-tick", error, "warning"));
+        } else {
+          engine.setPreRenderedAudio(false);
+        }
       } else {
         if (Platform.OS === "android") await androidProbeReady;
         // Android Beat mode keeps the proven per-tick player path. Switching it
@@ -390,15 +397,26 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
         if (context?.state === "suspended") await context.resume().catch(() => {});
         if (p.preparingCancelledRef.current) { p.setIsPreparing(false); markAudioStopped(); return; }
         p.setIsPreparing(false);
-        try {
-          await renderWebLoop(engine, false);
-        } catch (error) {
-          p.capturePlaybackError("startMetronome: Web pre-render failed, using per-tick", error, "warning");
+        const useRenderedLoop =
+          p.barModeRef.current ||
+          String(p.soundSetRef.current).startsWith("custom");
+        if (useRenderedLoop) {
+          try {
+            await renderWebLoop(engine, false);
+          } catch (error) {
+            p.capturePlaybackError("startMetronome: Web pre-render failed, using per-tick", error, "warning");
+            engine.setPreRenderedAudio(false);
+          }
+        } else {
           engine.setPreRenderedAudio(false);
         }
         p.setIsPlaying(true); engine.start(); markAudioPlaying(); p.armAudioWatchdogRef.current();
       } else {
-        const player = await p.buildRenderedPlayer();
+        const useRenderedLoop =
+          Platform.OS !== "android" ||
+          p.barModeRef.current ||
+          String(p.soundSetRef.current).startsWith("custom");
+        const player = useRenderedLoop ? await p.buildRenderedPlayer() : null;
         if (p.preparingCancelledRef.current) {
           try { player?.release(); } catch {}
           p.setIsPreparing(false);

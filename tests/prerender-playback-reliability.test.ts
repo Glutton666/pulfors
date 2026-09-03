@@ -421,6 +421,7 @@ describe("pre-rendered playback reliability", () => {
     (Platform as unknown as { OS: string }).OS = "web";
     const engine = makeEngine();
     const params = makePlaybackParams(engine, null);
+    params.soundSetRef.current = "custom1";
     const { result } = renderHook(() => usePlaybackControl(params as any));
 
     await act(async () => {
@@ -447,6 +448,7 @@ describe("pre-rendered playback reliability", () => {
     const engine = makeEngine();
     let resolveFirst!: (value: typeof samplePCMs) => void;
     const params = makePlaybackParams(engine, null);
+    params.soundSetRef.current = "custom1";
     params.getSamplePCMs
       .mockImplementationOnce(() => new Promise((resolve) => { resolveFirst = resolve; }))
       .mockResolvedValueOnce(samplePCMs);
@@ -477,6 +479,7 @@ describe("pre-rendered playback reliability", () => {
       markSampleLoadEntered = resolve;
     });
     const playbackParams = makePlaybackParams(engine, null);
+    playbackParams.soundSetRef.current = "custom1";
     playbackParams.renderGenerationRef = sharedEpoch;
     playbackParams.getSamplePCMs.mockImplementationOnce(
       () => {
@@ -499,6 +502,24 @@ describe("pre-rendered playback reliability", () => {
       await pendingStart;
     });
 
+    expect(mockPlayWebRenderedLoop).not.toHaveBeenCalled();
+  });
+
+  it("keeps web Beat mode builtin sets on per-tick playback after the first measure", async () => {
+    (Platform as unknown as { OS: string }).OS = "web";
+    const engine = makeEngine();
+    const params = makePlaybackParams(engine, null);
+    params.barModeRef.current = false;
+    params.soundSetRef.current = "classic";
+    const { result } = renderHook(() => usePlaybackControl(params as any));
+
+    await act(async () => {
+      await result.current.togglePlayPause();
+    });
+
+    expect(engine.start).toHaveBeenCalledTimes(1);
+    expect(engine.setPreRenderedAudio).toHaveBeenCalledWith(false);
+    expect(mockRenderMeasure).not.toHaveBeenCalled();
     expect(mockPlayWebRenderedLoop).not.toHaveBeenCalled();
   });
 });

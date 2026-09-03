@@ -482,6 +482,16 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
       const engine = engineRef.current;
       if (!engine?.getIsRunning()) return;
       engine.setPendingMeasureStartAction(null);
+      const realtimeBeatMode =
+        !barModeRef.current &&
+        !String(soundSetRef.current).startsWith("custom") &&
+        (Platform.OS === "web" || Platform.OS === "android");
+      if (realtimeBeatMode) {
+        stopRenderedAudio();
+        engine.setPreRenderedAudio(false);
+        outputStateRef.current.transition("realtime");
+        return;
+      }
 
       if (Platform.OS === "web") {
         const generation = ++renderGenerationRef.current;
@@ -561,7 +571,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
         } catch {}
       }
     }, 300);
-  }, [activateWebRenderedLoop, buildRenderedPlayer, getClickPCMs, getLayerClickPCMsForSchedule, getSamplePCMs]);
+  }, [activateWebRenderedLoop, buildRenderedPlayer, getClickPCMs, getLayerClickPCMsForSchedule, getSamplePCMs, stopRenderedAudio]);
 
   const invalidateSamplePCMCache = useCallback((key?: string) => {
     renderGenerationRef.current += 1;
