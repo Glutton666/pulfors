@@ -180,7 +180,13 @@ export function SimplifiedStaffNotation({
         preserveAspectRatio="none"
       >
         <Defs>
-          <LinearGradient id={gradientId} x1="0" y1="0" x2="1" y2="1">
+          <LinearGradient
+            id={gradientId}
+            x1="0"
+            y1="0"
+            x2="1"
+            y2="1"
+          >
             <Stop
               offset="0"
               stopColor={isCurrentBeat ? C.white : C.accent}

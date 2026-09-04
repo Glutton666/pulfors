@@ -206,7 +206,7 @@ describe("SwipeableBarRow block editing", () => {
   });
 
   it("marks only the currently playing subdivision and gives strong notes depth without symbols", () => {
-    const { getByTestId, queryByTestId } = render(
+    const { container, getByTestId, queryByTestId } = render(
       <SwipeableBarRow
         beat={2}
         beatType="strong"
@@ -235,6 +235,7 @@ describe("SwipeableBarRow block editing", () => {
 
     expect(getByTestId("bar-staff-2")).toBeTruthy();
     expect(getByTestId("bar-note-strong-0")).toBeTruthy();
+    expect(container.querySelector("#bar-s-note-gradient-2")).toBeTruthy();
     expect(getByTestId("bar-note-accent-1")).toBeTruthy();
     expect(getByTestId("bar-note-normal-2")).toBeTruthy();
     expect(getByTestId("bar-note-mute-3")).toBeTruthy();
