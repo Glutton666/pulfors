@@ -993,6 +993,15 @@ export function useMetronomeScreen() {
                 role,
                 atPerformanceTime: Math.round(atPerformanceTime),
               });
+              if (typeof document !== "undefined") {
+                const trace = document.getElementById("beat-audio-trace");
+                if (trace) {
+                  const roles = `${trace.dataset.roles ?? ""}${role?.[0] ?? "m"}`;
+                  trace.dataset.roles = roles;
+                  const configured = trace.textContent?.split(" R:")[0] ?? "C:?";
+                  trace.textContent = `${configured} R:${roles}`;
+                }
+              }
               realtimeReservationDebugCount += 1;
             }
             if (!role) return true;
