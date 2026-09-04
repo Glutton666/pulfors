@@ -253,13 +253,6 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
   useEffect(() => { showRecoveryToastRef.current = showRecoveryToast; }, [showRecoveryToast]);
 
   const clearRealtimeWebAudio = useCallback(() => {
-    if (__DEV__ && Platform.OS === "web") {
-      console.info("[beat-audio-trace] clear-sources", {
-        count: realtimeSourcesRef.current.size,
-        owner: outputStateRef.current.snapshot().mode,
-        hasRenderedLoop: Boolean(webRenderedLoopRef.current),
-      });
-    }
     realtimeSourcesRef.current.forEach((source) => source.cancel());
     realtimeSourcesRef.current.clear();
   }, []);

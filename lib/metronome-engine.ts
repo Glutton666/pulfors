@@ -369,7 +369,12 @@ export class MetronomeEngine {
   setAllBeatSubdivisions(subs: Record<string, BeatType[]>) {
     this.beatSubdivisions.clear();
     for (const [key, value] of Object.entries(subs)) {
-      this.beatSubdivisions.set(Number(key), [...value]);
+      // A single cell is the beat itself, not a subdivision. Persisted legacy
+      // values such as { "0": ["accent"] } must not invisibly override the
+      // visible beatTypes array during playback.
+      if (value.length > 1) {
+        this.beatSubdivisions.set(Number(key), [...value]);
+      }
     }
     this.invalidateScheduleCache();
     if (this.isRunning) {

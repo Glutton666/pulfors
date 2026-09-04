@@ -173,6 +173,25 @@ test("measure rollover preserves audio-clock sources reserved for the final beat
   });
 });
 
+test("bulk subdivision restore ignores hidden single-cell patterns", () => {
+  const engine = new MetronomeEngine();
+  engine.setBeatsPerMeasure(5);
+  engine.setBeatTypes(["accent", "normal", "normal", "normal", "normal"]);
+  engine.setAllBeatSubdivisions({
+    "0": ["accent"],
+    "1": ["accent"],
+    "2": ["accent"],
+    "3": ["accent"],
+  });
+
+  const roles = engine.getScheduleInfo().ticks.map((tick) => tick.type);
+  assert.deepEqual(
+    roles,
+    ["accent", "normal", "normal", "normal", "normal"],
+    "legacy one-cell subdivisions must not override the visible beat pattern",
+  );
+});
+
 test("look-ahead does not reclaim Polygon-muted base clicks", () => {
   withFakeNow(3000, () => {
     const engine = new MetronomeEngine();

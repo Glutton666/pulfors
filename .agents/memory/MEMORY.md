@@ -45,3 +45,4 @@
 - [Score import trust boundary](score-import-trust-boundary.md) — validate editor/layout/playback invariants, use own-key allowlists, and share producer/import limits.
 - [AudioWorklet adoption threshold](audio-worklet-adoption-threshold.md) — keep pre-render + 160ms look-ahead until real stalls or graph/memory data justify a second web audio backend.
 - [Web look-ahead measure rollover](web-lookahead-measure-rollover.md) — crossing a measure must forget old tick identities without cancelling AudioContext sources still finishing the last beat.
+- [Single-cell subdivision restore](single-cell-subdivision-restore.md) — bulk-restored one-cell patterns are legacy residue, not subdivisions; ignore them or they invisibly override visible beat types.
