@@ -313,7 +313,7 @@ export function SwipeableBarRow({
               <Text
                 style={[styles.barCenterInfo, {
                   color: isCurrentBeat ? C.accent : C.text,
-                  fontSize: ms(13, 0.45),
+                   fontSize: ms(8.5, 0.35),
                   textShadowColor: "rgba(0,0,0,0.85)",
                   textShadowOffset: { width: 0, height: 1 },
                   textShadowRadius: 4,
@@ -466,12 +466,12 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    bottom: 0,
+    height: 11,
     flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
+    alignItems: "flex-start",
+    justifyContent: "flex-end",
     gap: 2,
-    paddingHorizontal: 4,
+    paddingHorizontal: 3,
     backgroundColor: "transparent",
   },
   barCenterInfo: {

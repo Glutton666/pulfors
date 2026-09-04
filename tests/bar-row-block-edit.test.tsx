@@ -8,6 +8,31 @@ jest.mock("@expo/vector-icons", () => ({
   Ionicons: () => null,
 }));
 
+jest.mock("react-native-svg", () => {
+  const React = require("react");
+  const element = (tag: string) => ({
+    children,
+    testID,
+    ...props
+  }: {
+    children?: React.ReactNode;
+    testID?: string;
+    [key: string]: unknown;
+  }) => React.createElement(tag, { ...props, "data-testid": testID }, children);
+  return {
+    __esModule: true,
+    default: element("svg"),
+    Ellipse: element("ellipse"),
+    G: element("g"),
+    Line: element("line"),
+    Path: element("path"),
+    Defs: element("defs"),
+    LinearGradient: element("linearGradient"),
+    Stop: element("stop"),
+    Text: element("text"),
+  };
+});
+
 const colors = {
   background: "#101116",
   backgroundSecondary: "#1a1c22",
@@ -258,5 +283,7 @@ describe("SwipeableBarRow block editing", () => {
     expect(getByTestId("bar-sample-start-marker-0-0")).toBeTruthy();
     expect(queryByTestId("bar-sample-start-marker-0-1")).toBeNull();
     expect(queryByTestId("bar-sample-start-marker-0-2")).toBeNull();
+    expect(getByTestId("bar-tuplet-3")).toBeTruthy();
+    expect(getByTestId("bar-tuplet-3").textContent).toBe("3");
   });
 });

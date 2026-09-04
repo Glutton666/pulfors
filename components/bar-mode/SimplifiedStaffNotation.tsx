@@ -5,6 +5,9 @@ import Svg, {
   G,
   Line,
   Path,
+  Defs,
+  LinearGradient,
+  Stop,
   Text as SvgText,
 } from "react-native-svg";
 import type { BeatType } from "@/components/beat-indicator.types";
@@ -35,12 +38,14 @@ function NoteGlyph({
   x,
   active,
   index,
+  gradientId,
   colors: C,
 }: {
   type: BeatType;
   x: number;
   active: boolean;
   index: number;
+  gradientId: string;
   colors: BarModeColors;
 }) {
   const stroke = active ? C.white : C.text;
@@ -58,13 +63,47 @@ function NoteGlyph({
   }
 
   if (type === "strong") {
-    // s: an open head with an X and a stem running through the head.
+    // s: an open head with an X and a stem running through the head. The
+    // gradient keeps those three parts feeling like one soft, hand-drawn
+    // glyph instead of three unrelated hard strokes.
     return (
       <G testID={`bar-note-strong-${index}`} opacity={opacity}>
-        <Line x1={x} y1={STAFF_TOP - 1} x2={x} y2={STAFF_BOTTOM + 1} stroke={stroke} strokeWidth={1.4} />
-        <Ellipse cx={x} cy={NOTE_Y} rx={4.1} ry={2.8} fill="none" stroke={accent} strokeWidth={1.35} />
-        <Line x1={x - 2.6} y1={NOTE_Y - 2} x2={x + 2.6} y2={NOTE_Y + 2} stroke={accent} strokeWidth={1.25} />
-        <Line x1={x + 2.6} y1={NOTE_Y - 2} x2={x - 2.6} y2={NOTE_Y + 2} stroke={accent} strokeWidth={1.25} />
+        <Line
+          x1={x}
+          y1={STAFF_TOP - 1}
+          x2={x}
+          y2={STAFF_BOTTOM + 1}
+          stroke={`url(#${gradientId})`}
+          strokeWidth={1.35}
+          strokeLinecap="round"
+        />
+        <Ellipse
+          cx={x}
+          cy={NOTE_Y}
+          rx={4.5}
+          ry={3}
+          fill="none"
+          stroke={`url(#${gradientId})`}
+          strokeWidth={1.5}
+        />
+        <Line
+          x1={x - 2.7}
+          y1={NOTE_Y - 2.1}
+          x2={x + 2.7}
+          y2={NOTE_Y + 2.1}
+          stroke={`url(#${gradientId})`}
+          strokeWidth={1.2}
+          strokeLinecap="round"
+        />
+        <Line
+          x1={x + 2.7}
+          y1={NOTE_Y - 2.1}
+          x2={x - 2.7}
+          y2={NOTE_Y + 2.1}
+          stroke={`url(#${gradientId})`}
+          strokeWidth={1.2}
+          strokeLinecap="round"
+        />
       </G>
     );
   }
@@ -131,6 +170,7 @@ export function SimplifiedStaffNotation({
   colors: C,
 }: SimplifiedStaffNotationProps) {
   const visibleNotes = notes.length > 0 ? notes : ["normal" as BeatType];
+  const gradientId = `bar-s-note-gradient-${beat}`;
   return (
     <View testID={`bar-staff-${beat}`} pointerEvents="none" style={StyleSheet.absoluteFill}>
       <Svg
@@ -139,6 +179,25 @@ export function SimplifiedStaffNotation({
         viewBox={`0 0 ${VIEWBOX_WIDTH} ${VIEWBOX_HEIGHT}`}
         preserveAspectRatio="none"
       >
+        <Defs>
+          <LinearGradient id={gradientId} x1="0" y1="0" x2="1" y2="1">
+            <Stop
+              offset="0"
+              stopColor={isCurrentBeat ? C.white : C.accent}
+              stopOpacity={isCurrentBeat ? 0.98 : 0.9}
+            />
+            <Stop
+              offset="0.52"
+              stopColor={C.accent}
+              stopOpacity={isCurrentBeat ? 0.92 : 0.76}
+            />
+            <Stop
+              offset="1"
+              stopColor={C.accentMuted}
+              stopOpacity={isCurrentBeat ? 0.86 : 0.64}
+            />
+          </LinearGradient>
+        </Defs>
         {[0, 1, 2, 3, 4].map((line) => (
           <Line
             key={line}
@@ -159,6 +218,7 @@ export function SimplifiedStaffNotation({
             x={noteX(index, visibleNotes.length)}
             active={isCurrentBeat && index === activeSubNote}
             index={index}
+            gradientId={gradientId}
             colors={C}
           />
         ))}
