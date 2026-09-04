@@ -152,6 +152,27 @@ test("fallback reservations are cancelled on schedule replacement and stop", () 
   });
 });
 
+test("measure rollover preserves audio-clock sources reserved for the final beat", () => {
+  withFakeNow(2500, () => {
+    const engine = new MetronomeEngine();
+    let clears = 0;
+    engine.setRealtimeAudioScheduler(() => true, () => { clears += 1; });
+    engine.start();
+    const internals = engine as unknown as EngineInternals;
+    const beforeRollover = clears;
+
+    internals.rolloverToNextMeasure();
+
+    assert.equal(
+      clears,
+      beforeRollover,
+      "crossing the measure boundary must not cancel a final source still pending on the audio clock",
+    );
+    engine.stop();
+    assert.ok(clears > beforeRollover, "an explicit stop still cancels pending sources");
+  });
+});
+
 test("look-ahead does not reclaim Polygon-muted base clicks", () => {
   withFakeNow(3000, () => {
     const engine = new MetronomeEngine();

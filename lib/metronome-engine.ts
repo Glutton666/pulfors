@@ -253,6 +253,14 @@ export class MetronomeEngine {
     try { this.clearRealtimeAudio?.(); } catch {}
   }
 
+  private advanceRealtimeAudioQueue() {
+    // Sources reserved on the AudioContext clock may still be starting when the
+    // JS scheduler crosses the measure boundary (especially with a positive
+    // audio offset). Let those sources finish naturally; only forget the old
+    // tick identities so the new measure can reserve its own schedule.
+    this.realtimeScheduledTicks.clear();
+  }
+
   /**
    * 기본 메트로놈 클릭과 연결된 샘플만 음소거한다.
    * onBeat/onSubBeat 콜백은 계속 발화하므로 폴리곤의 자체 스케줄링은 유지된다.
@@ -1120,7 +1128,7 @@ export class MetronomeEngine {
   }
 
   private rolloverToNextMeasure() {
-    this.clearRealtimeAudioQueue();
+    this.advanceRealtimeAudioQueue();
     this.onMeasureComplete?.();
     this.measureCount += 1;
     this.measureStartTime =
