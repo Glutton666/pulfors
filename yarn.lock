@@ -3288,7 +3288,7 @@ badgin@^1.1.5:
 
 balanced-match@^4.0.2:
   version "4.0.4"
-  resolved "http://package-firewall.replit.local/npm/balanced-match/-/balanced-match-4.0.4.tgz"
+  resolved "https://registry.npmjs.org/balanced-match/-/balanced-match-4.0.4.tgz"
   integrity sha512-BLrgEcRTwX2o6gGxGOCNyMvGSp35YofuYzw9h1IMTRmKqttAZZVU67bdb9Pr2vUHA8+j3i2tJfjO6C6+4myGTA==
 
 base64-arraybuffer@^1.0.2:
@@ -3366,7 +3366,7 @@ bplist-parser@0.3.1:
 
 brace-expansion@^5.0.8:
   version "5.0.9"
-  resolved "http://package-firewall.replit.local/npm/brace-expansion/-/brace-expansion-5.0.9.tgz"
+  resolved "https://registry.npmjs.org/brace-expansion/-/brace-expansion-5.0.9.tgz"
   integrity sha512-ScQ4IuvIEF1TMlP7Zt+vjJ//9zlPb2SDcxWxM3bk8s6t6GGdJ7KO1dCcTidOPJKePW30LE/2cT7wCyPho9/Wxg==
   dependencies:
     balanced-match "^4.0.2"
@@ -7069,7 +7069,7 @@ mimic-fn@^2.1.0:
 
 minimatch@>=10.2.3:
   version "10.2.6"
-  resolved "http://package-firewall.replit.local/npm/minimatch/-/minimatch-10.2.6.tgz"
+  resolved "https://registry.npmjs.org/minimatch/-/minimatch-10.2.6.tgz"
   integrity sha512-vpLQEs+VLCr1nU0BXS07maYoFwlDAH0gngQuuttxIwutDFEMHq2blX+8vpgxDdK3J1PwjCJiep77OitTZ4Ll1A==
   dependencies:
     brace-expansion "^5.0.8"
@@ -7595,7 +7595,7 @@ postcss-value-parser@^4.2.0:
 
 postcss@>=8.5.10:
   version "8.5.27"
-  resolved "http://package-firewall.replit.local/npm/postcss/-/postcss-8.5.27.tgz"
+  resolved "https://registry.npmjs.org/postcss/-/postcss-8.5.27.tgz"
   integrity sha512-79Iho8QeYyooJ8e9lCRyTVlyTAkS/kXBYKff6TMzS3kEWGQ8Ds5UEtXpGrSUDLUWok6QTvxeYy0GO8fopHnaSA==
   dependencies:
     nanoid "^3.3.18"

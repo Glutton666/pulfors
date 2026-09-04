@@ -40,6 +40,14 @@ npm-debug.*
 yarn-debug.*
 yarn-error.*
 
+# 이 프로젝트는 yarn(yarn.lock)을 쓴다. package-lock.json은 npm이 별도로
+# 만드는 lockfile인데, 이게 생겼다는 건 npm install이 실수로 돌아갔다는
+# 신호이고 그때 yarn.lock이 이 프로젝트가 아닌 registry로 재해석되며
+# 오염되는 사고가 반복됐다(package-firewall.replit.local resolved URL).
+# 원인 자체(npm install 실행)를 막을 순 없지만, 결과물이 커밋되어 다음
+# `yarn install --frozen-lockfile`을 깨뜨리는 일은 여기서 막는다.
+package-lock.json
+
 # macOS
 .DS_Store
 *.pem
