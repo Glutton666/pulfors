@@ -208,7 +208,11 @@ describe("SwipeableBarRow block editing", () => {
       />,
     );
 
-    expect(getByTestId("bar-strong-depth-2-0")).toBeTruthy();
+    expect(getByTestId("bar-staff-2")).toBeTruthy();
+    expect(getByTestId("bar-note-strong-0")).toBeTruthy();
+    expect(getByTestId("bar-note-accent-1")).toBeTruthy();
+    expect(getByTestId("bar-note-normal-2")).toBeTruthy();
+    expect(getByTestId("bar-note-mute-3")).toBeTruthy();
     expect(queryByTestId("bar-cell-type-2-0-strong")).toBeNull();
     expect(queryByTestId("bar-cell-type-2-1-accent")).toBeNull();
     expect(queryByTestId("bar-cell-type-2-2-normal")).toBeNull();

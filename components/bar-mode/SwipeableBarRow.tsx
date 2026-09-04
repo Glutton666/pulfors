@@ -15,6 +15,7 @@ import {
   type BarModeColors,
   type SampleCellCoverage,
 } from "./BarModeTypes";
+import { SimplifiedStaffNotation } from "./SimplifiedStaffNotation";
 
 export interface SwipeableBarRowProps {
   beat: number;
@@ -211,7 +212,14 @@ export function SwipeableBarRow({
           </View>
 
           {/* 중앙: 비트 셀 */}
-          <View style={[styles.barRowCells, { height: rowHeight != null ? Math.max(20, rowHeight - 16) : 28 }]}>
+           <View style={[styles.barRowCells, { height: rowHeight != null ? Math.max(20, rowHeight - 16) : 28 }]}>
+             <SimplifiedStaffNotation
+               beat={beat}
+               notes={cells}
+               activeSubNote={activeSubNote}
+               isCurrentBeat={isCurrentBeat}
+               colors={C}
+             />
             {cells.map((ct, ci) => {
               const isLast = ci === cells.length - 1;
                const isActiveCell = isCurrentBeat && ci === activeSubNote;
@@ -241,28 +249,14 @@ export function SwipeableBarRow({
                     styles.barMiniCell,
                     !isLast && { borderRightWidth: 1, borderRightColor: C.overlay10 },
                     {
-                      backgroundColor:
-                        ct === "strong" ? C.accent + (isActiveCell ? "E6" : "9E")
-                        : ct === "accent" ? C.accentMuted + (isActiveCell ? "D9" : "73")
-                        : ct === "mute" ? C.backgroundSecondary
-                        : C.textTertiary + (isActiveCell ? "A6" : "47"),
-                      borderTopWidth: isActiveCell ? 2 : ct === "strong" || ct === "mute" ? 1 : 0,
-                      borderBottomWidth: isActiveCell ? 2 : ct === "strong" || ct === "mute" ? 1 : 0,
+                      backgroundColor: isActiveCell ? C.accent + "12" : "transparent",
+                      borderTopWidth: isActiveCell ? 2 : 0,
+                      borderBottomWidth: isActiveCell ? 2 : 0,
                       borderTopColor: isActiveCell ? C.white : ct === "strong" ? C.white + "80" : ct === "mute" ? C.textTertiary + "80" : "transparent",
                       borderBottomColor: isActiveCell ? C.white : ct === "strong" ? C.background + "A6" : ct === "mute" ? C.textTertiary + "80" : "transparent",
                     },
                   ]}
                 >
-                   {ct === "strong" && (
-                     <View
-                       testID={`bar-strong-depth-${beat}-${ci}`}
-                       pointerEvents="none"
-                       style={styles.barStrongDepth}
-                     >
-                       <View style={[styles.barStrongHighlight, { backgroundColor: C.white + "70" }]} />
-                       <View style={[styles.barStrongShadow, { backgroundColor: C.background + "8C" }]} />
-                     </View>
-                   )}
                    {isActiveCell && (
                      <View
                        testID={`bar-active-cell-${beat}-${ci}`}
@@ -431,27 +425,6 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
     paddingBottom: 2,
     position: "relative",
-  },
-  barStrongDepth: {
-    ...StyleSheet.absoluteFillObject,
-    borderRadius: 1,
-    overflow: "hidden",
-  },
-  barStrongHighlight: {
-    position: "absolute",
-    top: 1,
-    left: 1,
-    right: 1,
-    height: 2,
-    borderRadius: 1,
-  },
-  barStrongShadow: {
-    position: "absolute",
-    left: 1,
-    right: 1,
-    bottom: 1,
-    height: 3,
-    borderRadius: 1,
   },
   barSampleStartMarker: {
     position: "absolute",
