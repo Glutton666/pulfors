@@ -39,7 +39,10 @@ import type { SampleChannel } from "@/lib/stereo-channel";
 import { useAudioPlayers } from "@/hooks/useAudioPlayers";
 import type { BuiltinPlayers, SoundSetPlayers } from "@/hooks/useAudioPlayers";
 import { BUILTIN_POOL_SIZE } from "@/hooks/useAudioPlayers";
-import { setAutoResumeAfterInterruption as setAudioSessionAutoResume } from "@/lib/audio-session";
+import {
+  setAutoResumeAfterInterruption as setAudioSessionAutoResume,
+  setAudioSessionBackgroundPlay,
+} from "@/lib/audio-session";
 import {
   getAudioLifecycleSnapshot,
   markAudioRecoveryFailed,
@@ -175,7 +178,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
   const { clickPCMCacheRef, webClickReadyRef, noteSampleSoundsRef } = params;
 
   // ── Audio-session settings (moved from useMetronomeScreen) ─────────────────
-  const [backgroundPlay, setBackgroundPlay] = useState(false);
+  const [backgroundPlay, setBackgroundPlay] = useState(true);
   const [autoResumeAfterInterruption, setAutoResumeState] = useState(true);
 
   /**
@@ -184,7 +187,10 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
    */
   const applyAudioSettings = useCallback(
     (s: Partial<{ backgroundPlay: boolean; autoResumeAfterInterruption: boolean }>) => {
-      if (s.backgroundPlay !== undefined) setBackgroundPlay(s.backgroundPlay);
+      if (s.backgroundPlay !== undefined) {
+        setBackgroundPlay(s.backgroundPlay);
+        setAudioSessionBackgroundPlay(s.backgroundPlay);
+      }
       if (s.autoResumeAfterInterruption !== undefined) {
         setAutoResumeState(s.autoResumeAfterInterruption);
         setAudioSessionAutoResume(s.autoResumeAfterInterruption);
@@ -199,6 +205,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
   const updateBackgroundPlay = useCallback(
     (value: boolean) => {
       setBackgroundPlay(value);
+      setAudioSessionBackgroundPlay(value);
       persistAudioSettingsCallbackRef.current({ backgroundPlay: value });
     },
     [persistAudioSettingsCallbackRef],

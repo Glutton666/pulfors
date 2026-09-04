@@ -193,7 +193,10 @@ export async function startAndroidFocusProbe(): Promise<void> {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const expoAudioMod = require("expo-audio") as typeof import("expo-audio");
 
-    // doNotMix: 포커스를 잃으면 플레이어가 멈춰 playing=false 로 전환 → JS 에서 감지 가능.
+    // 다른 음악/영상과 동시에 들려야 하므로 mixWithOthers를 사용한다.
+    // 전화·Siri 같은 실제 인터럽션은 위 addInterruptionListener 경로와
+    // AppState 백업 경로에서 처리한다. doNotMix를 사용하면 외부 미디어가
+    // 재생 중이라는 이유만으로 프로브가 멈추고 메트로놈까지 일시정지된다.
     // 주의: 나머지 필드를 반드시 명시해야 한다. expo-audio 는 Partial<AudioMode> 를
     // 네이티브 측에서 기존 설정과 병합하지 않고 전달 → 미설정 필드가 기본값으로 교체될 수
     // 있다. playsInSilentMode 가 false(기본값)로 리셋되면 Android 에서 오디오가
@@ -203,7 +206,7 @@ export async function startAndroidFocusProbe(): Promise<void> {
     // setAudioModeAsync 호출 자체를 생략해 메트로놈 자신의 AudioTrack 생성과의
     // 경합을 줄인다.
     await applyAudioModeIfChanged({
-      interruptionMode: "doNotMix",
+      interruptionMode: "mixWithOthers",
       playsInSilentMode: true,
       shouldPlayInBackground: true,
       allowsRecording: false,

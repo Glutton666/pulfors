@@ -46,8 +46,8 @@ export async function requestForegroundPlayback(): Promise<void> {
     // AudioControlsService가 MediaSessionService로서 startForeground()를 유지합니다.
     //
     // interruptionMode는 반드시 lib/android-audio-focus.ts의 오디오 포커스
-    // 프로브와 동일한 "doNotMix"를 사용해야 합니다. 예전에는 "mixWithOthers"를
-    // 썼는데, 재생 버튼 하나로 이 함수와 포커스 프로브가 거의 동시에 서로 다른
+    // 프로브와 동일한 값을 사용해야 합니다. 재생 버튼 하나로 이 함수와 포커스
+    // 프로브가 거의 동시에 서로 다른
     // interruptionMode로 setAudioModeAsync를 호출하면서 매 재생마다 오디오 모드가
     // 오락가락(mixWithOthers ↔ doNotMix)했습니다. expo-audio의 Android 구현은
     // setAudioModeAsync 호출마다 무조건 AudioManager.setSpeakerphoneOn(true)를
@@ -59,7 +59,7 @@ export async function requestForegroundPlayback(): Promise<void> {
     await applyAudioModeIfChanged({
       allowsRecording: false,
       playsInSilentMode: true,
-      interruptionMode: "doNotMix",
+      interruptionMode: "mixWithOthers",
       shouldPlayInBackground: true,
     });
 

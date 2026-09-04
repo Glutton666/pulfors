@@ -1615,7 +1615,7 @@ export function useMetronomeScreen() {
       volumeRef.current = 0.5;
       setSampleVolume(0.8);
       sampleVolumeRef.current = 0.8;
-      applyAudioSettings({ backgroundPlay: false, autoResumeAfterInterruption: true });
+      applyAudioSettings({ backgroundPlay: true, autoResumeAfterInterruption: true });
       setSoundSet("classic");
       setFlashMode("accent");
       flashModeRef.current = "accent";

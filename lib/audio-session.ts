@@ -64,6 +64,7 @@ let userToggledDuringInterruption = false;
 // stopAndroidFocusProbe 를 registerAndroidFocusProbeController 로 주입한다.
 // 메트로놈이 실제로 재생될 때만 프로브를 실행해 오디오 포커스를 점유한다.
 let androidProbe: AndroidFocusProbeController | null = null;
+let backgroundPlayEnabled = true;
 
 // 인터럽션(전화/Siri/알람 등)이 끝났을 때 메트로놈을 자동으로 재개할지 여부.
 // 기본값 true (기존 동작 유지). false로 설정하면 notifyInterruptionEnd에서
@@ -121,8 +122,17 @@ async function applyMode(allowsRecording: boolean, isBaseline: boolean): Promise
     allowsRecording,
     playsInSilentMode: true,
     interruptionMode: "mixWithOthers",
-    shouldPlayInBackground: isBaseline,
+    shouldPlayInBackground: isBaseline && backgroundPlayEnabled,
   });
+}
+
+export function setAudioSessionBackgroundPlay(enabled: boolean): void {
+  backgroundPlayEnabled = enabled;
+  if (activeCallers.size === 0) {
+    void applyMode(false, true).catch((e) => {
+      logger.warn("[audioSession] background play mode update failed:", e);
+    });
+  }
 }
 
 export async function acquireAudioSession(callerId: string, mode: SessionMode): Promise<void> {

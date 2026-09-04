@@ -37,6 +37,7 @@ const stubAudioModule = expoAudioStub.AudioModule as Record<string, unknown>;
 
 let lastPlayer: MockPlayer | null = null;
 let lastCreateOptions: Record<string, unknown> | null = null;
+let lastAudioMode: Record<string, unknown> | null = null;
 
 const origCreateAudioPlayer = expoAudioStub.createAudioPlayer as (
   src: unknown,
@@ -49,6 +50,9 @@ expoAudioStub.createAudioPlayer = (src: unknown, options?: Record<string, unknow
   lastCreateOptions = options ?? null;
   return player;
 };
+expoAudioStub.setAudioModeAsync = async (mode: Record<string, unknown>) => {
+  lastAudioMode = mode;
+};
 
 /**
  * 각 테스트 전에 모듈 상태와 로컬 추적 변수를 초기화한다.
@@ -57,6 +61,7 @@ function resetAll(os: "android" | "ios") {
   (Platform as unknown as Record<string, unknown>).OS = os;
   lastPlayer = null;
   lastCreateOptions = null;
+  lastAudioMode = null;
   _resetAndroidFocusForTests();
   _resetAudioModeCacheForTests();
 }
@@ -83,6 +88,16 @@ test("Android 에서 startAndroidFocusProbe 가 player 를 생성한다", async 
   initAndroidFocusCallbacks(() => {}, () => {});
   await startAndroidFocusProbe();
   assert.ok(lastPlayer !== null, "player 가 생성돼야 한다");
+  assert.equal(
+    lastAudioMode?.["interruptionMode"],
+    "mixWithOthers",
+    "외부 음악과 동시에 재생할 수 있도록 오디오 포커스를 공유해야 한다",
+  );
+  assert.equal(
+    lastAudioMode?.["shouldPlayInBackground"],
+    true,
+    "홈 화면에서도 프로브와 메트로놈 재생이 유지돼야 한다",
+  );
   await stopAndroidFocusProbe();
 });
 

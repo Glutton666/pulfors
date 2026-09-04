@@ -248,7 +248,7 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
   const externalSnapshotRef = useRef<
     Pick<MetronomeSettings, "backgroundPlay" | "autoResumeAfterInterruption" | "showLandscapeImage" | "landscapeContentType">
   >({
-    backgroundPlay: false,
+    backgroundPlay: true,
     autoResumeAfterInterruption: true,
     showLandscapeImage: true,
     landscapeContentType: "photo",

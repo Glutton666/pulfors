@@ -284,7 +284,7 @@ const DEFAULT_SETTINGS: MetronomeSettings = {
   beatSubdivisions: {},
   volume: 0.8,
   sampleVolume: 0.8,
-  backgroundPlay: false,
+  backgroundPlay: true,
   soundSet: "classic",
   flashMode: "accent",
   hapticMode: "all",
