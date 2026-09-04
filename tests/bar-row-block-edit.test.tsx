@@ -8,6 +8,14 @@ jest.mock("@expo/vector-icons", () => ({
   Ionicons: () => null,
 }));
 
+jest.mock("expo-linear-gradient", () => {
+  const React = require("react");
+  return {
+    LinearGradient: ({ children, testID, ...props }: any) =>
+      React.createElement("div", { ...props, "data-testid": testID }, children),
+  };
+});
+
 jest.mock("react-native-svg", () => {
   const React = require("react");
   const element = (tag: string) => ({
@@ -26,9 +34,6 @@ jest.mock("react-native-svg", () => {
     G: element("g"),
     Line: element("line"),
     Path: element("path"),
-    Defs: element("defs"),
-    LinearGradient: element("linearGradient"),
-    Stop: element("stop"),
     Text: element("text"),
   };
 });
@@ -55,8 +60,8 @@ describe("SwipeableBarRow block editing", () => {
     const { getByTestId, queryByTestId } = render(
       <SwipeableBarRow
         beat={1}
-        beatType="normal"
-        subdivisions={["normal", "normal", "normal", "normal"]}
+        beatType="strong"
+        subdivisions={["strong", "normal", "normal", "normal"]}
         repeat={{ type: "count", value: 1, bpm: 120, meterNumerator: 4, meterDenominator: 4 }}
         isCurrentBeat={false}
         isEditingBeat={false}
@@ -80,6 +85,8 @@ describe("SwipeableBarRow block editing", () => {
       />,
     );
 
+    expect(queryByTestId("bar-staff-1")).toBeNull();
+    expect(getByTestId("bar-cell-strong-gradient-1-0")).toBeTruthy();
     fireEvent.click(getByTestId("bar-row-1"));
     expect(onPress).toHaveBeenCalledWith(1);
 
@@ -148,6 +155,7 @@ describe("SwipeableBarRow block editing", () => {
         onLongPress={jest.fn()}
         colors={colors}
         ms={(value) => value}
+        showStaffNotation
         sampleCellCoverage={[
           undefined,
           { source: "recording", kind: "direct" },
@@ -188,6 +196,7 @@ describe("SwipeableBarRow block editing", () => {
         onLongPress={jest.fn()}
         colors={colors}
         ms={(value) => value}
+        showStaffNotation
         sampleCellCoverage={[
           { source: "recording", kind: "direct" },
           { source: "recording", kind: "continued" },
@@ -206,7 +215,7 @@ describe("SwipeableBarRow block editing", () => {
   });
 
   it("marks only the currently playing subdivision and gives strong notes depth without symbols", () => {
-    const { container, getByTestId, queryByTestId } = render(
+    const { getByTestId, queryByTestId } = render(
       <SwipeableBarRow
         beat={2}
         beatType="strong"
@@ -230,12 +239,12 @@ describe("SwipeableBarRow block editing", () => {
         onLongPress={jest.fn()}
         colors={colors}
         ms={(value) => value}
+        showStaffNotation
       />,
     );
 
     expect(getByTestId("bar-staff-2")).toBeTruthy();
     expect(getByTestId("bar-note-strong-0")).toBeTruthy();
-    expect(container.querySelector("#bar-s-note-gradient-2")).toBeTruthy();
     expect(getByTestId("bar-note-accent-1")).toBeTruthy();
     expect(getByTestId("bar-note-normal-2")).toBeTruthy();
     expect(getByTestId("bar-note-mute-3")).toBeTruthy();
@@ -273,6 +282,7 @@ describe("SwipeableBarRow block editing", () => {
         onLongPress={jest.fn()}
         colors={colors}
         ms={(value) => value}
+        showStaffNotation
         sampleCellCoverage={[
           { source: "recording", kind: "direct" },
           { source: "recording", kind: "continued" },

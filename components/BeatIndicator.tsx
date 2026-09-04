@@ -155,6 +155,7 @@ interface BeatIndicatorProps {
   onCustomSoundSetsChange?: (configs: Record<string, import("@/lib/storage").CustomSoundSetConfig>) => void;
   barCellOpacity?: number;
   barRowHeight?: number;
+  showStaffNotation?: boolean;
   onEasterEggTrigger?: (isHighRange: boolean) => void;
   easterEggEnabled?: boolean;
   onOpenSettings?: () => void;
@@ -241,6 +242,7 @@ export function BeatIndicator({
   onCustomSoundSetsChange,
   barCellOpacity,
   barRowHeight,
+  showStaffNotation = false,
   onEasterEggTrigger,
   easterEggEnabled = true,
   onOpenSettings,
@@ -1314,6 +1316,7 @@ export function BeatIndicator({
         ms={S.ms}
         cellOverlayOpacity={barCellOpacity}
         rowHeight={barRowHeight}
+        showStaffNotation={showStaffNotation}
         onExitBarMode={() => onBarModeChange(false)}
         onNoteRecordRequest={onNoteRecordRequest}
         onOpenSettings={onOpenSettings}

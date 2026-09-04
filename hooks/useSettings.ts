@@ -134,6 +134,8 @@ export interface UseSettingsResult {
   setBarCellOpacity: React.Dispatch<React.SetStateAction<number>>;
   barRowHeight: number;
   setBarRowHeight: React.Dispatch<React.SetStateAction<number>>;
+  barStaffNotation: boolean;
+  setBarStaffNotation: React.Dispatch<React.SetStateAction<boolean>>;
   barRandomStrategy: BarRandomStrategy;
   setBarRandomStrategy: React.Dispatch<React.SetStateAction<BarRandomStrategy>>;
   // ── Stage mode ─────────────────────────────────────────────────────────────
@@ -235,6 +237,7 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
 
   const [barCellOpacity, setBarCellOpacity] = useState(0.55);
   const [barRowHeight, setBarRowHeight] = useState(44);
+  const [barStaffNotation, setBarStaffNotation] = useState(false);
   const [barRandomStrategy, setBarRandomStrategy] = useState<BarRandomStrategy>("independent");
   const [stageSettings, setStageSettings] = useState<StageSettings>(DEFAULT_STAGE_SETTINGS);
 
@@ -267,12 +270,12 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
     bpm, beatsPerMeasure, beatDenominator, subdivisions: 1, subdivisionPattern, beatSubdivisions,
     volume, sampleVolume, soundSet, layerSoundSets, flashMode, hapticMode,
     audioOffsetMs, timerStopMode, landscapeReversed, beatDirection, username,
-    barMetronomeChannel, barCellOpacity, barRowHeight, barRandomStrategy,
+    barMetronomeChannel, barCellOpacity, barRowHeight, barStaffNotation, barRandomStrategy,
     modeSettings: {
       [mode]: {
         volume, sampleVolume, soundSet, layerSoundSets, flashMode, hapticMode,
         audioOffsetMs, timerStopMode, landscapeReversed, beatDirection,
-        barMetronomeChannel, barCellOpacity, barRowHeight, barRandomStrategy,
+        barMetronomeChannel, barCellOpacity, barRowHeight, barStaffNotation, barRandomStrategy,
         ...(mode === "stage" ? { stageOptions: stageSettings } : {}),
       },
     },
@@ -284,7 +287,7 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
     bpm, beatsPerMeasure, beatDenominator, subdivisions: 1, subdivisionPattern, beatSubdivisions,
     volume, sampleVolume, soundSet, layerSoundSets, flashMode, hapticMode,
     audioOffsetMs, timerStopMode, landscapeReversed, beatDirection, username,
-    barMetronomeChannel, barCellOpacity, barRowHeight, barRandomStrategy,
+    barMetronomeChannel, barCellOpacity, barRowHeight, barStaffNotation, barRandomStrategy,
     modeSettings: modeChangedThisRender
       ? (persistSnapshotRef.current.modeSettings ?? {})
       : {
@@ -293,7 +296,7 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
         ...(persistSnapshotRef.current.modeSettings?.[mode] ?? {}),
         volume, sampleVolume, soundSet, layerSoundSets, flashMode, hapticMode,
         audioOffsetMs, timerStopMode, landscapeReversed, beatDirection,
-        barMetronomeChannel, barCellOpacity, barRowHeight, barRandomStrategy,
+        barMetronomeChannel, barCellOpacity, barRowHeight, barStaffNotation, barRandomStrategy,
         ...(mode === "stage" ? { stageOptions: stageSettings } : {}),
         } satisfies ModeSettings,
       },
@@ -460,6 +463,7 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
       }
       if (settings.barCellOpacity != null) setBarCellOpacity(settings.barCellOpacity);
       if (settings.barRowHeight != null) setBarRowHeight(settings.barRowHeight);
+      if (settings.barStaffNotation !== undefined) setBarStaffNotation(settings.barStaffNotation);
       if (settings.barRandomStrategy) setBarRandomStrategy(settings.barRandomStrategy);
       if (settings.stageOptions) setStageSettings(settings.stageOptions);
       if (settings.username) {
@@ -516,6 +520,7 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
     }
     if (profile.barCellOpacity != null) setBarCellOpacity(profile.barCellOpacity);
     if (profile.barRowHeight != null) setBarRowHeight(profile.barRowHeight);
+    if (profile.barStaffNotation !== undefined) setBarStaffNotation(profile.barStaffNotation);
     if (profile.barRandomStrategy) setBarRandomStrategy(profile.barRandomStrategy);
     if (mode === "stage" && profile.stageOptions) setStageSettings(profile.stageOptions);
   }, [mode]);
@@ -677,6 +682,7 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
     barMetronomeChannel, setBarMetronomeChannel, barMetronomeChannelRef,
     barCellOpacity, setBarCellOpacity,
     barRowHeight, setBarRowHeight,
+    barStaffNotation, setBarStaffNotation,
     barRandomStrategy, setBarRandomStrategy,
     stageSettings, updateStageSettings,
     persistSettings,

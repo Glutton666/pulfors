@@ -85,6 +85,8 @@ const themeProps: Omit<React.ComponentProps<typeof SettingsThemeTab>, "scope"> =
   onBarCellOpacityChange: jest.fn(),
   barRowHeight: 72,
   onBarRowHeightChange: jest.fn(),
+  barStaffNotation: false,
+  onBarStaffNotationChange: jest.fn(),
   randomBarConfig: {
     strategy: "independent",
     bundleSize: 2,
@@ -160,6 +162,8 @@ describe("theme settings scope visibility", () => {
     expect(view.getByText("barMetronomeChannel")).toBeTruthy();
     expect(view.getByText("barCellOpacity")).toBeTruthy();
     expect(view.getByText("barRowHeight")).toBeTruthy();
+    expect(view.getByText("barStaffNotation")).toBeTruthy();
+    expect(view.getByTestId("bar-staff-notation-toggle")).toBeTruthy();
     expect(view.getByText("barRandomStrategy")).toBeTruthy();
     expect(view.queryByText("hubImages")).toBeNull();
     expect(view.queryByText("themeMode")).toBeNull();

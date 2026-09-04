@@ -46,6 +46,8 @@ interface SettingsThemeTabProps {
   onBarCellOpacityChange: (val: number) => void;
   barRowHeight: number;
   onBarRowHeightChange: (val: number) => void;
+  barStaffNotation: boolean;
+  onBarStaffNotationChange: (val: boolean) => void;
   randomBarConfig: BarRandomConfig;
   onRandomBarConfigChange: (config: BarRandomConfig) => void;
   flashMode: FlashMode;
@@ -73,6 +75,8 @@ export function SettingsThemeTab({
   onBarCellOpacityChange,
   barRowHeight,
   onBarRowHeightChange,
+  barStaffNotation,
+  onBarStaffNotationChange,
   randomBarConfig,
   onRandomBarConfigChange,
   flashMode,
@@ -512,6 +516,26 @@ export function SettingsThemeTab({
             })}
           </View>
         </View>
+
+      <View style={[styles.divider, { backgroundColor: C.border }]} />
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Ionicons name="musical-notes-outline" size={S.ms(18, 0.4)} color={C.accent} />
+          <Text style={[styles.sectionLabel, { color: C.text }]}>{t("settings", "barStaffNotation")}</Text>
+          <Switch
+            testID="bar-staff-notation-toggle"
+            value={barStaffNotation}
+            onValueChange={(val) => {
+              onBarStaffNotationChange(val);
+              if (Platform.OS !== "web") Haptics.selectionAsync();
+            }}
+            trackColor={{ false: C.surfaceLight, true: C.accentMuted }}
+            thumbColor={barStaffNotation ? C.accent : C.textSecondary}
+            style={{ transform: [{ scale: 0.85 }] }}
+          />
+        </View>
+        <Text style={[styles.offsetHint, { color: C.textTertiary }]}>{t("settings", "barStaffNotationHint")}</Text>
+      </View>
 
       <View style={[styles.divider, { backgroundColor: C.border }]} />
       <View style={styles.section}>

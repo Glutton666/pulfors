@@ -75,6 +75,8 @@ interface SettingsModalProps {
   onBarCellOpacityChange: (val: number) => void;
   barRowHeight: number;
   onBarRowHeightChange: (val: number) => void;
+  barStaffNotation: boolean;
+  onBarStaffNotationChange: (val: boolean) => void;
   randomBarConfig: BarRandomConfig;
   onRandomBarConfigChange: (config: BarRandomConfig) => void;
   onShowOnboarding?: () => void;
@@ -133,6 +135,8 @@ export function SettingsModal({
   onBarCellOpacityChange,
   barRowHeight,
   onBarRowHeightChange,
+  barStaffNotation,
+  onBarStaffNotationChange,
   randomBarConfig,
   onRandomBarConfigChange,
   onShowOnboarding,
@@ -239,6 +243,8 @@ export function SettingsModal({
             onBarCellOpacityChange={onBarCellOpacityChange}
             barRowHeight={barRowHeight}
             onBarRowHeightChange={onBarRowHeightChange}
+            barStaffNotation={barStaffNotation}
+            onBarStaffNotationChange={onBarStaffNotationChange}
             randomBarConfig={randomBarConfig}
             onRandomBarConfigChange={onRandomBarConfigChange}
             flashMode={flashMode}

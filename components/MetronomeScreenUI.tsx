@@ -128,6 +128,7 @@ export function MetronomeScreenUI(props: Props) {
     handleBarReset, handleBarQuickSave, handleResetFlash,
     handleAddBar, handleDeleteBar, handleCopyBar, handleReorderBar, handleInsertBarAfter,
     barCellOpacity, setBarCellOpacity, barRowHeight, setBarRowHeight,
+    barStaffNotation, setBarStaffNotation,
     barMetronomeChannel, setBarMetronomeChannel, barMetronomeChannelRef,
     stageSettings, updateStageSettings,
     currentBarConfig,
@@ -940,6 +941,11 @@ export function MetronomeScreenUI(props: Props) {
           setBarRowHeight(val);
           persistSettings({ barRowHeight: val });
         }}
+        barStaffNotation={barStaffNotation}
+        onBarStaffNotationChange={(val) => {
+          setBarStaffNotation(val);
+          persistSettings({ barStaffNotation: val });
+        }}
         randomBarConfig={randomBarConfig}
         onRandomBarConfigChange={onRandomBarConfigChange}
         onEnterNoteMode={handleEnterNoteMode}
@@ -1150,6 +1156,7 @@ export function MetronomeScreenUI(props: Props) {
             }}
             barCellOpacity={barCellOpacity}
             barRowHeight={barRowHeight}
+            showStaffNotation={barStaffNotation}
             onEasterEggTrigger={handleEasterEggTrigger}
             easterEggEnabled={!usesSharedEasterEggGesture(currentMode, showPolygon)}
           />

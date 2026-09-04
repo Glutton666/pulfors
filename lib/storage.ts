@@ -206,6 +206,7 @@ export interface MetronomeSettings {
   autoResumeAfterInterruption?: boolean;
   barCellOpacity?: number;
   barRowHeight?: number;
+  barStaffNotation?: boolean;
   beatDenominator?: 2 | 4 | 8;
   barRandomStrategy?: BarRandomStrategy;
   /**
@@ -230,6 +231,7 @@ export interface ModeSettings {
   barMetronomeChannel?: SampleChannel;
   barCellOpacity?: number;
   barRowHeight?: number;
+  barStaffNotation?: boolean;
   barRandomStrategy?: BarRandomStrategy;
   stageOptions?: StageSettings;
 }
@@ -298,6 +300,7 @@ const DEFAULT_SETTINGS: MetronomeSettings = {
   autoResumeAfterInterruption: true,
   barCellOpacity: 0.55,
   barRowHeight: 44,
+  barStaffNotation: false,
   barRandomStrategy: "independent",
 };
 
@@ -327,6 +330,7 @@ export async function loadSettings(): Promise<MetronomeSettings> {
         barMetronomeChannel: merged.barMetronomeChannel,
         barCellOpacity: merged.barCellOpacity,
         barRowHeight: merged.barRowHeight,
+        barStaffNotation: merged.barStaffNotation,
         barRandomStrategy: merged.barRandomStrategy,
       };
       const savedProfiles = isPlainObject(merged.modeSettings) ? merged.modeSettings : {};

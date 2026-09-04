@@ -5,6 +5,7 @@ import React, { useRef, useMemo } from "react";
 import { View, Text, Pressable, PanResponder, Animated, Platform, StyleSheet } from "react-native";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient as ExpoLinearGradient } from "expo-linear-gradient";
 import type { BeatType, BarRepeat } from "@/components/beat-indicator.types";
 import type { ProgressInfo } from "@/lib/metronome-engine";
 import { FontSize } from "@/constants/tokens";
@@ -52,6 +53,7 @@ export interface SwipeableBarRowProps {
   colors: BarModeColors;
   ms: (size: number, factor?: number) => number;
   rowHeight?: number;
+  showStaffNotation?: boolean;
   cellOverlayOpacity?: number;
   sampleCells?: boolean[];
   sampleCellCoverage?: Array<SampleCellCoverage | undefined>;
@@ -65,7 +67,7 @@ export function SwipeableBarRow({
   onPress, onSwipeLeft, onSwipeRight, onLongPress, onEditBlock,
   onDragStart, onDragMove, onDragEnd, isDragging, showDropLineAbove, dragTranslateY,
   colors: C, ms,
-  rowHeight, cellOverlayOpacity: _cellOverlayOpacity, sampleCells = [], sampleCellCoverage = [],
+  rowHeight, showStaffNotation = false, cellOverlayOpacity = 0.55, sampleCells = [], sampleCellCoverage = [],
 }: SwipeableBarRowProps) {
   const translateX = useRef(new Animated.Value(0)).current;
   const actionTriggered = useRef(false);
@@ -213,13 +215,15 @@ export function SwipeableBarRow({
 
           {/* 중앙: 비트 셀 */}
            <View style={[styles.barRowCells, { height: rowHeight != null ? Math.max(20, rowHeight - 16) : 28 }]}>
-             <SimplifiedStaffNotation
-               beat={beat}
-               notes={cells}
-               activeSubNote={activeSubNote}
-               isCurrentBeat={isCurrentBeat}
-               colors={C}
-             />
+              {showStaffNotation && (
+                <SimplifiedStaffNotation
+                  beat={beat}
+                  notes={cells}
+                  activeSubNote={activeSubNote}
+                  isCurrentBeat={isCurrentBeat}
+                  colors={C}
+                />
+              )}
             {cells.map((ct, ci) => {
               const isLast = ci === cells.length - 1;
                const isActiveCell = isCurrentBeat && ci === activeSubNote;
@@ -257,6 +261,33 @@ export function SwipeableBarRow({
                     },
                   ]}
                 >
+                    {!showStaffNotation && ct === "strong" && (
+                      <ExpoLinearGradient
+                        testID={`bar-cell-strong-gradient-${beat}-${ci}`}
+                        pointerEvents="none"
+                        colors={[C.accent, C.accentMuted, C.accent + "66"]}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                        style={[StyleSheet.absoluteFill, { opacity: cellOverlayOpacity }]}
+                      />
+                    )}
+                    {!showStaffNotation && ct !== "strong" && (
+                      <View
+                        testID={`bar-cell-color-${beat}-${ci}`}
+                        pointerEvents="none"
+                        style={[
+                          StyleSheet.absoluteFill,
+                          {
+                            backgroundColor: ct === "accent"
+                              ? C.accentMuted
+                              : ct === "mute"
+                                ? C.textTertiary
+                                : C.textSecondary,
+                            opacity: ct === "mute" ? cellOverlayOpacity * 0.45 : cellOverlayOpacity,
+                          },
+                        ]}
+                      />
+                    )}
                    {isActiveCell && (
                      <View
                        testID={`bar-active-cell-${beat}-${ci}`}

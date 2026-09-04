@@ -102,6 +102,7 @@ export interface BarModeViewProps {
   ms: (size: number, factor?: number) => number;
   cellOverlayOpacity?: number;
   rowHeight?: number;
+  showStaffNotation?: boolean;
   onExitBarMode?: () => void;
   onNoteRecordRequest?: (beatIndex: number, subIndex: number) => void;
   onReorderBar?: (fromIndex: number, toIndex: number) => void;
@@ -129,7 +130,7 @@ export function BarModeView({
   onLayerSoundSetsChange, onPreviewSoundSet,
   customSoundSets = {} as Record<string, CustomSoundSetConfig>, onCustomSoundSetsChange,
   colors: C, ms,
-  cellOverlayOpacity, rowHeight,
+  cellOverlayOpacity, rowHeight, showStaffNotation = false,
   noteSamples, noteSampleSources, onNoteRecordRequest, onReorderBar, onInsertBarAfter,
   randomBarSession, onRandomViewportCapacityChange,
   onReplayRandomBarSession, onSaveRandomBarSession, onApplyRandomBarSession,
@@ -643,6 +644,7 @@ export function BarModeView({
               colors={C}
               ms={ms}
               rowHeight={rowHeight}
+              showStaffNotation={showStaffNotation}
               cellOverlayOpacity={cellOverlayOpacity}
               sampleCells={rowSampleCoverage.map((coverage) => coverage?.kind === "direct")}
               sampleCellCoverage={rowSampleCoverage}
