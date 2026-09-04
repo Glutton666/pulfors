@@ -22,6 +22,7 @@ export interface SwipeableBarRowProps {
   subdivisions: BeatType[];
   repeat: BarRepeat | null;
   isCurrentBeat: boolean;
+  activeSubNote?: number;
   isEditingBeat: boolean;
   blockDepth: number;
   blockStart: boolean;
@@ -57,6 +58,7 @@ export interface SwipeableBarRowProps {
 
 export function SwipeableBarRow({
   beat, beatType, subdivisions, repeat, isCurrentBeat, isEditingBeat,
+  activeSubNote = -1,
   blockDepth: _blockDepth, blockStart, blockEnd, blockEditIndex, blockRepeatText, symbolBadges, isPlaying,
   progressCurrent, progressTotal, bpm, meterNumerator, meterDenominator, beatsPerMeasure,
   onPress, onSwipeLeft, onSwipeRight, onLongPress, onEditBlock,
@@ -168,6 +170,8 @@ export function SwipeableBarRow({
                 ? C.backgroundSecondary
                 : "transparent",
               borderBottomColor: C.overlay06,
+               borderLeftWidth: isCurrentBeat ? 3 : isEditingBeat ? 2 : 0,
+               borderLeftColor: isCurrentBeat ? C.accent : isEditingBeat ? C.textSecondary : "transparent",
             },
           ]}
         >
@@ -210,10 +214,15 @@ export function SwipeableBarRow({
           <View style={[styles.barRowCells, { height: rowHeight != null ? Math.max(20, rowHeight - 16) : 28 }]}>
             {cells.map((ct, ci) => {
               const isLast = ci === cells.length - 1;
-              const isActiveCell = isCurrentBeat;
+               const isActiveCell = isCurrentBeat && ci === activeSubNote;
               const coverage = sampleCellCoverage[ci];
               const hasSample = Boolean(coverage || sampleCells[ci]);
               const isDirectSample = coverage?.kind === "direct" || (!coverage && hasSample);
+               const typeMark =
+                 ct === "strong" ? "●"
+                 : ct === "accent" ? "▲"
+                 : ct === "mute" ? "—"
+                 : "•";
               return (
                 <View
                   key={ci}
@@ -235,18 +244,57 @@ export function SwipeableBarRow({
                   }
                   style={[
                     styles.barMiniCell,
-                    !isLast && { borderRightWidth: 0.5, borderRightColor: C.overlay06 },
+                     !isLast && { borderRightWidth: 1, borderRightColor: C.overlay10 },
                     {
                       backgroundColor:
-                        ct === "strong" ? (isActiveCell ? C.accent : C.accent + "90")
-                        : ct === "accent" ? (isActiveCell ? C.accentMuted : C.accentMuted + "90")
-                        : ct === "mute" ? "transparent"
-                        : (isActiveCell ? C.textSecondary : C.textTertiary + "60"),
-                      borderWidth: ct === "mute" ? 1 : 0,
-                      borderColor: ct === "mute" ? C.textTertiary + "80" : "transparent",
+                         ct === "strong" ? C.accent + (isActiveCell ? "E6" : "8F")
+                         : ct === "accent" ? C.accentMuted + (isActiveCell ? "D9" : "73")
+                         : ct === "mute" ? C.backgroundSecondary
+                         : C.textTertiary + (isActiveCell ? "A6" : "47"),
+                       borderTopWidth: isActiveCell ? 2 : ct === "mute" ? 1 : 0,
+                       borderBottomWidth: isActiveCell ? 2 : ct === "mute" ? 1 : 0,
+                       borderTopColor: isActiveCell ? C.white : ct === "mute" ? C.textTertiary + "80" : "transparent",
+                       borderBottomColor: isActiveCell ? C.white : ct === "mute" ? C.textTertiary + "80" : "transparent",
                     },
                   ]}
                 >
+                   <Text
+                     testID={`bar-cell-type-${beat}-${ci}-${ct}`}
+                     pointerEvents="none"
+                     style={[
+                       styles.barCellTypeMark,
+                       {
+                         color: isActiveCell
+                           ? C.white
+                           : ct === "strong"
+                           ? C.white
+                           : ct === "accent"
+                           ? C.text
+                           : C.textSecondary,
+                         fontSize: ms(ct === "accent" ? 7 : ct === "normal" ? 12 : 9, 0.35),
+                         opacity: isActiveCell ? 1 : ct === "mute" ? 0.7 : 0.85,
+                       },
+                     ]}
+                   >
+                     {typeMark}
+                   </Text>
+                   {isActiveCell && (
+                     <View
+                       testID={`bar-active-cell-${beat}-${ci}`}
+                       pointerEvents="none"
+                       style={[styles.barActiveCellMarker, { backgroundColor: C.white }]}
+                     />
+                   )}
+                   {isDirectSample && (
+                     <View
+                       testID={`bar-sample-start-marker-${beat}-${ci}`}
+                       pointerEvents="none"
+                       style={[
+                         styles.barSampleStartMarker,
+                         { backgroundColor: coverage?.source === "import" ? C.textSecondary : C.text },
+                       ]}
+                     />
+                   )}
                 </View>
               );
             })}
@@ -379,8 +427,8 @@ const styles = StyleSheet.create({
     height: 28,
     borderRadius: 2,
     overflow: "visible",
-    borderWidth: 0.5,
-    borderColor: "rgba(255,255,255,0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.16)",
   },
   blockEditButton: {
     width: 30,
@@ -394,6 +442,35 @@ const styles = StyleSheet.create({
     flex: 1,
     height: "100%",
     borderRadius: 0,
+    alignItems: "center",
+    justifyContent: "flex-end",
+    paddingBottom: 2,
+    position: "relative",
+  },
+  barCellTypeMark: {
+    fontFamily: "SpaceGrotesk_700Bold",
+    lineHeight: 10,
+    includeFontPadding: false,
+    textShadowColor: "rgba(0,0,0,0.55)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  barSampleStartMarker: {
+    position: "absolute",
+    top: 3,
+    alignSelf: "center",
+    width: 5,
+    height: 5,
+    borderRadius: 1,
+    transform: [{ rotate: "45deg" }],
+  },
+  barActiveCellMarker: {
+    position: "absolute",
+    top: 1,
+    alignSelf: "center",
+    width: 12,
+    height: 2,
+    borderRadius: 1,
   },
   barSampleCoverageOverlay: {
     position: "absolute",

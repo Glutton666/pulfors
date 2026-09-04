@@ -27,7 +27,7 @@ describe("SwipeableBarRow block editing", () => {
   it("keeps a boundary-row tap for bar selection and exposes a separate block editor action", () => {
     const onPress = jest.fn();
     const onEditBlock = jest.fn();
-    const { getByTestId } = render(
+    const { getByTestId, queryByTestId } = render(
       <SwipeableBarRow
         beat={1}
         beatType="normal"
@@ -178,5 +178,80 @@ describe("SwipeableBarRow block editing", () => {
     const overlay = getByTestId("bar-sample-coverage-overlay-1") as HTMLElement;
     expect(overlay.children).toHaveLength(4);
     expect(overlay.querySelectorAll("[data-testid]").length).toBe(0);
+  });
+
+  it("marks only the currently playing subdivision and exposes non-color note identities", () => {
+    const { getByTestId, queryByTestId } = render(
+      <SwipeableBarRow
+        beat={2}
+        beatType="strong"
+        subdivisions={["strong", "accent", "normal", "mute"]}
+        repeat={null}
+        isCurrentBeat
+        activeSubNote={2}
+        isEditingBeat={false}
+        blockDepth={0}
+        blockStart={false}
+        blockEnd={false}
+        symbolBadges={[]}
+        isPlaying
+        bpm={120}
+        meterNumerator={4}
+        meterDenominator={4}
+        beatsPerMeasure={4}
+        onPress={jest.fn()}
+        onSwipeLeft={jest.fn()}
+        onSwipeRight={jest.fn()}
+        onLongPress={jest.fn()}
+        colors={colors}
+        ms={(value) => value}
+      />,
+    );
+
+    expect(getByTestId("bar-cell-type-2-0-strong").textContent).toBe("●");
+    expect(getByTestId("bar-cell-type-2-1-accent").textContent).toBe("▲");
+    expect(getByTestId("bar-cell-type-2-2-normal").textContent).toBe("•");
+    expect(getByTestId("bar-cell-type-2-3-mute").textContent).toBe("—");
+    expect(queryByTestId("bar-active-cell-2-0")).toBeNull();
+    expect(queryByTestId("bar-active-cell-2-1")).toBeNull();
+    expect(getByTestId("bar-active-cell-2-2")).toBeTruthy();
+    expect(queryByTestId("bar-active-cell-2-3")).toBeNull();
+  });
+
+  it("adds a distinct start marker only to direct sample cells", () => {
+    const { getByTestId, queryByTestId } = render(
+      <SwipeableBarRow
+        beat={0}
+        beatType="normal"
+        subdivisions={["normal", "normal", "normal"]}
+        repeat={null}
+        isCurrentBeat={false}
+        isEditingBeat
+        blockDepth={0}
+        blockStart={false}
+        blockEnd={false}
+        symbolBadges={[]}
+        isPlaying={false}
+        bpm={120}
+        meterNumerator={3}
+        meterDenominator={4}
+        beatsPerMeasure={3}
+        onPress={jest.fn()}
+        onSwipeLeft={jest.fn()}
+        onSwipeRight={jest.fn()}
+        onLongPress={jest.fn()}
+        colors={colors}
+        ms={(value) => value}
+        sampleCellCoverage={[
+          { source: "recording", kind: "direct" },
+          { source: "recording", kind: "continued" },
+          undefined,
+        ]}
+      />,
+    );
+
+    expect(getByTestId("bar-sample-start-marker-0-0")).toBeTruthy();
+    expect(queryByTestId("bar-sample-start-marker-0-1")).toBeNull();
+    expect(queryByTestId("bar-sample-start-marker-0-2")).toBeNull();
   });
 });

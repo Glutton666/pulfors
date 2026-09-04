@@ -120,7 +120,7 @@ export interface BarModeViewProps {
 export function BarModeView({
   beatsPerMeasure, beatTypes, beatSubdivisions,
   barRepeats, onBarRepeatChange, onBarMeterChange, loopBlocks, onLoopBlocksChange,
-  isPlaying, isPreparing, currentBeat, onTogglePlay, barLoopMode,
+  isPlaying, isPreparing, currentBeat, activeSubNote, onTogglePlay, barLoopMode,
   onRandomPlayRequest, onBarLoopModeChange, blockPlayMode, onBlockPlayModeChange, progressInfo,
   barStartBeat, onBarStartBeatSelect, onAddBar, onDeleteBar,
   subdivisionBarElement, onBarQuickSave, onBarScrollOffset,
@@ -614,6 +614,7 @@ export function BarModeView({
               subdivisions={subs}
               repeat={rep}
               isCurrentBeat={isCurrent}
+               activeSubNote={isCurrent ? activeSubNote : -1}
               isEditingBeat={isEditing}
               blockDepth={maxDepth}
               blockStart={blockStart}
