@@ -978,11 +978,23 @@ export function useMetronomeScreen() {
       }
     };
 
+    let realtimeReservationDebugCount = 0;
     engine.setRealtimeAudioScheduler(
       Platform.OS === "web"
         ? (tick, atPerformanceTime) => {
             if (fadeOutMutedRef.current) return false;
             const role = beatTypeToClickRole(tick.type);
+            if (__DEV__ && realtimeReservationDebugCount < 12) {
+              console.info("[beat-audio-trace] reserve", {
+                sequence: realtimeReservationDebugCount,
+                beat: tick.beat,
+                subBeat: tick.subBeat,
+                type: tick.type,
+                role,
+                atPerformanceTime: Math.round(atPerformanceTime),
+              });
+              realtimeReservationDebugCount += 1;
+            }
             if (!role) return true;
             const channel = barModeRef.current
               ? (noteSampleMetroChannelsRef.current[String(tick.beat)] ?? barMetronomeChannelRef.current)

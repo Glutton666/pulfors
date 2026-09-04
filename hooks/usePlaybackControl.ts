@@ -194,6 +194,15 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
     } else {
       // The visible Beat-mode state is the playback source of truth. The
       // persisted config ref can lag React state by one render after a tap.
+      if (__DEV__ && Platform.OS === "web") {
+        console.info("[beat-audio-trace] configure", {
+          beatsPerMeasure: p.beatsPerMeasure,
+          beatTypes: [...p.beatTypes],
+          beatSubdivisions: Object.fromEntries(
+            Object.entries(p.beatSubdivisions).map(([key, pattern]) => [key, [...pattern]]),
+          ),
+        });
+      }
       applyDialConfigToEngine(engine, {
         beatsPerMeasure: p.beatsPerMeasure,
         beatTypes: [...p.beatTypes],
