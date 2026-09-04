@@ -32,7 +32,6 @@ import type {
   NoteSampleVolumeMap,
 } from "@/lib/note-samples";
 
-const WEB_REALTIME_START_LEAD_MS = 80;
 import type { PlaybackContext } from "@/lib/playback-context";
 import type { AudioPlayer } from "expo-audio";
 import {
@@ -334,6 +333,10 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
       activeBarIndex: startBeat ?? 0,
     });
     p.showPlayingNotification(playback.bpm, playback.modeLabel, p.languageRef.current);
+    // A stopped UI does not guarantee that an older rendered loop or queued
+    // Web Audio source has released output ownership. Clear both before the
+    // visible Beat-mode state is copied into a fresh engine schedule.
+    p.stopRenderedAudio();
     configureEngine(engine);
     p.preparingCancelledRef.current = false;
     try {
@@ -348,12 +351,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
           p.barModeRef.current ||
           String(p.soundSetRef.current).startsWith("custom");
         p.setIsPreparing(false); p.setIsPlaying(true); p.notifyVoicePlayState(true); p.isPlayingRef.current = true;
-        engine.start({
-          startFromBeat: startBeat ?? undefined,
-          measureStartAt: useRenderedLoop
-            ? undefined
-            : performance.now() + WEB_REALTIME_START_LEAD_MS,
-        });
+        engine.start(startBeat ?? undefined);
         markAudioPlaying();
         p.armAudioWatchdogRef.current();
         if (useRenderedLoop) {
@@ -414,6 +412,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
     p.resetPlaybackVisuals();
     p.clearSamplePlayStates();
     markAudioPreparing();
+    p.stopRenderedAudio();
     configureEngine(engine);
     p.preparingCancelledRef.current = false;
     p.setIsPreparing(true);
@@ -441,11 +440,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
           engine.setPreRenderedAudio(false);
         }
         p.setIsPlaying(true);
-        engine.start({
-          measureStartAt: useRenderedLoop
-            ? undefined
-            : performance.now() + WEB_REALTIME_START_LEAD_MS,
-        });
+        engine.start();
         markAudioPlaying(); p.armAudioWatchdogRef.current();
       } else {
         const useRenderedLoop =
