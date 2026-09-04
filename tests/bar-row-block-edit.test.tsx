@@ -180,7 +180,7 @@ describe("SwipeableBarRow block editing", () => {
     expect(overlay.querySelectorAll("[data-testid]").length).toBe(0);
   });
 
-  it("marks only the currently playing subdivision and exposes non-color note identities", () => {
+  it("marks only the currently playing subdivision and gives strong notes depth without symbols", () => {
     const { getByTestId, queryByTestId } = render(
       <SwipeableBarRow
         beat={2}
@@ -208,10 +208,11 @@ describe("SwipeableBarRow block editing", () => {
       />,
     );
 
-    expect(getByTestId("bar-cell-type-2-0-strong").textContent).toBe("●");
-    expect(getByTestId("bar-cell-type-2-1-accent").textContent).toBe("▲");
-    expect(getByTestId("bar-cell-type-2-2-normal").textContent).toBe("•");
-    expect(getByTestId("bar-cell-type-2-3-mute").textContent).toBe("—");
+    expect(getByTestId("bar-strong-depth-2-0")).toBeTruthy();
+    expect(queryByTestId("bar-cell-type-2-0-strong")).toBeNull();
+    expect(queryByTestId("bar-cell-type-2-1-accent")).toBeNull();
+    expect(queryByTestId("bar-cell-type-2-2-normal")).toBeNull();
+    expect(queryByTestId("bar-cell-type-2-3-mute")).toBeNull();
     expect(queryByTestId("bar-active-cell-2-0")).toBeNull();
     expect(queryByTestId("bar-active-cell-2-1")).toBeNull();
     expect(getByTestId("bar-active-cell-2-2")).toBeTruthy();
