@@ -416,7 +416,11 @@ export function SubdivisionBar({
   const livePattern: BeatType[] | null = useMemo(() => {
     if (!currentBeatType) return null;
     const subs = new Map<number, BeatType[]>();
-    if (activeBeatPattern && activeBeatPattern.length > 0) subs.set(0, activeBeatPattern);
+    // Keep playback visualization on the same ingestion rule as the engine:
+    // one cell is the beat itself, not a subdivision. Legacy one-cell values
+    // may still exist in restored UI state even though audio correctly ignores
+    // them.
+    if (activeBeatPattern && activeBeatPattern.length > 1) subs.set(0, activeBeatPattern);
     return pureGetSubPattern([currentBeatType], subs, 0);
   }, [currentBeatType, activeBeatPattern]);
   const displayPattern = isPlaying ? (livePattern ?? pattern) : pattern;

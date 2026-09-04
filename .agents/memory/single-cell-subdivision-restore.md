@@ -7,4 +7,4 @@ A subdivision pattern is valid only when it contains more than one cell. Bulk re
 
 **Why:** Legacy persisted one-cell patterns can be invisible in the UI while still overriding the engine's beat type. A visible accent-normal-normal-normal-normal pattern can then play as four accents followed by one normal.
 
-**How to apply:** Normalize subdivision maps at the engine ingestion boundary, including settings restore, mode transitions, and imported configurations. The visible beat type remains the source of truth for a one-cell beat.
+**How to apply:** Normalize subdivision maps at the engine ingestion boundary, including settings restore, mode transitions, and imported configurations. Playback visualization must apply the same rule even if legacy values remain in React state. The visible beat type remains the source of truth for a one-cell beat.
