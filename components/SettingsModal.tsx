@@ -38,6 +38,8 @@ interface SettingsModalProps {
   onSampleVolumeChange: (volume: number) => void;
   backgroundPlay: boolean;
   onBackgroundPlayChange: (value: boolean) => void;
+  playbackNotifications: boolean;
+  onPlaybackNotificationsChange: (value: boolean) => void;
   autoResumeAfterInterruption: boolean;
   onAutoResumeAfterInterruptionChange: (value: boolean) => void;
   soundSet: SoundSet;
@@ -98,6 +100,8 @@ export function SettingsModal({
   onSampleVolumeChange,
   backgroundPlay,
   onBackgroundPlayChange,
+  playbackNotifications,
+  onPlaybackNotificationsChange,
   autoResumeAfterInterruption,
   onAutoResumeAfterInterruptionChange,
   soundSet,
@@ -276,6 +280,8 @@ export function SettingsModal({
             onTimerStopModeChange={onTimerStopModeChange}
             backgroundPlay={backgroundPlay}
             onBackgroundPlayChange={onBackgroundPlayChange}
+            playbackNotifications={playbackNotifications}
+            onPlaybackNotificationsChange={onPlaybackNotificationsChange}
             autoResumeAfterInterruption={autoResumeAfterInterruption}
             onAutoResumeAfterInterruptionChange={onAutoResumeAfterInterruptionChange}
             playSoundPreview={playSoundPreview}

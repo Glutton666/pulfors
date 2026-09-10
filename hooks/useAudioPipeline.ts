@@ -24,7 +24,7 @@ import {
 } from "@/lib/audio-renderer";
 import { syncStereoArtifact, releaseStereoArtifact } from "@/lib/sample-cache";
 import { captureBreadcrumb } from "@/lib/error-tracking";
-import { safePlay, notifyAudioPoolFallback } from "@/lib/audio-utils";
+import { safePlay } from "@/lib/audio-utils";
 import { isSafeNoteSampleUri } from "@/app/index.helpers";
 import type {
   ClickPCMs,
@@ -33,7 +33,7 @@ import type {
   DecodedSample,
   WebRenderedLoop,
 } from "@/lib/audio-renderer";
-import type { SoundSet, BuiltinSoundSet, CustomSoundSetConfig } from "@/lib/storage";
+import type { SoundSet, CustomSoundSetConfig } from "@/lib/storage";
 import type { NoteSampleMap, NoteSampleChannelMap, NoteSampleMetroChannelMap, NoteSampleVolumeMap, NoteSampleSpeedMap } from "@/lib/note-samples";
 import type { SampleChannel } from "@/lib/stereo-channel";
 import { useAudioPlayers } from "@/hooks/useAudioPlayers";
@@ -43,6 +43,7 @@ import {
   setAutoResumeAfterInterruption as setAudioSessionAutoResume,
   setAudioSessionBackgroundPlay,
 } from "@/lib/audio-session";
+import { setPlaybackNotificationsEnabled } from "@/lib/notification-preferences";
 import {
   getAudioLifecycleSnapshot,
   markAudioRecoveryFailed,
@@ -57,7 +58,11 @@ import {
 } from "@/lib/audio-clock";
 
 /** Narrow callback type for audio-specific settings persistence. */
-export type PersistAudioSettingsFn = (s: Partial<{ backgroundPlay: boolean; autoResumeAfterInterruption: boolean }>) => void;
+export type PersistAudioSettingsFn = (s: Partial<{
+  backgroundPlay: boolean;
+  playbackNotifications: boolean;
+  autoResumeAfterInterruption: boolean;
+}>) => void;
 
 export interface UseAudioPipelineParams {
   engineRef: React.MutableRefObject<MetronomeEngine | null>;
@@ -109,18 +114,24 @@ export interface UseAudioPipelineResult {
   strongToggle: React.MutableRefObject<number>;
   // ── Audio-session settings (owned here, exposed for settings UI) ─────────
   backgroundPlay: boolean;
+  playbackNotifications: boolean;
   autoResumeAfterInterruption: boolean;
   /**
    * User-facing setter: updates state + calls audio-session + persists.
    * Use this from settings UI change handlers.
    */
   updateBackgroundPlay: (v: boolean) => void;
+  updatePlaybackNotifications: (v: boolean) => void;
   updateAutoResumeAfterInterruption: (v: boolean) => void;
   /**
    * Apply-only setter (no persistence side-effect).
    * Use this when restoring saved settings on startup.
    */
-  applyAudioSettings: (s: Partial<{ backgroundPlay: boolean; autoResumeAfterInterruption: boolean }>) => void;
+  applyAudioSettings: (s: Partial<{
+    backgroundPlay: boolean;
+    playbackNotifications: boolean;
+    autoResumeAfterInterruption: boolean;
+  }>) => void;
   // ── Refs owned by this hook, exposed for coordination ────────────────────
   renderedPlayerRef: React.MutableRefObject<ExpoAudioPlayer | null>;
   samplePCMCacheRef: React.MutableRefObject<Map<string, SamplePCMEntry>>;
@@ -135,7 +146,6 @@ export interface UseAudioPipelineResult {
   buildRenderedPlayer: () => Promise<ExpoAudioPlayer | null>;
   scheduleReRender: () => void;
   stopRenderedAudio: () => void;
-  warmupAudioPlayers: () => Promise<void>;
   getClickPCMs: (set: SoundSet, signal?: AbortSignal) => Promise<ClickPCMs>;
   getSamplePCMs: (samples: NoteSampleMap, signal?: AbortSignal) => Promise<Map<string, SamplePCMEntry>>;
   getLayerClickPCMsForSchedule: (ticks: TickInfo[], signal?: AbortSignal) => Promise<Map<string, ClickPCMs>>;
@@ -179,6 +189,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
 
   // ── Audio-session settings (moved from useMetronomeScreen) ─────────────────
   const [backgroundPlay, setBackgroundPlay] = useState(true);
+  const [playbackNotifications, setPlaybackNotifications] = useState(false);
   const [autoResumeAfterInterruption, setAutoResumeState] = useState(true);
 
   /**
@@ -186,10 +197,18 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
    * Called during initial settings load.
    */
   const applyAudioSettings = useCallback(
-    (s: Partial<{ backgroundPlay: boolean; autoResumeAfterInterruption: boolean }>) => {
+    (s: Partial<{
+      backgroundPlay: boolean;
+      playbackNotifications: boolean;
+      autoResumeAfterInterruption: boolean;
+    }>) => {
       if (s.backgroundPlay !== undefined) {
         setBackgroundPlay(s.backgroundPlay);
         setAudioSessionBackgroundPlay(s.backgroundPlay);
+      }
+      if (s.playbackNotifications !== undefined) {
+        setPlaybackNotifications(s.playbackNotifications);
+        setPlaybackNotificationsEnabled(s.playbackNotifications);
       }
       if (s.autoResumeAfterInterruption !== undefined) {
         setAutoResumeState(s.autoResumeAfterInterruption);
@@ -207,6 +226,15 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
       setBackgroundPlay(value);
       setAudioSessionBackgroundPlay(value);
       persistAudioSettingsCallbackRef.current({ backgroundPlay: value });
+    },
+    [persistAudioSettingsCallbackRef],
+  );
+
+  const updatePlaybackNotifications = useCallback(
+    (value: boolean) => {
+      setPlaybackNotifications(value);
+      setPlaybackNotificationsEnabled(value);
+      persistAudioSettingsCallbackRef.current({ playbackNotifications: value });
     },
     [persistAudioSettingsCallbackRef],
   );
@@ -498,28 +526,6 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
       finishAbortableRender(renderGenerationRef, signal);
     }
   }, [getClickPCMs, getLayerClickPCMsForSchedule, getSamplePCMs]);
-
-  const warmupAudioPlayers = useCallback(async () => {
-    try {
-      const set = soundSetRef.current;
-      const customCfg = customSoundSetsRef.current[set];
-      const builtinSet: BuiltinSoundSet = (customCfg ? customCfg.strong.sourceSet : (set as BuiltinSoundSet)) || "classic";
-      const pool = allPlayersRef.current[builtinSet as keyof BuiltinPlayers];
-      if (!pool) notifyAudioPoolFallback("warmup-missing-set", { requestedSet: String(builtinSet) });
-      const players = pool || allPlayersRef.current.classic;
-      const toWarm = [players.highA, players.highB, players.highC, players.highD, players.lowA, players.lowB, players.lowC, players.lowD, players.strongA, players.strongB, players.strongC, players.strongD];
-      const savedVolumes = toWarm.map(p => p.volume);
-      toWarm.forEach(p => { p.volume = 0; });
-      await Promise.all(toWarm.map(async (p) => {
-        try { await p.seekTo(0); } catch {}
-        safePlay(p, "warmup");
-      }));
-      await new Promise(r => setTimeout(r, 50));
-      await Promise.all(toWarm.map(async (p, i) => {
-        try { p.pause(); await p.seekTo(0); p.volume = savedVolumes[i]; } catch {}
-      }));
-    } catch {}
-  }, []);
 
   const stopRenderedAudio = useCallback(() => {
     renderGenerationRef.current += 1;
@@ -824,8 +830,10 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
     strongToggle,
     // Audio-session settings
     backgroundPlay,
+    playbackNotifications,
     autoResumeAfterInterruption,
     updateBackgroundPlay,
+    updatePlaybackNotifications,
     updateAutoResumeAfterInterruption,
     applyAudioSettings,
     // PCM / rendered-player refs
@@ -841,7 +849,6 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
     buildRenderedPlayer,
     scheduleReRender,
     stopRenderedAudio,
-    warmupAudioPlayers,
     getClickPCMs,
     getSamplePCMs,
     getLayerClickPCMsForSchedule,

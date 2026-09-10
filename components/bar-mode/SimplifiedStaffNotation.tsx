@@ -85,9 +85,9 @@ function NoteGlyph({
   noteValueDenominator: number;
   colors: BarModeColors;
 }) {
-  const stroke = active ? C.white : C.text;
-  const accent = active ? C.white : C.accent;
-  const muted = active ? C.white : C.textTertiary;
+  const stroke = C.accent;
+  const accent = C.accent;
+  const muted = C.accent;
   const opacity = active ? 1 : 0.92;
   const openNotehead = noteValueDenominator <= 2;
   const stemTop = grouped ? TUPLET_BEAM_Y : STAFF_TOP - 1;
@@ -206,7 +206,7 @@ function RhythmGroup({
           y1={TUPLET_BEAM_Y + beam * BEAM_GAP}
           x2={lastStem}
           y2={TUPLET_BEAM_Y + beam * BEAM_GAP}
-          stroke={C.textSecondary}
+          stroke={C.accent}
           strokeWidth={1.8}
           strokeLinecap="square"
         />
@@ -216,7 +216,7 @@ function RhythmGroup({
           testID="bar-rhythm-bracket"
           d={`M ${bracketFirst} ${TUPLET_BEAM_Y + 3} L ${bracketFirst} ${TUPLET_BEAM_Y} L ${bracketLast} ${TUPLET_BEAM_Y} L ${bracketLast} ${TUPLET_BEAM_Y + 3}`}
           fill="none"
-          stroke={C.textSecondary}
+          stroke={C.accent}
           strokeWidth={1}
         />
       )}
@@ -225,7 +225,7 @@ function RhythmGroup({
           testID={`bar-tuplet-number-${count}`}
           x={(noteX(0, count) + noteX(count - 1, count)) / 2}
           y={TUPLET_BEAM_Y - 1.3}
-          fill={C.text}
+          fill={C.accent}
           fontSize={6.2}
           fontWeight="700"
           textAnchor="middle"

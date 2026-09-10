@@ -73,7 +73,7 @@ export interface UseSettingsParams {
    * after the pipeline resolves.
    */
   applyAudioSettingsCallbackRef: React.MutableRefObject<
-    (s: Partial<{ backgroundPlay: boolean; autoResumeAfterInterruption: boolean }>) => void
+    (s: Partial<{ backgroundPlay: boolean; playbackNotifications: boolean; autoResumeAfterInterruption: boolean }>) => void
   >;
   /**
    * Called at the end of the settings-load .then() for any extra init that
@@ -156,13 +156,13 @@ export interface UseSettingsResult {
   persistAudioSettingsCallbackRef: React.MutableRefObject<PersistAudioSettingsFn>;
   /**
    * Call this every render (inline, after useAudioPipeline resolves) to keep
-   * the snapshot's cross-hook fields — backgroundPlay, autoResumeAfterInterruption,
+    * the snapshot's cross-hook fields — backgroundPlay, playbackNotifications, autoResumeAfterInterruption,
    * showLandscapeImage, landscapeContentType — current at flush time.
    */
   syncExternalSnapshot: (
     vals: Pick<
       MetronomeSettings,
-      "backgroundPlay" | "autoResumeAfterInterruption" | "showLandscapeImage" | "landscapeContentType"
+      "backgroundPlay" | "playbackNotifications" | "autoResumeAfterInterruption" | "showLandscapeImage" | "landscapeContentType"
     >
   ) => void;
   // ── Update callbacks ───────────────────────────────────────────────────────
@@ -246,9 +246,10 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
   // Values that live in other hooks but must appear in the snapshot.
   // syncExternalSnapshot() is called inline every render by useMetronomeScreen.
   const externalSnapshotRef = useRef<
-    Pick<MetronomeSettings, "backgroundPlay" | "autoResumeAfterInterruption" | "showLandscapeImage" | "landscapeContentType">
+    Pick<MetronomeSettings, "backgroundPlay" | "playbackNotifications" | "autoResumeAfterInterruption" | "showLandscapeImage" | "landscapeContentType">
   >({
     backgroundPlay: true,
+    playbackNotifications: false,
     autoResumeAfterInterruption: true,
     showLandscapeImage: true,
     landscapeContentType: "photo",
@@ -256,7 +257,7 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
 
   // Stable callback — just mutates the ref, no React state change.
   const syncExternalSnapshot = useCallback(
-    (vals: Pick<MetronomeSettings, "backgroundPlay" | "autoResumeAfterInterruption" | "showLandscapeImage" | "landscapeContentType">) => {
+    (vals: Pick<MetronomeSettings, "backgroundPlay" | "playbackNotifications" | "autoResumeAfterInterruption" | "showLandscapeImage" | "landscapeContentType">) => {
       externalSnapshotRef.current = vals;
     },
     [],
@@ -427,6 +428,7 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
       // useMetronomeScreen). The ref is populated by mount time (async .then).
       applyAudioSettingsCallbackRef.current({
         backgroundPlay: settings.backgroundPlay,
+        playbackNotifications: settings.playbackNotifications,
         autoResumeAfterInterruption: settings.autoResumeAfterInterruption,
       });
       if (settings.soundSet) {

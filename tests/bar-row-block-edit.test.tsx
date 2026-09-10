@@ -308,6 +308,9 @@ describe("SwipeableBarRow block editing", () => {
     expect(getByTestId("bar-tuplet-3")).toBeTruthy();
     expect(getByTestId("bar-tuplet-number-3").textContent).toBe("3");
     expect(getByTestId("bar-rhythm-beam-0")).toBeTruthy();
+    expect(getByTestId("bar-rhythm-beam-0").getAttribute("stroke")).toBe(colors.accent);
+    expect(getByTestId("bar-tuplet-number-3").getAttribute("fill")).toBe(colors.accent);
+    expect(getByTestId("bar-note-normal-0").querySelector("ellipse")?.getAttribute("stroke")).toBe(colors.accent);
   });
 
   it.each([

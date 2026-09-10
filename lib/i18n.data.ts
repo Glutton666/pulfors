@@ -117,6 +117,11 @@ export const translations = {
     timerStopHintEndCycle: { ko: "현재 마디가 끝나면 정지합니다", en: "Stops at the end of the current measure" },
     timerStopHintImmediate: { ko: "타이머가 끝나면 즉시 정지합니다", en: "Stops immediately when the timer ends" },
     backgroundPlay: { ko: "백그라운드 재생", en: "Background Play" },
+    playbackNotifications: { ko: "재생·정지 팝업", en: "Play/Pause Popup" },
+    playbackNotificationsHint: {
+      ko: "재생 및 정지 상태 알림을 화면에 표시합니다.",
+      en: "Shows playback status notifications when starting or stopping.",
+    },
     autoResumeAfterInterruption: { ko: "통화 후 자동 재개", en: "Auto-resume After Call" },
     autoResumeAfterInterruptionHint: {
       ko: "전화·Siri·알람이 끝나면 메트로놈을 자동으로 다시 시작합니다",

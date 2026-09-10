@@ -100,6 +100,7 @@ export function MetronomeScreenUI(props: Props) {
     showFadeOut, showBpmDetect, showPolygon,
     volume, updateVolume, sampleVolume, updateSampleVolume,
     backgroundPlay, updateBackgroundPlay,
+    playbackNotifications, updatePlaybackNotifications,
     autoResumeAfterInterruption, updateAutoResumeAfterInterruption,
     soundSet, updateSoundSet, previewSoundSet,
     layerSoundSets, setLayerSoundSets, layerSoundSetsRef,
@@ -864,6 +865,8 @@ export function MetronomeScreenUI(props: Props) {
         onSampleVolumeChange={updateSampleVolume}
         backgroundPlay={backgroundPlay}
         onBackgroundPlayChange={updateBackgroundPlay}
+        playbackNotifications={playbackNotifications}
+        onPlaybackNotificationsChange={updatePlaybackNotifications}
         autoResumeAfterInterruption={autoResumeAfterInterruption}
         onAutoResumeAfterInterruptionChange={updateAutoResumeAfterInterruption}
         soundSet={soundSet}

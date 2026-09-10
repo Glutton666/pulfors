@@ -117,6 +117,8 @@ const soundProps: Omit<React.ComponentProps<typeof SettingsSoundTab>, "scope"> =
   onTimerStopModeChange: jest.fn(),
   backgroundPlay: false,
   onBackgroundPlayChange: jest.fn(),
+  playbackNotifications: false,
+  onPlaybackNotificationsChange: jest.fn(),
   autoResumeAfterInterruption: true,
   onAutoResumeAfterInterruptionChange: jest.fn(),
   playSoundPreview: jest.fn(),
@@ -180,6 +182,14 @@ describe("theme settings scope visibility", () => {
 });
 
 describe("sound settings scope visibility", () => {
+  test("playback popup switch appears only in global settings", () => {
+    expect(renderSound("global").getByText("playbackNotifications")).toBeTruthy();
+    cleanup();
+    expect(renderSound("beat").queryByText("playbackNotifications")).toBeNull();
+    cleanup();
+    expect(renderSound("bar").queryByText("playbackNotifications")).toBeNull();
+  });
+
   test("sample volume is hidden globally and in note settings", () => {
     expect(renderSound("global").queryByText("sampleVolume")).toBeNull();
     cleanup();

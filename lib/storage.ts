@@ -190,6 +190,7 @@ export interface MetronomeSettings {
   volume?: number;
   sampleVolume?: number;
   backgroundPlay?: boolean;
+  playbackNotifications?: boolean;
   soundSet?: SoundSet;
   flashMode?: FlashMode;
   hapticMode?: HapticMode;
@@ -285,6 +286,7 @@ const DEFAULT_SETTINGS: MetronomeSettings = {
   volume: 0.8,
   sampleVolume: 0.8,
   backgroundPlay: true,
+  playbackNotifications: false,
   soundSet: "classic",
   flashMode: "accent",
   hapticMode: "all",

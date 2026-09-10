@@ -19,7 +19,6 @@ import * as ImagePicker from "expo-image-picker";
 import { ensurePermission } from "@/lib/permissions";
 import * as Linking from "expo-linking";
 import {
-  setupNotificationControls,
   showPlayingNotification,
   showPausedNotification,
   updateNotificationBpm,
@@ -671,14 +670,14 @@ export function useMetronomeScreen() {
     // Player pool (now owned by the pipeline)
     allPlayersRef, highToggle, lowToggle, strongToggle,
     // Audio-session settings (now owned by the pipeline)
-    backgroundPlay, autoResumeAfterInterruption,
-    updateBackgroundPlay, updateAutoResumeAfterInterruption, applyAudioSettings,
+    backgroundPlay, playbackNotifications, autoResumeAfterInterruption,
+    updateBackgroundPlay, updatePlaybackNotifications, updateAutoResumeAfterInterruption, applyAudioSettings,
     // PCM / rendered-player refs & functions
     renderedPlayerRef, samplePCMCacheRef, renderedUrlRef,
     webRenderedLoopRef, activateWebRenderedLoop, lastAudioFireRef,
     armAudioWatchdogRef, clearAudioWatchdogRef,
     samplePlayStateRef,
-    buildRenderedPlayer, scheduleReRender, stopRenderedAudio, warmupAudioPlayers,
+    buildRenderedPlayer, scheduleReRender, stopRenderedAudio,
     getClickPCMs, getSamplePCMs, getLayerClickPCMsForSchedule,
     invalidateSamplePCMCache, preloadNoteSampleSounds, clearSamplePlayStates,
     armAudioWatchdog, clearAudioWatchdog,
@@ -711,10 +710,15 @@ export function useMetronomeScreen() {
   applyAudioSettingsCallbackRef.current = applyAudioSettings;
   syncExternalSnapshot({
     backgroundPlay,
+    playbackNotifications,
     autoResumeAfterInterruption,
     showLandscapeImage,
     landscapeContentType,
   });
+
+  useEffect(() => {
+    if (!playbackNotifications) void dismissNotification();
+  }, [playbackNotifications]);
 
   // ── stopIfPlaying — explicit stop interface passed to useBarMode ──────────
   // Bundles engine.stop() + rendered-audio teardown + state reset so that
@@ -1240,12 +1244,6 @@ export function useMetronomeScreen() {
     AsyncStorage.getItem("metronome_subdivision_longpress_hint_v1").then((val) => {
       if (!val) setShowSubdivisionLongPressHint(true);
     });
-    setupNotificationControls();
-
-    setTimeout(() => {
-      warmupAudioPlayers().catch(() => {});
-    }, 500);
-
     return () => {
       engine.cleanup();
       if (renderedPlayerRef.current) {
@@ -1617,7 +1615,11 @@ export function useMetronomeScreen() {
       volumeRef.current = 0.5;
       setSampleVolume(0.8);
       sampleVolumeRef.current = 0.8;
-      applyAudioSettings({ backgroundPlay: true, autoResumeAfterInterruption: true });
+      applyAudioSettings({
+        backgroundPlay: true,
+        playbackNotifications: false,
+        autoResumeAfterInterruption: true,
+      });
       setSoundSet("classic");
       setFlashMode("accent");
       flashModeRef.current = "accent";
@@ -3871,6 +3873,8 @@ export function useMetronomeScreen() {
     updateSampleVolume,
     backgroundPlay,
     updateBackgroundPlay,
+    playbackNotifications,
+    updatePlaybackNotifications,
     autoResumeAfterInterruption,
     updateAutoResumeAfterInterruption,
     soundSet,

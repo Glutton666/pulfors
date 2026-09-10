@@ -146,6 +146,7 @@ describe("pre-rendered playback reliability", () => {
 
   afterEach(() => {
     (Platform as unknown as { OS: string }).OS = "ios";
+    jest.useRealTimers();
   });
 
   it("native builder renders note PCM with its volume, speed and channel metadata", async () => {

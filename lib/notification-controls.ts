@@ -6,6 +6,11 @@ import {
   requestForegroundPlayback,
   relinquishForegroundPlayback,
 } from "./android-foreground-service";
+import {
+  arePlaybackNotificationsEnabled,
+  getPlaybackNotificationsRevision,
+  setPlaybackNotificationsEnabled as setPlaybackNotificationsPreference,
+} from "./notification-preferences";
 
 const CATEGORY_ID = "metronome_controls";
 const NOTIFICATION_ID = "metronome_playback";
@@ -151,6 +156,8 @@ export async function showPlayingNotification(
   mode: string,
   lang: Language = "ko"
 ) {
+  if (!arePlaybackNotificationsEnabled()) return;
+  const preferenceRevision = getPlaybackNotificationsRevision();
   if (Platform.OS === "web") return;
   if (isExpoGo) return;
   if (!isSetup) {
@@ -171,6 +178,10 @@ export async function showPlayingNotification(
       CATEGORY_ID,
       buildNotificationActions(true, lang)
     );
+    if (
+      !arePlaybackNotificationsEnabled() ||
+      getPlaybackNotificationsRevision() !== preferenceRevision
+    ) return;
 
     await N.scheduleNotificationAsync({
       identifier: NOTIFICATION_ID,
@@ -188,11 +199,16 @@ export async function updateNotificationBpm(
   isPlaying: boolean = true,
   lang: Language = "ko"
 ) {
-  if (Platform.OS === "web" || !isSetup) return;
+  if (!arePlaybackNotificationsEnabled() || Platform.OS === "web" || !isSetup) return;
+  const preferenceRevision = getPlaybackNotificationsRevision();
   if (isExpoGo) return;
 
   const N = await getNotifications();
   if (!N) return;
+  if (
+    !arePlaybackNotificationsEnabled() ||
+    getPlaybackNotificationsRevision() !== preferenceRevision
+  ) return;
 
   try {
     await N.scheduleNotificationAsync({
@@ -210,13 +226,17 @@ export async function showPausedNotification(
   mode: string,
   lang: Language = "ko"
 ) {
-  if (Platform.OS === "web" || !isSetup) return;
-  if (isExpoGo) return;
-
   // Android: 메트로놈이 정지되면 포그라운드 서비스 상태를 초기화합니다.
   // AudioPlayer가 정지되면 AudioControlsService가 자동으로 stopForeground()를
   // 호출하므로 JS 레벨 상태만 초기화합니다.
   relinquishForegroundPlayback();
+  if (!arePlaybackNotificationsEnabled()) {
+    await dismissNotification();
+    return;
+  }
+  if (Platform.OS === "web" || !isSetup) return;
+  if (isExpoGo) return;
+  const preferenceRevision = getPlaybackNotificationsRevision();
 
   const N = await getNotifications();
   if (!N) return;
@@ -226,6 +246,10 @@ export async function showPausedNotification(
       CATEGORY_ID,
       buildNotificationActions(false, lang)
     );
+    if (
+      !arePlaybackNotificationsEnabled() ||
+      getPlaybackNotificationsRevision() !== preferenceRevision
+    ) return;
 
     await N.scheduleNotificationAsync({
       identifier: NOTIFICATION_ID,
@@ -249,6 +273,11 @@ export async function dismissNotification() {
   } catch (e) {
     logger.warn("Dismiss notification error:", e);
   }
+}
+
+export function setPlaybackNotificationsEnabled(enabled: boolean): void {
+  setPlaybackNotificationsPreference(enabled);
+  if (!enabled) void dismissNotification();
 }
 
 export function addNotificationActionListener(

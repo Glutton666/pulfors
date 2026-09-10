@@ -48,3 +48,5 @@
 - [Single-cell subdivision restore](single-cell-subdivision-restore.md) — bulk-restored one-cell patterns are legacy residue, not subdivisions; ignore them or they invisibly override visible beat types.
 - [Random Bar block units](random-bar-block-units.md) — random Bar sessions select top-level blocks or lone bars; snapshot block structure and keep crossing blocks intact at end markers.
 - [Bar staff rhythm notation](bar-staff-rhythm-notation.md) — derive note value from the lower power-of-two subdivision bucket; duration affects notehead fill as well as beams.
+- [Audio warm-up isolation](audio-warmup-isolation.md) — never mute/play shared click pools on a delayed timer; it can race both realtime and rendered playback startup.
+- [Notification preference races](notification-preference-races.md) — disabling a notification needs an epoch check before every async publish, not only an initial enabled guard.

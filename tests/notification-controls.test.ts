@@ -7,6 +7,7 @@ const mockSetNotificationChannelAsync = jest.fn();
 const mockDeleteNotificationChannelAsync = jest.fn();
 const mockSetNotificationCategoryAsync = jest.fn();
 const mockScheduleNotificationAsync = jest.fn();
+const mockDismissNotificationAsync = jest.fn();
 const mockGetLastNotificationResponseAsync = jest.fn();
 const mockAddNotificationResponseReceivedListener = jest.fn();
 
@@ -26,6 +27,7 @@ jest.mock("expo-notifications", () => ({
   deleteNotificationChannelAsync: mockDeleteNotificationChannelAsync,
   setNotificationCategoryAsync: mockSetNotificationCategoryAsync,
   scheduleNotificationAsync: mockScheduleNotificationAsync,
+  dismissNotificationAsync: mockDismissNotificationAsync,
   getLastNotificationResponseAsync: mockGetLastNotificationResponseAsync,
   addNotificationResponseReceivedListener: mockAddNotificationResponseReceivedListener,
   AndroidImportance: { MAX: "max" },
@@ -35,6 +37,8 @@ jest.mock("expo-notifications", () => ({
 import {
   addNotificationActionListener,
   buildNotificationActions,
+  setPlaybackNotificationsEnabled,
+  showPlayingNotification,
   setupNotificationControls,
 } from "../lib/notification-controls";
 
@@ -42,6 +46,7 @@ let liveResponseListener: ((response: { actionIdentifier: string }) => void) | n
 
 beforeEach(() => {
   jest.clearAllMocks();
+  setPlaybackNotificationsEnabled(false);
   mockRequestPermissionsAsync.mockResolvedValue({ status: "granted" });
   mockDeleteNotificationChannelAsync.mockResolvedValue(undefined);
   mockSetNotificationChannelAsync.mockResolvedValue(undefined);
@@ -78,6 +83,42 @@ test("notification category registration preserves action options", async () => 
   assert.equal(byId.BPM_UP.options.opensAppToForeground, false);
   assert.equal(byId.BPM_DOWN.options.opensAppToForeground, false);
   assert.equal(byId.TOGGLE_PLAY.options.opensAppToForeground, false);
+});
+
+test("playback popup stays disabled until the user enables it", async () => {
+  await setupNotificationControls("en");
+  mockScheduleNotificationAsync.mockClear();
+
+  await showPlayingNotification(120, "Beat", "en");
+  assert.equal(mockScheduleNotificationAsync.mock.calls.length, 0);
+
+  setPlaybackNotificationsEnabled(true);
+  await showPlayingNotification(120, "Beat", "en");
+  assert.equal(mockScheduleNotificationAsync.mock.calls.length, 1);
+
+  setPlaybackNotificationsEnabled(false);
+  await Promise.resolve();
+  assert.ok(mockDismissNotificationAsync.mock.calls.length >= 1);
+});
+
+test("disabling while a popup is being prepared prevents the stale popup", async () => {
+  await setupNotificationControls("en");
+  mockScheduleNotificationAsync.mockClear();
+  setPlaybackNotificationsEnabled(true);
+
+  let finishCategory!: () => void;
+  mockSetNotificationCategoryAsync.mockImplementationOnce(
+    () => new Promise<void>((resolve) => { finishCategory = resolve; }),
+  );
+  const showing = showPlayingNotification(120, "Beat", "en");
+  await Promise.resolve();
+  await Promise.resolve();
+
+  setPlaybackNotificationsEnabled(false);
+  finishCategory();
+  await showing;
+
+  assert.equal(mockScheduleNotificationAsync.mock.calls.length, 0);
 });
 
 test("live notification responses dispatch supported actions without changing the listener flow", async () => {

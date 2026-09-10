@@ -53,6 +53,8 @@ interface SettingsSoundTabProps {
   onTimerStopModeChange: (value: "immediate" | "end-of-cycle") => void;
   backgroundPlay: boolean;
   onBackgroundPlayChange: (value: boolean) => void;
+  playbackNotifications: boolean;
+  onPlaybackNotificationsChange: (value: boolean) => void;
   autoResumeAfterInterruption: boolean;
   onAutoResumeAfterInterruptionChange: (value: boolean) => void;
   playSoundPreview: (set: SoundSet) => void;
@@ -77,6 +79,8 @@ export function SettingsSoundTab({
   onTimerStopModeChange,
   backgroundPlay,
   onBackgroundPlayChange,
+  playbackNotifications,
+  onPlaybackNotificationsChange,
   autoResumeAfterInterruption,
   onAutoResumeAfterInterruptionChange,
   playSoundPreview,
@@ -880,6 +884,24 @@ export function SettingsSoundTab({
             style={{ transform: [{ scale: 0.85 }] }}
           />
         </View>
+      </View>
+
+      <View style={[styles.divider, { backgroundColor: C.border }]} />
+
+      {/* Playback notification popup */}
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Ionicons name="notifications-outline" size={S.ms(18, 0.4)} color={C.accent} />
+          <Text style={[styles.sectionLabel, { color: C.text }]}>{t("settings", "playbackNotifications")}</Text>
+          <Switch
+            value={playbackNotifications}
+            onValueChange={onPlaybackNotificationsChange}
+            trackColor={{ false: C.surfaceLight, true: C.accentMuted }}
+            thumbColor={playbackNotifications ? C.accent : C.textSecondary}
+            style={{ transform: [{ scale: 0.85 }] }}
+          />
+        </View>
+        <Text style={[styles.offsetHint, { color: C.textTertiary }]}>{t("settings", "playbackNotificationsHint")}</Text>
       </View>
 
       <View style={[styles.divider, { backgroundColor: C.border }]} />
