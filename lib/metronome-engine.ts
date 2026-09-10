@@ -713,10 +713,7 @@ export class MetronomeEngine {
     const processOuterCached = (outerIdx: number) =>
       pureProcessOuterCached(inputs, state, durCache, jumpProcessed, cacheHandle, outerIdx);
 
-    if (
-      this.blockPlayMode === "random" &&
-      (this.randomBarOrder?.length || sortedBlocks.length === 0)
-    ) {
+    if (this.blockPlayMode === "random" && this.randomBarOrder?.length) {
       let candidateCount = this.beatsPerMeasure;
       for (let beat = 0; beat < this.beatsPerMeasure; beat++) {
         if (inputs.barRepeats.get(beat)?.isEnd) {
@@ -724,25 +721,31 @@ export class MetronomeEngine {
           break;
         }
       }
-      const suppliedOrder = this.randomBarOrder?.filter(beat => beat < candidateCount);
-      const shuffledBeats = suppliedOrder?.length
-        ? suppliedOrder
-        : Array.from({ length: candidateCount }, (_, beat) => beat);
-      if (!suppliedOrder?.length) {
-        for (let i = shuffledBeats.length - 1; i > 0; i--) {
-          const j = Math.floor(Math.random() * (i + 1));
-          [shuffledBeats[i], shuffledBeats[j]] = [shuffledBeats[j], shuffledBeats[i]];
-        }
-      }
-      for (let sequenceIndex = 0; sequenceIndex < shuffledBeats.length; sequenceIndex += 1) {
-        const beat = shuffledBeats[sequenceIndex];
+      const suppliedOrder = this.randomBarOrder.filter(beat => beat < candidateCount);
+      for (let sequenceIndex = 0; sequenceIndex < suppliedOrder.length; sequenceIndex += 1) {
+        const beat = suppliedOrder[sequenceIndex];
         const firstTick = state.ticks.length;
-        pureAddBarWithRepeat(inputs, state, beat, 0, -1, 1);
+        const outerIdx = sortedBlocks.findIndex((block, index) => {
+          if (block.layerOf !== undefined || block.startBeat !== beat) return false;
+          return !sortedBlocks.some((other, otherIndex) =>
+            otherIndex !== index &&
+            other.layerOf === undefined &&
+            other.startBeat <= block.startBeat &&
+            other.endBeat >= block.endBeat &&
+            (other.startBeat < block.startBeat || other.endBeat > block.endBeat)
+          );
+        });
+        if (outerIdx >= 0) {
+          jumpProcessed.clear();
+          processOuterCached(outerIdx);
+        } else {
+          pureAddBarWithRepeat(inputs, state, beat, 0, -1, 1);
+        }
         for (let tickIndex = firstTick; tickIndex < state.ticks.length; tickIndex += 1) {
           state.ticks[tickIndex].randomSequenceIndex = sequenceIndex;
         }
       }
-    } else if (this.blockPlayMode === "random" && sortedBlocks.length >= 2) {
+    } else if (this.blockPlayMode === "random") {
       const outerBlocks: number[] = [];
       for (let idx = 0; idx < sortedBlocks.length; idx++) {
         const blk = sortedBlocks[idx];
@@ -752,11 +755,45 @@ export class MetronomeEngine {
         );
         if (!isNested) outerBlocks.push(idx);
       }
-      if (outerBlocks.length >= 2) {
-        const randomIdx = outerBlocks[Math.floor(Math.random() * outerBlocks.length)];
-        processOuterCached(randomIdx);
+      const covered = new Set<number>();
+      outerBlocks.forEach(index => {
+        const block = sortedBlocks[index];
+        for (let beat = block.startBeat; beat <= Math.min(block.endBeat, this.beatsPerMeasure - 1); beat += 1) {
+          covered.add(beat);
+        }
+      });
+      const units: Array<{ beat: number; outerIdx?: number }> = [
+        ...outerBlocks.map(outerIdx => ({ beat: sortedBlocks[outerIdx].startBeat, outerIdx })),
+        ...Array.from({ length: this.beatsPerMeasure }, (_, beat) => beat)
+          .filter(beat => !covered.has(beat))
+          .map(beat => ({ beat })),
+      ].sort((a, b) => a.beat - b.beat);
+      if (outerBlocks.length === 0) {
+        let candidateCount = this.beatsPerMeasure;
+        for (let beat = 0; beat < this.beatsPerMeasure; beat += 1) {
+          if (inputs.barRepeats.get(beat)?.isEnd) {
+            candidateCount = beat + 1;
+            break;
+          }
+        }
+        const shuffledBeats = Array.from({ length: candidateCount }, (_, beat) => beat);
+        for (let index = shuffledBeats.length - 1; index > 0; index -= 1) {
+          const swap = Math.floor(Math.random() * (index + 1));
+          [shuffledBeats[index], shuffledBeats[swap]] = [shuffledBeats[swap], shuffledBeats[index]];
+        }
+        shuffledBeats.forEach((beat, sequenceIndex) => {
+          const firstTick = state.ticks.length;
+          pureAddBarWithRepeat(inputs, state, beat, 0, -1, 1);
+          for (let tickIndex = firstTick; tickIndex < state.ticks.length; tickIndex += 1) {
+            state.ticks[tickIndex].randomSequenceIndex = sequenceIndex;
+          }
+        });
+      } else if (units.length > 0) {
+        const unit = units[Math.floor(Math.random() * units.length)];
+        if (unit.outerIdx !== undefined) processOuterCached(unit.outerIdx);
+        else pureAddBarWithRepeat(inputs, state, unit.beat, 0, -1, 1);
       } else {
-        processOuterCached(outerBlocks[0] ?? 0);
+        pureAddBarWithRepeat(inputs, state, 0, 0, -1, 1);
       }
     } else {
       const processed = new Set<number>();

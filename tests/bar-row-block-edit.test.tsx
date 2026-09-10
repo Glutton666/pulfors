@@ -2,7 +2,10 @@
 import React from "react";
 import { fireEvent, render } from "@testing-library/react";
 
-import { SwipeableBarRow } from "@/components/bar-mode/SwipeableBarRow";
+import {
+  getBarRightRailLayout,
+  SwipeableBarRow,
+} from "@/components/bar-mode/SwipeableBarRow";
 
 jest.mock("@expo/vector-icons", () => ({
   Ionicons: () => null,
@@ -306,5 +309,47 @@ describe("SwipeableBarRow block editing", () => {
     expect(
       getByTestId("bar-tuplet-3").querySelector('line[stroke-width="2.2"]'),
     ).toBeTruthy();
+  });
+
+  it("reserves separate right-side rails for block repeat text and the end marker", () => {
+    const { getByTestId, getByText } = render(
+      <SwipeableBarRow
+        beat={1}
+        beatType="normal"
+        subdivisions={["normal", "normal", "normal"]}
+        repeat={null}
+        isCurrentBeat={false}
+        isEditingBeat={false}
+        blockDepth={1}
+        blockStart={false}
+        blockEnd
+        blockRepeatText="×12"
+        symbolBadges={[]}
+        isPlaying={false}
+        bpm={71}
+        meterNumerator={3}
+        meterDenominator={4}
+        beatsPerMeasure={3}
+        onPress={jest.fn()}
+        onSwipeLeft={jest.fn()}
+        onSwipeRight={jest.fn()}
+        onLongPress={jest.fn()}
+        colors={colors}
+        ms={(value) => value}
+        showStaffNotation
+      />,
+    );
+
+    expect(getByTestId("bar-block-repeat-1")).toBeTruthy();
+    expect(getByTestId("bar-block-end-marker-1")).toBeTruthy();
+    expect(getBarRightRailLayout(true, "×12")).toEqual({
+      blockEndWidth: 10,
+      blockRepeatWidth: 28,
+      blockRightInset: 38,
+      infoRight: 40,
+    });
+    expect(getByText("×12")).toBeTruthy();
+    expect(getByText("3/4")).toBeTruthy();
+    expect(getByText("71")).toBeTruthy();
   });
 });

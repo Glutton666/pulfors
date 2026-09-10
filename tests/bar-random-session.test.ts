@@ -2,7 +2,9 @@ import {
   appendBarRandomItems,
   appendBarRandomPlaybackChunk,
   buildBarRandomDisplayItems,
+  buildBarRandomSourceIndexes,
   createBarRandomSession,
+  getBarRandomCandidateCount,
   replayBarRandomSession,
 } from "../lib/bar-random-session";
 
@@ -82,14 +84,86 @@ describe("bar random session", () => {
     expect(chunk).toEqual([1, 1, 1, 1]);
   });
 
+  it("selects top-level blocks and ungrouped bars as equal random units", () => {
+    const sourceIndexes = buildBarRandomSourceIndexes(6, [
+      { startBeat: 1, endBeat: 3 },
+      { startBeat: 2, endBeat: 2 },
+    ]);
+    expect(sourceIndexes).toEqual([0, 1, 4, 5]);
+    const session = createBarRandomSession(6, sourceIndexes);
+    expect(appendBarRandomPlaybackChunk(
+      session,
+      3,
+      true,
+      { strategy: "independent", bundleSize: 2, bundleRepeats: 2 },
+      () => 0.3,
+    )).toEqual([1, 1, 1]);
+  });
+
+  it("excludes bars and clips blocks after the first end marker", () => {
+    const candidateCount = getBarRandomCandidateCount(7, {
+      4: { isEnd: true },
+    });
+    const blocks = [{ startBeat: 3, endBeat: 6 }];
+    const eligibleBlocks = blocks.filter(block => block.startBeat < candidateCount);
+    expect(candidateCount).toBe(5);
+    expect(eligibleBlocks).toEqual([{ startBeat: 3, endBeat: 6 }]);
+    expect(buildBarRandomSourceIndexes(7, eligibleBlocks, candidateCount)).toEqual([0, 1, 2, 3]);
+  });
+
+  it("uses the session block snapshot when the live block list later changes", () => {
+    const session = createBarRandomSession(
+      5,
+      [1, 4],
+      [{ startBeat: 1, endBeat: 3 }],
+    );
+    session.order = [1];
+    const items = buildBarRandomDisplayItems(
+      5,
+      session,
+      [{ startBeat: 1, endBeat: 1 }],
+    );
+    expect(items.map(item => item.sourceBeat)).toEqual([1, 2, 3]);
+  });
+
+  it("keeps the complete block snapshot while limiting selectable units at an end marker", () => {
+    const sourceCount = 8;
+    const blocks = [
+      { startBeat: 2, endBeat: 5, type: "count" as const, value: 2 },
+      { startBeat: 3, endBeat: 4, type: "count" as const, value: 2 },
+      { startBeat: 6, endBeat: 7, type: "count" as const, value: 3 },
+    ];
+    const candidateCount = getBarRandomCandidateCount(sourceCount, { 4: { isEnd: true } });
+    const selectableBlocks = blocks.filter(block => block.startBeat < candidateCount);
+    const session = createBarRandomSession(
+      sourceCount,
+      buildBarRandomSourceIndexes(sourceCount, selectableBlocks, candidateCount),
+      blocks,
+    );
+
+    expect(session.sourceIndexes).toEqual([0, 1, 2]);
+    expect(session.loopBlocks).toEqual(blocks);
+  });
+
+  it("expands a selected block for display while retaining its random unit index", () => {
+    const session = createBarRandomSession(5, [0, 1, 4]);
+    session.order = [1, 4];
+    expect(buildBarRandomDisplayItems(5, session, [{ startBeat: 1, endBeat: 3 }])).toEqual([
+      { key: "random-0-1", displayBeat: 0, sourceBeat: 1, isRandom: true, randomSequenceIndex: 0 },
+      { key: "random-0-2", displayBeat: 1, sourceBeat: 2, isRandom: true, randomSequenceIndex: 0 },
+      { key: "random-0-3", displayBeat: 2, sourceBeat: 3, isRandom: true, randomSequenceIndex: 0 },
+      { key: "random-1-4", displayBeat: 3, sourceBeat: 4, isRandom: true, randomSequenceIndex: 1 },
+    ]);
+  });
+
   it("overlays the generated order as numbered vertical rows without changing source indexes", () => {
     const session = createBarRandomSession(3);
     session.order = [2, 0, 2, 1];
     expect(buildBarRandomDisplayItems(3, session)).toEqual([
-      { key: "random-0-2", displayBeat: 0, sourceBeat: 2, isRandom: true },
-      { key: "random-1-0", displayBeat: 1, sourceBeat: 0, isRandom: true },
-      { key: "random-2-2", displayBeat: 2, sourceBeat: 2, isRandom: true },
-      { key: "random-3-1", displayBeat: 3, sourceBeat: 1, isRandom: true },
+      { key: "random-0-2", displayBeat: 0, sourceBeat: 2, isRandom: true, randomSequenceIndex: 0 },
+      { key: "random-1-0", displayBeat: 1, sourceBeat: 0, isRandom: true, randomSequenceIndex: 1 },
+      { key: "random-2-2", displayBeat: 2, sourceBeat: 2, isRandom: true, randomSequenceIndex: 2 },
+      { key: "random-3-1", displayBeat: 3, sourceBeat: 1, isRandom: true, randomSequenceIndex: 3 },
     ]);
   });
 

@@ -59,6 +59,17 @@ export interface SwipeableBarRowProps {
   sampleCellCoverage?: Array<SampleCellCoverage | undefined>;
 }
 
+export function getBarRightRailLayout(blockEnd: boolean, blockRepeatText?: string | null) {
+  const blockEndWidth = blockEnd ? 10 : 0;
+  const blockRepeatWidth = blockRepeatText ? 28 : 0;
+  return {
+    blockEndWidth,
+    blockRepeatWidth,
+    blockRightInset: blockEndWidth + blockRepeatWidth,
+    infoRight: 2 + blockEndWidth + blockRepeatWidth,
+  };
+}
+
 export function SwipeableBarRow({
   beat, beatType, subdivisions, repeat, isCurrentBeat, isEditingBeat,
   activeSubNote = -1,
@@ -132,6 +143,12 @@ export function SwipeableBarRow({
   }), [isPlaying, beat, onDragStart, onDragMove, onDragEnd, onPress]);
 
   const cells: BeatType[] = subdivisions.length > 0 ? subdivisions : [beatType];
+  const {
+    blockEndWidth,
+    blockRepeatWidth,
+    blockRightInset,
+    infoRight,
+  } = getBarRightRailLayout(blockEnd, blockRepeatText);
 
   const rowTransform = dragTranslateY
     ? [{ translateX }, { translateY: dragTranslateY }]
@@ -222,7 +239,7 @@ export function SwipeableBarRow({
                   activeSubNote={activeSubNote}
                   isCurrentBeat={isCurrentBeat}
                   colors={C}
-                  rightInset={54}
+                  rightInset={54 + blockRightInset}
                 />
               )}
             {cells.map((ct, ci) => {
@@ -341,7 +358,7 @@ export function SwipeableBarRow({
             </View>
 
             {/* 오른쪽 고정 2단 박자/템포 정보 */}
-            <View style={styles.barCellOverlay} pointerEvents="none">
+            <View style={[styles.barCellOverlay, { right: infoRight }]} pointerEvents="none">
               <Text
                 style={[styles.barCenterInfo, {
                   color: isCurrentBeat ? C.accent : C.text,
@@ -385,6 +402,7 @@ export function SwipeableBarRow({
             {/* 우측 블록 끝 괄호 */}
             {blockEnd && (
               <View
+                testID={`bar-block-end-marker-${beat}`}
                 style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: 10, alignItems: "center", justifyContent: "center" }}
                 pointerEvents="none"
               >
@@ -395,7 +413,17 @@ export function SwipeableBarRow({
             {/* 반복 횟수 뱃지 (×N) */}
             {blockRepeatText && (
               <View
-                style={{ position: "absolute", right: blockEnd ? 10 : 4, top: 2 }}
+                testID={`bar-block-repeat-${beat}`}
+                style={{
+                  position: "absolute",
+                  right: blockEndWidth,
+                  top: 0,
+                  bottom: 0,
+                  width: blockRepeatWidth,
+                  alignItems: "center",
+                  justifyContent: "flex-start",
+                  paddingTop: 2,
+                }}
                 pointerEvents="none"
               >
                 <Text style={{ fontSize: ms(9, 0.4), color: C.accent, fontFamily: "SpaceGrotesk_700Bold", opacity: 0.9 }}>{blockRepeatText}</Text>

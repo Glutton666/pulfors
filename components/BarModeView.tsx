@@ -248,10 +248,14 @@ export function BarModeView({
   // ─── Auto-scroll while playing ────────────────────────────────────────────
 
   const showingRandomList = Boolean(randomBarSession?.active && randomBarSession.order.length > 0);
+  const barListItems = useMemo(
+    () => buildBarRandomDisplayItems(beatsPerMeasure, randomBarSession, loopBlocks),
+    [beatsPerMeasure, randomBarSession, loopBlocks],
+  );
   const activeListIndex = showingRandomList
-    ? Math.max(0, Math.min(
-      (randomBarSession?.order.length ?? 1) - 1,
-      randomBarSession?.cursor ?? 0,
+    ? Math.max(0, barListItems.findIndex(item =>
+      item.randomSequenceIndex === randomBarSession?.cursor &&
+      item.sourceBeat === currentBeat
     ))
     : currentBeat;
 
@@ -496,11 +500,6 @@ export function BarModeView({
 
   // ─── Render ───────────────────────────────────────────────────────────────
 
-  const barListItems = useMemo(
-    () => buildBarRandomDisplayItems(beatsPerMeasure, randomBarSession),
-    [beatsPerMeasure, randomBarSession],
-  );
-
   return (
     <View style={{ flex: 1, backgroundColor: C.background }} testID="beat-indicator-bar-mode">
 
@@ -565,7 +564,7 @@ export function BarModeView({
           const bType = beatTypes[sourceBeat] || "normal";
           const subs = beatSubdivisions[String(sourceBeat)] ?? [];
           const rep = barRepeats[sourceBeat] ?? null;
-          const blockEntries = isRandom ? [] : (blockForBeat.get(sourceBeat) ?? []);
+          const blockEntries = blockForBeat.get(sourceBeat) ?? [];
           const maxDepth = blockEntries.length > 0 ? Math.max(...blockEntries.map(e => e.depth)) : 0;
           const blockStart = blockEntries.some(e => e.isStart);
           const blockEnd = blockEntries.some(e => e.isEnd);
@@ -592,7 +591,7 @@ export function BarModeView({
           const badges = getSymbolBadges(sourceBeat);
           const isCurrent = isPlaying && (
             isRandom
-              ? randomBarSession?.cursor === beat
+              ? item.randomSequenceIndex === randomBarSession?.cursor && currentBeat === sourceBeat
               : currentBeat === sourceBeat
           );
           const isEditing = !isRandom && barStartBeat === sourceBeat && !isPlaying;

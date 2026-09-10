@@ -53,8 +53,10 @@ import { MetronomeEngine, soundSets, toEngineBpm } from "@/lib/metronome-engine"
 import type { BeatType, ProgressInfo } from "@/lib/metronome-engine";
 import {
   appendBarRandomPlaybackChunk,
+  buildBarRandomSourceIndexes,
   createBarRandomSession,
   DEFAULT_BAR_RANDOM_CONFIG,
+  getBarRandomCandidateCount,
   type BarRandomConfig,
   type BarRandomSession,
 } from "@/lib/bar-random-session";
@@ -1918,7 +1920,17 @@ export function useMetronomeScreen() {
     ) return;
     const sourceCount = barConfigRef.current.beatsPerMeasure;
     if (sourceCount <= 0) return;
-    const session = createBarRandomSession(sourceCount);
+    const candidateCount = getBarRandomCandidateCount(
+      sourceCount,
+      barConfigRef.current.barRepeats,
+    );
+    const eligibleBlocks = barConfigRef.current.loopBlocks
+      .filter(block => block.startBeat < candidateCount);
+    const session = createBarRandomSession(
+      sourceCount,
+      buildBarRandomSourceIndexes(sourceCount, eligibleBlocks, candidateCount),
+      barConfigRef.current.loopBlocks,
+    );
     const repeatEnabled = barLoopModeRef.current === "loop";
     const chunkLength = repeatEnabled
       ? Math.max(2, randomBarViewportCapacityRef.current * 2)
@@ -2007,6 +2019,13 @@ export function useMetronomeScreen() {
   const handleReplayRandomBarSession = useCallback(() => {
     const previous = randomBarSessionRef.current;
     if (!previous || previous.order.length === 0 || isPlaying || isPreparing) return;
+    if (
+      previous.loopBlocks &&
+      JSON.stringify(previous.loopBlocks) !== JSON.stringify(barConfigRef.current.loopBlocks)
+    ) {
+      updateRandomBarSession(null);
+      return;
+    }
     const session = {
       ...previous,
       order: [...previous.order],
@@ -2036,6 +2055,10 @@ export function useMetronomeScreen() {
   const handleSaveRandomBarSession = useCallback(async (): Promise<boolean> => {
     const session = randomBarSessionRef.current;
     if (!session?.order.length) return false;
+    if (
+      session.loopBlocks &&
+      JSON.stringify(session.loopBlocks) !== JSON.stringify(barConfigRef.current.loopBlocks)
+    ) return false;
     try {
       const source = barConfigRef.current;
       const now = new Date();
@@ -2048,7 +2071,9 @@ export function useMetronomeScreen() {
           beatTypes: [...source.beatTypes],
           beatSubdivisions: { ...source.beatSubdivisions },
           barRepeats: { ...source.barRepeats },
-          loopBlocks: [...source.loopBlocks],
+          loopBlocks: session.loopBlocks
+            ? session.loopBlocks.map(block => ({ ...block })) as typeof source.loopBlocks
+            : [...source.loopBlocks],
           blockPlayMode: "random",
           randomBarOrder: [...session.order],
           barLoopMode: "once",
@@ -2083,7 +2108,25 @@ export function useMetronomeScreen() {
     const session = randomBarSessionRef.current;
     if (!session?.order.length || isPlaying || isPreparing) return;
     const sourceCount = barConfigRef.current.beatsPerMeasure;
-    const uniqueOrder = Array.from(new Set(session.order))
+    const randomUnits = new Set(buildBarRandomSourceIndexes(
+      sourceCount,
+      barConfigRef.current.loopBlocks,
+    ));
+    const topLevelByStart = new Map<number, typeof barConfigRef.current.loopBlocks[number]>();
+    barConfigRef.current.loopBlocks.forEach(block => {
+      if (block.layerOf !== undefined || !randomUnits.has(block.startBeat)) return;
+      const existing = topLevelByStart.get(block.startBeat);
+      if (!existing || block.endBeat > existing.endBeat) topLevelByStart.set(block.startBeat, block);
+    });
+    const expandedOrder = session.order.flatMap(index => {
+      const block = topLevelByStart.get(index);
+      if (!block) return [index];
+      return Array.from(
+        { length: Math.min(sourceCount - 1, block.endBeat) - index + 1 },
+        (_, offset) => index + offset,
+      );
+    });
+    const uniqueOrder = Array.from(new Set(expandedOrder))
       .filter(index => index >= 0 && index < sourceCount);
     for (let index = 0; index < sourceCount; index += 1) {
       if (!uniqueOrder.includes(index)) uniqueOrder.push(index);

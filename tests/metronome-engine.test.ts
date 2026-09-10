@@ -34,6 +34,30 @@ test("getCurrentBeat는 시작 전 0을 반환한다", () => {
   assert.equal(engine.getCurrentBeat(), 0);
 });
 
+test("randomBarOrder에서 같은 블록을 연속 선택해도 블록 내부 순서와 반복을 유지한다", () => {
+  const engine = new MetronomeEngine();
+  engine.setBpm(120);
+  engine.setBeatsPerMeasure(5);
+  engine.setBeatTypes(["strong", "accent", "normal", "normal", "normal"]);
+  engine.setLoopBlocks([
+    { startBeat: 1, endBeat: 3, type: "count", value: 2 },
+    { startBeat: 2, endBeat: 2, type: "count", value: 2 },
+  ]);
+  engine.setRandomBarOrder([1, 1, 4]);
+  engine.setBlockPlayMode("random");
+
+  const mainTicks = engine.getScheduleInfo().ticks.filter(tick => tick.isMainBeat);
+  const bySelection = new Map<number, number[]>();
+  mainTicks.forEach(tick => {
+    const selection = tick.randomSequenceIndex ?? -1;
+    bySelection.set(selection, [...(bySelection.get(selection) ?? []), tick.beat]);
+  });
+
+  assert.deepEqual(bySelection.get(0), [1, 2, 2, 3, 1, 2, 2, 3]);
+  assert.deepEqual(bySelection.get(1), [1, 2, 2, 3, 1, 2, 2, 3]);
+  assert.deepEqual(bySelection.get(2), [4]);
+});
+
 test("setOnBeat 콜백 등록은 throw하지 않는다", () => {
   const engine = new MetronomeEngine();
   engine.setOnBeat(() => {});
