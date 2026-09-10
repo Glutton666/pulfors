@@ -109,6 +109,7 @@ import { useStageMode } from "@/hooks/useStageMode";
 import { useBeatTypeControls } from "@/hooks/useBeatTypeControls";
 import { applySwitchToMode, type ModeSwitchState, type ModeSwitchCallbacks } from "@/lib/stage-mode-logic";
 import { findBeatStaffCellTarget, type BeatStaffCellRects } from "@/lib/beat-staff-logic";
+import { useBeatStaffControls } from "@/hooks/useBeatStaffControls";
 import { createDebouncedPersister, type DebouncedPersister } from "@/lib/persist";
 import { createRafBatcher } from "@/lib/raf-batcher";
 import type { ModeSlot } from "@/components/ModeSwitcherDial";
@@ -1809,30 +1810,10 @@ export function useMetronomeScreen() {
     scheduleReRender,
   });
 
-  const handleBeatStaffDelete = useCallback((index: number) => {
-    if (index < 0 || index >= beatTypes.length || beatTypes.length <= 1) return;
-    const nextTypes = beatTypes.filter((_, i) => i !== index);
-    const nextSubs: Record<string, BeatType[]> = {};
-    Object.entries(beatSubdivisions).forEach(([key, value]) => {
-      const old = Number(key);
-      if (old < index) nextSubs[key] = value;
-      else if (old > index) nextSubs[String(old - 1)] = value;
-    });
-    setBeatsPerMeasure(nextTypes.length);
-    setBeatTypes(nextTypes);
-    setBeatSubdivisions(nextSubs);
-    engineRef.current?.setBeatsPerMeasure(nextTypes.length);
-    engineRef.current?.setBeatTypes(nextTypes);
-    engineRef.current?.setAllBeatSubdivisions(nextSubs);
-    dialConfigRef.current.beatsPerMeasure = nextTypes.length;
-    dialConfigRef.current.beatTypes = nextTypes;
-    dialConfigRef.current.beatSubdivisions = nextSubs;
-    persistSettings({
-      beatsPerMeasure: nextTypes.length,
-      beatSubdivisions: nextSubs,
-    });
-    scheduleReRender();
-  }, [beatTypes, beatSubdivisions, persistSettings, scheduleReRender]);
+  const { handleBeatStaffDelete, applyBeatStaffSubdivision } = useBeatStaffControls({
+    engineRef, barModeRef, barConfigRef, dialConfigRef, beatTypes, beatSubdivisions,
+    setBeatsPerMeasure, setBeatTypes, setBeatSubdivisions, persistSettings, scheduleReRender,
+  });
 
   const { notifyPlayState: notifyVoicePlayState } = useVoiceAssistant();
   const randomBarPreviousModeRef = useRef<"sequential" | "loop" | "random" | null>(null);
@@ -3006,36 +2987,7 @@ export function useMetronomeScreen() {
         if (Platform.OS !== "web") {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         }
-        const newSubs = { ...beatSubdivisions };
-        newSubs[String(target)] = [...subdivisionPattern];
-        setBeatSubdivisions(newSubs);
-        engineRef.current?.setBeatSubdivision(target, subdivisionPattern);
-        // 패턴 첫 노트의 강세를 해당 비트 타입에 동기화 (뮤트는 전파하지 않음)
-        const firstType = subdivisionPattern[0];
-        if (firstType !== "mute") {
-          setBeatTypes((prev) => {
-            const next = [...prev];
-            next[target] = firstType;
-            if (barModeRef.current) {
-              barConfigRef.current.beatTypes = next;
-            } else {
-              dialConfigRef.current.beatTypes = next;
-            }
-            const engine = engineRef.current;
-            if (engine) {
-              const engineTypes = [...engine.getBeatTypes()];
-              engineTypes[target] = firstType;
-              engine.setBeatTypes(engineTypes);
-            }
-            return next;
-          });
-        }
-        if (barModeRef.current) {
-          barConfigRef.current.beatSubdivisions = { ...newSubs };
-        } else {
-          dialConfigRef.current.beatSubdivisions = { ...newSubs };
-        }
-        persistSettings({ beatSubdivisions: newSubs });
+        applyBeatStaffSubdivision(target, subdivisionPattern);
       } else if (target !== null && subdivisionPattern.length < 1) {
         if (Platform.OS !== "web") {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -3052,7 +3004,7 @@ export function useMetronomeScreen() {
         persistSettings({ beatSubdivisions: newSubs });
       }
     },
-    [findDropTarget, subdivisionPattern, beatSubdivisions, persistSettings, applyToAllBeats, clearDragState]
+    [findDropTarget, subdivisionPattern, beatSubdivisions, persistSettings, applyToAllBeats, applyBeatStaffSubdivision, clearDragState]
   );
 
   // handleBarRepeatChange / handleLoopBlocksChange → useBarMode
