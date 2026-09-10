@@ -57,7 +57,7 @@ describe("SwipeableBarRow block editing", () => {
   it("keeps a boundary-row tap for bar selection and exposes a separate block editor action", () => {
     const onPress = jest.fn();
     const onEditBlock = jest.fn();
-    const { getByTestId, queryByTestId } = render(
+    const { getByTestId, queryByTestId, getByText } = render(
       <SwipeableBarRow
         beat={1}
         beatType="strong"
@@ -214,8 +214,8 @@ describe("SwipeableBarRow block editing", () => {
     expect(overlay.querySelectorAll("[data-testid]").length).toBe(0);
   });
 
-  it("marks only the currently playing subdivision and gives strong notes depth without symbols", () => {
-    const { getByTestId, queryByTestId } = render(
+  it("centers real note glyphs, leaves mute empty, and stacks meter above tempo", () => {
+    const { getByTestId, queryByTestId, getByText } = render(
       <SwipeableBarRow
         beat={2}
         beatType="strong"
@@ -248,6 +248,13 @@ describe("SwipeableBarRow block editing", () => {
     expect(getByTestId("bar-note-accent-1")).toBeTruthy();
     expect(getByTestId("bar-note-normal-2")).toBeTruthy();
     expect(getByTestId("bar-note-mute-3")).toBeTruthy();
+    expect(getByTestId("bar-note-mute-3").children).toHaveLength(0);
+    const strongStrike = getByTestId("bar-note-strong-strike-0");
+    expect(strongStrike.getAttribute("y1")).toBe(strongStrike.getAttribute("y2"));
+    const staffSvg = getByTestId("bar-staff-2").querySelector("svg");
+    expect(staffSvg?.getAttribute("preserveAspectRatio")).toBe("xMidYMid meet");
+    expect(getByText("4/4")).toBeTruthy();
+    expect(getByText("120")).toBeTruthy();
     expect(queryByTestId("bar-cell-type-2-0-strong")).toBeNull();
     expect(queryByTestId("bar-cell-type-2-1-accent")).toBeNull();
     expect(queryByTestId("bar-cell-type-2-2-normal")).toBeNull();
@@ -296,5 +303,8 @@ describe("SwipeableBarRow block editing", () => {
     expect(queryByTestId("bar-sample-start-marker-0-2")).toBeNull();
     expect(getByTestId("bar-tuplet-3")).toBeTruthy();
     expect(getByTestId("bar-tuplet-3").textContent).toBe("3");
+    expect(
+      getByTestId("bar-tuplet-3").querySelector('line[stroke-width="2.2"]'),
+    ).toBeTruthy();
   });
 });

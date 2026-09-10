@@ -222,6 +222,7 @@ export function SwipeableBarRow({
                   activeSubNote={activeSubNote}
                   isCurrentBeat={isCurrentBeat}
                   colors={C}
+                  rightInset={54}
                 />
               )}
             {cells.map((ct, ci) => {
@@ -339,23 +340,35 @@ export function SwipeableBarRow({
               })}
             </View>
 
-            {/* 비트 셀 위 info overlay */}
+            {/* 오른쪽 고정 2단 박자/템포 정보 */}
             <View style={styles.barCellOverlay} pointerEvents="none">
               <Text
                 style={[styles.barCenterInfo, {
                   color: isCurrentBeat ? C.accent : C.text,
-                   fontSize: ms(8.5, 0.35),
+                  fontSize: ms(8, 0.35),
                   textShadowColor: "rgba(0,0,0,0.85)",
                   textShadowOffset: { width: 0, height: 1 },
                   textShadowRadius: 4,
                 }]}
                 numberOfLines={1}
               >
-                {isPlaying && progressTotal && progressTotal > 1 && progressCurrent !== undefined
-                  ? `${meterNumerator}/${meterDenominator} · ${formatBarCenterInfo(repeat, bpm, meterNumerator, meterDenominator) ?? String(Math.round(bpm))} [${progressCurrent + 1}/${progressTotal}]`
-                  : `${meterNumerator}/${meterDenominator} · ${formatBarCenterInfo(repeat, bpm, meterNumerator, meterDenominator) ?? String(Math.round(bpm))}`
-                }
-                {symbolBadges.length > 0 ? `  ${symbolBadges.join(" ")}` : ""}
+                {`${meterNumerator}/${meterDenominator}`}
+              </Text>
+              <Text
+                style={[styles.barCenterInfo, {
+                  color: isCurrentBeat ? C.accent : C.textSecondary,
+                  fontSize: ms(7.5, 0.35),
+                  textShadowColor: "rgba(0,0,0,0.85)",
+                  textShadowOffset: { width: 0, height: 1 },
+                  textShadowRadius: 4,
+                }]}
+                numberOfLines={1}
+              >
+                {`${formatBarCenterInfo(repeat, bpm, meterNumerator, meterDenominator) ?? String(Math.round(bpm))}${
+                  isPlaying && progressTotal && progressTotal > 1 && progressCurrent !== undefined
+                    ? ` ${progressCurrent + 1}/${progressTotal}`
+                    : ""
+                }${symbolBadges.length > 0 ? ` ${symbolBadges.join(" ")}` : ""}`}
               </Text>
             </View>
 
@@ -495,18 +508,18 @@ const styles = StyleSheet.create({
   barCellOverlay: {
     position: "absolute",
     top: 0,
-    left: 0,
-    right: 0,
-    height: 11,
-    flexDirection: "row",
-    alignItems: "flex-start",
-    justifyContent: "flex-end",
-    gap: 2,
-    paddingHorizontal: 3,
+    right: 2,
+    bottom: 0,
+    width: 50,
+    alignItems: "flex-end",
+    justifyContent: "center",
+    gap: 0,
+    paddingHorizontal: 2,
     backgroundColor: "transparent",
   },
   barCenterInfo: {
     fontFamily: "SpaceGrotesk_600SemiBold",
-    flexShrink: 1,
+    textAlign: "right",
+    lineHeight: 9,
   },
 });
