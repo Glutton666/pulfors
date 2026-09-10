@@ -1,8 +1,8 @@
-import React, { useEffect, useMemo, useRef } from "react";
+import React, { useCallback, useEffect, useMemo, useRef } from "react";
 import { PanResponder, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { useTheme } from "@/contexts/ThemeContext";
 import type { BeatType } from "@/lib/metronome-engine";
-import { getBeatStaffRows, findBeatStaffCellTarget, nextBeatCountForStaffAdd, type BeatStaffCellRects } from "@/lib/beat-staff-logic";
+import { getBeatStaffCellHeight, getBeatStaffRows, findBeatStaffCellTarget, nextBeatCountForStaffAdd, type BeatStaffCellRects } from "@/lib/beat-staff-logic";
 import { SimplifiedStaffNotation } from "@/components/bar-mode/SimplifiedStaffNotation";
 
 interface Props {
@@ -38,35 +38,52 @@ export function BeatStaffMode({
   const { colors: C } = useTheme();
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const rows = useMemo(() => getBeatStaffRows(beatsPerMeasure), [beatsPerMeasure]);
-  const cellHeight = useMemo(() => {
-    const landscape = windowWidth > windowHeight;
-    const gridBudget = windowHeight * (landscape ? 0.46 : 0.5);
-    return Math.max(42, Math.min(106, (gridBudget - Math.max(0, rows.length - 1) * 8) / rows.length));
-  }, [rows.length, windowHeight, windowWidth]);
+  const cellHeight = useMemo(
+    () => getBeatStaffCellHeight(windowWidth, windowHeight, rows.length),
+    [rows.length, windowHeight, windowWidth],
+  );
   const startRef = useRef({ x: 0, y: 0, cell: -1 });
   const cellRefs = useRef<Record<number, View | null>>({});
   const latest = useRef({ isPlaying, beatsPerMeasure, onBeatsChange, onDeleteBeat });
   latest.current = { isPlaying, beatsPerMeasure, onBeatsChange, onDeleteBeat };
+  const measureCells = useCallback(() => {
+    Object.entries(cellRefs.current).forEach(([key, node]) => {
+      node?.measureInWindow?.((x, y, w, h) => {
+        cellRectsRef.current[Number(key)] = { x, y, w, h };
+      });
+    });
+  }, [cellRectsRef]);
   useEffect(() => {
     for (const key of Object.keys(cellRectsRef.current)) {
       if (Number(key) >= beatsPerMeasure) delete cellRectsRef.current[Number(key)];
     }
   }, [beatsPerMeasure, cellRectsRef]);
+  useEffect(() => {
+    cellRectsRef.current = {};
+    const timer = setTimeout(measureCells, 0);
+    return () => clearTimeout(timer);
+  }, [cellRectsRef, measureCells, windowHeight, windowWidth]);
   const pan = useRef(PanResponder.create({
     onStartShouldSetPanResponder: () => false,
-    onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 18 || Math.abs(g.dy) > 18,
-    onPanResponderGrant: (e) => {
-      startRef.current = { x: e.nativeEvent.pageX, y: e.nativeEvent.pageY, cell: findBeatStaffCellTarget(e.nativeEvent.pageX, e.nativeEvent.pageY, cellRectsRef.current) ?? -1 };
+    onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 18 && Math.abs(g.dx) > Math.abs(g.dy),
+    onPanResponderGrant: (e, g) => {
+      const x = Number.isFinite(g.x0) ? g.x0 : e.nativeEvent.pageX;
+      const y = Number.isFinite(g.y0) ? g.y0 : e.nativeEvent.pageY;
+      startRef.current = { x, y, cell: findBeatStaffCellTarget(x, y, cellRectsRef.current) ?? -1 };
     },
     onPanResponderRelease: (e, g) => {
       const current = latest.current;
       if (current.isPlaying) return;
+      if (Math.abs(g.dx) <= Math.abs(g.dy)) return;
       if (startRef.current.cell >= 0 && g.dx < -36) {
         current.onDeleteBeat(startRef.current.cell);
       } else if (g.dx > 44) {
         const nextCount = nextBeatCountForStaffAdd(current.beatsPerMeasure);
         if (nextCount !== null) current.onBeatsChange(nextCount);
       }
+    },
+    onPanResponderTerminate: () => {
+      startRef.current = { x: 0, y: 0, cell: -1 };
     },
   })).current;
 
@@ -98,9 +115,7 @@ export function BeatStaffMode({
                 const next = current === "strong" ? "accent" : current === "accent" ? "normal" : current === "normal" ? "mute" : "strong";
                 onBeatTypeChange(beat, next);
               }}
-                onLayout={() => cellRefs.current[beat]?.measureInWindow((x, y, w, h) => {
-                  cellRectsRef.current[beat] = { x, y, w, h };
-                })}
+                onLayout={measureCells}
               >
                 <SimplifiedStaffNotation beat={beat} notes={notes} activeSubNote={activeSubNote} isCurrentBeat={isPlaying && currentBeat === beat} colors={{ ...C, background: C.background, backgroundSecondary: C.backgroundSecondary }} meterDenominator={beatDenominator} />
               </Pressable>

@@ -19,6 +19,20 @@ export function getBeatStaffRows(count: number): BeatStaffLayout {
   );
 }
 
+export function getBeatStaffCellHeight(
+  windowWidth: number,
+  windowHeight: number,
+  rowCount: number,
+): number {
+  const landscape = windowWidth > windowHeight;
+  const gridBudget = windowHeight * (landscape ? 0.46 : 0.5);
+  const minimum = landscape && rowCount >= 3 ? 30 : 42;
+  return Math.max(
+    minimum,
+    Math.min(106, (gridBudget - Math.max(0, rowCount - 1) * 8) / rowCount),
+  );
+}
+
 export function nextBeatCountForStaffAdd(count: number): number | null {
   return count >= 1 && count < 8 ? count + 1 : null;
 }

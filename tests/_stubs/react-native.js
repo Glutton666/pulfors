@@ -49,7 +49,7 @@ const Pressable = React.forwardRef(function Pressable(
   { children, testID, onPress, onLongPress, style, disabled, hitSlop, delayLongPress, ...rest },
   ref,
 ) {
-  const domProps = { "data-testid": testID, ref, type: "button" };
+  const domProps = { "data-testid": testID, ref, type: "button", disabled: Boolean(disabled) };
   if (typeof onPress === "function") domProps.onClick = onPress;
   if (typeof onLongPress === "function") {
     domProps.onContextMenu = function (e) {

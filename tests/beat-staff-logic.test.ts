@@ -1,4 +1,4 @@
-import { addBeatStaffBeat, deleteBeatStaffBeat, findBeatStaffCellTarget, getBeatStaffRows, nextBeatCountForStaffAdd } from "@/lib/beat-staff-logic";
+import { addBeatStaffBeat, deleteBeatStaffBeat, findBeatStaffCellTarget, getBeatStaffCellHeight, getBeatStaffRows, nextBeatCountForStaffAdd } from "@/lib/beat-staff-logic";
 
 describe("beat staff presentation logic", () => {
   test("lays out one to four in one row and five to eight in balanced rows", () => {
@@ -33,6 +33,24 @@ describe("beat staff presentation logic", () => {
     expect(nextBeatCountForStaffAdd(7)).toBe(8);
     expect(nextBeatCountForStaffAdd(8)).toBeNull();
     expect(nextBeatCountForStaffAdd(12)).toBeNull();
+  });
+
+  test("adds and deletes every editable meter size from one through eight", () => {
+    for (let count = 1; count < 8; count += 1) {
+      expect(nextBeatCountForStaffAdd(count)).toBe(count + 1);
+    }
+    for (let count = 2; count <= 8; count += 1) {
+      const beatTypes = Array.from({ length: count }, (_, index) =>
+        index === 0 ? "strong" as const : "normal" as const,
+      );
+      expect(deleteBeatStaffBeat(count - 1, beatTypes, {}).beatTypes).toHaveLength(count - 1);
+    }
+  });
+
+  test("fits four rows inside the grid budget on a small landscape phone", () => {
+    const cellHeight = getBeatStaffCellHeight(667, 320, 4);
+    expect(cellHeight * 4 + 8 * 3).toBeLessThanOrEqual(320 * 0.46);
+    expect(cellHeight).toBeGreaterThanOrEqual(30);
   });
 
   test("targets measured rectangular cells, including a refreshed rect map", () => {
