@@ -297,7 +297,7 @@ export function useKeyboardShortcuts(params: UseKeyboardShortcutsParams): UseKey
           if (matchesBinding(e, binding)) {
             e.preventDefault();
             const p = subdivisionPatternRef.current;
-            if (p.length < 8) {
+            if (p.length < 9) {
               const newP: BeatType[] = [...p, type];
               setSubdivisionPattern(newP);
               persistSettings({ subdivisionPattern: newP });

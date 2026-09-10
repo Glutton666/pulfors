@@ -16,6 +16,7 @@ interface SimplifiedStaffNotationProps {
   activeSubNote: number;
   isCurrentBeat: boolean;
   colors: BarModeColors;
+  meterDenominator: 2 | 4 | 8;
   rightInset?: number;
 }
 
@@ -28,6 +29,37 @@ const STAFF_GAP = 4.25;
 const STAFF_BOTTOM = STAFF_TOP + STAFF_GAP * 4;
 const NOTE_Y = STAFF_TOP + STAFF_GAP * 2;
 const TUPLET_BEAM_Y = 7;
+const BEAM_GAP = 2.45;
+
+export interface StaffRhythmNotation {
+  noteValueDenominator: number;
+  beamCount: number;
+  isTuplet: boolean;
+  useBeam: boolean;
+  useBracket: boolean;
+}
+
+function isPowerOfTwo(value: number): boolean {
+  return value > 0 && (value & (value - 1)) === 0;
+}
+
+export function getStaffRhythmNotation(
+  meterDenominator: 2 | 4 | 8,
+  subdivisionCount: number,
+): StaffRhythmNotation {
+  const count = Math.max(1, Math.floor(subdivisionCount));
+  const standardDivision = 2 ** Math.floor(Math.log2(count));
+  const noteValueDenominator = meterDenominator * standardDivision;
+  const beamCount = Math.max(0, Math.round(Math.log2(noteValueDenominator / 4)));
+  const isTuplet = count > 1 && !isPowerOfTwo(count);
+  return {
+    noteValueDenominator,
+    beamCount,
+    isTuplet,
+    useBeam: count > 1 && beamCount > 0,
+    useBracket: isTuplet && beamCount === 0,
+  };
+}
 
 function noteX(index: number, count: number): number {
   if (count <= 1) return VIEWBOX_WIDTH / 2;
@@ -39,20 +71,39 @@ function NoteGlyph({
   x,
   active,
   index,
-  beamed,
+  beamCount,
+  grouped,
+  noteValueDenominator,
   colors: C,
 }: {
   type: BeatType;
   x: number;
   active: boolean;
   index: number;
-  beamed: boolean;
+  beamCount: number;
+  grouped: boolean;
+  noteValueDenominator: number;
   colors: BarModeColors;
 }) {
   const stroke = active ? C.white : C.text;
   const accent = active ? C.white : C.accent;
   const muted = active ? C.white : C.textTertiary;
   const opacity = active ? 1 : 0.92;
+  const openNotehead = noteValueDenominator <= 2;
+  const stemTop = grouped ? TUPLET_BEAM_Y : STAFF_TOP - 1;
+  const flags = !grouped && beamCount > 0
+    ? Array.from({ length: beamCount }, (_, flag) => (
+      <Path
+        key={flag}
+        testID={`bar-note-flag-${index}-${flag}`}
+        d={`M ${x + 3.5} ${stemTop + flag * BEAM_GAP} Q ${x + 8.2} ${stemTop + 1.5 + flag * BEAM_GAP} ${x + 6.2} ${stemTop + 5.1 + flag * BEAM_GAP}`}
+        fill="none"
+        stroke={stroke}
+        strokeWidth={1.3}
+        strokeLinecap="round"
+      />
+    ))
+    : null;
 
   if (type === "mute") {
     // Mute is an intentionally empty rhythmic slot.
@@ -64,9 +115,8 @@ function NoteGlyph({
     // with a short horizontal stroke that only protrudes slightly.
     return (
       <G testID={`bar-note-strong-${index}`} opacity={opacity}>
-        {beamed && (
-          <Line x1={x + 3.6} y1={TUPLET_BEAM_Y} x2={x + 3.6} y2={NOTE_Y} stroke={stroke} strokeWidth={1.3} />
-        )}
+        <Line x1={x + 3.6} y1={stemTop} x2={x + 3.6} y2={NOTE_Y} stroke={stroke} strokeWidth={1.3} />
+        {flags}
         <Ellipse cx={x} cy={NOTE_Y} rx={4.1} ry={2.8} fill="none" stroke={accent} strokeWidth={1.35} />
         <Line x1={x - 2.6} y1={NOTE_Y - 2} x2={x + 2.6} y2={NOTE_Y + 2} stroke={accent} strokeWidth={1.25} />
         <Line x1={x + 2.6} y1={NOTE_Y - 2} x2={x - 2.6} y2={NOTE_Y + 2} stroke={accent} strokeWidth={1.25} />
@@ -87,8 +137,17 @@ function NoteGlyph({
     // a: the ordinary filled note.
     return (
       <G testID={`bar-note-accent-${index}`} opacity={opacity}>
-        <Line x1={x + 3.6} y1={beamed ? TUPLET_BEAM_Y : STAFF_TOP - 1} x2={x + 3.6} y2={NOTE_Y} stroke={stroke} strokeWidth={1.35} />
-        <Ellipse cx={x} cy={NOTE_Y} rx={4.1} ry={2.8} fill={stroke} />
+        <Line x1={x + 3.6} y1={stemTop} x2={x + 3.6} y2={NOTE_Y} stroke={stroke} strokeWidth={1.35} />
+        {flags}
+        <Ellipse
+          cx={x}
+          cy={NOTE_Y}
+          rx={4.1}
+          ry={2.8}
+          fill={openNotehead ? "none" : stroke}
+          stroke={stroke}
+          strokeWidth={openNotehead ? 1.25 : 0}
+        />
       </G>
     );
   }
@@ -96,8 +155,17 @@ function NoteGlyph({
   // N: conventional ghost note — a filled notehead enclosed by parentheses.
   return (
     <G testID={`bar-note-normal-${index}`} opacity={opacity}>
-      <Line x1={x + 3.1} y1={beamed ? TUPLET_BEAM_Y : STAFF_TOP - 1} x2={x + 3.1} y2={NOTE_Y} stroke={muted} strokeWidth={1.25} />
-      <Ellipse cx={x} cy={NOTE_Y} rx={3.4} ry={2.35} fill={accent} />
+      <Line x1={x + 3.1} y1={stemTop} x2={x + 3.1} y2={NOTE_Y} stroke={muted} strokeWidth={1.25} />
+      {flags}
+      <Ellipse
+        cx={x}
+        cy={NOTE_Y}
+        rx={3.4}
+        ry={2.35}
+        fill={openNotehead ? "none" : accent}
+        stroke={accent}
+        strokeWidth={openNotehead ? 1.15 : 0}
+      />
       <Path
         d={`M ${x - 4.7} ${NOTE_Y - 3.4} Q ${x - 6.2} ${NOTE_Y} ${x - 4.7} ${NOTE_Y + 3.4}`}
         fill="none"
@@ -114,37 +182,57 @@ function NoteGlyph({
   );
 }
 
-function TupletGroup({
+function RhythmGroup({
   count,
+  notation,
   colors: C,
 }: {
   count: number;
+  notation: StaffRhythmNotation;
   colors: BarModeColors;
 }) {
-  if (![3, 5, 7].includes(count)) return null;
-  const first = noteX(0, count) - 7;
-  const last = noteX(count - 1, count) + 7;
+  if (!notation.useBeam && !notation.useBracket) return null;
+  const firstStem = noteX(0, count) + 3.6;
+  const lastStem = noteX(count - 1, count) + 3.6;
+  const bracketFirst = noteX(0, count) - 7;
+  const bracketLast = noteX(count - 1, count) + 7;
   return (
-    <G testID={`bar-tuplet-${count}`}>
-      <Line
-        x1={first}
-        y1={TUPLET_BEAM_Y}
-        x2={last}
-        y2={TUPLET_BEAM_Y}
-        stroke={C.textSecondary}
-        strokeWidth={2.2}
-        strokeLinecap="square"
-      />
-      <SvgText
-        x={(first + last) / 2}
-        y={TUPLET_BEAM_Y - 1.3}
-        fill={C.text}
-        fontSize={6.2}
-        fontWeight="700"
-        textAnchor="middle"
-      >
-        {String(count)}
-      </SvgText>
+    <G testID={notation.isTuplet ? `bar-tuplet-${count}` : `bar-rhythm-group-${count}`}>
+      {notation.useBeam && Array.from({ length: notation.beamCount }, (_, beam) => (
+        <Line
+          key={beam}
+          testID={`bar-rhythm-beam-${beam}`}
+          x1={firstStem}
+          y1={TUPLET_BEAM_Y + beam * BEAM_GAP}
+          x2={lastStem}
+          y2={TUPLET_BEAM_Y + beam * BEAM_GAP}
+          stroke={C.textSecondary}
+          strokeWidth={1.8}
+          strokeLinecap="square"
+        />
+      ))}
+      {notation.useBracket && (
+        <Path
+          testID="bar-rhythm-bracket"
+          d={`M ${bracketFirst} ${TUPLET_BEAM_Y + 3} L ${bracketFirst} ${TUPLET_BEAM_Y} L ${bracketLast} ${TUPLET_BEAM_Y} L ${bracketLast} ${TUPLET_BEAM_Y + 3}`}
+          fill="none"
+          stroke={C.textSecondary}
+          strokeWidth={1}
+        />
+      )}
+      {notation.isTuplet && (
+        <SvgText
+          testID={`bar-tuplet-number-${count}`}
+          x={(noteX(0, count) + noteX(count - 1, count)) / 2}
+          y={TUPLET_BEAM_Y - 1.3}
+          fill={C.text}
+          fontSize={6.2}
+          fontWeight="700"
+          textAnchor="middle"
+        >
+          {String(count)}
+        </SvgText>
+      )}
     </G>
   );
 }
@@ -155,10 +243,11 @@ export function SimplifiedStaffNotation({
   activeSubNote,
   isCurrentBeat,
   colors: C,
+  meterDenominator,
   rightInset = 0,
 }: SimplifiedStaffNotationProps) {
   const visibleNotes = notes.length > 0 ? notes : ["normal" as BeatType];
-  const isTuplet = [3, 5, 7].includes(visibleNotes.length);
+  const notation = getStaffRhythmNotation(meterDenominator, visibleNotes.length);
   return (
     <View
       testID={`bar-staff-${beat}`}
@@ -183,7 +272,7 @@ export function SimplifiedStaffNotation({
             strokeWidth={line === 2 ? 1.1 : 0.7}
           />
         ))}
-        <TupletGroup count={visibleNotes.length} colors={C} />
+        <RhythmGroup count={visibleNotes.length} notation={notation} colors={C} />
         {visibleNotes.map((type, index) => (
           <NoteGlyph
             key={`${type}-${index}`}
@@ -191,7 +280,9 @@ export function SimplifiedStaffNotation({
             x={noteX(index, visibleNotes.length)}
             active={isCurrentBeat && index === activeSubNote}
             index={index}
-            beamed={isTuplet}
+            beamCount={notation.beamCount}
+            grouped={notation.useBeam}
+            noteValueDenominator={notation.noteValueDenominator}
             colors={C}
           />
         ))}

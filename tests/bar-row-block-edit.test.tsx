@@ -6,6 +6,7 @@ import {
   getBarRightRailLayout,
   SwipeableBarRow,
 } from "@/components/bar-mode/SwipeableBarRow";
+import { getStaffRhythmNotation } from "@/components/bar-mode/SimplifiedStaffNotation";
 
 jest.mock("@expo/vector-icons", () => ({
   Ionicons: () => null,
@@ -305,11 +306,93 @@ describe("SwipeableBarRow block editing", () => {
     expect(queryByTestId("bar-sample-start-marker-0-1")).toBeNull();
     expect(queryByTestId("bar-sample-start-marker-0-2")).toBeNull();
     expect(getByTestId("bar-tuplet-3")).toBeTruthy();
-    expect(getByTestId("bar-tuplet-3").textContent).toBe("3");
-    expect(
-      getByTestId("bar-tuplet-3").querySelector('line[stroke-width="2.2"]'),
-    ).toBeTruthy();
+    expect(getByTestId("bar-tuplet-number-3").textContent).toBe("3");
+    expect(getByTestId("bar-rhythm-beam-0")).toBeTruthy();
   });
+
+  it.each([
+    [4, 2, 8, 1, false, true, false],
+    [4, 3, 8, 1, true, true, false],
+    [4, 4, 16, 2, false, true, false],
+    [4, 5, 16, 2, true, true, false],
+    [4, 6, 16, 2, true, true, false],
+    [4, 7, 16, 2, true, true, false],
+    [4, 8, 32, 3, false, true, false],
+    [4, 9, 32, 3, true, true, false],
+    [2, 3, 4, 0, true, false, true],
+    [8, 3, 16, 2, true, true, false],
+  ] as const)(
+    "derives standard notation for denominator %i and %i subdivisions",
+    (denominator, count, noteValueDenominator, beamCount, isTuplet, useBeam, useBracket) => {
+      expect(getStaffRhythmNotation(denominator, count)).toEqual({
+        noteValueDenominator,
+        beamCount,
+        isTuplet,
+        useBeam,
+        useBracket,
+      });
+    },
+  );
+
+  it("covers standard note values and beam counts for all supported denominators and subdivisions", () => {
+    const expected = {
+      2: {
+        values: [2, 4, 4, 8, 8, 8, 8, 16, 16],
+        beams: [0, 0, 0, 1, 1, 1, 1, 2, 2],
+      },
+      4: {
+        values: [4, 8, 8, 16, 16, 16, 16, 32, 32],
+        beams: [0, 1, 1, 2, 2, 2, 2, 3, 3],
+      },
+      8: {
+        values: [8, 16, 16, 32, 32, 32, 32, 64, 64],
+        beams: [1, 2, 2, 3, 3, 3, 3, 4, 4],
+      },
+    } as const;
+
+    ([2, 4, 8] as const).forEach(denominator => {
+      for (let count = 1; count <= 9; count++) {
+        const notation = getStaffRhythmNotation(denominator, count);
+        expect(notation.noteValueDenominator).toBe(expected[denominator].values[count - 1]);
+        expect(notation.beamCount).toBe(expected[denominator].beams[count - 1]);
+        expect(notation.isTuplet).toBe([3, 5, 6, 7, 9].includes(count));
+      }
+    });
+  });
+
+  it.each(["accent", "normal"] as const)(
+    "renders a denominator-2 single %s note with an open notehead",
+    (type) => {
+      const { getByTestId } = render(
+        <SwipeableBarRow
+          beat={0}
+          beatType={type}
+          subdivisions={[type]}
+          repeat={null}
+          isCurrentBeat={false}
+          isEditingBeat={false}
+          blockDepth={0}
+          blockStart={false}
+          blockEnd={false}
+          symbolBadges={[]}
+          isPlaying={false}
+          bpm={120}
+          meterNumerator={2}
+          meterDenominator={2}
+          beatsPerMeasure={2}
+          onPress={jest.fn()}
+          onSwipeLeft={jest.fn()}
+          onSwipeRight={jest.fn()}
+          onLongPress={jest.fn()}
+          colors={colors}
+          ms={(value) => value}
+          showStaffNotation
+        />,
+      );
+
+      expect(getByTestId(`bar-note-${type}-0`).querySelector("ellipse")?.getAttribute("fill")).toBe("none");
+    },
+  );
 
   it("reserves separate right-side rails for block repeat text and the end marker", () => {
     const { getByTestId, getByText } = render(

@@ -239,6 +239,7 @@ export function SwipeableBarRow({
                   activeSubNote={activeSubNote}
                   isCurrentBeat={isCurrentBeat}
                   colors={C}
+                  meterDenominator={meterDenominator}
                   rightInset={54 + blockRightInset}
                 />
               )}

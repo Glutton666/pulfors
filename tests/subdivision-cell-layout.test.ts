@@ -26,6 +26,18 @@ describe("getSubdivisionCellLayout", () => {
     expect(layout.gap).toBe(3);
   });
 
+  test("fits nine subdivision controls inside a narrow phone row", () => {
+    const layout = getSubdivisionCellLayout({
+      containerWidth: 176,
+      cellCount: 9,
+      preferredCellSize: 28,
+      preferredGap: 3,
+    });
+
+    expect(layout.cellSize).toBe(14);
+    expect(layout.cellSize * 9 + layout.gap * 8 + 32).toBeLessThanOrEqual(182);
+  });
+
   test("uses a safe compact fallback before layout is measured", () => {
     const layout = getSubdivisionCellLayout({
       containerWidth: 0,

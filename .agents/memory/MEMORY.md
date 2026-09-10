@@ -47,3 +47,4 @@
 - [Web look-ahead measure rollover](web-lookahead-measure-rollover.md) — crossing a measure must forget old tick identities without cancelling AudioContext sources still finishing the last beat.
 - [Single-cell subdivision restore](single-cell-subdivision-restore.md) — bulk-restored one-cell patterns are legacy residue, not subdivisions; ignore them or they invisibly override visible beat types.
 - [Random Bar block units](random-bar-block-units.md) — random Bar sessions select top-level blocks or lone bars; snapshot block structure and keep crossing blocks intact at end markers.
+- [Bar staff rhythm notation](bar-staff-rhythm-notation.md) — derive note value from the lower power-of-two subdivision bucket; duration affects notehead fill as well as beams.

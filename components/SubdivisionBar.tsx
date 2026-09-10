@@ -51,7 +51,7 @@ interface SubdivisionBarProps {
   currentBeatType?: BeatType | null;
 }
 
-const MAX_CELLS = 8;
+export const MAX_SUBDIVISION_CELLS = 9;
 const MIN_CELLS = 1;
 const SWIPE_THRESHOLD = 30;
 
@@ -166,7 +166,7 @@ export function SubdivisionBar({
   const addCell = useCallback(() => {
     if (isPlayingRef.current) return;
     const p = patternRef.current;
-    if (p.length >= MAX_CELLS) return;
+    if (p.length >= MAX_SUBDIVISION_CELLS) return;
     if (Platform.OS !== "web") {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
