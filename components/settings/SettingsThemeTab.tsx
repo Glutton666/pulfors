@@ -48,6 +48,8 @@ interface SettingsThemeTabProps {
   onBarRowHeightChange: (val: number) => void;
   barStaffNotation: boolean;
   onBarStaffNotationChange: (val: boolean) => void;
+  beatStaffNotation?: boolean;
+  onBeatStaffNotationChange?: (val: boolean) => void;
   randomBarConfig: BarRandomConfig;
   onRandomBarConfigChange: (config: BarRandomConfig) => void;
   flashMode: FlashMode;
@@ -77,6 +79,8 @@ export function SettingsThemeTab({
   onBarRowHeightChange,
   barStaffNotation,
   onBarStaffNotationChange,
+  beatStaffNotation = false,
+  onBeatStaffNotationChange = () => {},
   randomBarConfig,
   onRandomBarConfigChange,
   flashMode,
@@ -348,6 +352,21 @@ export function SettingsThemeTab({
       </>}
 
       {showsBeatControls && <>
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Ionicons name="musical-notes-outline" size={S.ms(18, 0.4)} color={C.accent} />
+          <Text style={[styles.sectionLabel, { color: C.text }]}>{t("settings", "beatStaff")}</Text>
+          <Switch
+            testID="beat-staff-notation-toggle"
+            value={beatStaffNotation}
+            onValueChange={onBeatStaffNotationChange}
+            trackColor={{ false: C.surfaceLight, true: C.accentMuted }}
+            thumbColor={beatStaffNotation ? C.accent : C.textSecondary}
+          />
+        </View>
+        <Text style={[styles.offsetHint, { color: C.textTertiary }]}>{t("settings", "beatStaffHint")}</Text>
+      </View>
+      <View style={[styles.divider, { backgroundColor: C.border }]} />
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Ionicons name="image-outline" size={S.ms(18, 0.4)} color={C.accent} />

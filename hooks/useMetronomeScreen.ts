@@ -108,6 +108,7 @@ import { usePracticeRoomTracking } from "@/hooks/usePracticeRoomTracking";
 import { useStageMode } from "@/hooks/useStageMode";
 import { useBeatTypeControls } from "@/hooks/useBeatTypeControls";
 import { applySwitchToMode, type ModeSwitchState, type ModeSwitchCallbacks } from "@/lib/stage-mode-logic";
+import { findBeatStaffCellTarget, type BeatStaffCellRects } from "@/lib/beat-staff-logic";
 import { createDebouncedPersister, type DebouncedPersister } from "@/lib/persist";
 import { createRafBatcher } from "@/lib/raf-batcher";
 import type { ModeSlot } from "@/components/ModeSwitcherDial";
@@ -287,6 +288,7 @@ export function useMetronomeScreen() {
   const stopwatchTimerRef = useRef<StopwatchTimerHandle>(null);
   const stopwatchTimerLandscapeRef = useRef<StopwatchTimerHandle>(null);
   const barAreaRef = useRef<View>(null);
+  const beatStaffCellRectsRef = useRef<BeatStaffCellRects>({});
   const barAreaLayoutRef = useRef({ y: 0, height: 0 });
   const barScrollOffsetRef = useRef(0);
 
@@ -587,6 +589,7 @@ export function useMetronomeScreen() {
     barCellOpacity, setBarCellOpacity,
     barRowHeight, setBarRowHeight,
     barStaffNotation, setBarStaffNotation,
+    beatStaffNotation, setBeatStaffNotation,
     barRandomStrategy, setBarRandomStrategy,
     stageSettings, updateStageSettings,
     persistSettings,
@@ -1806,6 +1809,31 @@ export function useMetronomeScreen() {
     scheduleReRender,
   });
 
+  const handleBeatStaffDelete = useCallback((index: number) => {
+    if (index < 0 || index >= beatTypes.length || beatTypes.length <= 1) return;
+    const nextTypes = beatTypes.filter((_, i) => i !== index);
+    const nextSubs: Record<string, BeatType[]> = {};
+    Object.entries(beatSubdivisions).forEach(([key, value]) => {
+      const old = Number(key);
+      if (old < index) nextSubs[key] = value;
+      else if (old > index) nextSubs[String(old - 1)] = value;
+    });
+    setBeatsPerMeasure(nextTypes.length);
+    setBeatTypes(nextTypes);
+    setBeatSubdivisions(nextSubs);
+    engineRef.current?.setBeatsPerMeasure(nextTypes.length);
+    engineRef.current?.setBeatTypes(nextTypes);
+    engineRef.current?.setAllBeatSubdivisions(nextSubs);
+    dialConfigRef.current.beatsPerMeasure = nextTypes.length;
+    dialConfigRef.current.beatTypes = nextTypes;
+    dialConfigRef.current.beatSubdivisions = nextSubs;
+    persistSettings({
+      beatsPerMeasure: nextTypes.length,
+      beatSubdivisions: nextSubs,
+    });
+    scheduleReRender();
+  }, [beatTypes, beatSubdivisions, persistSettings, scheduleReRender]);
+
   const { notifyPlayState: notifyVoicePlayState } = useVoiceAssistant();
   const randomBarPreviousModeRef = useRef<"sequential" | "loop" | "random" | null>(null);
   const finishRandomBarPlay = useCallback(() => {
@@ -2853,6 +2881,9 @@ export function useMetronomeScreen() {
         return null;
       }
 
+      if (beatStaffNotation) {
+        return findBeatStaffCellTarget(pageX, pageY, beatStaffCellRectsRef.current);
+      }
       const center = dialCenterRef.current;
       if (center.x === 0 && center.y === 0) return null;
 
@@ -2879,7 +2910,7 @@ export function useMetronomeScreen() {
       if (closestDist < S.ms(55, 0.3)) return closestBeat;
       return null;
     },
-    [beatsPerMeasure, barMode, S]
+    [beatsPerMeasure, barMode, S, beatStaffNotation]
   );
 
   const handleDragStart = useCallback(() => {
@@ -3781,6 +3812,8 @@ export function useMetronomeScreen() {
     // Refs
     rootViewRef,
     barAreaRef,
+    beatStaffCellRectsRef,
+    handleBeatStaffDelete,
     dialRef,
     stopwatchTimerRef,
     stopwatchTimerLandscapeRef,
@@ -3968,6 +4001,8 @@ export function useMetronomeScreen() {
     setBarRowHeight,
     barStaffNotation,
     setBarStaffNotation,
+    beatStaffNotation,
+    setBeatStaffNotation,
     barMetronomeChannel,
     setBarMetronomeChannel,
     barMetronomeChannelRef,

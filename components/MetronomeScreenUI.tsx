@@ -78,14 +78,14 @@ export function MetronomeScreenUI(props: Props) {
     styles, C, S, t, themeMode, language, insets, webTopInset, webBottomInset,
     isLandscape, windowWidth,
     rootViewRef, barAreaRef, dialRef, stopwatchTimerRef, stopwatchTimerLandscapeRef,
-    barScrollOffsetRef, engineRef, togglePlayPauseRef, updateBpmRef, beatDenominatorRef,
+    barScrollOffsetRef, beatStaffCellRectsRef, engineRef, togglePlayPauseRef, updateBpmRef, beatDenominatorRef,
     seamlessNextEntryRef, tuningGuideOnSelectRef, reopenSignalGenAfterTuningGuideRef,
     settingsReturnModalRef, featureStartRef, practiceStartRef, discardPracticeSession, startOrResumePracticeSession,
     handleNoteTogglePlayRef, clickPCMCacheRef,
     bpm, beatsPerMeasure, beatDenominator, beatTypes, subdivisionPattern, beatSubdivisions,
     isPlaying, isPreparing, audioLifecycle, retryAudioRecovery, currentBeat, measureCount, activeSubNote, progressInfo,
     layerProgressMap, halfTime,
-    togglePlayPause, updateBpm, updateTimeSignature, handleBeatTypeChange,
+    togglePlayPause, updateBpm, updateTimeSignature, handleBeatTypeChange, handleBeatStaffDelete,
     handleBeatSubdivisionChange, handleBeatDenominatorCycle, handleTapTempo,
     handleReset, startMetronome, handleTimerExpired,
     beatSubdivisionCounts, beatDirection, setBeatDirection,
@@ -130,6 +130,7 @@ export function MetronomeScreenUI(props: Props) {
     handleAddBar, handleDeleteBar, handleCopyBar, handleReorderBar, handleInsertBarAfter,
     barCellOpacity, setBarCellOpacity, barRowHeight, setBarRowHeight,
     barStaffNotation, setBarStaffNotation,
+    beatStaffNotation, setBeatStaffNotation,
     barMetronomeChannel, setBarMetronomeChannel, barMetronomeChannelRef,
     stageSettings, updateStageSettings,
     currentBarConfig,
@@ -949,6 +950,11 @@ export function MetronomeScreenUI(props: Props) {
           setBarStaffNotation(val);
           persistSettings({ barStaffNotation: val });
         }}
+        beatStaffNotation={beatStaffNotation}
+        onBeatStaffNotationChange={(val) => {
+          setBeatStaffNotation(val);
+          persistSettings({ beatStaffNotation: val });
+        }}
         randomBarConfig={randomBarConfig}
         onRandomBarConfigChange={onRandomBarConfigChange}
         onEnterNoteMode={handleEnterNoteMode}
@@ -1160,6 +1166,10 @@ export function MetronomeScreenUI(props: Props) {
             barCellOpacity={barCellOpacity}
             barRowHeight={barRowHeight}
             showStaffNotation={barStaffNotation}
+            beatStaffNotation={beatStaffNotation}
+            subdivisionPattern={subdivisionPattern}
+            beatStaffCellRectsRef={beatStaffCellRectsRef}
+            onBeatStaffDelete={handleBeatStaffDelete}
             onEasterEggTrigger={handleEasterEggTrigger}
             easterEggEnabled={!usesSharedEasterEggGesture(currentMode, showPolygon)}
           />

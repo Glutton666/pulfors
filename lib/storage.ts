@@ -210,6 +210,7 @@ export interface MetronomeSettings {
   barStaffNotation?: boolean;
   beatDenominator?: 2 | 4 | 8;
   barRandomStrategy?: BarRandomStrategy;
+  beatStaffNotation?: boolean;
   /**
    * Per-mode overrides. The legacy top-level fields remain the migration
    * source and are intentionally kept for older builds.
@@ -233,6 +234,7 @@ export interface ModeSettings {
   barCellOpacity?: number;
   barRowHeight?: number;
   barStaffNotation?: boolean;
+  beatStaffNotation?: boolean;
   barRandomStrategy?: BarRandomStrategy;
   stageOptions?: StageSettings;
 }
@@ -304,6 +306,7 @@ const DEFAULT_SETTINGS: MetronomeSettings = {
   barRowHeight: 44,
   barStaffNotation: false,
   barRandomStrategy: "independent",
+  beatStaffNotation: false,
 };
 
 export async function loadSettings(): Promise<MetronomeSettings> {
@@ -334,6 +337,7 @@ export async function loadSettings(): Promise<MetronomeSettings> {
         barRowHeight: merged.barRowHeight,
         barStaffNotation: merged.barStaffNotation,
         barRandomStrategy: merged.barRandomStrategy,
+        beatStaffNotation: merged.beatStaffNotation,
       };
       const savedProfiles = isPlainObject(merged.modeSettings) ? merged.modeSettings : {};
       merged.modeSettings = {};

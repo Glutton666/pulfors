@@ -50,3 +50,4 @@
 - [Bar staff rhythm notation](bar-staff-rhythm-notation.md) — derive note value from the lower power-of-two subdivision bucket; duration affects notehead fill as well as beams.
 - [Audio warm-up isolation](audio-warmup-isolation.md) — never mute/play shared click pools on a delayed timer; it can race both realtime and rendered playback startup.
 - [Notification preference races](notification-preference-races.md) — disabling a notification needs an epoch check before every async publish, not only an initial enabled guard.
+- [Capped meter changes](capped-meter-changes.md) — never call the meter updater with an unchanged capped count; equality intentionally resets beat types.

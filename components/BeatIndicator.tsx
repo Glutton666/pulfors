@@ -46,6 +46,8 @@ import { LoopBlockStripCompact } from "./LoopBlockStripCompact";
 import { LoopBlockStripDetailed } from "./LoopBlockStripDetailed";
 import { BlockEditPanel } from "./BlockEditPanel";
 import { BarModeView } from "./BarModeView";
+import { BeatStaffMode } from "./BeatStaffMode";
+import type { BeatStaffCellRects } from "@/lib/beat-staff-logic";
 
 export type { BeatType, BarRepeat, LoopBlock } from "./beat-indicator.types";
 import type { BeatType } from "./beat-indicator.types";
@@ -89,6 +91,7 @@ interface BeatIndicatorProps {
   barMode: boolean;
   onBarModeChange: (mode: boolean) => void;
   beatSubdivisions: Record<string, BeatType[]>;
+  subdivisionPattern?: BeatType[];
   onBeatSubdivisionChange: (beatIndex: number, pattern: BeatType[] | null) => void;
   activeSubNote: number;
   barAreaRef?: React.RefObject<View | null>;
@@ -156,6 +159,9 @@ interface BeatIndicatorProps {
   barCellOpacity?: number;
   barRowHeight?: number;
   showStaffNotation?: boolean;
+  beatStaffNotation?: boolean;
+  beatStaffCellRectsRef?: React.MutableRefObject<BeatStaffCellRects>;
+  onBeatStaffDelete?: (index: number) => void;
   onEasterEggTrigger?: (isHighRange: boolean) => void;
   easterEggEnabled?: boolean;
   onOpenSettings?: () => void;
@@ -181,6 +187,7 @@ export function BeatIndicator({
   barMode,
   onBarModeChange,
   beatSubdivisions,
+  subdivisionPattern = ["accent"],
   onBeatSubdivisionChange,
   activeSubNote,
   barAreaRef,
@@ -243,6 +250,9 @@ export function BeatIndicator({
   barCellOpacity,
   barRowHeight,
   showStaffNotation = false,
+  beatStaffNotation = false,
+  beatStaffCellRectsRef,
+  onBeatStaffDelete,
   onEasterEggTrigger,
   easterEggEnabled = true,
   onOpenSettings,
@@ -1319,6 +1329,39 @@ export function BeatIndicator({
         showStaffNotation={showStaffNotation}
         onExitBarMode={() => onBarModeChange(false)}
         onNoteRecordRequest={onNoteRecordRequest}
+        onOpenSettings={onOpenSettings}
+      />
+    );
+  }
+
+  if (beatStaffNotation) {
+    return (
+      <BeatStaffMode
+        beatsPerMeasure={beatsPerMeasure}
+        beatDenominator={beatDenominator}
+        beatTypes={beatTypes}
+        beatSubdivisions={beatSubdivisions}
+        currentBeat={currentBeat}
+        activeSubNote={activeSubNote}
+        isPlaying={isPlaying}
+        isPreparing={isPreparing}
+        onTogglePlay={onTogglePlay}
+        onBeatsChange={onBeatsChange}
+        onBeatTypeChange={onBeatTypeChange}
+        cellRectsRef={beatStaffCellRectsRef ?? { current: {} }}
+        dropTargetBeat={dropTargetBeat}
+        hintText={t("main", "beatStaffHint")}
+        settingsText={t("settings", "title")}
+        playText={t("main", "play")}
+        stopText={t("main", "stop")}
+        addText={t("main", "beatStaffAdd")}
+        beatTypeLabels={{
+          strong: t("beatTypes", "strong"),
+          accent: t("beatTypes", "accent"),
+          normal: t("beatTypes", "normal"),
+          mute: t("beatTypes", "mute"),
+        }}
+        onDeleteBeat={onBeatStaffDelete ?? (() => {})}
         onOpenSettings={onOpenSettings}
       />
     );

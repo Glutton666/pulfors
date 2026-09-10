@@ -138,6 +138,8 @@ export interface UseSettingsResult {
   setBarStaffNotation: React.Dispatch<React.SetStateAction<boolean>>;
   barRandomStrategy: BarRandomStrategy;
   setBarRandomStrategy: React.Dispatch<React.SetStateAction<BarRandomStrategy>>;
+  beatStaffNotation: boolean;
+  setBeatStaffNotation: React.Dispatch<React.SetStateAction<boolean>>;
   // ── Stage mode ─────────────────────────────────────────────────────────────
   stageSettings: StageSettings;
   updateStageSettings: (patch: Partial<StageSettings>) => void;
@@ -239,6 +241,7 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
   const [barRowHeight, setBarRowHeight] = useState(44);
   const [barStaffNotation, setBarStaffNotation] = useState(false);
   const [barRandomStrategy, setBarRandomStrategy] = useState<BarRandomStrategy>("independent");
+  const [beatStaffNotation, setBeatStaffNotation] = useState(false);
   const [stageSettings, setStageSettings] = useState<StageSettings>(DEFAULT_STAGE_SETTINGS);
 
   // ── Persistence infrastructure ───────────────────────────────────────────────
@@ -271,12 +274,12 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
     bpm, beatsPerMeasure, beatDenominator, subdivisions: 1, subdivisionPattern, beatSubdivisions,
     volume, sampleVolume, soundSet, layerSoundSets, flashMode, hapticMode,
     audioOffsetMs, timerStopMode, landscapeReversed, beatDirection, username,
-    barMetronomeChannel, barCellOpacity, barRowHeight, barStaffNotation, barRandomStrategy,
+    barMetronomeChannel, barCellOpacity, barRowHeight, barStaffNotation, barRandomStrategy, beatStaffNotation,
     modeSettings: {
       [mode]: {
         volume, sampleVolume, soundSet, layerSoundSets, flashMode, hapticMode,
         audioOffsetMs, timerStopMode, landscapeReversed, beatDirection,
-        barMetronomeChannel, barCellOpacity, barRowHeight, barStaffNotation, barRandomStrategy,
+         barMetronomeChannel, barCellOpacity, barRowHeight, barStaffNotation, barRandomStrategy, beatStaffNotation,
         ...(mode === "stage" ? { stageOptions: stageSettings } : {}),
       },
     },
@@ -288,7 +291,7 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
     bpm, beatsPerMeasure, beatDenominator, subdivisions: 1, subdivisionPattern, beatSubdivisions,
     volume, sampleVolume, soundSet, layerSoundSets, flashMode, hapticMode,
     audioOffsetMs, timerStopMode, landscapeReversed, beatDirection, username,
-    barMetronomeChannel, barCellOpacity, barRowHeight, barStaffNotation, barRandomStrategy,
+    barMetronomeChannel, barCellOpacity, barRowHeight, barStaffNotation, barRandomStrategy, beatStaffNotation,
     modeSettings: modeChangedThisRender
       ? (persistSnapshotRef.current.modeSettings ?? {})
       : {
@@ -297,7 +300,7 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
         ...(persistSnapshotRef.current.modeSettings?.[mode] ?? {}),
         volume, sampleVolume, soundSet, layerSoundSets, flashMode, hapticMode,
         audioOffsetMs, timerStopMode, landscapeReversed, beatDirection,
-        barMetronomeChannel, barCellOpacity, barRowHeight, barStaffNotation, barRandomStrategy,
+         barMetronomeChannel, barCellOpacity, barRowHeight, barStaffNotation, barRandomStrategy, beatStaffNotation,
         ...(mode === "stage" ? { stageOptions: stageSettings } : {}),
         } satisfies ModeSettings,
       },
@@ -467,6 +470,7 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
       if (settings.barRowHeight != null) setBarRowHeight(settings.barRowHeight);
       if (settings.barStaffNotation !== undefined) setBarStaffNotation(settings.barStaffNotation);
       if (settings.barRandomStrategy) setBarRandomStrategy(settings.barRandomStrategy);
+      if (settings.beatStaffNotation !== undefined) setBeatStaffNotation(settings.beatStaffNotation);
       if (settings.stageOptions) setStageSettings(settings.stageOptions);
       if (settings.username) {
         setUsername(settings.username);
@@ -524,6 +528,7 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
     if (profile.barRowHeight != null) setBarRowHeight(profile.barRowHeight);
     if (profile.barStaffNotation !== undefined) setBarStaffNotation(profile.barStaffNotation);
     if (profile.barRandomStrategy) setBarRandomStrategy(profile.barRandomStrategy);
+    if (mode === "beat" && profile.beatStaffNotation !== undefined) setBeatStaffNotation(profile.beatStaffNotation);
     if (mode === "stage" && profile.stageOptions) setStageSettings(profile.stageOptions);
   }, [mode]);
 
@@ -685,7 +690,7 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
     barCellOpacity, setBarCellOpacity,
     barRowHeight, setBarRowHeight,
     barStaffNotation, setBarStaffNotation,
-    barRandomStrategy, setBarRandomStrategy,
+    barRandomStrategy, setBarRandomStrategy, beatStaffNotation, setBeatStaffNotation,
     stageSettings, updateStageSettings,
     persistSettings,
     invalidateSettingsLoad,

@@ -79,6 +79,8 @@ interface SettingsModalProps {
   onBarRowHeightChange: (val: number) => void;
   barStaffNotation: boolean;
   onBarStaffNotationChange: (val: boolean) => void;
+  beatStaffNotation: boolean;
+  onBeatStaffNotationChange: (val: boolean) => void;
   randomBarConfig: BarRandomConfig;
   onRandomBarConfigChange: (config: BarRandomConfig) => void;
   onShowOnboarding?: () => void;
@@ -141,6 +143,8 @@ export function SettingsModal({
   onBarRowHeightChange,
   barStaffNotation,
   onBarStaffNotationChange,
+  beatStaffNotation,
+  onBeatStaffNotationChange,
   randomBarConfig,
   onRandomBarConfigChange,
   onShowOnboarding,
@@ -249,6 +253,8 @@ export function SettingsModal({
             onBarRowHeightChange={onBarRowHeightChange}
             barStaffNotation={barStaffNotation}
             onBarStaffNotationChange={onBarStaffNotationChange}
+            beatStaffNotation={beatStaffNotation}
+            onBeatStaffNotationChange={onBeatStaffNotationChange}
             randomBarConfig={randomBarConfig}
             onRandomBarConfigChange={onRandomBarConfigChange}
             flashMode={flashMode}

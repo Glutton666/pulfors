@@ -7,6 +7,7 @@ import {
   SwipeableBarRow,
 } from "@/components/bar-mode/SwipeableBarRow";
 import { getStaffRhythmNotation } from "@/components/bar-mode/SimplifiedStaffNotation";
+import { StaffRestGlyph } from "@/components/staff/StaffGlyphs";
 
 jest.mock("@expo/vector-icons", () => ({
   Ionicons: () => null,
@@ -218,7 +219,7 @@ describe("SwipeableBarRow block editing", () => {
     expect(overlay.querySelectorAll("[data-testid]").length).toBe(0);
   });
 
-  it("centers real note glyphs, leaves mute empty, and stacks meter above tempo", () => {
+  it("centers real note glyphs, renders mute as a rest, and stacks meter above tempo", () => {
     const { getByTestId, queryByTestId, getByText } = render(
       <SwipeableBarRow
         beat={2}
@@ -252,7 +253,8 @@ describe("SwipeableBarRow block editing", () => {
     expect(getByTestId("bar-note-accent-1")).toBeTruthy();
     expect(getByTestId("bar-note-normal-2")).toBeTruthy();
     expect(getByTestId("bar-note-mute-3")).toBeTruthy();
-    expect(getByTestId("bar-note-mute-3").children).toHaveLength(0);
+    expect(getByTestId("bar-rest-short-3")).toBeTruthy();
+    expect(getByTestId("bar-note-mute-3").children).not.toHaveLength(0);
     const strongStrike = getByTestId("bar-note-strong-strike-0");
     expect(strongStrike.getAttribute("y1")).toBe(strongStrike.getAttribute("y2"));
     const staffSvg = getByTestId("bar-staff-2").querySelector("svg");
@@ -267,6 +269,42 @@ describe("SwipeableBarRow block editing", () => {
     expect(queryByTestId("bar-active-cell-2-1")).toBeNull();
     expect(getByTestId("bar-active-cell-2-2")).toBeTruthy();
     expect(queryByTestId("bar-active-cell-2-3")).toBeNull();
+  });
+
+  it("renders rests for all-mute groups without dropping their rhythm beams", () => {
+    const { getByTestId } = render(
+      <SwipeableBarRow
+        beat={3}
+        beatType="mute"
+        subdivisions={["mute", "mute", "mute", "mute"]}
+        repeat={null}
+        isCurrentBeat={false}
+        isEditingBeat={false}
+        blockDepth={0}
+        blockStart={false}
+        blockEnd={false}
+        symbolBadges={[]}
+        isPlaying={false}
+        bpm={120}
+        meterNumerator={4}
+        meterDenominator={4}
+        beatsPerMeasure={4}
+        onPress={jest.fn()}
+        onSwipeLeft={jest.fn()}
+        onSwipeRight={jest.fn()}
+        onLongPress={jest.fn()}
+        colors={colors}
+        ms={(value) => value}
+        showStaffNotation
+      />,
+    );
+
+    for (let index = 0; index < 4; index++) {
+      expect(getByTestId(`bar-note-mute-${index}`)).toBeTruthy();
+      expect(getByTestId(`bar-rest-short-${index}`)).toBeTruthy();
+    }
+    expect(getByTestId("bar-rhythm-beam-0")).toBeTruthy();
+    expect(getByTestId("bar-rhythm-beam-1")).toBeTruthy();
   });
 
   it("adds a distinct start marker only to direct sample cells", () => {
@@ -361,6 +399,29 @@ describe("SwipeableBarRow block editing", () => {
         expect(notation.isTuplet).toBe([3, 5, 6, 7, 9].includes(count));
       }
     });
+  });
+
+  it.each([
+    [1, "bar-rest-whole-0"],
+    [2, "bar-rest-half-0"],
+    [4, "bar-rest-quarter-0"],
+    [8, "bar-rest-eighth-0"],
+    [16, "bar-rest-short-0"],
+  ] as const)("renders denominator %i with the matching rest glyph", (denominator, testID) => {
+    const { getByTestId } = render(
+      <StaffRestGlyph
+        x={20}
+        index={0}
+        noteValueDenominator={denominator}
+        beamCount={Math.max(0, Math.log2(denominator) - 2)}
+        grouped={false}
+        color={colors.accent}
+        noteY={22}
+        stemTop={8}
+        beamGap={3}
+      />,
+    );
+    expect(getByTestId(testID)).toBeTruthy();
   });
 
   it.each(["accent", "normal"] as const)(
