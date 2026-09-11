@@ -1386,6 +1386,13 @@ export const translations = {
     menu:     { ko: "메뉴",  en: "Menu"  },
     unknown:  { ko: "알 수 없는 모드", en: "Unknown Mode" },
     openDial:  { ko: "모드 전환 다이얼 열기", en: "Open mode switcher dial" },
+    closeDial: { ko: "모드 전환 다이얼 닫기", en: "Close mode switcher dial" },
+    dialLabel: { ko: "모드 선택", en: "Mode selection" },
+    dialHint: { ko: "조절하여 모드를 고른 뒤 활성화하여 선택합니다", en: "Adjust to choose a mode, then activate to select it" },
+    triggerHint: { ko: "Enter 또는 Space로 열 수 있습니다", en: "Press Enter or Space to open" },
+    nextMode: { ko: "다음 모드", en: "Next mode" },
+    previousMode: { ko: "이전 모드", en: "Previous mode" },
+    selectMode: { ko: "선택한 모드로 전환", en: "Switch to selected mode" },
     cycleTap:  { ko: "탭하여 다음 모드로 전환", en: "Tap to switch to next mode" },
   },
 } as const satisfies TranslationsShape;

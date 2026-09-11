@@ -4,6 +4,7 @@ import {
   Text,
   Pressable,
   PanResponder,
+  Platform,
   useWindowDimensions,
 } from "react-native";
 import Animated, {
@@ -378,6 +379,8 @@ interface ModeSwitcherDialProps {
   isPlaying?: boolean;
   /** When true, hides the D-tab handle entirely and anchors the fan to top-center. */
   hideHandle?: boolean;
+  onOpenChange?: (isOpen: boolean) => void;
+  returnFocusRef?: React.RefObject<View | null>;
 }
 
 export const ModeSwitcherDial = forwardRef(
@@ -388,6 +391,8 @@ function ModeSwitcherDial({
   isLandscape,
   isPlaying,
   hideHandle = false,
+  onOpenChange,
+  returnFocusRef,
 }: ModeSwitcherDialProps, ref: React.ForwardedRef<ModeSwitcherDialHandle>) {
   const { colors: C } = useTheme();
   // 테마 accent 색에서 림 색상 파생 — 외곽 테두리는 69%, 내부 링은 33% 불투명도
@@ -440,8 +445,18 @@ function ModeSwitcherDial({
 
   // ── Open / close ─────────────────────────────────────────────────────────
   const [isOpen, setIsOpen] = useState(false);
+  const fanAccessibilityRef = useRef<View>(null);
   const isOpenRef = useRef(false);
   useEffect(() => { isOpenRef.current = isOpen; }, [isOpen]);
+  useEffect(() => { onOpenChange?.(isOpen); }, [isOpen, onOpenChange]);
+  useEffect(() => {
+    if (Platform.OS !== "web" || !isOpen) return;
+    const frame = requestAnimationFrame(() => {
+      const fan = fanAccessibilityRef.current as (View & { focus?: () => void }) | null;
+      fan?.focus?.();
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [isOpen]);
 
   // ── Rotary scroll position ───────────────────────────────────────────────
   const initIdx = Math.max(0, MODES.indexOf(currentMode));
@@ -788,6 +803,59 @@ function ModeSwitcherDial({
     }, motionDuration(200, reduceMotion));
   }, [doClose, selectionPulse, reduceMotion]);
 
+  const moveKeyboardSelection = useCallback((delta: -1 | 1) => {
+    if (!isOpenRef.current || isConfirmingRef.current) return;
+    const target = scrollPosRef.current + delta;
+    settleToPosition(target);
+  }, [settleToPosition]);
+
+  const restoreTriggerFocus = useCallback(() => {
+    const target = returnFocusRef?.current as (View & { focus?: () => void }) | null | undefined;
+    target?.focus?.();
+  }, [returnFocusRef]);
+
+  useEffect(() => {
+    if (Platform.OS !== "web" || !isOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "ArrowRight" || event.key === "ArrowDown") {
+        event.preventDefault();
+        moveKeyboardSelection(1);
+      } else if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
+        event.preventDefault();
+        moveKeyboardSelection(-1);
+      } else if (event.key === "Enter" || event.key === " " || event.key === "Spacebar") {
+        event.preventDefault();
+        confirmSelection();
+      } else if (event.key === "Escape") {
+        event.preventDefault();
+        doClose();
+        requestAnimationFrame(restoreTriggerFocus);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [confirmSelection, doClose, isOpen, moveKeyboardSelection, restoreTriggerFocus]);
+
+  const handleDialAccessibilityAction = useCallback((event: {
+    nativeEvent: { actionName: string };
+  }) => {
+    switch (event.nativeEvent.actionName) {
+      case "increment":
+        moveKeyboardSelection(1);
+        break;
+      case "decrement":
+        moveKeyboardSelection(-1);
+        break;
+      case "activate":
+        confirmSelection();
+        break;
+      case "dismiss":
+        doClose();
+        restoreTriggerFocus();
+        break;
+    }
+  }, [confirmSelection, doClose, moveKeyboardSelection, restoreTriggerFocus]);
+
   // ── Geometry (sync refs synchronously in render) ──────────────────────────
   // When hideHandle=true, all geometry is pinned to top-center regardless of stored wallPos.
   const TOP_CENTER_WP: WallPos = { wall: "top", t: 0.5 };
@@ -883,6 +951,28 @@ function ModeSwitcherDial({
       {/* Expanded fan — anchor at wall edge, grows inward */}
       {isOpen && (
         <Animated.View
+          ref={fanAccessibilityRef}
+          {...(Platform.OS === "web"
+            ? ({ tabIndex: -1 } as unknown as React.ComponentProps<typeof Animated.View>)
+            : {})}
+          accessible
+          accessibilityRole="adjustable"
+          accessibilityLabel={t("switcher", "dialLabel")}
+          accessibilityHint={t("switcher", "dialHint")}
+          accessibilityState={{ expanded: true }}
+          accessibilityValue={{
+            min: 1,
+            max: N_MODES,
+            now: selectedIndex + 1,
+            text: t("switcher", MODES[selectedIndex] as "beat"|"bar"|"score"|"note"|"practice"|"stage"|"menu"),
+          }}
+          accessibilityActions={[
+            { name: "increment", label: t("switcher", "nextMode") },
+            { name: "decrement", label: t("switcher", "previousMode") },
+            { name: "activate", label: t("switcher", "selectMode") },
+            { name: "dismiss", label: t("switcher", "closeDial") },
+          ]}
+          onAccessibilityAction={handleDialAccessibilityAction}
           style={[
             {
               position: "absolute",
@@ -984,6 +1074,18 @@ function ModeSwitcherDial({
       {!hideHandle && (
       <View
         {...handlePR.panHandlers}
+        accessible
+        accessibilityRole="button"
+        accessibilityLabel={t("switcher", "openDial")}
+        accessibilityState={{ expanded: isOpen }}
+        accessibilityValue={{ text: t("switcher", currentMode as "beat"|"bar"|"score"|"note"|"practice"|"stage"|"menu") }}
+        accessibilityActions={[{ name: "activate", label: t("switcher", "openDial") }]}
+        onAccessibilityAction={() => {
+          if (isOpenRef.current) doCloseRef.current(); else doOpenRef.current();
+        }}
+        onAccessibilityTap={() => {
+          if (isOpenRef.current) doCloseRef.current(); else doOpenRef.current();
+        }}
         style={{
           position: "absolute",
           zIndex: Z_HANDLE,

@@ -102,6 +102,32 @@ test.describe("AnimatedModal 열기/닫기", () => {
     await expect(menuLab).toBeHidden();
   });
 
+  test("모드 다이얼: 키보드로 열기, 선택, 닫기 및 포커스 복원", async ({ page }) => {
+    const trigger = page.locator('[data-testid="mode-cycle-label"]');
+    const fan = page.locator('[data-testid="mode-dial-fan"]');
+
+    await trigger.focus();
+    await expect(trigger).toBeFocused();
+    await expect(trigger).toHaveAttribute("aria-expanded", "false");
+
+    await page.keyboard.press("Enter");
+    await expect(fan).toBeVisible();
+    await expect(trigger).toHaveAttribute("aria-expanded", "true");
+
+    await page.keyboard.press("ArrowRight");
+    await page.keyboard.press("Escape");
+    await expect(fan).toBeHidden();
+    await expect(trigger).toBeFocused();
+    await expect(trigger).toHaveAttribute("aria-expanded", "false");
+
+    await page.keyboard.press("Space");
+    await expect(fan).toBeVisible();
+    await page.keyboard.press("ArrowRight");
+    await page.keyboard.press("Enter");
+    await expect(fan).toBeHidden();
+    await expect(trigger).toContainText(/바|Bar/i);
+  });
+
   test("설정 모달: 메뉴에서 열기 → 내용 표시 → X 버튼 닫기", async ({
     page,
   }) => {

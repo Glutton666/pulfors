@@ -73,6 +73,8 @@ type Props = ReturnType<typeof useMetronomeScreen>;
 
 export function MetronomeScreenUI(props: Props) {
   const modeSwitcherDialRef = useRef<ModeSwitcherDialHandle>(null);
+  const modeDialTriggerRef = useRef<View>(null);
+  const [isModeDialOpen, setIsModeDialOpen] = useState(false);
 
   const {
     styles, C, S, t, themeMode, language, insets, webTopInset, webBottomInset,
@@ -487,7 +489,11 @@ export function MetronomeScreenUI(props: Props) {
       {/* 상단 중앙 고정 모드 레이블 — 탭하면 팬 다이얼 열기 (무대·악보·메뉴·연습장 중 숨김, 해당 화면 헤더에 자체 트리거 있음) */}
       {!stageModeActive && scoreMode === null && !showMenu && !showPracticeBook && !showPolygon && (
         <Pressable
+          ref={modeDialTriggerRef}
           onPress={openModeDial}
+          {...(Platform.OS === "web"
+            ? ({ "aria-expanded": isModeDialOpen } as unknown as React.ComponentProps<typeof Pressable>)
+            : {})}
           style={{
             position: "absolute",
             top: (insets.top || webTopInset) + 2,
@@ -502,6 +508,9 @@ export function MetronomeScreenUI(props: Props) {
           }}
           accessibilityRole="button"
           accessibilityLabel={t("switcher", "openDial")}
+          accessibilityHint={t("switcher", "triggerHint")}
+          accessibilityState={{ expanded: isModeDialOpen }}
+          accessibilityValue={{ text: t("switcher", currentMode as "beat" | "bar" | "score" | "note" | "practice" | "stage" | "menu") }}
           testID="mode-cycle-label"
         >
           <ModeIcon
@@ -533,6 +542,8 @@ export function MetronomeScreenUI(props: Props) {
           isLandscape={isLandscape}
           isPlaying={isPlaying}
           hideHandle
+          onOpenChange={setIsModeDialOpen}
+          returnFocusRef={modeDialTriggerRef}
         />
       )}
 
