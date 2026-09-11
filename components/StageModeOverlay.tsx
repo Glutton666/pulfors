@@ -24,7 +24,6 @@ import {
   FlatList,
   Modal,
   ScrollView,
-  Switch,
   BackHandler,
   Image,
   TextInput,
@@ -302,9 +301,6 @@ export interface StageModeOverlayProps {
   /** Opens the shared mode-scoped audio, feedback and keyboard settings. */
   onOpenModeSettings?: () => void;
   stageSettings?: StageSettings;
-  onStageSettingsChange?: (patch: Partial<StageSettings>) => void;
-  /** Monotonic request value used to reveal stage-only options from shared settings. */
-  stageOptionsRequest?: number;
   /** True while the shared stage settings modal is displayed. */
   modeSettingsVisible?: boolean;
   /**
@@ -352,8 +348,6 @@ export function StageModeOverlay({
   onOpenScheduledStart,
   onOpenModeSettings,
   stageSettings: settings = DEFAULT_STAGE_SETTINGS,
-  onStageSettingsChange,
-  stageOptionsRequest = 0,
   modeSettingsVisible = false,
   onQueueSeamlessNext,
 }: StageModeOverlayProps) {
@@ -369,7 +363,6 @@ export function StageModeOverlay({
 
   // ── 설정 & 셋 리스트 상태 ──────────────────────────────────────────
   const [setlist,  setSetlist]        = useState<PracticeEntry[]>([]);
-  const [settingsOpen, setSettingsOpen] = useState(false);
   const [pickerOpen,   setPickerOpen]   = useState(false);
   const [confirmExit,  setConfirmExit]  = useState(false);
 
@@ -382,8 +375,6 @@ export function StageModeOverlay({
   const [pendingJumpIdx, setPendingJumpIdx] = useState<number | null>(null);
   const pendingJumpIdxRef = useRef<number | null>(null);
   useEffect(() => { pendingJumpIdxRef.current = pendingJumpIdx; }, [pendingJumpIdx]);
-  /** 키보드 단축키 설정 중 선택 중인 키 ("1"~"0") */
-  const [keyPickerTarget, setKeyPickerTarget] = useState<string | null>(null);
 
   const practiceBookRef = useRef<PracticeEntry[]>([]);
   useEffect(() => { practiceBookRef.current = practiceBook; }, [practiceBook]);
@@ -464,7 +455,6 @@ export function StageModeOverlay({
       }
     }).catch(() => {});
     setConfirmExit(false);
-    setSettingsOpen(false);
     setPickerOpen(false);
     setContextEntryId(null);
   }, [visible]);
@@ -500,10 +490,6 @@ export function StageModeOverlay({
         .catch(() => {});
     };
   }, [visible, settings.keepAwake]);
-
-  const updateSettings = useCallback((patch: Partial<StageSettings>) => {
-    onStageSettingsChange?.(patch);
-  }, [onStageSettingsChange]);
 
   const updateSetlist = useCallback((next: PracticeEntry[]) => {
     setSetlist(next);
@@ -554,23 +540,16 @@ export function StageModeOverlay({
     const handler = BackHandler.addEventListener("hardwareBackPress", () => {
       // The shared settings modal owns the Android back action while visible.
       if (modeSettingsVisible) return false;
-      const backState: StageModeBackState = { settingsOpen, pickerOpen, contextEntryId };
+      const backState: StageModeBackState = { pickerOpen, contextEntryId };
       return handleStageModeBackPress(
         backState,
-        setSettingsOpen,
         setPickerOpen,
         setContextEntryId,
         setConfirmExit,
       );
     });
     return () => handler.remove();
-  }, [visible, settingsOpen, pickerOpen, contextEntryId, modeSettingsVisible]);
-
-  useEffect(() => {
-    if (visible && stageOptionsRequest > 0) {
-      setSettingsOpen(true);
-    }
-  }, [visible, stageOptionsRequest]);
+  }, [visible, pickerOpen, contextEntryId, modeSettingsVisible]);
 
   // ── 활성 항목 & 모드 결정 ────────────────────────────────────────
   const activeEntry = setlist.find((e) => e.id === activeEntryId) ?? null;
@@ -957,14 +936,6 @@ export function StageModeOverlay({
       {/* 플래시 레이어 */}
       <Animated.View pointerEvents="none" style={[styles.flashLayer, flashStyle]} />
 
-      {/* 설정 패널 딤 */}
-      {settingsOpen && (
-        <Pressable
-          style={styles.settingsDim}
-          onPress={() => setSettingsOpen(false)}
-        />
-      )}
-
       {/* 상단 바 */}
       <View style={[styles.topBar, { paddingTop: topPad }]}>
         <View style={{ minWidth: 44 }} />
@@ -992,7 +963,7 @@ export function StageModeOverlay({
           }}
           accessibilityLabel={t("stageMode", "settings")}
         >
-          <Ionicons name="settings-outline" size={20} color={settingsOpen ? text : faint} />
+          <Ionicons name="settings-outline" size={20} color={modeSettingsVisible ? text : faint} />
         </Pressable>
       </View>
 
@@ -1368,148 +1339,6 @@ export function StageModeOverlay({
       {/* 하단 패딩 */}
       <View style={{ height: bottomPad }} />
 
-      {/* ── 설정 패널 ─────────────────────────────────────────────── */}
-      <View
-        style={[
-          styles.settingsPanel,
-          {
-            backgroundColor: panelBg,
-            paddingTop: topPad + 44,
-            transform: [{ translateX: settingsOpen ? 0 : 320 }],
-          },
-        ]}
-      >
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.settingsPanelContent}>
-          <Text style={[styles.settingsPanelTitle, { color: text }]}>{t("stageMode", "settingsPanel")}</Text>
-          {/* 테마 */}
-          <SettingRow label={t("stageMode", "theme")} textColor={text} faintColor={faint}>
-            <View style={styles.segmentRow}>
-              {(["dark", "light"] as const).map((opt) => (
-                <Pressable
-                  key={opt}
-                  style={({ pressed }) => [
-                    styles.segment,
-                    settings.theme === opt && styles.segmentActive,
-                    { borderColor: btnBdr, backgroundColor: settings.theme === opt ? (isDark ? "rgba(255,255,255,0.18)" : "rgba(0,0,0,0.14)") : "transparent" },
-                    pressed && { opacity: 0.7 },
-                  ]}
-                  onPress={() => updateSettings({ theme: opt })}
-                >
-                  <Text style={[styles.segmentText, { color: text }]}>
-                    {t("stageMode", opt === "dark" ? "themeDark" : "themeLight")}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-          </SettingRow>
-
-          {/* 화면 꺼짐 방지 */}
-          <SettingRow label={t("stageMode", "keepAwake")} textColor={text} faintColor={faint}>
-            <Switch
-              value={settings.keepAwake}
-              onValueChange={(v) => updateSettings({ keepAwake: v })}
-              trackColor={{ false: isDark ? "#333" : "#ccc", true: "#4A9EFF" }}
-              thumbColor="#fff"
-            />
-          </SettingRow>
-
-          {/* 자동 진행 */}
-          <SettingRow label={t("stageMode", "autoAdvance")} textColor={text} faintColor={faint}
-            hint={t("stageMode", "autoAdvanceHint")}>
-            <Switch
-              value={settings.autoAdvance}
-              onValueChange={(v) => updateSettings({ autoAdvance: v })}
-              trackColor={{ false: isDark ? "#333" : "#ccc", true: "#4A9EFF" }}
-              thumbColor="#fff"
-            />
-          </SettingRow>
-
-          {/* 카운트다운 */}
-          <SettingRow label={t("stageMode", "countdown")} textColor={text} faintColor={faint}>
-            <View style={styles.segmentRow}>
-              {([0, 1, 2, 4] as const).map((opt) => (
-                <Pressable
-                  key={opt}
-                  style={({ pressed }) => [
-                    styles.segment,
-                    settings.countdown === opt && styles.segmentActive,
-                    { borderColor: btnBdr, backgroundColor: settings.countdown === opt ? (isDark ? "rgba(255,255,255,0.18)" : "rgba(0,0,0,0.14)") : "transparent" },
-                    pressed && { opacity: 0.7 },
-                  ]}
-                  onPress={() => updateSettings({ countdown: opt })}
-                >
-                  <Text style={[styles.segmentText, { color: text }]}>
-                    {opt === 0 ? t("stageMode", "countdown0") : `${opt}`}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-          </SettingRow>
-
-          {/* 악보 하이라이트 위치 */}
-          <SettingRow label={t("stageMode", "scoreHighlight")} textColor={text} faintColor={faint}>
-            <View style={styles.segmentRow}>
-              {(["top", "center", "bottom"] as const).map((opt) => (
-                <Pressable
-                  key={opt}
-                  style={({ pressed }) => [
-                    styles.segment,
-                    settings.scoreHighlight === opt && styles.segmentActive,
-                    { borderColor: btnBdr, backgroundColor: settings.scoreHighlight === opt ? (isDark ? "rgba(255,255,255,0.18)" : "rgba(0,0,0,0.14)") : "transparent" },
-                    pressed && { opacity: 0.7 },
-                  ]}
-                  onPress={() => updateSettings({ scoreHighlight: opt })}
-                >
-                  <Text style={[styles.segmentText, { color: text }]}>
-                    {t("stageMode", opt === "top" ? "scoreHighlightTop" : opt === "center" ? "scoreHighlightCenter" : "scoreHighlightBottom")}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-          </SettingRow>
-
-          {/* 키보드 단축키 */}
-          <View style={srow.row}>
-            <Text style={[srow.label, { color: text }]}>{t("stageMode", "keyShortcuts")}</Text>
-            <Text style={[srow.hint, { color: faint }]}>{t("stageMode", "keyShortcutsHint")}</Text>
-          </View>
-          {["1","2","3","4","5","6","7","8","9","0"].map((k) => {
-            const mappedId = (settings.keyMappings ?? {})[k];
-            const mappedEntry = mappedId ? practiceBook.find((e) => e.id === mappedId) : null;
-            return (
-              <View key={k} style={[srow.row, { flexDirection: "row", alignItems: "center" }]}>
-                <View style={styles.keyBadge}>
-                  <Text style={[styles.keyBadgeText, { color: text }]}>{k}</Text>
-                </View>
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.keyMappingBtn,
-                    { borderColor: btnBdr, backgroundColor: pressed ? btnBg : "transparent", flex: 1 },
-                  ]}
-                  onPress={() => setKeyPickerTarget(k)}
-                >
-                  <Text style={[styles.keyMappingBtnText, { color: mappedEntry ? text : faint }]} numberOfLines={1}>
-                    {mappedEntry ? mappedEntry.label : t("stageMode", "keyNone")}
-                  </Text>
-                </Pressable>
-                {mappedEntry && (
-                  <Pressable
-                    hitSlop={8}
-                    onPress={() => {
-                      const next = { ...(settings.keyMappings ?? {}) };
-                      delete next[k];
-                      updateSettings({ keyMappings: next });
-                    }}
-                  >
-                    <Ionicons name="close-circle" size={18} color={faint} />
-                  </Pressable>
-                )}
-              </View>
-            );
-          })}
-        </ScrollView>
-      </View>
-
       {/* ── 셋 리스트 피커 모달 ───────────────────────────────────── */}
       <Modal
         visible={pickerOpen}
@@ -1600,65 +1429,6 @@ export function StageModeOverlay({
         </View>
       )}
 
-      {/* ── 키 매핑 피커 모달 ────────────────────────────────────── */}
-      <Modal
-        visible={keyPickerTarget !== null}
-        transparent
-        animationType="none"
-        onRequestClose={() => setKeyPickerTarget(null)}
-      >
-        <View style={styles.pickerOverlay}>
-          <View style={[styles.pickerSheet, { backgroundColor: panelBg }]}>
-            <View style={styles.pickerHeader}>
-              <Text style={[styles.pickerTitle, { color: text }]}>
-                {t("stageMode", "keyPickerTitle")} [{keyPickerTarget}]
-              </Text>
-              <Pressable onPress={() => setKeyPickerTarget(null)}>
-                <Ionicons name="close" size={24} color={faint} />
-              </Pressable>
-            </View>
-            <FlatList
-              data={practiceBook}
-              keyExtractor={(item) => item.id}
-              contentContainerStyle={styles.pickerList}
-              renderItem={({ item }) => {
-                const mode  = getEntryMode(item);
-                const badge = MODE_BADGE[mode] ?? MODE_BADGE["beat"]!;
-                const isMapped = keyPickerTarget !== null &&
-                  (settings.keyMappings ?? {})[keyPickerTarget] === item.id;
-                return (
-                  <Pressable
-                    style={({ pressed }) => [
-                      styles.pickerItem,
-                      { borderColor: isMapped ? badge.color : cardBdr, backgroundColor: pressed ? cardBg : "transparent" },
-                    ]}
-                    onPress={() => {
-                      if (keyPickerTarget) {
-                        updateSettings({ keyMappings: { ...(settings.keyMappings ?? {}), [keyPickerTarget]: item.id } });
-                        setKeyPickerTarget(null);
-                      }
-                    }}
-                  >
-                    <View style={[styles.modeBadge, { backgroundColor: badge.color + "33" }]}>
-                      <Text style={[styles.modeBadgeText, { color: badge.color }]}>{badge.label}</Text>
-                    </View>
-                    <View style={styles.pickerItemText}>
-                      <Text style={[styles.pickerItemLabel, { color: text }]} numberOfLines={1}>
-                        {item.label}
-                      </Text>
-                      <Text style={[styles.pickerItemMeta, { color: faint }]}>
-                        {item.bpm} BPM · {item.beatsPerMeasure}/{beatDenominator}
-                      </Text>
-                    </View>
-                    {isMapped && <Ionicons name="checkmark-circle" size={20} color={badge.color} />}
-                  </Pressable>
-                );
-              }}
-            />
-          </View>
-        </View>
-      </Modal>
-
       {/* ── 웹 종료 확인 ─────────────────────────────────────────── */}
       {confirmExit && (
         <View style={styles.confirmOverlay}>
@@ -1684,31 +1454,6 @@ export function StageModeOverlay({
     </View>
   );
 }
-
-// ─── 설정 행 헬퍼 ────────────────────────────────────────────────────
-function SettingRow({
-  label, hint, textColor, faintColor, children,
-}: {
-  label: string; hint?: string; textColor: string; faintColor: string; children: React.ReactNode;
-}) {
-  return (
-    <View style={srow.row}>
-      <View style={srow.labelCol}>
-        <Text style={[srow.label, { color: textColor }]}>{label}</Text>
-        {hint ? <Text style={[srow.hint, { color: faintColor }]}>{hint}</Text> : null}
-      </View>
-      <View style={srow.control}>{children}</View>
-    </View>
-  );
-}
-
-const srow = StyleSheet.create({
-  row: { paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: "rgba(128,128,128,0.2)", gap: 8 },
-  labelCol: { flex: 1, marginBottom: 4 },
-  label: { fontSize: 14, fontFamily: "SpaceGrotesk_500Medium" },
-  hint:  { fontSize: 11, fontFamily: "SpaceGrotesk_400Regular", marginTop: 2 },
-  control: { alignItems: "flex-end" },
-});
 
 // ─── 스타일 ──────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
@@ -2140,53 +1885,6 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
 
-  // ── 설정 패널 ───────────────────────────────────────────────────
-  settingsDim: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.4)",
-    zIndex: 10,
-  },
-  settingsPanel: {
-    position: "absolute",
-    top: 0,
-    right: 0,
-    bottom: 0,
-    width: 320,
-    zIndex: 20,
-    shadowColor: "#000",
-    shadowOffset: { width: -4, height: 0 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 20,
-  },
-  settingsPanelContent: {
-    paddingHorizontal: 20,
-    paddingBottom: 40,
-  },
-  settingsPanelTitle: {
-    fontSize: 16,
-    fontFamily: "SpaceGrotesk_700Bold",
-    marginBottom: 16,
-  },
-  segmentRow: {
-    flexDirection: "row",
-    gap: 6,
-    flexWrap: "wrap",
-  },
-  segment: {
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingVertical: 5,
-    paddingHorizontal: 10,
-  },
-  segmentActive: {
-    // tintColor applied inline
-  },
-  segmentText: {
-    fontSize: 12,
-    fontFamily: "SpaceGrotesk_500Medium",
-  },
-
   // ── 피커 ─────────────────────────────────────────────────────────
   pickerOverlay: {
     flex: 1,
@@ -2273,33 +1971,6 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: "center",
     borderWidth: 1,
-  },
-
-  // ── 키보드 단축키 설정 ─────────────────────────────────────────────
-  keyBadge: {
-    width: 26,
-    height: 26,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.2)",
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 8,
-  },
-  keyBadgeText: {
-    fontSize: 12,
-    fontFamily: "SpaceGrotesk_700Bold",
-  },
-  keyMappingBtn: {
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingVertical: 5,
-    paddingHorizontal: 10,
-    marginRight: 6,
-  },
-  keyMappingBtnText: {
-    fontSize: 12,
-    fontFamily: "SpaceGrotesk_400Regular",
   },
 
   // ── 예약 점프 토스트 ────────────────────────────────────────────────

@@ -17,6 +17,9 @@ describe("Stage shared settings flow", () => {
       overlaySource.includes("onOpenModeSettings?.();"),
       "stage settings button must open the shared settings callback",
     );
+    assert.ok(!overlaySource.includes("stageOptionsRequest"), "legacy stage options request must be absent");
+    assert.ok(!overlaySource.includes("settingsPanel"), "legacy standalone settings panel must be absent");
+    assert.ok(!overlaySource.includes("keyPickerTarget"), "legacy overlay key picker must be absent");
     assert.ok(
       uiSource.includes('onOpenModeSettings={() => openScopedSettings("stage")}'),
       "StageModeOverlay must be wired to the stage-scoped settings modal",

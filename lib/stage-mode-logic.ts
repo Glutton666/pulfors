@@ -95,7 +95,6 @@ export async function applySwitchToMode(
 // ─── StageModeOverlay — Android BackHandler ──────────────────────────────────
 
 export interface StageModeBackState {
-  settingsOpen: boolean;
   pickerOpen: boolean;
   contextEntryId: string | null;
 }
@@ -104,21 +103,18 @@ export interface StageModeBackState {
  * Handles Android hardware back-press inside stage mode.
  *
  * Priority:
- *   1. Settings panel open → close it
- *   2. Picker open         → close it
- *   3. Context menu open   → clear it
- *   4. None of the above   → show exit-confirmation overlay
+ *   1. Picker open         → close it
+ *   2. Context menu open   → clear it
+ *   3. None of the above   → show exit-confirmation overlay
  *
  * Always returns true (event consumed).
  */
 export function handleStageModeBackPress(
   state: StageModeBackState,
-  setSettingsOpen: (v: boolean) => void,
   setPickerOpen: (v: boolean) => void,
   setContextEntryId: (v: string | null) => void,
   setConfirmExit: (v: boolean) => void,
 ): true {
-  if (state.settingsOpen)   { setSettingsOpen(false);   return true; }
   if (state.pickerOpen)     { setPickerOpen(false);     return true; }
   if (state.contextEntryId) { setContextEntryId(null);  return true; }
   setConfirmExit(true);

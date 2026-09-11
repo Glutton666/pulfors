@@ -121,34 +121,30 @@ describe("applySwitchToMode — 무대 모드 활성 상태에서 모드 전환"
 describe("handleStageModeBackPress — 안드로이드 백 버튼 우선순위", () => {
   test("모든 패널 닫혀 있을 때 → confirmExit(true) 호출, true 반환", () => {
     let confirmVal: boolean | undefined;
-    const state: StageModeBackState = { settingsOpen: false, pickerOpen: false, contextEntryId: null };
-    const result = handleStageModeBackPress(state, () => {}, () => {}, () => {}, (v) => { confirmVal = v; });
+    const state: StageModeBackState = { pickerOpen: false, contextEntryId: null };
+    const result = handleStageModeBackPress(state, () => {}, () => {}, (v) => { confirmVal = v; });
     assert.strictEqual(result, true);
     assert.strictEqual(confirmVal, true);
   });
 
-  test("설정 패널 열려 있을 때 → settingsOpen(false) 호출, confirmExit 미호출", () => {
-    let settingsVal: boolean | undefined;
+  test("공유 설정 모달은 Stage 백 핸들러가 가로채지 않음", () => {
     let confirmCalled = false;
-    const state: StageModeBackState = { settingsOpen: true, pickerOpen: false, contextEntryId: null };
+    const state: StageModeBackState = { pickerOpen: false, contextEntryId: null };
     handleStageModeBackPress(
       state,
-      (v) => { settingsVal = v; },
       () => {},
       () => {},
       () => { confirmCalled = true; },
     );
-    assert.strictEqual(settingsVal, false, "settings must close");
-    assert.strictEqual(confirmCalled, false, "confirmExit must NOT fire");
+    assert.strictEqual(confirmCalled, true, "shared modal owns its own dismissal");
   });
 
   test("피커 열려 있을 때 → pickerOpen(false) 호출, confirmExit 미호출", () => {
     let pickerVal: boolean | undefined;
     let confirmCalled = false;
-    const state: StageModeBackState = { settingsOpen: false, pickerOpen: true, contextEntryId: null };
+    const state: StageModeBackState = { pickerOpen: true, contextEntryId: null };
     handleStageModeBackPress(
       state,
-      () => {},
       (v) => { pickerVal = v; },
       () => {},
       () => { confirmCalled = true; },
@@ -160,10 +156,9 @@ describe("handleStageModeBackPress — 안드로이드 백 버튼 우선순위",
   test("컨텍스트 항목 있을 때 → contextEntryId(null) 호출, confirmExit 미호출", () => {
     let contextVal: string | null | undefined;
     let confirmCalled = false;
-    const state: StageModeBackState = { settingsOpen: false, pickerOpen: false, contextEntryId: "entry-1" };
+    const state: StageModeBackState = { pickerOpen: false, contextEntryId: "entry-1" };
     handleStageModeBackPress(
       state,
-      () => {},
       () => {},
       (v) => { contextVal = v; },
       () => { confirmCalled = true; },
@@ -172,17 +167,16 @@ describe("handleStageModeBackPress — 안드로이드 백 버튼 우선순위",
     assert.strictEqual(confirmCalled, false, "confirmExit must NOT fire");
   });
 
-  test("설정 > 피커: settingsOpen 이 pickerOpen 보다 우선", () => {
+  test("피커 > 컨텍스트: pickerOpen 이 contextEntryId 보다 우선", () => {
     const fired: string[] = [];
-    const state: StageModeBackState = { settingsOpen: true, pickerOpen: true, contextEntryId: "e" };
+    const state: StageModeBackState = { pickerOpen: true, contextEntryId: "e" };
     handleStageModeBackPress(
       state,
-      () => { fired.push("settings"); },
       () => { fired.push("picker"); },
       () => { fired.push("context"); },
       () => { fired.push("confirm"); },
     );
-    assert.deepStrictEqual(fired, ["settings"]);
+    assert.deepStrictEqual(fired, ["picker"]);
   });
 });
 
@@ -239,6 +233,13 @@ describe("경로 A: 상단 '무대 모드' 텍스트가 onOpenDial에 연결됨"
       src.includes("handleStageModeBackPress("),
       "StageModeOverlay BackHandler must delegate to handleStageModeBackPress",
     );
+  });
+
+  test("StageModeOverlay에 레거시 설정 패널 경로가 없음", () => {
+    const src = fs.readFileSync("components/StageModeOverlay.tsx", "utf8");
+    assert.ok(!src.includes("stageOptionsRequest"), "legacy stage options request must be removed");
+    assert.ok(!src.includes("settingsOpen"), "legacy settings panel state must be removed");
+    assert.ok(!src.includes("keyPickerTarget"), "legacy key picker state must be removed");
   });
 });
 

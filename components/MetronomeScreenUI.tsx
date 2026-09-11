@@ -1572,7 +1572,6 @@ export function MetronomeScreenUI(props: Props) {
         onOpenScheduledStart={() => openExclusive("scheduledStart")}
         onOpenModeSettings={() => openScopedSettings("stage")}
         stageSettings={stageSettings}
-        onStageSettingsChange={updateStageSettings}
         modeSettingsVisible={showSettings && settingsScope === "stage"}
         onQueueSeamlessNext={(next) => { seamlessNextEntryRef.current = next; }}
         onSelectEntry={(entry) => {
