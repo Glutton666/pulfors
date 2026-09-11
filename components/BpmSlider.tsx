@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useCallback, useMemo } from "react";
+import React, { useRef, useEffect, useCallback, useMemo, useState } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import {
   View,
@@ -23,6 +23,7 @@ import Colors from "@/constants/colors";
 import { useScale } from "@/lib/scale";
 import type { ScaleValues } from "@/lib/scale";
 import { FontSize, Spacing } from "@/constants/tokens";
+import { motionDuration, useReducedMotion } from "@/hooks/useReducedMotion";
 
 interface BpmSliderProps {
   bpm: number;
@@ -48,6 +49,9 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo, onDenominatorCycle, is
   };
   const { t } = useLanguage();
   const S = useScale();
+  const reduceMotion = useReducedMotion();
+  const reduceMotionRef = useRef(reduceMotion);
+  useEffect(() => { reduceMotionRef.current = reduceMotion; }, [reduceMotion]);
   const styles = useMemo(() => make_styles(C, S), [C, S]);
   const bpmRef = useRef(bpm);
   const startBpmRef = useRef(bpm);
@@ -61,6 +65,7 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo, onDenominatorCycle, is
   const longPressRepeat = useRef<ReturnType<typeof setInterval> | null>(null);
   const longPressFired = useRef(false);
   const touchViewRef = useRef<View>(null);
+  const [isFocused, setIsFocused] = useState(false);
 
   useEffect(() => { bpmRef.current = bpm; }, [bpm]);
   useEffect(() => { onBpmChangeRef.current = onBpmChange; }, [onBpmChange]);
@@ -96,9 +101,9 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo, onDenominatorCycle, is
     if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; }
     if (longPressRepeat.current) { clearInterval(longPressRepeat.current); longPressRepeat.current = null; }
     longPressFired.current = false;
-    glowL.value = withTiming(0, { duration: 200 });
-    glowR.value = withTiming(0, { duration: 200 });
-  }, []);
+    glowL.value = withTiming(0, { duration: motionDuration(200, reduceMotion) });
+    glowR.value = withTiming(0, { duration: motionDuration(200, reduceMotion) });
+  }, [reduceMotion]);
 
   const measureLayout = useCallback(() => {
     touchViewRef.current?.measureInWindow((x, y, width, height) => {
@@ -109,7 +114,7 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo, onDenominatorCycle, is
   }, []);
 
   const beginLongPress = useCallback((zone: "left" | "right") => {
-    (zone === "left" ? glowL : glowR).value = withTiming(1, { duration: 300 });
+    (zone === "left" ? glowL : glowR).value = withTiming(1, { duration: motionDuration(300, reduceMotion) });
     longPressTimer.current = setTimeout(() => {
       longPressFired.current = true;
       const step = () => {
@@ -123,7 +128,7 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo, onDenominatorCycle, is
       step();
       longPressRepeat.current = setInterval(step, 350);
     }, 500);
-  }, [snapDown, snapUp]);
+  }, [snapDown, snapUp, reduceMotion]);
 
   const panResponder = useRef(
     PanResponder.create({
@@ -178,7 +183,8 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo, onDenominatorCycle, is
       },
 
       onPanResponderRelease: () => {
-        offsetX.value = withSpring(0, { damping: 15, stiffness: 300 });
+        if (reduceMotionRef.current) offsetX.value = 0;
+        else offsetX.value = withSpring(0, { damping: 15, stiffness: 300 });
         const wasLong = longPressFired.current;
         const zone = zoneRef.current;
         clearTimers();
@@ -187,8 +193,8 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo, onDenominatorCycle, is
           if (zone === "center") {
             onTapTempoRef.current();
             flash.value = withSequence(
-              withTiming(1, { duration: 60 }),
-              withTiming(0, { duration: 300, easing: Easing.out(Easing.quad) })
+              withTiming(1, { duration: motionDuration(60, reduceMotionRef.current) }),
+              withTiming(0, { duration: motionDuration(300, reduceMotionRef.current), easing: Easing.out(Easing.quad) })
             );
           } else {
             const delta = zone === "left" ? -1 : 1;
@@ -202,7 +208,8 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo, onDenominatorCycle, is
       },
 
       onPanResponderTerminate: () => {
-        offsetX.value = withSpring(0, { damping: 15, stiffness: 300 });
+        if (reduceMotionRef.current) offsetX.value = 0;
+        else offsetX.value = withSpring(0, { damping: 15, stiffness: 300 });
         clearTimers();
       },
     })
@@ -215,6 +222,31 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo, onDenominatorCycle, is
   const leftGlowStyle = useAnimatedStyle(() => ({ opacity: glowL.value * 0.3 }));
   const rightGlowStyle = useAnimatedStyle(() => ({ opacity: glowR.value * 0.3 }));
 
+  const handleKeyDown = useCallback((event: { nativeEvent?: { key?: string }; key?: string; preventDefault?: () => void }) => {
+    const key = event.key ?? event.nativeEvent?.key;
+    let next: number | null = null;
+    if (key === "ArrowLeft" || key === "ArrowDown") next = Math.max(20, bpmRef.current - 1);
+    else if (key === "ArrowRight" || key === "ArrowUp") next = Math.min(300, bpmRef.current + 1);
+    else if (key === "Home") next = 20;
+    else if (key === "End") next = 300;
+    else if (key === "Enter" || key === " " || key === "Spacebar") {
+      event.preventDefault?.();
+      onTapTempoRef.current();
+      return;
+    }
+    if (next !== null) {
+      event.preventDefault?.();
+      if (next !== bpmRef.current) onBpmChangeRef.current(next);
+    }
+  }, []);
+  // React Native does not expose tabIndex/onKeyDown in its shared View props,
+  // while react-native-web does. Keep these web-only so native focus/gestures
+  // retain their existing semantics.
+  const webFocusProps =
+    Platform.OS === "web"
+      ? ({ tabIndex: 0, onKeyDown: handleKeyDown } as unknown as React.ComponentProps<typeof View>)
+      : {};
+
   return (
     <View style={[styles.wrapper, isLandscape && { alignSelf: "stretch" as const }]}>
       <View
@@ -224,12 +256,25 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo, onDenominatorCycle, is
         onLayout={() => measureLayout()}
         accessible
         accessibilityRole="adjustable"
-        accessibilityLabel={`BPM ${bpm}`}
+        accessibilityLabel="BPM"
         accessibilityHint={t("a11y", "bpmSliderHint")}
-        accessibilityValue={{ min: 20, max: 300, now: bpm }}
+        accessibilityValue={{ min: 20, max: 300, now: bpm, text: `${bpm} BPM` }}
+        accessibilityState={{ disabled: false }}
+        onFocus={() => setIsFocused(true)}
+        onBlur={() => setIsFocused(false)}
+        {...webFocusProps}
         {...panResponder.panHandlers}
       >
-        <Animated.View style={[styles.card, { backgroundColor: C.surface, borderColor: C.border }, bodyStyle, isLandscape && { paddingTop: S.ms(8, 0.3), paddingBottom: S.ms(6, 0.3) }]} testID="bpm-slider">
+        <Animated.View
+          style={[
+            styles.card,
+            { backgroundColor: C.surface, borderColor: isFocused ? C.accent : C.border },
+            isFocused && styles.focusedCard,
+            bodyStyle,
+            isLandscape && { paddingTop: S.ms(8, 0.3), paddingBottom: S.ms(6, 0.3) },
+          ]}
+          testID="bpm-slider"
+        >
           <Animated.View style={[styles.flashOverlay, flashStyle, { backgroundColor: C.accent }]} />
           <Animated.View style={[styles.glowLeft, leftGlowStyle]}>
             <LinearGradient
@@ -303,6 +348,13 @@ const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
     overflow: "hidden",
     borderWidth: 1.5,
   },
+  focusedCard: {
+    // A visible, non-layout-shifting focus affordance for keyboard users.
+    shadowColor: C.accent,
+    shadowOpacity: 0.55,
+    shadowRadius: 5,
+    ...(Platform.OS === "web" ? { outlineWidth: 2, outlineColor: C.accent, outlineStyle: "solid" } : {}),
+  } as any,
   flashOverlay: {
     ...StyleSheet.absoluteFillObject,
     borderRadius: 20,

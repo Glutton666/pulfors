@@ -31,7 +31,9 @@ export function BeatStepperButton({
       accessibilityRole="button"
       accessibilityLabel={direction === "minus" ? t("barModeView", "beatStepperDecrease") : t("barModeView", "beatStepperIncrease")}
       accessibilityState={{ disabled }}
-      style={[baseStyle, disabled && { opacity: 0.3 }]}
+      // Keep the visual size supplied by callers, but never let the hit target
+      // fall below the platform accessibility minimum.
+      style={[baseStyle, { minWidth: 44, minHeight: 44 }, disabled && { opacity: 0.3 }]}
       hitSlop={8}
       testID={testID}
     >

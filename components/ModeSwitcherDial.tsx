@@ -22,6 +22,7 @@ import { useTheme } from "@/contexts/ThemeContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useScale } from "@/lib/scale";
 import { onAccentColor } from "@/lib/color-contrast";
+import { motionDuration, useReducedMotion } from "@/hooks/useReducedMotion";
 import {
   MODE_DIAL_SLOTS,
   MODE_DIAL_SWIPE_SIGN,
@@ -394,6 +395,7 @@ function ModeSwitcherDial({
   const rimColorDim = C.accent + "55";
   const { t } = useLanguage();
   const S = useScale();
+  const reduceMotion = useReducedMotion();
   const { width: winW, height: winH } = useWindowDimensions();
 
   // ── Wall position ────────────────────────────────────────────────────────
@@ -467,13 +469,13 @@ function ModeSwitcherDial({
     if (selectedIndexRef.current === nextIndex) return;
     selectedIndexRef.current = nextIndex;
     setSelectedIndex(nextIndex);
-    if (pulse) {
+    if (pulse && !reduceMotion) {
       selectionPulse.value = withSequence(
         withTiming(1, { duration: 80, easing: Easing.out(Easing.quad) }),
         withTiming(0, { duration: 180, easing: Easing.out(Easing.cubic) }),
       );
     }
-  }, [selectionPulse]);
+  }, [selectionPulse, reduceMotion]);
 
   const settleToPosition = useCallback((position: number) => {
     const animationGeneration = ++animationGenerationRef.current;
@@ -485,17 +487,18 @@ function ModeSwitcherDial({
     // Keep the logical index canonical, but spring to its closest visual
     // equivalent so wrapping 5.6 → 0 moves a fraction forward to 6, not
     // backwards through the entire fan.
-    scrollPosition.value = withSpring(visualTarget, {
+     if (reduceMotion) scrollPosition.value = visualTarget;
+     else scrollPosition.value = withSpring(visualTarget, {
       damping: 18,
       stiffness: 210,
       mass: 0.7,
-    });
+     });
     if (settleTimerRef.current) clearTimeout(settleTimerRef.current);
     settleTimerRef.current = setTimeout(() => {
       if (animationGeneration !== animationGenerationRef.current) return;
       settleTimerRef.current = null;
     }, 220);
-  }, [highlightPosition, scrollPosition]);
+  }, [highlightPosition, scrollPosition, reduceMotion]);
 
   const resetDialSession = useCallback((mode: ModeSlot) => {
     const session = modeDialSessionForMode(mode);
@@ -559,27 +562,27 @@ function ModeSwitcherDial({
     cancelAnimation(overlayOp);
     setIsOpen(true);
     isOpenRef.current = true;
-    fanScale.value   = withTiming(1,   { duration: 220, easing: Easing.out(Easing.cubic) });
-    fanOpacity.value = withTiming(1,   { duration: 180 });
-    overlayOp.value  = withTiming(0.5, { duration: 200 });
+    fanScale.value   = withTiming(1,   { duration: motionDuration(220, reduceMotion), easing: Easing.out(Easing.cubic) });
+    fanOpacity.value = withTiming(1,   { duration: motionDuration(180, reduceMotion) });
+    overlayOp.value  = withTiming(0.5, { duration: motionDuration(200, reduceMotion) });
   // currentMode 제거 — ref로 읽으므로 deps 불필요, React Compiler 재생성 방지
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fanScale, fanOpacity, overlayOp, resetDialSession]);
+  }, [fanScale, fanOpacity, overlayOp, resetDialSession, reduceMotion]);
 
   const doClose = useCallback(() => {
     if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
     cancelAnimation(fanScale);
     cancelAnimation(fanOpacity);
     cancelAnimation(overlayOp);
-    fanScale.value   = withTiming(0.05, { duration: 180, easing: Easing.in(Easing.cubic) });
-    fanOpacity.value = withTiming(0,    { duration: 150 });
-    overlayOp.value  = withTiming(0,    { duration: 160 });
+    fanScale.value   = withTiming(0.05, { duration: motionDuration(180, reduceMotion), easing: Easing.in(Easing.cubic) });
+    fanOpacity.value = withTiming(0,    { duration: motionDuration(150, reduceMotion) });
+    overlayOp.value  = withTiming(0,    { duration: motionDuration(160, reduceMotion) });
     closeTimerRef.current = setTimeout(() => {
       closeTimerRef.current = null;
       setIsOpen(false);
       isOpenRef.current = false;
-    }, 185);
-  }, [fanScale, fanOpacity, overlayOp]);
+    }, motionDuration(185, reduceMotion));
+  }, [fanScale, fanOpacity, overlayOp, reduceMotion]);
 
   // Expose open/close to parent via ref.
   // Always call through doOpenRef/doCloseRef so React Compiler memoization
@@ -751,7 +754,7 @@ function ModeSwitcherDial({
     // 탭/스와이프 애니메이션과 같은 최단 경로 기준으로 전환 방향 결정
     const currentIdx = MODES.indexOf(currentModeRef.current);
     const direction = modeDialTransitionDirection(currentIdx, snapped);
-    selectionPulse.value = withSequence(
+    if (!reduceMotion) selectionPulse.value = withSequence(
       withTiming(1, { duration: 70, easing: Easing.out(Easing.quad) }),
       withTiming(0, { duration: 130, easing: Easing.in(Easing.quad) }),
     );
@@ -782,8 +785,8 @@ function ModeSwitcherDial({
           isConfirmingRef.current = false;
         }
       }
-    }, 200);
-  }, [doClose, selectionPulse]);
+    }, motionDuration(200, reduceMotion));
+  }, [doClose, selectionPulse, reduceMotion]);
 
   // ── Geometry (sync refs synchronously in render) ──────────────────────────
   // When hideHandle=true, all geometry is pinned to top-center regardless of stored wallPos.

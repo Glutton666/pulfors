@@ -7,6 +7,8 @@ import {
   View,
   Text,
   TextInput,
+  KeyboardAvoidingView,
+  ScrollView,
   StyleSheet,
   Pressable,
   Platform,
@@ -84,56 +86,69 @@ export function ScoreNewModal({ visible, defaultBpm, onClose, onCreate, onTitleS
   return (
     <AnimatedModal visible={visible} transparent onRequestClose={handleClose}>
       <Pressable style={styles.overlay} onPress={handleClose} testID="score-new-modal-overlay">
-        <View
-          style={[
-            styles.sheet,
-            {
-              backgroundColor: C.surface,
-              borderColor: C.border,
-              paddingTop: (insets.top || webTopInset) + 16,
-              paddingBottom: 24 + (insets.bottom || (Platform.OS === "web" ? 34 : 0)),
-            },
-          ]}
-          onStartShouldSetResponder={() => true}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          keyboardVerticalOffset={0}
+          style={styles.keyboardAvoiding}
         >
-          <View style={styles.handle} />
-          <Text style={[styles.title, { color: C.text }]}>{t("scoreMode", "newTitle")}</Text>
-
-          <Text style={[styles.label, { color: C.textSecondary }]}>{t("scoreMode", "scoreTitleLabel")}</Text>
-          <TextInput
-            style={[styles.textInput, { color: C.text, borderColor: C.border, backgroundColor: C.background }]}
-            value={title}
-            onChangeText={setTitle}
-            placeholder={t("scoreMode", "scoreTitlePlaceholder")}
-            placeholderTextColor={C.textSecondary}
-            maxLength={60}
-            autoFocus
-            returnKeyType="done"
-            onSubmitEditing={handleCreate}
-            testID="score-new-title-input"
-          />
-
-          <Text style={[styles.hint, { color: C.textSecondary }]}>
-            {t("scoreMode", "newScoreHint")}
-          </Text>
-
-          <View style={styles.btnRow}>
-            <Pressable
-              style={[styles.cancelBtn, { backgroundColor: C.background, borderColor: C.border }]}
-              onPress={handleClose}
-              testID="score-new-cancel"
+          <View
+            style={[
+              styles.sheet,
+              {
+                backgroundColor: C.surface,
+                borderColor: C.border,
+                paddingTop: (insets.top || webTopInset) + 16,
+                paddingBottom: 24 + (insets.bottom || (Platform.OS === "web" ? 34 : 0)),
+              },
+            ]}
+            onStartShouldSetResponder={() => true}
+          >
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="on-drag"
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.sheetContent}
             >
-              <Text style={[styles.cancelText, { color: C.text }]}>{t("scoreMode", "cancel")}</Text>
-            </Pressable>
-            <Pressable
-              style={[styles.createBtn, { backgroundColor: C.accent }]}
-              onPress={handleCreate}
-              testID="score-new-create"
-            >
-              <Text style={[styles.createText, { color: onAccentColor(C.accent) }]}>{t("scoreMode", "create")}</Text>
-            </Pressable>
+              <View style={styles.handle} />
+              <Text style={[styles.title, { color: C.text }]}>{t("scoreMode", "newTitle")}</Text>
+
+              <Text style={[styles.label, { color: C.textSecondary }]}>{t("scoreMode", "scoreTitleLabel")}</Text>
+              <TextInput
+                style={[styles.textInput, { color: C.text, borderColor: C.border, backgroundColor: C.background }]}
+                value={title}
+                onChangeText={setTitle}
+                placeholder={t("scoreMode", "scoreTitlePlaceholder")}
+                placeholderTextColor={C.textSecondary}
+                maxLength={60}
+                autoFocus
+                returnKeyType="done"
+                onSubmitEditing={handleCreate}
+                testID="score-new-title-input"
+              />
+
+              <Text style={[styles.hint, { color: C.textSecondary }]}>
+                {t("scoreMode", "newScoreHint")}
+              </Text>
+
+              <View style={styles.btnRow}>
+                <Pressable
+                  style={[styles.cancelBtn, { backgroundColor: C.background, borderColor: C.border }]}
+                  onPress={handleClose}
+                  testID="score-new-cancel"
+                >
+                  <Text style={[styles.cancelText, { color: C.text }]}>{t("scoreMode", "cancel")}</Text>
+                </Pressable>
+                <Pressable
+                  style={[styles.createBtn, { backgroundColor: C.accent }]}
+                  onPress={handleCreate}
+                  testID="score-new-create"
+                >
+                  <Text style={[styles.createText, { color: onAccentColor(C.accent) }]}>{t("scoreMode", "create")}</Text>
+                </Pressable>
+              </View>
+            </ScrollView>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Pressable>
     </AnimatedModal>
   );
@@ -146,7 +161,15 @@ const makeStyles = (C: any, S: any) =>
       borderTopLeftRadius: Radius.xl, borderTopRightRadius: Radius.xl,
       borderTopWidth: 1, borderLeftWidth: 1, borderRightWidth: 1,
       paddingHorizontal: Spacing.lg, gap: Spacing.sm,
+      flexShrink: 1,
     },
+    keyboardAvoiding: {
+      flex: 1,
+      width: "100%",
+      justifyContent: "flex-end",
+      alignItems: "stretch",
+    },
+    sheetContent: { flexGrow: 1 },
     handle: {
       alignSelf: "center", width: 36, height: 4, borderRadius: 2,
       backgroundColor: C.border, marginBottom: Spacing.xs,

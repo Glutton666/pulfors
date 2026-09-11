@@ -6,7 +6,7 @@ import { View, Text, Pressable, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { AnimatedModal } from "@/components/AnimatedModal";
 import { FontSize, Spacing, Radius } from "@/constants/tokens";
-import { IS_TABLET } from "@/lib/scale";
+import { useScale } from "@/lib/scale";
 import type { TranslationFn } from "@/lib/i18n";
 import type { BarModeColors } from "./BarModeTypes";
 
@@ -21,11 +21,12 @@ interface BarVoltaModalProps {
 }
 
 export function BarVoltaModal({ beat, voltaVal, onChangeVal, onSave, colors: C, ms, t }: BarVoltaModalProps) {
+  const { isTablet } = useScale();
   return (
     <AnimatedModal visible={beat !== null} transparent onRequestClose={onSave}>
       <View style={styles.overlay}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onSave} />
-        <View style={[styles.card, { backgroundColor: C.backgroundSecondary, maxWidth: IS_TABLET ? 520 : 320 }]} dataSet={{ capturesKeys: "true" }}>
+        <View style={[styles.card, { backgroundColor: C.backgroundSecondary, maxWidth: isTablet ? 520 : 320 }]} dataSet={{ capturesKeys: "true" }}>
           <View style={[styles.header, { borderBottomColor: C.overlay08 }]}>
             <Ionicons name="hourglass-outline" size={ms(16, 0.4)} color="#7b68ee" />
             <Text style={{ color: "#7b68ee", fontSize: FontSize.small, fontFamily: "SpaceGrotesk_700Bold" }}>

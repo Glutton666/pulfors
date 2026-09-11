@@ -11,15 +11,10 @@ import Animated, {
 } from "react-native-reanimated";
 import { useTheme } from "@/contexts/ThemeContext";
 import Colors from "@/constants/colors";
-import { moderateScale, SCREEN_WIDTH, IS_TABLET, useScale } from "@/lib/scale";
+import { useScale } from "@/lib/scale";
 import { Radius, Spacing } from "@/constants/tokens";
 import type { ScaleValues } from "@/lib/scale";
 import { computePendulumAnim, pendulumPlan } from "@/lib/animation-lifecycle";
-
-const PENDULUM_LENGTH = IS_TABLET
-  ? Math.min(SCREEN_WIDTH * 0.35, 280)
-  : Math.min(SCREEN_WIDTH * 0.5, moderateScale(200));
-const BOB_SIZE = moderateScale(14, 0.4);
 
 interface PendulumProps {
   isPlaying: boolean;
@@ -29,7 +24,11 @@ interface PendulumProps {
 export function Pendulum({ isPlaying, bpm }: PendulumProps) {
   const { colors: C } = useTheme();
   const S = useScale();
-  const styles = useMemo(() => make_styles(C, S), [C, S]);
+  const pendulumLength = S.isTablet
+    ? Math.min(S.screenWidth * 0.35, 280)
+    : Math.min(S.screenWidth * 0.5, S.ms(200));
+  const bobSize = S.ms(14, 0.4);
+  const styles = useMemo(() => make_styles(C, S, pendulumLength, bobSize), [C, S, pendulumLength, bobSize]);
   const { swingDuration, maxAngle } = computePendulumAnim(bpm);
 
   const rotation = useSharedValue(0);
@@ -90,11 +89,11 @@ export function Pendulum({ isPlaying, bpm }: PendulumProps) {
   );
 }
 
-const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
+const make_styles = (C: typeof Colors, S: ScaleValues, pendulumLength: number, bobSize: number) => StyleSheet.create({
   container: {
     alignItems: "center",
     justifyContent: "flex-end",
-    height: PENDULUM_LENGTH + 60,
+    height: pendulumLength + 60,
     marginBottom: Spacing.sm,
   },
   pivotPoint: {
@@ -113,12 +112,12 @@ const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
   },
   armLine: {
     width: 3,
-    height: PENDULUM_LENGTH,
+    height: pendulumLength,
     borderRadius: 1.5,
   },
   weightTrack: {
     position: "absolute",
-    top: PENDULUM_LENGTH * 0.3,
+    top: pendulumLength * 0.3,
     alignItems: "center",
   },
   weight: {
@@ -127,9 +126,9 @@ const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
     borderRadius: 3,
   },
   bob: {
-    width: BOB_SIZE,
-    height: BOB_SIZE,
-    borderRadius: BOB_SIZE / 2,
+    width: bobSize,
+    height: bobSize,
+    borderRadius: bobSize / 2,
     marginTop: -2,
   },
   base: {

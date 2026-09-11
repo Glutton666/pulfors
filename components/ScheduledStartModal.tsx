@@ -69,13 +69,29 @@ function Spinner({ value, min, max, onChange, label, accent, text, border, surfa
   return (
     <View style={spinnerStyles.col}>
       <Text style={[spinnerStyles.label, { color: text + "88" }]}>{label}</Text>
-      <Pressable onPress={inc} hitSlop={8} style={[spinnerStyles.chevron, { borderColor: border, backgroundColor: surface }]}>
+      <Pressable
+        onPress={inc}
+        hitSlop={8}
+        accessibilityRole="button"
+        accessibilityLabel={`${label} increase`}
+        accessibilityValue={{ now: value, min, max }}
+        accessibilityState={{ disabled: false }}
+        style={[spinnerStyles.chevron, { borderColor: border, backgroundColor: surface }]}
+      >
         <Ionicons name="chevron-up" size={20} color={accent} />
       </Pressable>
       <View style={[spinnerStyles.valueBox, { borderColor: border, backgroundColor: surface }]}>
         <Text style={[spinnerStyles.value, { color: text }]}>{pad2(value)}</Text>
       </View>
-      <Pressable onPress={dec} hitSlop={8} style={[spinnerStyles.chevron, { borderColor: border, backgroundColor: surface }]}>
+      <Pressable
+        onPress={dec}
+        hitSlop={8}
+        accessibilityRole="button"
+        accessibilityLabel={`${label} decrease`}
+        accessibilityValue={{ now: value, min, max }}
+        accessibilityState={{ disabled: false }}
+        style={[spinnerStyles.chevron, { borderColor: border, backgroundColor: surface }]}
+      >
         <Ionicons name="chevron-down" size={20} color={accent} />
       </Pressable>
     </View>
@@ -94,7 +110,8 @@ const spinnerStyles = StyleSheet.create({
   },
   chevron: {
     width: 44,
-    height: 36,
+    minWidth: 44,
+    minHeight: 44,
     borderRadius: Radius.md,
     borderWidth: 1,
     alignItems: "center" as const,
@@ -267,7 +284,15 @@ export function ScheduledStartModal({
           <View style={styles.header}>
             <View style={{ width: 26 }} />
             <Text style={[styles.headerTitle, { color: C.text }]}>{t("scheduledStart", "title")}</Text>
-            <Pressable onPress={counting ? handleCancel : onClose} hitSlop={10} testID="scheduled-start-close">
+            <Pressable
+              onPress={counting ? handleCancel : onClose}
+              hitSlop={10}
+              accessibilityRole="button"
+              accessibilityLabel={counting ? t("scheduledStart", "cancel") : t("scheduledStart", "close")}
+              accessibilityState={{ disabled: false }}
+              style={styles.closeButton}
+              testID="scheduled-start-close"
+            >
               <Ionicons name="close" size={26} color={C.text} />
             </Pressable>
           </View>
@@ -323,6 +348,10 @@ export function ScheduledStartModal({
                         hitSlop={8}
                         style={[styles.offsetBtn, { borderColor: C.border, backgroundColor: C.surface }]}
                         testID="offset-dec"
+                        accessibilityRole="button"
+                        accessibilityLabel={t("scheduledStart", "offsetDecrease")}
+                        accessibilityValue={{ now: offsetMs, min: -OFFSET_MAX, max: OFFSET_MAX, text: formatOffset(offsetMs) }}
+                        accessibilityState={{ disabled: offsetMs <= -OFFSET_MAX }}
                       >
                         <Ionicons name="remove" size={16} color={C.text} />
                       </Pressable>
@@ -330,6 +359,10 @@ export function ScheduledStartModal({
                         onPress={resetOffset}
                         style={[styles.offsetValue, { borderColor: offsetMs !== 0 ? C.accent : C.border, backgroundColor: C.surface }]}
                         testID="offset-value"
+                        accessibilityRole="button"
+                        accessibilityLabel={t("scheduledStart", "offsetReset")}
+                        accessibilityValue={{ now: offsetMs, min: -OFFSET_MAX, max: OFFSET_MAX, text: formatOffset(offsetMs) }}
+                        accessibilityState={{ disabled: offsetMs === 0 }}
                       >
                         <Text style={[styles.offsetValueText, { color: offsetMs !== 0 ? C.accent : C.textSecondary }]}>
                           {formatOffset(offsetMs)}
@@ -340,6 +373,10 @@ export function ScheduledStartModal({
                         hitSlop={8}
                         style={[styles.offsetBtn, { borderColor: C.border, backgroundColor: C.surface }]}
                         testID="offset-inc"
+                        accessibilityRole="button"
+                        accessibilityLabel={t("scheduledStart", "offsetIncrease")}
+                        accessibilityValue={{ now: offsetMs, min: -OFFSET_MAX, max: OFFSET_MAX, text: formatOffset(offsetMs) }}
+                        accessibilityState={{ disabled: offsetMs >= OFFSET_MAX }}
                       >
                         <Ionicons name="add" size={16} color={C.text} />
                       </Pressable>
@@ -427,6 +464,12 @@ const makeStyles = (C: any) =>
       fontFamily: "SpaceGrotesk_600SemiBold",
       fontSize: FontSize.subtitle,
     },
+    closeButton: {
+      minWidth: 44,
+      minHeight: 44,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+    },
     body: {
       flex: 1,
     },
@@ -485,7 +528,8 @@ const makeStyles = (C: any) =>
     },
     offsetBtn: {
       width: 36,
-      height: 36,
+      minWidth: 44,
+      minHeight: 44,
       borderRadius: Radius.md,
       borderWidth: 1,
       alignItems: "center" as const,
@@ -493,7 +537,7 @@ const makeStyles = (C: any) =>
     },
     offsetValue: {
       flex: 1,
-      height: 36,
+      minHeight: 44,
       borderRadius: Radius.md,
       borderWidth: 1,
       alignItems: "center" as const,

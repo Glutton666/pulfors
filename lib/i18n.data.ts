@@ -722,6 +722,9 @@ export const translations = {
     countdownInfo: { ko: "%bpm BPM · %meter박자로 시작합니다", en: "Starting %bpm BPM · %meter beats" },
     cancel: { ko: "취소", en: "Cancel" },
     close: { ko: "닫기", en: "Close" },
+    offsetDecrease: { ko: "오프셋 줄이기", en: "Decrease offset" },
+    offsetIncrease: { ko: "오프셋 늘리기", en: "Increase offset" },
+    offsetReset: { ko: "오프셋 초기화", en: "Reset offset" },
   },
   fadeOut: {
     title: { ko: "구간 음소거", en: "Fade-Out" },

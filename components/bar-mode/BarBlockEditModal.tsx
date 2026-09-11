@@ -7,7 +7,7 @@ import { View, Text, Pressable, TextInput, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { AnimatedModal } from "@/components/AnimatedModal";
 import { FontSize, Spacing, Radius } from "@/constants/tokens";
-import { IS_TABLET } from "@/lib/scale";
+import { useScale } from "@/lib/scale";
 import type { LoopBlock } from "@/components/beat-indicator.types";
 import type { CustomSoundSetConfig } from "@/lib/storage";
 import type { TranslationFn } from "@/lib/i18n";
@@ -31,6 +31,7 @@ export function BarBlockEditModal({
   onSave, onDelete, onClose,
   colors: C, ms, t,
 }: BarBlockEditModalProps) {
+  const { isTablet } = useScale();
   const [repType, setRepType] = useState<"count" | "duration">("count");
   const [repCount, setRepCount] = useState(2);
   const [repMin, setRepMin] = useState(0);
@@ -71,7 +72,7 @@ export function BarBlockEditModal({
     <AnimatedModal visible={visible} transparent onRequestClose={handleSave}>
       <View style={styles.overlay}>
         <Pressable style={StyleSheet.absoluteFill} onPress={handleSave} />
-        <View style={[styles.card, { backgroundColor: C.backgroundSecondary, maxWidth: IS_TABLET ? 520 : 320 }]} dataSet={{ capturesKeys: "true" }}>
+        <View style={[styles.card, { backgroundColor: C.backgroundSecondary, maxWidth: isTablet ? 520 : 320 }]} dataSet={{ capturesKeys: "true" }}>
 
           {/* Header */}
           <View style={[styles.header, { borderBottomColor: C.overlay08 }]}>

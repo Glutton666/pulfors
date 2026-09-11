@@ -35,15 +35,11 @@ import { Spacing } from "@/constants/tokens";
 import { useTheme } from "@/contexts/ThemeContext";
 import { onAccentColor } from "@/lib/color-contrast";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { moderateScale, useScale } from "@/lib/scale";
+import { useScale } from "@/lib/scale";
 import type { ScaleValues } from "@/lib/scale";
 type Mode = "stopwatch" | "timer";
 type TimerState = "idle" | "running" | "paused" | "finishing" | "countdown";
 
-const PANEL_WIDTH = moderateScale(260, 0.3);
-const HANDLE_WIDTH = moderateScale(28, 0.3);
-const HANDLE_HEIGHT = moderateScale(80, 0.3);
-const TOTAL_DRAWER_WIDTH = PANEL_WIDTH + HANDLE_WIDTH;
 const EDGE_SWIPE_ZONE = 30;
 const SWIPE_THRESHOLD = 50;
 const TIMER_PRESETS = [
@@ -129,7 +125,13 @@ function StopwatchTimer({
 
   const { colors: C } = useTheme();
   const S = useScale();
-  const styles = useMemo(() => make_styles(C, S), [C, S]);
+  const panelWidth = S.ms(260, 0.3);
+  const handleWidth = S.ms(28, 0.3);
+  const handleHeight = S.ms(80, 0.3);
+  const styles = useMemo(
+    () => make_styles(C, S, handleWidth, handleHeight, panelWidth),
+    [C, S, panelWidth, handleWidth, handleHeight],
+  );
 
   useEffect(() => { stateRef.current = state; }, [state]);
   useEffect(() => { modeRef.current = mode; }, [mode]);
@@ -175,7 +177,7 @@ function StopwatchTimer({
     return () => sub.remove();
   }, [bumpTick]);
 
-  const slideX = useSharedValue(-PANEL_WIDTH);
+  const slideX = useSharedValue(-panelWidth);
   const pulseOpacity = useSharedValue(1);
   const finishingPulse = useSharedValue(1);
   const handleGlow = useSharedValue(0);
@@ -189,9 +191,9 @@ function StopwatchTimer({
     if (open) {
       slideX.value = withTiming(0, { duration: 200, easing: Easing.out(Easing.quad) });
     } else {
-      slideX.value = withTiming(-PANEL_WIDTH, { duration: 180, easing: Easing.in(Easing.quad) });
+      slideX.value = withTiming(-panelWidth, { duration: 180, easing: Easing.in(Easing.quad) });
     }
-  }, [open]);
+  }, [open, panelWidth]);
 
   useEffect(() => {
     if (state === "running" || state === "finishing" || state === "countdown") {
@@ -334,10 +336,10 @@ function StopwatchTimer({
         ) => {
           const currentOpen = openRef.current;
           if (currentOpen) {
-            const clamped = Math.min(0, Math.max(-PANEL_WIDTH, gestureState.dx));
+            const clamped = Math.min(0, Math.max(-panelWidth, gestureState.dx));
             slideX.value = clamped;
           } else {
-            const clamped = Math.min(0, Math.max(-PANEL_WIDTH, -PANEL_WIDTH + gestureState.dx));
+            const clamped = Math.min(0, Math.max(-panelWidth, -panelWidth + gestureState.dx));
             slideX.value = clamped;
           }
         },
@@ -350,18 +352,18 @@ function StopwatchTimer({
             slideX.value = withTiming(0, { duration: 200, easing: Easing.out(Easing.quad) });
           } else if (gestureState.dx < -SWIPE_THRESHOLD) {
             closePanel();
-            slideX.value = withTiming(-PANEL_WIDTH, { duration: 180, easing: Easing.in(Easing.quad) });
+            slideX.value = withTiming(-panelWidth, { duration: 180, easing: Easing.in(Easing.quad) });
           } else {
             const currentOpen = openRef.current;
             if (currentOpen) {
               slideX.value = withTiming(0, { duration: 200, easing: Easing.out(Easing.quad) });
             } else {
-              slideX.value = withTiming(-PANEL_WIDTH, { duration: 180, easing: Easing.in(Easing.quad) });
+              slideX.value = withTiming(-panelWidth, { duration: 180, easing: Easing.in(Easing.quad) });
             }
           }
         },
       }),
-    [openPanel, closePanel]
+    [openPanel, closePanel, panelWidth]
   );
 
   const edgeSwipePanResponder = useMemo(
@@ -378,7 +380,7 @@ function StopwatchTimer({
           _evt: GestureResponderEvent,
           gestureState: PanResponderGestureState
         ) => {
-          const clamped = Math.min(0, Math.max(-PANEL_WIDTH, -PANEL_WIDTH + gestureState.dx));
+          const clamped = Math.min(0, Math.max(-panelWidth, -panelWidth + gestureState.dx));
           slideX.value = clamped;
         },
         onPanResponderRelease: (
@@ -389,11 +391,11 @@ function StopwatchTimer({
             openPanel();
             slideX.value = withTiming(0, { duration: 200, easing: Easing.out(Easing.quad) });
           } else {
-            slideX.value = withTiming(-PANEL_WIDTH, { duration: 180, easing: Easing.in(Easing.quad) });
+            slideX.value = withTiming(-panelWidth, { duration: 180, easing: Easing.in(Easing.quad) });
           }
         },
       }),
-    [openPanel]
+    [openPanel, panelWidth]
   );
 
   const clearTimerInterval = useCallback(() => {
@@ -1278,7 +1280,13 @@ function StopwatchTimer({
 
 });
 
-const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
+const make_styles = (
+  C: typeof Colors,
+  S: ScaleValues,
+  handleWidth: number,
+  handleHeight: number,
+  panelWidth: number,
+) => StyleSheet.create({
   landscapeContainer: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
@@ -1372,8 +1380,8 @@ const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
     alignItems: "flex-start",
   },
   handle: {
-    width: HANDLE_WIDTH,
-    minHeight: HANDLE_HEIGHT,
+    width: handleWidth,
+    minHeight: handleHeight,
     backgroundColor: C.surface,
     borderTopRightRadius: S.ms(12, 0.3),
     borderBottomRightRadius: S.ms(12, 0.3),
@@ -1405,7 +1413,7 @@ const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
     opacity: 0.4,
   },
   panel: {
-    width: PANEL_WIDTH,
+    width: panelWidth,
     backgroundColor: C.surface,
     borderRightWidth: 1,
     borderBottomWidth: 1,

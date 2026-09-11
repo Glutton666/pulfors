@@ -8,6 +8,7 @@ import {
   TextInput,
   PanResponder,
   ScrollView,
+  KeyboardAvoidingView,
   FlatList,
   useWindowDimensions,
 } from "react-native";
@@ -374,6 +375,7 @@ interface TuningGuideModalProps {
 export function TuningGuideModal({ visible, onClose, onSelectFreq, lang, accentColor, accentDim }: TuningGuideModalProps) {
   const { colors: C } = useTheme();
   const S = useScale();
+  const { width: winW } = useWindowDimensions();
   const tgStyles = make_tgStyles(C);
   const [tgNote, setTgNote] = useState("A");
   const [tgOctave, setTgOctave] = useState(4);
@@ -393,7 +395,15 @@ export function TuningGuideModal({ visible, onClose, onSelectFreq, lang, accentC
     <AnimatedModal visible={visible} transparent onRequestClose={handleClose} statusBarTranslucent>
       <View style={tgStyles.overlay}>
         <Pressable style={StyleSheet.absoluteFill} onPress={handleClose} />
-        <View style={tgStyles.card}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          keyboardVerticalOffset={0}
+          style={tgStyles.keyboardAvoiding}
+        >
+        <View
+          testID="tuning-guide-card"
+          style={[tgStyles.card, { width: Math.min(338, Math.max(0, winW - 32)) }]}
+        >
           {/* Header */}
           <View style={tgStyles.header}>
             <MaterialCommunityIcons name="music-note-outline" size={S.ms(18, 0.4)} color={accentColor} />
@@ -434,7 +444,12 @@ export function TuningGuideModal({ visible, onClose, onSelectFreq, lang, accentC
           <View style={tgStyles.divider} />
           <Text style={tgStyles.hint}>{t("signalGenerator", "tapToSet")}</Text>
           {/* Accordion list */}
-          <ScrollView style={tgStyles.scrollBody} showsVerticalScrollIndicator={false}>
+          <ScrollView
+            style={tgStyles.scrollBody}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
+          >
             {TUNING_DATA.map((cat) => (
               <View key={cat.id}>
                 <Pressable
@@ -514,6 +529,7 @@ export function TuningGuideModal({ visible, onClose, onSelectFreq, lang, accentC
             ))}
           </ScrollView>
         </View>
+        </KeyboardAvoidingView>
       </View>
     </AnimatedModal>
   );
@@ -526,8 +542,15 @@ const make_tgStyles = (C: typeof Colors) => StyleSheet.create({
     alignItems: "center",
     backgroundColor: "rgba(0,0,0,0.6)",
   },
+  keyboardAvoiding: {
+    flex: 1,
+    width: "100%",
+    alignItems: "center",
+    justifyContent: "center",
+  },
   card: {
-    width: 338,
+    width: "100%",
+    maxWidth: 338,
     maxHeight: "83%",
     backgroundColor: C.surface,
     borderRadius: 16,
@@ -1262,6 +1285,11 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
     >
       <View style={styles.overlay}>
         <Pressable style={StyleSheet.absoluteFill} onPress={handleClose} />
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          keyboardVerticalOffset={0}
+          style={styles.keyboardAvoiding}
+        >
         <View style={[styles.card, { backgroundColor: C.surface, borderColor: C.border, width: dynamicCardWidth }, !isLandscape && { padding: cardPad, gap: cardGap }, isLandscape && { paddingVertical: landscapePadV, paddingHorizontal: landscapePadH, height: dynamicCardHeight, maxHeight: "95%" as const, alignItems: "stretch" as const }]}>
           {isLandscape && (
             <Pressable onPress={handleClose} hitSlop={12} style={{ position: "absolute" as const, top: landscapePadV * 0.6, right: landscapePadH * 0.6, zIndex: 10 }}>
@@ -1289,6 +1317,8 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
             showsVerticalScrollIndicator={false}
             bounces={false}
             nestedScrollEnabled
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
             testID="signal-scroll"
           >
           <View style={styles.knobMicContainer}>
@@ -1474,6 +1504,7 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
             </Pressable>
 
             <Pressable
+              testID="signal-tuning-guide"
               onPress={() => {
                 hapticFeedback();
                 const capturedFreq = frequency;
@@ -1567,7 +1598,12 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
               </Text>
               {micListening ? (
                 topPeaks.length > 0 ? (
-                  <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1 }}>
+                  <ScrollView
+                    showsVerticalScrollIndicator={false}
+                    style={{ flex: 1 }}
+                    keyboardShouldPersistTaps="handled"
+                    keyboardDismissMode="on-drag"
+                  >
                     <View style={{ flexDirection: "row" as const, paddingBottom: Spacing.xs, borderBottomWidth: 0.5, borderBottomColor: C.border, marginBottom: Spacing.xxs }}>
                       <Text style={{ flex: 1.4, color: C.textTertiary, fontSize: 9, letterSpacing: 0.8, fontFamily: "SpaceGrotesk_500Medium" }}>Hz</Text>
                       <Text style={{ flex: 0.7, color: C.textTertiary, fontSize: 9, letterSpacing: 0.8, fontFamily: "SpaceGrotesk_500Medium", textAlign: "center" as const }}>{t("signalGenerator", "noteLabel")}</Text>
@@ -1621,6 +1657,7 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
 
 
         </View>
+        </KeyboardAvoidingView>
       </View>
     </AnimatedModal>
   );
@@ -2025,6 +2062,12 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
+  keyboardAvoiding: {
+    flex: 1,
+    width: "100%",
+    alignItems: "center",
+    justifyContent: "center",
+  },
   card: {
     backgroundColor: C.surface,
     borderRadius: 20,
@@ -2034,6 +2077,7 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
     borderColor: C.border,
     gap: 18,
     maxHeight: "85%",
+    flexShrink: 1,
   },
   header: {
     flexDirection: "row",

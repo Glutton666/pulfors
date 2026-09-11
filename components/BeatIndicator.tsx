@@ -10,7 +10,6 @@ import {
   TextInput,
   Image,
   ActivityIndicator,
-  useWindowDimensions,
   type ViewStyle,
   type TextStyle,
   type ImageStyle,
@@ -35,7 +34,7 @@ import { Radius, FontSize, Spacing } from "@/constants/tokens";
 import { getLayerCountForBeat, formatRepeat, findPillDropTarget as findPillDropTargetPure, mergePillToLayer, type PillLayout } from "./beat-indicator-helpers";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { moderateScale, SCREEN_WIDTH, IS_TABLET, useScale } from "@/lib/scale";
+import { useScale } from "@/lib/scale";
 import type { ScaleValues } from "@/lib/scale";
 import { make_styles } from "./BeatIndicator.styles";
 import { DialBeatDot } from "./DialBeatDot";
@@ -52,12 +51,11 @@ import type { BeatStaffCellRects } from "@/lib/beat-staff-logic";
 export type { BeatType, BarRepeat, LoopBlock } from "./beat-indicator.types";
 import type { BeatType } from "./beat-indicator.types";
 
-const DIAL_SIZE = IS_TABLET
-  ? Math.min(SCREEN_WIDTH - 80, 420)
-  : Math.min(SCREEN_WIDTH - 48, moderateScale(300));
+// Kept as compatibility exports for consumers/tests. Runtime layout is derived
+// from useScale() in BeatIndicator.styles and its child components.
+const DIAL_SIZE = 300;
 const DIAL_RADIUS = DIAL_SIZE / 2;
-const DOT_RADIUS_FROM_CENTER = DIAL_RADIUS - moderateScale(30, 0.4);
-const DOT_SIZE = IS_TABLET ? moderateScale(40, 0.4) : moderateScale(34, 0.4);
+const DOT_RADIUS_FROM_CENTER = DIAL_RADIUS - 30;
 const MIN_BEATS = 1;
 const MAX_BEATS = 16;
 

@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   TextInput,
   ScrollView,
+  KeyboardAvoidingView,
   useWindowDimensions,
 } from "react-native";
 import { AnimatedModal } from "@/components/AnimatedModal";
@@ -47,6 +48,7 @@ import { safePlay } from "@/lib/audio-utils";
 import { captureBreadcrumb } from "@/lib/error-tracking";
 import { decodeSampleFile, getRenderSampleRate } from "@/lib/audio-renderer";
 import { adjustBpmCandidatesForPlaybackSpeed, detectBpmCandidatesOnDevice } from "@/lib/onset-bpm-detect";
+import { motionDuration, useReducedMotion } from "@/hooks/useReducedMotion";
 
 type Phase = "idle" | "countdown" | "recording" | "trimming" | "loading";
 
@@ -122,6 +124,7 @@ export function NoteRecorderModal({
   const styles = make_styles(C);
   const { t } = useLanguage();
   const { width: winW, height: winH } = useWindowDimensions();
+  const reduceMotion = useReducedMotion();
 
   const [phase, setPhase] = useState<Phase>("idle");
   const [countdownValue, setCountdownValue] = useState(1);
@@ -367,10 +370,17 @@ export function NoteRecorderModal({
       if (Platform.OS !== "web") {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       }
-      countScale.value = 0.5;
-      countOpacity.value = 0;
-      countScale.value = withSpring(1, { damping: 8, stiffness: 300 });
-      countOpacity.value = withTiming(1, { duration: 200 });
+      if (reduceMotion) {
+        // Keep the current countdown number fully visible, but do not
+        // animate its scale or opacity for motion-sensitive users.
+        countScale.value = 1;
+        countOpacity.value = 1;
+      } else {
+        countScale.value = 0.5;
+        countOpacity.value = 0;
+        countScale.value = withSpring(1, { damping: 8, stiffness: 300 });
+        countOpacity.value = withTiming(1, { duration: motionDuration(200, reduceMotion) });
+      }
       playClick();
     };
 
@@ -388,7 +398,7 @@ export function NoteRecorderModal({
     };
 
     countdownTimerRef.current = setTimeout(doTick, interval);
-  }, [bpm, playClick, prepareRecording, t]);
+  }, [bpm, playClick, prepareRecording, reduceMotion, t]);
   useEffect(() => { startCountdownRef.current = startCountdown; }, [startCountdown]);
 
   const startRecording = useCallback(async () => {
@@ -866,16 +876,21 @@ export function NoteRecorderModal({
   return (
     <AnimatedModal visible={visible} transparent onRequestClose={handleClose}>
       <Pressable style={styles.overlay} onPress={handleClose}>
-        <Pressable style={[styles.container, { backgroundColor: C.surface, maxHeight: Math.round(winH * 0.9) }]} onPress={(e) => e.stopPropagation()}>
-          <View style={styles.header}>
-            <Text style={[styles.title, { color: C.text }]}>
-              {t("noteRecorder", "beatNote").replace("{0}", String(beatIndex + 1)).replace("{1}", String(subIndex + 1))}
-            </Text>
-            <Pressable onPress={handleClose} hitSlop={12}>
-              <Ionicons name="close" size={22} color={C.textSecondary} />
-            </Pressable>
-          </View>
-          <ScrollView showsVerticalScrollIndicator={false} bounces={false} contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled">
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          keyboardVerticalOffset={0}
+          style={styles.keyboardAvoiding}
+        >
+          <Pressable style={[styles.container, { backgroundColor: C.surface, maxHeight: Math.round(winH * 0.9) }]} onPress={(e) => e.stopPropagation()}>
+            <View style={styles.header}>
+              <Text style={[styles.title, { color: C.text }]}>
+                {t("noteRecorder", "beatNote").replace("{0}", String(beatIndex + 1)).replace("{1}", String(subIndex + 1))}
+              </Text>
+              <Pressable onPress={handleClose} hitSlop={12}>
+                <Ionicons name="close" size={22} color={C.textSecondary} />
+              </Pressable>
+            </View>
+            <ScrollView showsVerticalScrollIndicator={false} bounces={false} contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
 
           {phase === "idle" && (
             <View style={styles.content}>
@@ -1328,8 +1343,9 @@ export function NoteRecorderModal({
               </View>
             </View>
           )}
-          </ScrollView>
-        </Pressable>
+            </ScrollView>
+          </Pressable>
+        </KeyboardAvoidingView>
       </Pressable>
     </AnimatedModal>
   );
@@ -1411,11 +1427,18 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
     alignItems: "center",
     padding: 24,
   },
+  keyboardAvoiding: {
+    flex: 1,
+    width: "100%",
+    alignItems: "center",
+    justifyContent: "center",
+  },
   container: {
     width: "100%",
     maxWidth: 480,
     borderRadius: 16,
     padding: 20,
+    flexShrink: 1,
   },
   header: {
     flexDirection: "row",

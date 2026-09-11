@@ -23,6 +23,7 @@ import Animated, {
   Easing,
 } from "react-native-reanimated";
 import type { PolygonLayer } from "./PolygonTypes";
+import { motionDuration, useReducedMotion } from "@/hooks/useReducedMotion";
 import {
   sortLayersForDisplay,
   computeLayerLayout,
@@ -48,9 +49,10 @@ interface PolygonCanvasProps {
 
 /** 단일 꼭짓점의 펄스 애니메이션 */
 function AnimatedVertex({
-  cx, cy, r, color, isActive,
+  cx, cy, r, color, isActive, reduceMotion,
 }: {
   cx: number; cy: number; r: number; color: string; isActive: boolean;
+  reduceMotion: boolean;
 }) {
   const scale = useSharedValue(1);
   const opacity = useSharedValue(1);
@@ -58,16 +60,16 @@ function AnimatedVertex({
   useEffect(() => {
     if (isActive) {
       scale.value = withSequence(
-        withTiming(1.7, { duration: 80, easing: Easing.out(Easing.cubic) }),
-        withTiming(1, { duration: 220, easing: Easing.out(Easing.cubic) }),
+         withTiming(1.7, { duration: motionDuration(80, reduceMotion), easing: Easing.out(Easing.cubic) }),
+         withTiming(1, { duration: motionDuration(220, reduceMotion), easing: Easing.out(Easing.cubic) }),
       );
       opacity.value = withSequence(
         withTiming(1, { duration: 0 }),
-        withTiming(0.6, { duration: 300 }),
+         withTiming(0.6, { duration: motionDuration(300, reduceMotion) }),
       );
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isActive]);
+  }, [isActive, reduceMotion]);
 
   const animProps = useAnimatedProps(() => ({
     r: r * scale.value,
@@ -107,6 +109,7 @@ export function PolygonCanvas({
   layers, activeVertices, editingLayerId,
   onVertexPress, onVertexLongPress, size,
 }: PolygonCanvasProps) {
+  const reduceMotion = useReducedMotion();
   const sorted = sortLayersForDisplay(layers);
   const layouts = computeLayerLayout(sorted, size);
 
@@ -189,6 +192,7 @@ export function PolygonCanvas({
                       r={VERTEX_R_ACTIVE}
                       color={layer.color}
                       isActive={isActive}
+                      reduceMotion={reduceMotion}
                     />
                   )}
                   <SvgText
@@ -264,6 +268,7 @@ export function PolygonCanvas({
                       r={isActive ? VERTEX_R_ACTIVE : VERTEX_R_NORMAL}
                       color={layer.color}
                       isActive={isActive}
+                      reduceMotion={reduceMotion}
                     />
                     <SvgText
                       x={labelPos.x}

@@ -7,6 +7,7 @@ import Animated, {
   withTiming,
   runOnJS,
 } from "react-native-reanimated";
+import { motionDuration, useReducedMotion } from "@/hooks/useReducedMotion";
 
 const FADE_MS = 150;
 const SLIDE_MS = 200;
@@ -22,6 +23,7 @@ export function AnimatedModal({
   ...rest
 }: AnimatedModalProps) {
   const opacity = useSharedValue(visible ? 1 : 0);
+  const reduceMotion = useReducedMotion();
   const [nativeVisible, setNativeVisible] = useState(visible);
   const generationRef = useRef(0);
 
@@ -31,9 +33,9 @@ export function AnimatedModal({
 
     if (visible) {
       setNativeVisible(true);
-      opacity.value = withTiming(1, { duration: FADE_MS });
+       opacity.value = withTiming(1, { duration: motionDuration(FADE_MS, reduceMotion) });
     } else {
-      opacity.value = withTiming(0, { duration: FADE_MS }, (finished) => {
+      opacity.value = withTiming(0, { duration: motionDuration(FADE_MS, reduceMotion) }, (finished) => {
         if (finished && gen === generationRef.current) {
           runOnJS(setNativeVisible)(false);
         }
@@ -47,13 +49,13 @@ export function AnimatedModal({
       // 애니메이션이 정상 완료됐는지와 무관하게 일정 시간 후엔 반드시 닫는다.
       fallbackTimer = setTimeout(() => {
         if (gen === generationRef.current) setNativeVisible(false);
-      }, FADE_MS + 50);
+      }, motionDuration(FADE_MS, reduceMotion) + 50);
     }
 
     return () => {
       if (fallbackTimer) clearTimeout(fallbackTimer);
     };
-  }, [visible]);
+  }, [visible, reduceMotion]);
 
   const animStyle = useAnimatedStyle(() => ({
     flex: 1,
@@ -90,6 +92,7 @@ export function AnimatedSlideModal({
 }: AnimatedSlideModalProps) {
   const { height } = useWindowDimensions();
   const translateY = useSharedValue(visible ? 0 : height);
+  const reduceMotion = useReducedMotion();
   const [nativeVisible, setNativeVisible] = useState(visible);
   const generationRef = useRef(0);
 
@@ -101,13 +104,13 @@ export function AnimatedSlideModal({
       translateY.value = height;
       setNativeVisible(true);
       translateY.value = withTiming(0, {
-        duration,
+        duration: motionDuration(duration, reduceMotion),
         easing: enterEasing,
       });
     } else {
       translateY.value = withTiming(
         height,
-        { duration, easing: exitEasing },
+         { duration: motionDuration(duration, reduceMotion), easing: exitEasing },
         (finished) => {
           if (finished && gen === generationRef.current) {
             runOnJS(setNativeVisible)(false);
@@ -118,13 +121,13 @@ export function AnimatedSlideModal({
       // 경우(애니메이션 중단)에 대비해 일정 시간 후 무조건 닫는다.
       fallbackTimer = setTimeout(() => {
         if (gen === generationRef.current) setNativeVisible(false);
-      }, duration + 50);
+      }, motionDuration(duration, reduceMotion) + 50);
     }
 
     return () => {
       if (fallbackTimer) clearTimeout(fallbackTimer);
     };
-  }, [visible, height, duration, enterEasing, exitEasing]);
+  }, [visible, height, duration, enterEasing, exitEasing, reduceMotion]);
 
   const animStyle = useAnimatedStyle(() => ({
     flex: 1,
