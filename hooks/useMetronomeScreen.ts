@@ -192,7 +192,10 @@ export function useMetronomeScreen() {
   const [measureCount, setMeasureCount] = useState(0);
   const [activeSubNote, setActiveSubNote] = useState(-1);
   const activeSubNoteRef = useRef(-1);
+  const flushPendingPlaybackVisualsRef = useRef<() => void>(() => {});
+  const discardPendingPlaybackVisualsRef = useRef<() => void>(() => {});
   const resetPlaybackVisuals = useCallback(() => {
+    discardPendingPlaybackVisualsRef.current();
     setCurrentBeat(-1);
     setMeasureCount(0);
     setActiveSubNote(-1);
@@ -1355,15 +1358,15 @@ export function useMetronomeScreen() {
     let pendingLayerMap: Record<string, number> = {};
     let hasLayerUpdate = false;
 
-    const batcher = createRafBatcher(() => {
-      if (!isPlayingRef.current) {
-        hasBeatUpdate = false;
-        hasSubBeatUpdate = false;
-        hasProgressUpdate = false;
-        hasLayerUpdate = false;
-        pendingLayerMap = {};
-        return;
-      }
+    const discardPendingVisuals = () => {
+      hasBeatUpdate = false;
+      hasSubBeatUpdate = false;
+      hasProgressUpdate = false;
+      hasLayerUpdate = false;
+      pendingLayerMap = {};
+    };
+
+    const flushPendingVisuals = () => {
       if (hasBeatUpdate) {
         hasBeatUpdate = false;
         setCurrentBeat(pendingBeat);
@@ -1381,6 +1384,7 @@ export function useMetronomeScreen() {
       }
       if (hasSubBeatUpdate) {
         hasSubBeatUpdate = false;
+        activeSubNoteRef.current = pendingSubBeat;
         setActiveSubNote(pendingSubBeat);
       }
       if (hasProgressUpdate) {
@@ -1392,6 +1396,17 @@ export function useMetronomeScreen() {
         setLayerProgressMap(prev => ({ ...prev, ...pendingLayerMap }));
         pendingLayerMap = {};
       }
+    };
+
+    flushPendingPlaybackVisualsRef.current = flushPendingVisuals;
+    discardPendingPlaybackVisualsRef.current = discardPendingVisuals;
+
+    const batcher = createRafBatcher(() => {
+      if (!isPlayingRef.current) {
+        if (!isPreparingRef.current) discardPendingVisuals();
+        return;
+      }
+      flushPendingVisuals();
     });
 
     engine.setOnBeat((beat: number, isAccent: boolean) => {
@@ -1413,7 +1428,6 @@ export function useMetronomeScreen() {
     });
 
     engine.setOnSubBeat((_beat: number, subBeat: number) => {
-      activeSubNoteRef.current = subBeat;
       pendingSubBeat = subBeat;
       hasSubBeatUpdate = true;
       batcher.schedule();
@@ -1489,6 +1503,9 @@ export function useMetronomeScreen() {
     // (setOnBeat은 null을 받지 않으므로 no-op으로 교체)
     return () => {
       batcher.cancel();
+      discardPendingVisuals();
+      flushPendingPlaybackVisualsRef.current = () => {};
+      discardPendingPlaybackVisualsRef.current = () => {};
       try { engine.setOnBeat(() => {}); } catch {}
       try { engine.setOnSubBeat(null); } catch {}
       try { engine.setOnProgress(null); } catch {}
@@ -1888,6 +1905,7 @@ export function useMetronomeScreen() {
     stopRenderedAudio,
     clearSamplePlayStates,
     resetPlaybackVisuals,
+    flushPlaybackVisuals: () => flushPendingPlaybackVisualsRef.current(),
     renderedPlayerRef,
     webRenderedLoopRef,
     activateWebRenderedLoop,

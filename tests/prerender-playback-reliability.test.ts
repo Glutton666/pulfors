@@ -399,6 +399,9 @@ describe("pre-rendered playback reliability", () => {
     expect(engine.start).toHaveBeenCalledTimes(1);
     expect(player.play).toHaveBeenCalledTimes(1);
     expect(params.setIsPlaying).toHaveBeenCalledWith(true);
+    expect(params.flushPlaybackVisuals).toHaveBeenCalledTimes(1);
+    expect(params.flushPlaybackVisuals.mock.invocationCallOrder[0])
+      .toBeGreaterThan(params.setIsPlaying.mock.invocationCallOrder.at(-1)!);
     expect(params.showPlayingNotification).toHaveBeenCalledTimes(1);
   });
 
@@ -747,6 +750,7 @@ function makePlaybackParams(engine: ReturnType<typeof makeEngine>, player: typeo
     }),
     clearSamplePlayStates: jest.fn(),
     resetPlaybackVisuals: jest.fn(),
+    flushPlaybackVisuals: jest.fn(),
     renderedPlayerRef,
     webRenderedLoopRef,
     activateWebRenderedLoop: jest.fn((loop) => { webRenderedLoopRef.current = loop; }),

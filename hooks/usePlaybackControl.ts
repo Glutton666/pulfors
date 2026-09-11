@@ -72,6 +72,7 @@ export interface UsePlaybackControlParams {
   stopRenderedAudio: () => void;
   clearSamplePlayStates: () => void;
   resetPlaybackVisuals: () => void;
+  flushPlaybackVisuals: () => void;
   renderedPlayerRef: Ref<AudioPlayer | null>;
   webRenderedLoopRef: Ref<WebRenderedLoop | null>;
   activateWebRenderedLoop: (loop: WebRenderedLoop) => void;
@@ -454,6 +455,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
       }
       setPreparing(false);
       setPlaying(true);
+      p.flushPlaybackVisuals();
       p.notifyVoicePlayState(true);
       markAudioPlaying();
       p.armAudioWatchdogRef.current();
