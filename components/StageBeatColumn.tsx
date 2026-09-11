@@ -14,6 +14,9 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import { View, Text, StyleSheet, PanResponder } from "react-native";
+import { GradientLetter } from "@/components/GradientLetter";
+import { useTheme } from "@/contexts/ThemeContext";
+import { accentGradientEdge, onAccentShadow } from "@/lib/color-contrast";
 import type { BeatType } from "@/lib/metronome-engine";
 
 const BEAT_COLOR_DARK: Record<BeatType, string> = {
@@ -34,9 +37,54 @@ function getBeatType(beat0: number, types?: BeatType[]): BeatType {
   return types[beat0 % types.length] ?? "normal";
 }
 
+function StrongMarker({
+  size,
+  accent,
+  testID,
+  active = false,
+  activeBorderColor,
+}: {
+  size: number;
+  accent: string;
+  testID: string;
+  active?: boolean;
+  activeBorderColor?: string;
+}) {
+  const letterSize = Math.max(8, size * 0.82);
+  return (
+    <View
+      testID={testID}
+      style={[
+        styles.strongMarker,
+        {
+          width: size,
+          height: size,
+          borderRadius: size * 0.22,
+          backgroundColor: "transparent",
+          borderColor: active ? (activeBorderColor ?? accent) : "transparent",
+          borderWidth: active ? Math.max(1, size * 0.08) : 0,
+          opacity: active ? 1 : 0.95,
+        },
+      ]}
+      accessible={false}
+    >
+      <GradientLetter
+        letter="S"
+        width={letterSize}
+        height={letterSize}
+        fontSize={letterSize * 0.72}
+        lineHeight={letterSize * 0.82}
+        colors={[accentGradientEdge(accent), accent, accent]}
+        textShadowColor={onAccentShadow(accent)}
+      />
+    </View>
+  );
+}
+
 function SubdivDots({
   types,
   theme,
+  accentColor,
   size = 10,
   activeIndex,
   maxWidth,
@@ -45,6 +93,7 @@ function SubdivDots({
 }: {
   types: BeatType[];
   theme: "dark" | "light";
+  accentColor?: string;
   size?: number;
   /** 재생 중 현재 활성 서브디비전 인덱스 — 해당 점을 크고 밝게 하이라이트 */
   activeIndex?: number;
@@ -72,7 +121,7 @@ function SubdivDots({
   }
   const gap = size * ratio;
   const strongBg  = theme === "dark" ? "#ffffff" : "#111111";
-  const accentCol = theme === "dark" ? "#FFD54F" : "#B8860B";
+  const accentCol = accentColor ?? (theme === "dark" ? "#FFD54F" : "#B8860B");
   const muteEdge  = theme === "dark" ? "rgba(255,255,255,0.55)" : "rgba(0,0,0,0.45)";
   return (
     <View
@@ -115,6 +164,15 @@ function SubdivDots({
               justifyContent: "center",
             }}
           >
+            {isStrong && (
+              <StrongMarker
+                size={Math.max(10, dotHeight)}
+                accent={accentCol}
+                active={isActive}
+                activeBorderColor={activeRing}
+                testID={`stage-strong-subdivision-${i}`}
+              />
+            )}
           </View>
         );
       })}
@@ -162,6 +220,7 @@ export function StageBeatColumn({
     subdivision: "서브디비전",
   },
 }: StageBeatColumnProps) {
+  const { colors: C } = useTheme();
   const total     = Math.max(1, beatsPerMeasure);
   const stopped   = currentBeat < 0;
 
@@ -250,6 +309,7 @@ export function StageBeatColumn({
         <SubdivDots
           types={types}
           theme={theme}
+            accentColor={C.accent}
           size={subSize}
           maxWidth={rootW > 0 ? rootW - 32 : undefined}
           activeIndex={activeIndex}
@@ -270,6 +330,7 @@ export function StageBeatColumn({
 
   return (
     <View
+      testID="stage-beat-column"
       style={styles.root}
       onLayout={(e) => { setRootH(e.nativeEvent.layout.height); setRootW(e.nativeEvent.layout.width); }}
       {...swipePR.panHandlers}
@@ -292,6 +353,13 @@ export function StageBeatColumn({
           accessibilityLabel={`${labels.current}, ${labels.beat} ${cur0 + 1}. ${subdivisionA11y(currentSubdiv)}`}
         >
           <View style={[styles.beatOnlyRow, { minHeight: detailHeight }]}>
+            {!stopped && curType === "strong" && (
+              <StrongMarker
+                size={Math.max(20, Math.round(curFont * 0.48))}
+                accent={C.accent}
+                testID="stage-current-strong"
+              />
+            )}
             <Text
               testID="stage-current-beat"
               style={[styles.beatNum, styles.currentBeatNum, { color: curColor, fontSize: curFont, lineHeight: curFont + 4 }]}
@@ -325,6 +393,13 @@ export function StageBeatColumn({
           accessibilityLabel={`${labels.next}, ${labels.beat} ${next0 + 1}. ${subdivisionA11y(nextSubdiv)}`}
         >
           <View style={[styles.beatOnlyRow, { minHeight: detailHeight }]}>
+            {nextType === "strong" && (
+              <StrongMarker
+                size={Math.max(18, Math.round(nextFont * 0.48))}
+                accent={C.accent}
+                testID="stage-next-strong"
+              />
+            )}
             <Text
               testID="stage-next-beat"
               style={[styles.beatNum, styles.nextBeatNum, { color: nextColor, fontSize: nextFont, lineHeight: nextFont + 4 }]}
@@ -431,5 +506,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     minHeight: 24,
+  },
+  strongMarker: {
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
   },
 });

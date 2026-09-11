@@ -14,10 +14,15 @@ let lastPanResponderConfig = null;
 /** Create a simple pass-through component that forwards key RN props to DOM. */
 function makeRNComponent(tag) {
   const Comp = React.forwardRef(function RNCompat(
-    { children, testID, onPress, onLongPress, style, ...rest },
+    { children, testID, onPress, onLongPress, onLayout, style, ...rest },
     ref,
   ) {
-    const domProps = { "data-testid": testID, ref };
+    const layoutRef = (node) => {
+      if (node && onLayout) node.__onLayout = onLayout;
+      if (typeof ref === "function") ref(node);
+      else if (ref) ref.current = node;
+    };
+    const domProps = { "data-testid": testID, ref: layoutRef };
     if (typeof onPress === "function") domProps.onClick = onPress;
     if (typeof onLongPress === "function") {
       domProps.onContextMenu = function (e) {

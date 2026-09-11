@@ -19,11 +19,16 @@ describe("stage beat display stability", () => {
     assert.ok(beatColumnSrc.includes("accessibilityLabel={`${labels.next}"));
   });
 
-  test("uses dot-only subdivision visuals", () => {
+  test("keeps the strong beat marker as a gradient S", () => {
     assert.equal(beatColumnSrc.includes('const label = t === "strong"'), false);
-    assert.equal(beatColumnSrc.includes("<Text\n                style={{"), false);
     assert.ok(beatColumnSrc.includes("const isStrong = t === \"strong\""));
     assert.ok(beatColumnSrc.includes("rootW - 32"));
+    assert.ok(beatColumnSrc.includes("GradientLetter"));
+    assert.ok(beatColumnSrc.includes('letter="S"'));
+    assert.ok(beatColumnSrc.includes("accentGradientEdge"));
+    assert.ok(beatColumnSrc.includes('testID="stage-current-strong"'));
+    assert.ok(beatColumnSrc.includes('testID="stage-next-strong"'));
+    assert.ok(beatColumnSrc.includes("stage-strong-subdivision-${i}"));
   });
 
   test("scales the complete card stack from the measured container height", () => {
