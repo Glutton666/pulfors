@@ -73,6 +73,32 @@ export function safePlay(player: PlayerLike | null | undefined, label: string): 
 }
 
 /**
+ * Starts a player and reports whether the playback request was accepted.
+ * This cannot prove that a device speaker produced sound, but it lets startup
+ * code avoid presenting a playing UI after a synchronous throw or rejected
+ * playback promise.
+ */
+export async function safePlayAndConfirm(
+  player: PlayerLike | null | undefined,
+  label: string,
+): Promise<boolean> {
+  if (!player || typeof player.play !== "function") return false;
+  try {
+    await Promise.resolve(player.play());
+    return true;
+  } catch (e) {
+    logger.warn(`[audio] play failed (${label}):`, e);
+    captureBreadcrumb({
+      category: "audio.play",
+      message: `play failed: ${label}`,
+      level: "warning",
+      data: { error: String(e) },
+    });
+    return false;
+  }
+}
+
+/**
  * seekTo + play 조합을 안전하게 처리합니다.
  * seekTo가 Promise를 반환하면 await한 후 play를 호출합니다.
  */

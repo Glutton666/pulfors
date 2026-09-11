@@ -33,7 +33,7 @@ import Animated, {
   useSharedValue,
   cancelAnimation,
 } from "react-native-reanimated";
-import { safePlay, notifyAudioPoolFallback, detectPoolCutoffRisk } from "@/lib/audio-utils";
+import { safePlay, safePlayAndConfirm, notifyAudioPoolFallback, detectPoolCutoffRisk } from "@/lib/audio-utils";
 import { registerMetronomeBridge, notifyUserMetronomeToggle } from "@/lib/audio-session";
 import { captureBreadcrumb } from "@/lib/error-tracking";
 import { sanitizeDeepLinkEntry } from "@/lib/deep-link-import";
@@ -85,7 +85,6 @@ import { useAudioLifecycle } from "@/hooks/useAudioLifecycle";
 import {
   getAudioLifecycleSnapshot,
   markAudioPlaying,
-  markAudioRecoverySucceeded,
   markAudioStopped,
 } from "@/lib/audio-lifecycle";
 import { useDialConfig } from "@/hooks/useBarDialConfig";
@@ -679,6 +678,8 @@ export function useMetronomeScreen() {
     // PCM / rendered-player refs & functions
     renderedPlayerRef, samplePCMCacheRef, renderedUrlRef,
     webRenderedLoopRef, activateWebRenderedLoop, lastAudioFireRef,
+    beginAudioStartupProbe, getAudioStartupEpoch, invalidateAudioStartupProbe,
+    isAudioStartupEpochCurrent, recordAudioActivity, waitForFirstAudioActivity,
     armAudioWatchdogRef, clearAudioWatchdogRef,
     samplePlayStateRef,
     buildRenderedPlayer, scheduleReRender, stopRenderedAudio,
@@ -942,11 +943,15 @@ export function useMetronomeScreen() {
     const engine = new MetronomeEngine();
     engineRef.current = engine;
 
-    const restartPlayer = (active: any) => {
+    const restartPlayer = (active: any, onStarted: (epoch: number) => void) => {
       if (Platform.OS === "web") return;
+      const startupEpoch = getAudioStartupEpoch();
       try {
         Promise.resolve(active.seekTo(0)).then(() => {
-          safePlay(active, "metronome.restartPlayer");
+          if (!isAudioStartupEpochCurrent(startupEpoch)) return;
+          void safePlayAndConfirm(active, "metronome.restartPlayer").then((started) => {
+            if (started) onStarted(startupEpoch);
+          });
         });
       } catch (e) {}
     };
@@ -982,11 +987,8 @@ export function useMetronomeScreen() {
     // Every audible path must report activity to the watchdog. Layer/block
     // callbacks were previously omitted, which could label healthy playback as
     // "recovering" and trigger an unnecessary restart.
-    const recordAudibleTick = () => {
-      lastAudioFireRef.current = Date.now();
-      if (getAudioLifecycleSnapshot().phase === "recovering") {
-        markAudioRecoverySucceeded();
-      }
+    const recordAudibleTick = (epoch = getAudioStartupEpoch()) => {
+      recordAudioActivity(epoch);
     };
 
     engine.setRealtimeAudioScheduler(
@@ -1017,8 +1019,7 @@ export function useMetronomeScreen() {
         try {
           const active = getCustomPlayer("high", highToggle.current);
           highToggle.current = (highToggle.current + 1) % BUILTIN_POOL_SIZE;
-          restartPlayer(active);
-          recordAudibleTick();
+          restartPlayer(active, recordAudibleTick);
         } catch (e) {}
       },
       () => {
@@ -1033,8 +1034,7 @@ export function useMetronomeScreen() {
         try {
           const active = getCustomPlayer("low", lowToggle.current);
           lowToggle.current = (lowToggle.current + 1) % BUILTIN_POOL_SIZE;
-          restartPlayer(active);
-          recordAudibleTick();
+          restartPlayer(active, recordAudibleTick);
         } catch (e) {}
       },
       () => {
@@ -1049,8 +1049,7 @@ export function useMetronomeScreen() {
         try {
           const active = getCustomPlayer("strong", strongToggle.current);
           strongToggle.current = (strongToggle.current + 1) % BUILTIN_POOL_SIZE;
-          restartPlayer(active);
-          recordAudibleTick();
+          restartPlayer(active, recordAudibleTick);
         } catch (e) {}
       }
     );
@@ -1082,16 +1081,14 @@ export function useMetronomeScreen() {
             const srcSet = mapping.sourceSet || "classic";
             players = allPlayersRef.current[srcSet as keyof BuiltinPlayers] || allPlayersRef.current.classic;
             const r = (mapping.sourceRole || "strong") as "high" | "low" | "strong";
-            restartPlayer(pickSlot(players, r, toggle));
-            recordAudibleTick();
+            restartPlayer(pickSlot(players, r, toggle), recordAudibleTick);
             return;
           }
           players = allPlayersRef.current.classic;
         } else {
           players = allPlayersRef.current[layerSet as keyof typeof allPlayersRef.current] || allPlayersRef.current.classic;
         }
-        restartPlayer(pickSlot(players, role, toggle));
-        recordAudibleTick();
+        restartPlayer(pickSlot(players, role, toggle), recordAudibleTick);
       } catch (e) {}
     });
 
@@ -1124,16 +1121,14 @@ export function useMetronomeScreen() {
             const srcSet = mapping.sourceSet || "classic";
             players = allPlayersRef.current[srcSet as keyof BuiltinPlayers] || allPlayersRef.current.classic;
             const r = (mapping.sourceRole || "strong") as "high" | "low" | "strong";
-            restartPlayer(pickSlot(players, r, toggle));
-            recordAudibleTick();
+            restartPlayer(pickSlot(players, r, toggle), recordAudibleTick);
             return;
           }
           players = allPlayersRef.current.classic;
         } else {
           players = allPlayersRef.current[blockSet as keyof typeof allPlayersRef.current] || allPlayersRef.current.classic;
         }
-        restartPlayer(pickSlot(players, role, toggle));
-        recordAudibleTick();
+        restartPlayer(pickSlot(players, role, toggle), recordAudibleTick);
       } catch (e) {}
     });
 
@@ -1361,6 +1356,14 @@ export function useMetronomeScreen() {
     let hasLayerUpdate = false;
 
     const batcher = createRafBatcher(() => {
+      if (!isPlayingRef.current) {
+        hasBeatUpdate = false;
+        hasSubBeatUpdate = false;
+        hasProgressUpdate = false;
+        hasLayerUpdate = false;
+        pendingLayerMap = {};
+        return;
+      }
       if (hasBeatUpdate) {
         hasBeatUpdate = false;
         setCurrentBeat(pendingBeat);
@@ -1854,6 +1857,7 @@ export function useMetronomeScreen() {
     startMetronome,
     stopMetronome,
     retryAudioRecovery,
+    cancelPlaybackAttempt,
     completePracticeSession,
     discardPracticeSession,
     startOrResumePracticeSession,
@@ -1887,6 +1891,9 @@ export function useMetronomeScreen() {
     renderedPlayerRef,
     webRenderedLoopRef,
     activateWebRenderedLoop,
+    beginAudioStartupProbe,
+    invalidateAudioStartupProbe,
+    waitForFirstAudioActivity,
     renderGenerationRef,
     buildRenderedPlayer,
     clearAudioWatchdogRef,
@@ -1909,6 +1916,7 @@ export function useMetronomeScreen() {
     notifyUserToggle: notifyUserMetronomeToggle,
     showPlayingNotification,
     showPausedNotification,
+    showPlaybackStartFailure: () => showRecoveryToast(t("main", "audioRecoveryFailed")),
     easterEggActiveRef,
     handleEasterEggGiveUpRef,
     loggingEnabled,
@@ -1921,6 +1929,24 @@ export function useMetronomeScreen() {
       captureBreadcrumb({ category: "metronome", message, level, data: { error: String(error) } }),
     onPlaybackStopped: finishRandomBarPlay,
   });
+
+  useEffect(() => {
+    if (!isPreparingRef.current) return;
+    cancelPlaybackAttempt(false);
+  }, [coreMode]);
+
+  useEffect(() => {
+    if (Platform.OS === "web") return;
+    const sub = AppState.addEventListener("change", (nextState) => {
+      if (nextState !== "active" && isPreparingRef.current) {
+        const preserveLifecycle = ["interrupted", "recovering"].includes(
+          getAudioLifecycleSnapshot().phase,
+        );
+        cancelPlaybackAttempt(false, preserveLifecycle);
+      }
+    });
+    return () => sub.remove();
+  }, [cancelPlaybackAttempt]);
 
   const handleRandomBarPlay = useCallback(() => {
     if (
@@ -2239,12 +2265,16 @@ export function useMetronomeScreen() {
 
   useEffect(() => {
     registerMetronomeBridge({
-      isRunning: () => engineRef.current?.getIsRunning() ?? false,
+      isRunning: () => isPreparingRef.current || (engineRef.current?.getIsRunning() ?? false),
       pause: () => {
-        if (engineRef.current?.getIsRunning()) return togglePlayPauseRef.current?.();
+        if (isPreparingRef.current || engineRef.current?.getIsRunning()) {
+          return togglePlayPauseRef.current?.();
+        }
       },
       resume: () => {
-        if (!engineRef.current?.getIsRunning()) return togglePlayPauseRef.current?.();
+        if (!isPreparingRef.current && !engineRef.current?.getIsRunning()) {
+          return togglePlayPauseRef.current?.();
+        }
       },
     });
     return () => { registerMetronomeBridge(null); };

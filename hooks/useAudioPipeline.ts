@@ -139,6 +139,12 @@ export interface UseAudioPipelineResult {
   webRenderedLoopRef: React.MutableRefObject<WebRenderedLoop | null>;
   activateWebRenderedLoop: (loop: WebRenderedLoop) => void;
   lastAudioFireRef: React.MutableRefObject<number>;
+  beginAudioStartupProbe: () => number;
+  getAudioStartupEpoch: () => number;
+  invalidateAudioStartupProbe: () => void;
+  isAudioStartupEpochCurrent: (epoch: number) => boolean;
+  recordAudioActivity: (epoch?: number) => boolean;
+  waitForFirstAudioActivity: (epoch: number, isCancelled?: () => boolean, timeoutMs?: number) => Promise<boolean>;
   armAudioWatchdogRef: React.MutableRefObject<() => void>;
   clearAudioWatchdogRef: React.MutableRefObject<() => void>;
   samplePlayStateRef: React.MutableRefObject<Record<string, { playing: boolean; endTimer: ReturnType<typeof setTimeout> | null }>>;
@@ -276,6 +282,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
   const webClockAdapterRef = useRef<AudioClockAdapter | null>(null);
   const timingDiagnosticsRef = useRef(new AudioTimingDiagnostics(__DEV__));
   const lastAudioFireRef = useRef(0);
+  const audioStartupEpochRef = useRef(0);
   const audioWatchdogTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const audioRetryCountRef = useRef(0);
   const armAudioWatchdogRef = useRef<() => void>(() => {});
@@ -290,6 +297,46 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
   const clearRealtimeWebAudio = useCallback(() => {
     realtimeSourcesRef.current.forEach((source) => source.cancel());
     realtimeSourcesRef.current.clear();
+  }, []);
+
+  const beginAudioStartupProbe = useCallback(() => {
+    audioStartupEpochRef.current += 1;
+    lastAudioFireRef.current = 0;
+    return audioStartupEpochRef.current;
+  }, []);
+
+  const getAudioStartupEpoch = useCallback(() => audioStartupEpochRef.current, []);
+  const invalidateAudioStartupProbe = useCallback(() => {
+    audioStartupEpochRef.current += 1;
+    lastAudioFireRef.current = 0;
+  }, []);
+  const isAudioStartupEpochCurrent = useCallback(
+    (epoch: number) => epoch === audioStartupEpochRef.current,
+    [],
+  );
+
+  const recordAudioActivity = useCallback((epoch = audioStartupEpochRef.current): boolean => {
+    if (epoch !== audioStartupEpochRef.current) return false;
+    lastAudioFireRef.current = Date.now();
+    if (getAudioLifecycleSnapshot().phase === "recovering") {
+      markAudioRecoverySucceeded();
+    }
+    return true;
+  }, []);
+
+  const waitForFirstAudioActivity = useCallback(async (
+    epoch: number,
+    isCancelled?: () => boolean,
+    timeoutMs = 5000,
+  ): Promise<boolean> => {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      if (isCancelled?.()) return false;
+      if (epoch !== audioStartupEpochRef.current) return false;
+      if (lastAudioFireRef.current > 0) return true;
+      await new Promise<void>((resolve) => setTimeout(resolve, 25));
+    }
+    return false;
   }, []);
 
   const scheduleRealtimeWebClick = useCallback((
@@ -311,18 +358,18 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
       outputStateRef.current.transition("realtime");
     }
     const generation = outputStateRef.current.snapshot().generation;
+    const startupEpoch = audioStartupEpochRef.current;
     const source = scheduleWebClickAt(role, channel, volumeRef.current, atAudioTime);
     if (!source) return false;
     realtimeSourcesRef.current.add(source);
     source.onEnded?.(() => {
       realtimeSourcesRef.current.delete(source);
       if (outputStateRef.current.owns(generation) && outputStateRef.current.snapshot().mode === "realtime") {
-        lastAudioFireRef.current = Date.now();
-        if (getAudioLifecycleSnapshot().phase === "recovering") markAudioRecoverySucceeded();
+        recordAudioActivity(startupEpoch);
       }
     });
     return true;
-  }, [volumeRef]);
+  }, [recordAudioActivity, volumeRef]);
 
   const activateWebRenderedLoop = useCallback((loop: WebRenderedLoop) => {
     webRenderedLoopRef.current = loop;
@@ -843,6 +890,12 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
     webRenderedLoopRef,
     activateWebRenderedLoop,
     lastAudioFireRef,
+    beginAudioStartupProbe,
+    getAudioStartupEpoch,
+    invalidateAudioStartupProbe,
+    isAudioStartupEpochCurrent,
+    recordAudioActivity,
+    waitForFirstAudioActivity,
     armAudioWatchdogRef,
     clearAudioWatchdogRef,
     samplePlayStateRef,

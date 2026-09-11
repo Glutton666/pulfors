@@ -52,3 +52,4 @@
 - [Audio warm-up isolation](audio-warmup-isolation.md) — never mute/play shared click pools on a delayed timer; it can race both realtime and rendered playback startup.
 - [Notification preference races](notification-preference-races.md) — disabling a notification needs an epoch check before every async publish, not only an initial enabled guard.
 - [Capped meter changes](capped-meter-changes.md) — never call the meter updater with an unchanged capped count; equality intentionally resets beat types.
+- [Audio startup handshake](audio-startup-handshake.md) — playing UI waits for accepted output; every start/stop owns and invalidates an activity epoch, including delayed native seeks.

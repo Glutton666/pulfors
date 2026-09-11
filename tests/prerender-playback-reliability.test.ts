@@ -92,6 +92,14 @@ jest.mock("@/lib/audio-session", () => ({
 
 jest.mock("@/lib/audio-utils", () => ({
   safePlay: (player: { play?: () => void }) => player.play?.(),
+  safePlayAndConfirm: async (player: { play?: () => unknown }) => {
+    try {
+      await Promise.resolve(player.play?.());
+      return true;
+    } catch {
+      return false;
+    }
+  },
   notifyAudioPoolFallback: jest.fn(),
 }));
 
@@ -378,6 +386,8 @@ describe("pre-rendered playback reliability", () => {
     });
 
     expect(params.setIsPreparing).toHaveBeenCalledWith(true);
+    expect(params.setIsPlaying).not.toHaveBeenCalledWith(true);
+    expect(params.showPlayingNotification).not.toHaveBeenCalled();
     expect(engine.start).not.toHaveBeenCalled();
 
     await act(async () => {
@@ -388,6 +398,177 @@ describe("pre-rendered playback reliability", () => {
     expect(engine.setPreRenderedAudio).toHaveBeenCalledWith(true);
     expect(engine.start).toHaveBeenCalledTimes(1);
     expect(player.play).toHaveBeenCalledTimes(1);
+    expect(params.setIsPlaying).toHaveBeenCalledWith(true);
+    expect(params.showPlayingNotification).toHaveBeenCalledTimes(1);
+  });
+
+  it("rolls back and explains the failure when the first native play request rejects", async () => {
+    const engine = makeEngine();
+    const player = {
+      ...mockPlayer,
+      play: jest.fn().mockRejectedValue(new Error("decoder unavailable")),
+    };
+    const params = makePlaybackParams(engine, player as any);
+    const { result } = renderHook(() => usePlaybackControl(params as any));
+
+    await act(async () => {
+      await result.current.togglePlayPause();
+    });
+
+    expect(engine.start).not.toHaveBeenCalled();
+    expect(engine.stop).toHaveBeenCalled();
+    expect(params.setIsPlaying).not.toHaveBeenCalledWith(true);
+    expect(params.showPlayingNotification).not.toHaveBeenCalled();
+    expect(params.showPlaybackStartFailure).toHaveBeenCalledTimes(1);
+    expect(params.renderedPlayerRef.current).toBeNull();
+  });
+
+  it("keeps realtime startup in preparing until the first audio activity arrives", async () => {
+    (Platform as unknown as { OS: string }).OS = "android";
+    const engine = makeEngine();
+    let confirmActivity!: (value: boolean) => void;
+    const params = makePlaybackParams(engine, null);
+    params.waitForFirstAudioActivity.mockImplementation(
+      (_epoch: number) => new Promise((resolve) => { confirmActivity = resolve; }),
+    );
+    const { result } = renderHook(() => usePlaybackControl(params as any));
+
+    let pendingStart!: Promise<unknown>;
+    act(() => {
+      pendingStart = result.current.togglePlayPause();
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(engine.start).toHaveBeenCalledTimes(1);
+    expect(params.setIsPreparing).toHaveBeenCalledWith(true);
+    expect(params.setIsPlaying).not.toHaveBeenCalledWith(true);
+    expect(params.showPlayingNotification).not.toHaveBeenCalled();
+
+    await act(async () => {
+      confirmActivity(true);
+      await pendingStart;
+    });
+
+    expect(params.setIsPlaying).toHaveBeenCalledWith(true);
+    expect(params.showPlayingNotification).toHaveBeenCalledTimes(1);
+  });
+
+  it("stops a realtime engine when the user cancels during first-audio confirmation", async () => {
+    (Platform as unknown as { OS: string }).OS = "android";
+    const engine = makeEngine();
+    let confirmActivity!: (value: boolean) => void;
+    const params = makePlaybackParams(engine, null);
+    params.waitForFirstAudioActivity.mockImplementation(
+      (_epoch: number) => new Promise((resolve) => { confirmActivity = resolve; }),
+    );
+    const { result } = renderHook(() => usePlaybackControl(params as any));
+
+    let pendingStart!: Promise<unknown>;
+    act(() => {
+      pendingStart = result.current.togglePlayPause();
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await result.current.togglePlayPause();
+    });
+
+    expect(engine.stop).toHaveBeenCalled();
+    expect(params.setIsPlaying).not.toHaveBeenCalledWith(true);
+    expect(params.showPlayingNotification).not.toHaveBeenCalled();
+
+    await act(async () => {
+      confirmActivity(false);
+      await pendingStart;
+    });
+    expect(params.showPlaybackStartFailure).not.toHaveBeenCalled();
+  });
+
+  it("invalidates pending native audio activity before pausing active playback", async () => {
+    (Platform as unknown as { OS: string }).OS = "android";
+    const engine = makeEngine();
+    engine.start();
+    const params = makePlaybackParams(engine, null);
+    params.isPlaying = true;
+    params.isPlayingRef.current = true;
+    const { result } = renderHook(() => usePlaybackControl(params as any));
+
+    await act(async () => {
+      await result.current.togglePlayPause();
+    });
+
+    expect(params.invalidateAudioStartupProbe).toHaveBeenCalledTimes(1);
+    expect(params.invalidateAudioStartupProbe.mock.invocationCallOrder[0])
+      .toBeLessThan(engine.stop.mock.invocationCallOrder.at(-1)!);
+    expect(params.setIsPlaying).toHaveBeenCalledWith(false);
+  });
+
+  it("returns to stopped state when realtime startup has no audio activity", async () => {
+    (Platform as unknown as { OS: string }).OS = "android";
+    const engine = makeEngine();
+    const params = makePlaybackParams(engine, null);
+    params.waitForFirstAudioActivity.mockResolvedValue(false);
+    const { result } = renderHook(() => usePlaybackControl(params as any));
+
+    await act(async () => {
+      await result.current.togglePlayPause();
+    });
+
+    expect(engine.start).toHaveBeenCalledTimes(1);
+    expect(engine.stop).toHaveBeenCalled();
+    expect(params.setIsPlaying).not.toHaveBeenCalledWith(true);
+    expect(params.showPlaybackStartFailure).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not treat an intentionally all-muted realtime schedule as startup failure", async () => {
+    (Platform as unknown as { OS: string }).OS = "android";
+    const engine = makeEngine();
+    engine.getScheduleInfo.mockReturnValue({
+      ticks: [{
+        time: 0,
+        type: "mute",
+        beat: 0,
+        subBeat: 0,
+        repeatIteration: 0,
+        barRepeatIteration: 0,
+      }],
+      durationMs: 500,
+    });
+    const params = makePlaybackParams(engine, null);
+    params.noteSamplesRef.current = {} as typeof sampleMap;
+    const { result } = renderHook(() => usePlaybackControl(params as any));
+
+    await act(async () => {
+      await result.current.togglePlayPause();
+    });
+
+    expect(params.waitForFirstAudioActivity).not.toHaveBeenCalled();
+    expect(params.setIsPlaying).toHaveBeenCalledWith(true);
+    expect(params.showPlaybackStartFailure).not.toHaveBeenCalled();
+  });
+
+  it("applies one deadline to Android focus preparation before audio startup", async () => {
+    jest.useFakeTimers();
+    (Platform as unknown as { OS: string }).OS = "android";
+    const engine = makeEngine();
+    const params = makePlaybackParams(engine, null);
+    params.notifyUserToggle.mockReturnValue(new Promise(() => {}));
+    const { result } = renderHook(() => usePlaybackControl(params as any));
+
+    let pendingStart!: Promise<unknown>;
+    act(() => {
+      pendingStart = result.current.togglePlayPause();
+    });
+    await act(async () => {
+      jest.advanceTimersByTime(8001);
+      await pendingStart;
+    });
+
+    expect(engine.start).not.toHaveBeenCalled();
+    expect(params.setIsPlaying).not.toHaveBeenCalledWith(true);
+    expect(params.showPlaybackStartFailure).toHaveBeenCalledTimes(1);
+    jest.useRealTimers();
   });
 
   it("keeps Android Beat mode on realtime players so accent roles and level do not change", async () => {
@@ -535,6 +716,8 @@ describe("pre-rendered playback reliability", () => {
 });
 
 function makePlaybackParams(engine: ReturnType<typeof makeEngine>, player: typeof mockPlayer | null) {
+  const webRenderedLoopRef = { current: null as any };
+  const renderedPlayerRef = { current: null as any };
   return {
     engineRef: { current: engine },
     isPlaying: false,
@@ -558,11 +741,18 @@ function makePlaybackParams(engine: ReturnType<typeof makeEngine>, player: typeo
     barLoopModeRef: { current: "loop" },
     blockPlayModeRef: { current: "sequential" },
     beatDenominatorRef: { current: 4 },
-    stopRenderedAudio: jest.fn(),
+    stopRenderedAudio: jest.fn(() => {
+      renderedPlayerRef.current = null;
+      webRenderedLoopRef.current = null;
+    }),
     clearSamplePlayStates: jest.fn(),
     resetPlaybackVisuals: jest.fn(),
-    renderedPlayerRef: { current: null },
-    webRenderedLoopRef: { current: null },
+    renderedPlayerRef,
+    webRenderedLoopRef,
+    activateWebRenderedLoop: jest.fn((loop) => { webRenderedLoopRef.current = loop; }),
+    beginAudioStartupProbe: jest.fn(() => 1),
+    invalidateAudioStartupProbe: jest.fn(),
+    waitForFirstAudioActivity: jest.fn(async (_epoch: number) => true),
     renderGenerationRef: { current: 0 },
     buildRenderedPlayer: jest.fn(async () => player),
     clearAudioWatchdogRef: { current: jest.fn() },
@@ -585,6 +775,7 @@ function makePlaybackParams(engine: ReturnType<typeof makeEngine>, player: typeo
     notifyUserToggle: jest.fn(),
     showPlayingNotification: jest.fn(),
     showPausedNotification: jest.fn(),
+    showPlaybackStartFailure: jest.fn(),
     easterEggActiveRef: { current: false },
     handleEasterEggGiveUpRef: { current: jest.fn() },
     loggingEnabled: false,

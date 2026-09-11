@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef } from "react";
 import { Platform } from "react-native";
 import * as Haptics from "expo-haptics";
-import { safePlay } from "@/lib/audio-utils";
+import { safePlayAndConfirm } from "@/lib/audio-utils";
 import { toEngineBpm, soundSets } from "@/lib/metronome-engine";
 import { applyDialConfigToEngine } from "@/lib/dial-engine-boundary";
 import {
@@ -75,6 +75,9 @@ export interface UsePlaybackControlParams {
   renderedPlayerRef: Ref<AudioPlayer | null>;
   webRenderedLoopRef: Ref<WebRenderedLoop | null>;
   activateWebRenderedLoop: (loop: WebRenderedLoop) => void;
+  beginAudioStartupProbe: () => number;
+  invalidateAudioStartupProbe: () => void;
+  waitForFirstAudioActivity: (epoch: number, isCancelled?: () => boolean, timeoutMs?: number) => Promise<boolean>;
   renderGenerationRef: Ref<number>;
   buildRenderedPlayer: () => Promise<AudioPlayer | null>;
   clearAudioWatchdogRef: Ref<() => void>;
@@ -97,6 +100,7 @@ export interface UsePlaybackControlParams {
   notifyUserToggle: () => Promise<unknown> | undefined;
   showPlayingNotification: (bpm: number, mode: string, language?: Language) => void | Promise<void>;
   showPausedNotification: (bpm: number, mode: string, language?: Language) => void | Promise<void>;
+  showPlaybackStartFailure: () => void;
   easterEggActiveRef: Ref<boolean>;
   handleEasterEggGiveUpRef: Ref<(stopEngine?: boolean) => void>;
   loggingEnabled: boolean;
@@ -114,6 +118,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
   const seamlessNextEntryRef = useRef<PracticeEntry | null>(null);
   const seamlessRef = p.seamlessNextEntryRef ?? seamlessNextEntryRef;
   const renderGenerationRef = p.renderGenerationRef;
+  const startAttemptRef = useRef(0);
 
   const startOrResumePracticeSession = useCallback(() => {
     if (!p.loggingEnabled) return;
@@ -273,39 +278,219 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
   }, [p]);
 
   const stopMetronome = useCallback(() => {
-    if (!p.isPlayingRef.current) return;
+    if (!p.isPlayingRef.current && !p.isPreparingRef.current) return;
+    startAttemptRef.current += 1;
     renderGenerationRef.current += 1;
+    abortActiveRender(renderGenerationRef);
+    p.preparingCancelledRef.current = true;
+    p.invalidateAudioStartupProbe();
+    p.clearAudioWatchdogRef.current();
     p.engineRef.current?.stop();
     p.stopRenderedAudio();
     p.clearSamplePlayStates();
     p.setIsPreparing(false);
+    p.isPreparingRef.current = false;
     p.setIsPlaying(false);
+    p.isPlayingRef.current = false;
+    p.notifyVoicePlayState(false);
     p.resetPlaybackVisuals();
     markAudioStopped();
     completePracticeSession("manual");
     p.onPlaybackStopped?.();
   }, [completePracticeSession, p, renderGenerationRef]);
 
+  const cancelPlaybackAttempt = useCallback((
+    notifyFailure = false,
+    preserveLifecycle = false,
+  ) => {
+    startAttemptRef.current += 1;
+    renderGenerationRef.current += 1;
+    abortActiveRender(renderGenerationRef);
+    p.preparingCancelledRef.current = true;
+    p.invalidateAudioStartupProbe();
+    p.clearAudioWatchdogRef.current();
+    p.engineRef.current?.stop();
+    p.stopRenderedAudio();
+    p.clearSamplePlayStates();
+    p.setIsPreparing(false);
+    p.isPreparingRef.current = false;
+    p.setIsPlaying(false);
+    p.isPlayingRef.current = false;
+    p.notifyVoicePlayState(false);
+    p.resetPlaybackVisuals();
+    if (!preserveLifecycle) markAudioStopped();
+    if (notifyFailure) p.showPlaybackStartFailure();
+    p.onPlaybackStopped?.();
+  }, [p, renderGenerationRef]);
+
+  const startPreparedPlayback = useCallback(async (
+    engine: MetronomeEngine,
+    startBeat: number | undefined,
+    androidProbeReady?: Promise<unknown>,
+  ): Promise<boolean> => {
+    const attempt = ++startAttemptRef.current;
+    const startupEpoch = p.beginAudioStartupProbe();
+    const deadline = Date.now() + 8000;
+    const cancelled = () =>
+      attempt !== startAttemptRef.current || p.preparingCancelledRef.current;
+    const remainingMs = () => Math.max(0, deadline - Date.now());
+    const awaitWithin = async <T,>(promise: Promise<T>, label: string): Promise<T> => {
+      const remaining = remainingMs();
+      if (remaining <= 0) throw new Error(`Audio startup timed out: ${label}`);
+      return Promise.race([
+        promise,
+        new Promise<T>((_, reject) => {
+          setTimeout(() => reject(new Error(`Audio startup timed out: ${label}`)), remaining);
+        }),
+      ]);
+    };
+    const setPreparing = (value: boolean) => {
+      p.isPreparingRef.current = value;
+      p.setIsPreparing(value);
+    };
+    const setPlaying = (value: boolean) => {
+      p.isPlayingRef.current = value;
+      p.setIsPlaying(value);
+    };
+    p.resetPlaybackVisuals();
+    p.clearSamplePlayStates();
+    markAudioPreparing();
+    setPreparing(true);
+    setPlaying(false);
+    p.preparingCancelledRef.current = false;
+    p.stopRenderedAudio();
+    configureEngine(engine);
+
+    try {
+      if (Platform.OS === "android" && androidProbeReady) {
+        await awaitWithin(androidProbeReady, "Android audio focus");
+      }
+      if (cancelled()) {
+        return false;
+      }
+
+      const useRenderedLoop = Platform.OS === "web"
+        ? p.barModeRef.current || String(p.soundSetRef.current).startsWith("custom")
+        : Platform.OS !== "android" ||
+          p.barModeRef.current ||
+          String(p.soundSetRef.current).startsWith("custom");
+
+      if (Platform.OS === "web") {
+        const context = getWebAudioContext();
+        if (context?.state === "suspended") {
+          await awaitWithin(context.resume(), "Web AudioContext resume");
+        }
+        const source = soundSets[p.soundSetRef.current as keyof typeof soundSets] || soundSets.classic;
+        const buffersReady = p.webClickReadyRef.current ||
+          await awaitWithin(ensureWebClickBuffers(source as never).catch(() => false), "Web click buffers");
+        if (!buffersReady) throw new Error("Web click buffers were not ready");
+        p.webClickReadyRef.current = true;
+        if (context?.state === "suspended") {
+          await awaitWithin(context.resume(), "Web AudioContext resume");
+        }
+        if (cancelled()) {
+          return false;
+        }
+
+        if (useRenderedLoop) {
+          await awaitWithin(renderWebLoop(engine, false), "Web rendered loop");
+          if (cancelled()) {
+            return false;
+          }
+          if (!p.webRenderedLoopRef.current?.isRunning()) {
+            throw new Error("Web rendered loop did not start");
+          }
+          engine.start(startBeat);
+        } else {
+          engine.setPreRenderedAudio(false);
+          const ticks = engine.getScheduleInfo().ticks as TickInfo[];
+          const expectsAudio = ticks.some((tick) => tick.type !== "mute") ||
+            Object.keys(p.noteSamplesRef.current).length > 0;
+          engine.start(startBeat);
+          const active = !expectsAudio || await p.waitForFirstAudioActivity(
+            startupEpoch,
+            cancelled,
+            remainingMs(),
+          );
+          if (!active) throw new Error("No initial Web Audio activity");
+        }
+      } else {
+        const player = useRenderedLoop
+          ? await awaitWithin(p.buildRenderedPlayer(), "Native rendered player")
+          : null;
+        if (cancelled()) {
+          try { player?.release(); } catch {}
+          return false;
+        }
+        if (player) {
+          p.renderedPlayerRef.current = player;
+          engine.setPreRenderedAudio(true);
+          const accepted = await awaitWithin(
+            safePlayAndConfirm(player, "metronome.start.native"),
+            "Native playback request",
+          );
+          if (!accepted) throw new Error("Native rendered player rejected playback");
+          if (cancelled()) {
+            return false;
+          }
+          engine.start(startBeat);
+        } else {
+          engine.setPreRenderedAudio(false);
+          const ticks = engine.getScheduleInfo().ticks as TickInfo[];
+          const expectsAudio = ticks.some((tick) => tick.type !== "mute") ||
+            Object.keys(p.noteSamplesRef.current).length > 0;
+          engine.start(startBeat);
+          const active = !expectsAudio || await p.waitForFirstAudioActivity(
+            startupEpoch,
+            cancelled,
+            remainingMs(),
+          );
+          if (!active) throw new Error("No initial native audio activity");
+        }
+      }
+
+      if (cancelled()) {
+        return false;
+      }
+      setPreparing(false);
+      setPlaying(true);
+      p.notifyVoicePlayState(true);
+      markAudioPlaying();
+      p.armAudioWatchdogRef.current();
+      const playback = p.getPlaybackContext({ activeBarIndex: startBeat ?? 0 });
+      p.showPlayingNotification(playback.bpm, playback.modeLabel, p.languageRef.current);
+      startOrResumePracticeSession();
+      if (p.barModeRef.current && p.barLoopModeRef.current === "once") {
+        engine.requestStopAfterMeasure();
+      }
+      return true;
+    } catch (error) {
+      if (cancelled()) return false;
+      p.capturePlaybackError("Audio startup failed", error, "warning");
+      cancelPlaybackAttempt(true);
+      return false;
+    }
+  }, [cancelPlaybackAttempt, configureEngine, p, renderWebLoop, startOrResumePracticeSession]);
+
   const togglePlayPause = useCallback(async () => {
     const engine = p.engineRef.current;
     if (!engine) return false;
-    const androidProbeReady = p.notifyUserToggle();
     if (p.easterEggActiveRef.current) {
       p.handleEasterEggGiveUpRef.current(true);
       return true;
     }
-    if (p.isPreparing && !p.isPlaying) {
-      renderGenerationRef.current += 1;
-      abortActiveRender(renderGenerationRef);
-      p.preparingCancelledRef.current = true;
-      p.setIsPreparing(false);
-      markAudioStopped();
-      p.onPlaybackStopped?.();
+    if (p.isPreparingRef.current && !p.isPlayingRef.current) {
+      p.notifyUserToggle();
+      const interrupted = ["interrupted", "recovering"].includes(getAudioLifecycleSnapshot().phase);
+      cancelPlaybackAttempt(false, interrupted);
       return true;
     }
     if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    if (p.isPlaying) {
+    if (p.isPlayingRef.current) {
+      p.notifyUserToggle();
+      startAttemptRef.current += 1;
       renderGenerationRef.current += 1;
+      p.invalidateAudioStartupProbe();
       const playback = p.getPlaybackContext();
       seamlessRef.current = null;
       p.clearAudioWatchdogRef.current();
@@ -313,7 +498,9 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
       p.stopRenderedAudio();
       p.clearSamplePlayStates();
       p.setIsPreparing(false);
+      p.isPreparingRef.current = false;
       p.setIsPlaying(false);
+      p.isPlayingRef.current = false;
       p.notifyVoicePlayState(false);
       p.resetPlaybackVisuals();
       const interrupted = ["interrupted", "recovering"].includes(getAudioLifecycleSnapshot().phase);
@@ -324,84 +511,10 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
       return;
     }
 
-    p.resetPlaybackVisuals();
-    p.clearSamplePlayStates();
-    markAudioPreparing();
-    p.setIsPreparing(true);
+    const androidProbeReady = p.notifyUserToggle();
     const startBeat = p.barModeRef.current ? p.barStartBeatRef.current : undefined;
-    const playback = p.getPlaybackContext({
-      activeBarIndex: startBeat ?? 0,
-    });
-    p.showPlayingNotification(playback.bpm, playback.modeLabel, p.languageRef.current);
-    // A stopped UI does not guarantee that an older rendered loop or queued
-    // Web Audio source has released output ownership. Clear both before the
-    // visible Beat-mode state is copied into a fresh engine schedule.
-    p.stopRenderedAudio();
-    configureEngine(engine);
-    p.preparingCancelledRef.current = false;
-    try {
-      if (Platform.OS === "web") {
-        const context = getWebAudioContext();
-        await context?.resume().catch(() => {});
-        if (!p.webClickReadyRef.current) {
-          const source = soundSets[p.soundSetRef.current as keyof typeof soundSets] || soundSets.classic;
-          if (await ensureWebClickBuffers(source as never).catch(() => false)) p.webClickReadyRef.current = true;
-        }
-        const useRenderedLoop =
-          p.barModeRef.current ||
-          String(p.soundSetRef.current).startsWith("custom");
-        p.setIsPreparing(false); p.setIsPlaying(true); p.notifyVoicePlayState(true); p.isPlayingRef.current = true;
-        engine.start(startBeat ?? undefined);
-        markAudioPlaying();
-        p.armAudioWatchdogRef.current();
-        if (useRenderedLoop) {
-          void renderWebLoop(engine, true).catch((error) => p.capturePlaybackError("togglePlayPause: Web pre-render failed, using per-tick", error, "warning"));
-        } else {
-          engine.setPreRenderedAudio(false);
-        }
-      } else {
-        if (Platform.OS === "android") await androidProbeReady;
-        // Android Beat mode keeps the proven per-tick player path. Switching it
-        // to a rendered WAV changed the audible role mix on real devices and
-        // caused a pronounced volume/timbre drop. Bar mode still needs the
-        // rendered loop for its samples and expanded schedule.
-        const useRenderedLoop =
-          Platform.OS !== "android" ||
-          p.barModeRef.current ||
-          String(p.soundSetRef.current).startsWith("custom");
-        const player = useRenderedLoop ? await p.buildRenderedPlayer() : null;
-        if (p.preparingCancelledRef.current) {
-          try { player?.release(); } catch {}
-          p.setIsPreparing(false);
-          markAudioStopped();
-          return true;
-        }
-        p.setIsPreparing(false); p.setIsPlaying(true); p.notifyVoicePlayState(true); p.isPlayingRef.current = true;
-        if (player) {
-          p.stopRenderedAudio();
-          p.renderedPlayerRef.current = player;
-          engine.setPreRenderedAudio(true);
-        } else {
-          engine.setPreRenderedAudio(false);
-        }
-        engine.start(startBeat ?? undefined);
-        markAudioPlaying();
-        p.armAudioWatchdogRef.current();
-        if (player) safePlay(player, "metronome.start.native");
-      }
-      startOrResumePracticeSession();
-      if (p.barModeRef.current && p.barLoopModeRef.current === "once") engine.requestStopAfterMeasure();
-      return true;
-    } catch {
-      p.setIsPreparing(false);
-      p.setIsPlaying(false);
-      p.isPlayingRef.current = false;
-      if (getAudioLifecycleSnapshot().phase === "recovering") markAudioRecoveryFailed("interruption");
-      else markAudioStopped();
-      p.onPlaybackStopped?.();
-      return false;
-    }
-  }, [configureEngine, p, pausePracticeSession, renderGenerationRef, renderWebLoop, startOrResumePracticeSession, seamlessRef]);
+    return startPreparedPlayback(engine, startBeat ?? undefined, androidProbeReady);
+  }, [cancelPlaybackAttempt, p, pausePracticeSession, renderGenerationRef, seamlessRef, startPreparedPlayback]);
 
   const togglePlayPauseRef = useRef(togglePlayPause);
   useEffect(() => { togglePlayPauseRef.current = togglePlayPause; }, [togglePlayPause]);
@@ -409,71 +522,8 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
   const startMetronome = useCallback(async () => {
     const engine = p.engineRef.current;
     if (!engine || p.isPlayingRef.current || p.isPreparingRef.current) return;
-    p.resetPlaybackVisuals();
-    p.clearSamplePlayStates();
-    markAudioPreparing();
-    p.stopRenderedAudio();
-    configureEngine(engine);
-    p.preparingCancelledRef.current = false;
-    p.setIsPreparing(true);
-    try {
-      if (Platform.OS === "web") {
-        const context = getWebAudioContext();
-        if (context?.state === "suspended") await context.resume().catch(() => {});
-        const source = soundSets[p.soundSetRef.current as keyof typeof soundSets] || soundSets.classic;
-        await ensureWebClickBuffers(source as never);
-        p.webClickReadyRef.current = true;
-        if (context?.state === "suspended") await context.resume().catch(() => {});
-        if (p.preparingCancelledRef.current) { p.setIsPreparing(false); markAudioStopped(); return; }
-        p.setIsPreparing(false);
-        const useRenderedLoop =
-          p.barModeRef.current ||
-          String(p.soundSetRef.current).startsWith("custom");
-        if (useRenderedLoop) {
-          try {
-            await renderWebLoop(engine, false);
-          } catch (error) {
-            p.capturePlaybackError("startMetronome: Web pre-render failed, using per-tick", error, "warning");
-            engine.setPreRenderedAudio(false);
-          }
-        } else {
-          engine.setPreRenderedAudio(false);
-        }
-        p.setIsPlaying(true);
-        engine.start();
-        markAudioPlaying(); p.armAudioWatchdogRef.current();
-      } else {
-        const useRenderedLoop =
-          Platform.OS !== "android" ||
-          p.barModeRef.current ||
-          String(p.soundSetRef.current).startsWith("custom");
-        const player = useRenderedLoop ? await p.buildRenderedPlayer() : null;
-        if (p.preparingCancelledRef.current) {
-          try { player?.release(); } catch {}
-          p.setIsPreparing(false);
-          markAudioStopped();
-          return;
-        }
-        p.setIsPreparing(false);
-        if (player) {
-          p.stopRenderedAudio();
-          p.renderedPlayerRef.current = player;
-          engine.setPreRenderedAudio(true);
-        } else engine.setPreRenderedAudio(false);
-        p.setIsPlaying(true); engine.start(); markAudioPlaying(); p.armAudioWatchdogRef.current();
-        if (player) safePlay(player, "metronome.start.fallback");
-      }
-      startOrResumePracticeSession();
-    } catch (error) {
-      p.capturePlaybackError("startMetronome error", error);
-      p.setIsPreparing(false);
-      p.setIsPlaying(false);
-      p.isPlayingRef.current = false;
-      if (getAudioLifecycleSnapshot().phase === "recovering") markAudioRecoveryFailed("interruption");
-      else markAudioStopped();
-      p.onPlaybackStopped?.();
-    }
-  }, [configureEngine, p, renderWebLoop, startOrResumePracticeSession]);
+    await startPreparedPlayback(engine, undefined);
+  }, [p, startPreparedPlayback]);
 
   const retryAudioRecovery = useCallback(async () => {
     if (p.isPreparingRef.current) return;
@@ -496,6 +546,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
     startMetronome,
     stopMetronome,
     retryAudioRecovery,
+    cancelPlaybackAttempt,
     completePracticeSession,
     discardPracticeSession,
     startOrResumePracticeSession,
