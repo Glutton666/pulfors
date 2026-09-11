@@ -252,6 +252,67 @@ describe("pre-rendered playback reliability", () => {
     expect(mockDecodeSampleFile).toHaveBeenCalledTimes(2);
   });
 
+  it("releases a native player whose pending boundary handoff is superseded", async () => {
+    jest.useFakeTimers();
+    const engine = makeEngine();
+    engine.start();
+    let pendingAction: (() => void) | null = null;
+    engine.setPendingMeasureStartAction.mockImplementation((action: (() => void) | null) => {
+      pendingAction = action;
+    });
+    const firstPendingPlayer = {
+      ...mockPlayer,
+      pause: jest.fn(),
+      release: jest.fn(),
+    };
+    mockCreateAudioPlayer.mockReturnValueOnce(firstPendingPlayer);
+    const params = {
+      engineRef: { current: engine },
+      soundSet: "classic",
+      soundSetRef: { current: "classic" },
+      customSoundSetsRef: { current: {} },
+      layerSoundSetsRef: { current: {} },
+      noteSamplesRef: { current: {} },
+      noteSampleChannelsRef: { current: {} },
+      noteSampleVolumesRef: { current: {} },
+      noteSampleSpeedsRef: { current: {} },
+      barModeRef: { current: false },
+      barMetronomeChannelRef: { current: "both" },
+      noteSampleMetroChannelsRef: { current: {} },
+      volume: 0.35,
+      volumeRef: { current: 0.35 },
+      sampleVolumeRef: { current: 0.7 },
+      clickPCMCacheRef: { current: { classic: clickPCMs } },
+      webClickReadyRef: { current: false },
+      noteSampleSoundsRef: { current: {} },
+      renderGenerationRef: { current: 0 },
+      isPlayingRef: { current: true },
+      bpmRef: { current: 120 },
+      t: (key: string) => key,
+      showRecoveryToast: jest.fn(),
+      persistAudioSettingsCallbackRef: { current: jest.fn() },
+    } as any;
+    const { result } = renderHook(() => useAudioPipeline(params));
+
+    act(() => {
+      result.current.scheduleReRender();
+    });
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(300);
+      await jest.runOnlyPendingTimersAsync();
+    });
+    expect(pendingAction).toEqual(expect.any(Function));
+    expect(firstPendingPlayer.release).not.toHaveBeenCalled();
+
+    act(() => {
+      result.current.scheduleReRender();
+    });
+
+    expect(engine.setPendingMeasureStartAction).toHaveBeenLastCalledWith(null);
+    expect(firstPendingPlayer.pause).toHaveBeenCalledTimes(1);
+    expect(firstPendingPlayer.release).toHaveBeenCalledTimes(1);
+  });
+
   it("keeps a healthy web pre-rendered loop without per-tick callbacks", () => {
     jest.useFakeTimers();
     (Platform as unknown as { OS: string }).OS = "web";
@@ -418,7 +479,7 @@ describe("pre-rendered playback reliability", () => {
       await result.current.togglePlayPause();
     });
 
-    expect(engine.start).not.toHaveBeenCalled();
+    expect(engine.start).toHaveBeenCalledTimes(1);
     expect(engine.stop).toHaveBeenCalled();
     expect(params.setIsPlaying).not.toHaveBeenCalledWith(true);
     expect(params.showPlayingNotification).not.toHaveBeenCalled();
@@ -458,13 +519,20 @@ describe("pre-rendered playback reliability", () => {
     expect(params.showPlayingNotification).toHaveBeenCalledTimes(1);
   });
 
-  it("stops a realtime engine when the user cancels during first-audio confirmation", async () => {
-    (Platform as unknown as { OS: string }).OS = "android";
+  it("stops a realtime fallback engine when the user cancels during first-audio confirmation", async () => {
+    (Platform as unknown as { OS: string }).OS = "ios";
     const engine = makeEngine();
     let confirmActivity!: (value: boolean) => void;
+    let activityWaitStarted!: () => void;
+    const activityWait = new Promise<void>((resolve) => {
+      activityWaitStarted = resolve;
+    });
     const params = makePlaybackParams(engine, null);
     params.waitForFirstAudioActivity.mockImplementation(
-      (_epoch: number) => new Promise((resolve) => { confirmActivity = resolve; }),
+      (_epoch: number) => new Promise((resolve) => {
+        confirmActivity = resolve;
+        activityWaitStarted();
+      }),
     );
     const { result } = renderHook(() => usePlaybackControl(params as any));
 
@@ -473,7 +541,7 @@ describe("pre-rendered playback reliability", () => {
       pendingStart = result.current.togglePlayPause();
     });
     await act(async () => {
-      await Promise.resolve();
+      await activityWait;
       await result.current.togglePlayPause();
     });
 
@@ -574,7 +642,7 @@ describe("pre-rendered playback reliability", () => {
     jest.useRealTimers();
   });
 
-  it("keeps Android Beat mode on realtime players so accent roles and level do not change", async () => {
+  it("uses a rendered loop for Android Beat mode so dense accent roles stay ordered", async () => {
     (Platform as unknown as { OS: string }).OS = "android";
     const engine = makeEngine();
     const player = { ...mockPlayer, volume: 0.35 };
@@ -586,10 +654,12 @@ describe("pre-rendered playback reliability", () => {
       await result.current.togglePlayPause();
     });
 
-    expect(params.buildRenderedPlayer).not.toHaveBeenCalled();
-    expect(engine.setPreRenderedAudio).toHaveBeenCalledWith(false);
+    expect(params.buildRenderedPlayer).toHaveBeenCalledTimes(1);
+    expect(engine.setPreRenderedAudio).toHaveBeenCalledWith(true);
     expect(engine.start).toHaveBeenCalledTimes(1);
-    expect(player.play).not.toHaveBeenCalled();
+    expect(player.play).toHaveBeenCalledTimes(1);
+    expect(player.play.mock.invocationCallOrder[0])
+      .toBeLessThan(engine.start.mock.invocationCallOrder[0]);
   });
 
   it("uses the rendered player for Android Beat custom sound sets", async () => {

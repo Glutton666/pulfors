@@ -65,6 +65,40 @@ test("setOnBeat 콜백 등록은 throw하지 않는다", () => {
   assert.ok(true);
 });
 
+test("4박 7분할 패턴은 반복마다 정확히 28틱과 같은 accent/normal 순서를 유지한다", () => {
+  const engine = new MetronomeEngine();
+  engine.setBpm(120);
+  engine.setBeatsPerMeasure(4);
+  engine.setBeatTypes(["accent", "normal", "normal", "normal"]);
+  engine.setAllBeatSubdivisions({
+    "0": ["accent", "normal", "normal", "normal", "normal", "normal", "normal"],
+    "1": ["normal", "normal", "normal", "normal", "normal", "normal", "normal"],
+    "2": ["normal", "normal", "normal", "normal", "normal", "normal", "normal"],
+    "3": ["normal", "normal", "normal", "normal", "normal", "normal", "normal"],
+  });
+
+  const expectedRoles = [
+    "accent", ...Array(27).fill("normal"),
+  ];
+  const internals = engine as unknown as { rolloverToNextMeasure: () => void };
+
+  for (let pass = 0; pass < 20; pass += 1) {
+    const { ticks } = engine.getScheduleInfo();
+    assert.equal(ticks.length, 28, `pass ${pass + 1}: tick count`);
+    assert.deepEqual(
+      ticks.map((tick) => tick.type),
+      expectedRoles,
+      `pass ${pass + 1}: role order`,
+    );
+    assert.deepEqual(
+      ticks.slice(-7).map((tick) => tick.type),
+      Array(7).fill("normal"),
+      `pass ${pass + 1}: final group must not gain an eighth tick`,
+    );
+    internals.rolloverToNextMeasure();
+  }
+});
+
 test("buildSchedule: jumpToBlock + jumpCount=2에서 jumpIteration이 0,1 부여되고 점프 종료 후 state.jump가 복원", () => {
   // beatsPerMeasure=6, A(0..1, jumpToBlock=B, jumpCount=2), B(2..3), C(4..5)
   // 기대 흐름: A_ji0 B_ji0 A_ji1 B_ji1 C(점프 외)

@@ -370,11 +370,13 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
         return false;
       }
 
+      // Native per-tick playback seeks pooled players asynchronously. Under dense
+      // subdivisions those seeks can resolve out of order across normal/accent
+      // pools, so native playback always attempts one deterministic rendered loop
+      // first. A render failure still falls back to the realtime callbacks below.
       const useRenderedLoop = Platform.OS === "web"
         ? p.barModeRef.current || String(p.soundSetRef.current).startsWith("custom")
-        : Platform.OS !== "android" ||
-          p.barModeRef.current ||
-          String(p.soundSetRef.current).startsWith("custom");
+        : true;
 
       if (Platform.OS === "web") {
         const context = getWebAudioContext();
@@ -426,15 +428,20 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
         if (player) {
           p.renderedPlayerRef.current = player;
           engine.setPreRenderedAudio(true);
+          // safePlayAndConfirm invokes play() synchronously before returning its
+          // confirmation promise. Start the engine in the same turn so rendered
+          // audio and visual scheduling share one launch anchor; only publishing
+          // the playing UI waits for confirmation.
+          const playConfirmation = safePlayAndConfirm(player, "metronome.start.native");
+          engine.start(startBeat);
           const accepted = await awaitWithin(
-            safePlayAndConfirm(player, "metronome.start.native"),
+            playConfirmation,
             "Native playback request",
           );
           if (!accepted) throw new Error("Native rendered player rejected playback");
           if (cancelled()) {
             return false;
           }
-          engine.start(startBeat);
         } else {
           engine.setPreRenderedAudio(false);
           const ticks = engine.getScheduleInfo().ticks as TickInfo[];

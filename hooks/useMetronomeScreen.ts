@@ -952,6 +952,7 @@ export function useMetronomeScreen() {
       try {
         Promise.resolve(active.seekTo(0)).then(() => {
           if (!isAudioStartupEpochCurrent(startupEpoch)) return;
+          active.volume = Math.max(0, Math.min(1, volumeRef.current));
           void safePlayAndConfirm(active, "metronome.restartPlayer").then((started) => {
             if (started) onStarted(startupEpoch);
           });

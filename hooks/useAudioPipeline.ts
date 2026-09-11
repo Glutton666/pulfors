@@ -274,6 +274,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
 
   // ── Owned refs ──────────────────────────────────────────────────────────────
   const renderedPlayerRef = useRef<ExpoAudioPlayer | null>(null);
+  const pendingRenderedPlayerRef = useRef<ExpoAudioPlayer | null>(null);
   const samplePCMCacheRef = useRef<Map<string, SamplePCMEntry>>(new Map());
   const samplePCMUriRef = useRef<Map<string, string>>(new Map());
   const renderedUrlRef = useRef<string | null>(null);
@@ -574,10 +575,20 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
     }
   }, [getClickPCMs, getLayerClickPCMsForSchedule, getSamplePCMs]);
 
+  const releasePendingRenderedPlayer = useCallback(() => {
+    const pending = pendingRenderedPlayerRef.current;
+    pendingRenderedPlayerRef.current = null;
+    if (!pending) return;
+    try { pending.pause(); } catch {}
+    try { pending.release(); } catch {}
+  }, []);
+
   const stopRenderedAudio = useCallback(() => {
     renderGenerationRef.current += 1;
     abortActiveRender(renderGenerationRef);
     clearRealtimeWebAudio();
+    engineRef.current?.setPendingMeasureStartAction(null);
+    releasePendingRenderedPlayer();
     if (webRenderedLoopRef.current) {
       webRenderedLoopRef.current.stop();
       webRenderedLoopRef.current = null;
@@ -594,11 +605,13 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
     if (engine) engine.setPreRenderedAudio(false);
     outputStateRef.current.transition("idle");
     webClockAdapterRef.current?.invalidate();
-  }, [clearRealtimeWebAudio, renderGenerationRef]);
+  }, [clearRealtimeWebAudio, releasePendingRenderedPlayer, renderGenerationRef]);
 
   const scheduleReRender = useCallback(() => {
     renderGenerationRef.current += 1;
     abortActiveRender(renderGenerationRef);
+    engineRef.current?.setPendingMeasureStartAction(null);
+    releasePendingRenderedPlayer();
     if (reRenderTimerRef.current) clearTimeout(reRenderTimerRef.current);
     reRenderTimerRef.current = setTimeout(async () => {
       const engine = engineRef.current;
@@ -607,7 +620,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
       const realtimeBeatMode =
         !barModeRef.current &&
         !String(soundSetRef.current).startsWith("custom") &&
-        (Platform.OS === "web" || Platform.OS === "android");
+        Platform.OS === "web";
       if (realtimeBeatMode) {
         stopRenderedAudio();
         engine.setPreRenderedAudio(false);
@@ -681,8 +694,12 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
           if (!player) return;
           const generation = renderGenerationRef.current;
           if (!engine.getIsRunning()) { try { player.release(); } catch {} return; }
+          pendingRenderedPlayerRef.current = player;
           engine.setPendingMeasureStartAction(() => {
             if (generation !== renderGenerationRef.current || !engine.getIsRunning()) {
+              if (pendingRenderedPlayerRef.current === player) {
+                pendingRenderedPlayerRef.current = null;
+              }
               try { player.release(); } catch {}
               return;
             }
@@ -690,6 +707,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
               try { renderedPlayerRef.current.pause(); renderedPlayerRef.current.release(); } catch {}
               renderedPlayerRef.current = null;
             }
+            pendingRenderedPlayerRef.current = null;
             renderedPlayerRef.current = player;
             engine.setPreRenderedAudio(true);
             safePlay(player, "preRender.initial");
@@ -697,7 +715,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
         } catch {}
       }
     }, 300);
-  }, [activateWebRenderedLoop, buildRenderedPlayer, getClickPCMs, getLayerClickPCMsForSchedule, getSamplePCMs, stopRenderedAudio]);
+  }, [activateWebRenderedLoop, buildRenderedPlayer, getClickPCMs, getLayerClickPCMsForSchedule, getSamplePCMs, releasePendingRenderedPlayer, stopRenderedAudio]);
 
   const invalidateSamplePCMCache = useCallback((key?: string) => {
     renderGenerationRef.current += 1;

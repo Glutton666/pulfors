@@ -53,3 +53,4 @@
 - [Notification preference races](notification-preference-races.md) — disabling a notification needs an epoch check before every async publish, not only an initial enabled guard.
 - [Capped meter changes](capped-meter-changes.md) — never call the meter updater with an unchanged capped count; equality intentionally resets beat types.
 - [Audio startup handshake](audio-startup-handshake.md) — playing UI waits for accepted output; every start/stop owns and invalidates an activity epoch, including delayed native seeks.
+- [Native dense-pattern playback](native-dense-pattern-playback.md) — native Beat playback is rendered-first; async per-tick seek/play can reorder accent and normal output.
