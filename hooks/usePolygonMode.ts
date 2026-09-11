@@ -13,13 +13,9 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Platform } from "react-native";
 import * as Crypto from "expo-crypto";
-import { safePlay, safePlayWithVolume } from "@/lib/audio-utils";
+import { safePlayWithVolume } from "@/lib/audio-utils";
 import { captureBreadcrumb } from "@/lib/error-tracking";
-import {
-  getWebAudioContext,
-  scheduleWebClickAt,
-  type ScheduledWebAudio,
-} from "@/lib/audio-renderer";
+import { getWebAudioContext, playWebClick } from "@/lib/audio-renderer";
 import type { BuiltinPlayers, SoundSetPlayers } from "@/hooks/useAudioPlayers";
 import type { ClickPCMs } from "@/lib/audio-renderer";
 import type { SoundSet } from "@/lib/storage";
@@ -85,45 +81,6 @@ export interface UsePolygonModeResult {
   setLayerCustomSound: (layerId: string, pcms: ClickPCMs) => void;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Web PCM 재생 헬퍼
-// ─────────────────────────────────────────────────────────────────────────────
-
-function playPCMOnWeb(
-  pcm: Float32Array,
-  volume: number,
-  when: number,
-): ScheduledWebAudio | null {
-  const ctx = getWebAudioContext();
-  if (!ctx) return null;
-  const buf = ctx.createBuffer(1, pcm.length, ctx.sampleRate);
-  buf.getChannelData(0).set(pcm);
-  const src = ctx.createBufferSource();
-  src.buffer = buf;
-  const gain = ctx.createGain();
-  gain.gain.value = Math.max(0, Math.min(2, volume));
-  src.connect(gain);
-  gain.connect(ctx.destination);
-  src.start(Math.max(ctx.currentTime, when));
-  let cancelled = false;
-  let endedListener: (() => void) | null = null;
-  src.onended = () => {
-    endedListener?.();
-    try { src.disconnect(); } catch {}
-    try { gain.disconnect(); } catch {}
-  };
-  return {
-    cancel: () => {
-      if (cancelled) return;
-      cancelled = true;
-      try { src.stop(); } catch {}
-      try { src.disconnect(); } catch {}
-      try { gain.disconnect(); } catch {}
-    },
-    onEnded: (listener) => { endedListener = listener; },
-  };
-}
-
 /**
  * VertexBeatType → playWebClick의 role 인자로 변환.
  * mute는 호출 전에 건너뛰므로 여기선 다루지 않는다.
@@ -132,6 +89,32 @@ function beatTypeToWebClickRole(bt: VertexBeatType): "strong" | "high" | "low" {
   if (bt === "strong") return "strong";
   if (bt === "accent") return "high";
   return "low";
+}
+
+/** Play a cached layer PCM immediately on the shared Web Audio context. */
+function playPCMOnWebRealtime(pcm: Float32Array, volume: number): boolean {
+  if (!pcm.length) return false;
+  const ctx = getWebAudioContext();
+  if (!ctx) return false;
+  try {
+    if (ctx.state === "suspended") ctx.resume().catch(() => {});
+    const buffer = ctx.createBuffer(1, pcm.length, ctx.sampleRate);
+    buffer.getChannelData(0).set(pcm);
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    const gain = ctx.createGain();
+    gain.gain.value = Math.max(0, Math.min(2, volume));
+    source.connect(gain);
+    gain.connect(ctx.destination);
+    source.start(ctx.currentTime);
+    source.onended = () => {
+      try { source.disconnect(); } catch {}
+      try { gain.disconnect(); } catch {}
+    };
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -182,13 +165,6 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
   // ── 오프셋 setTimeout 핸들 ───────────────────────────────────────────────
   // Map<layerId, Set<timerId>>: 레이어별로 관리해 삭제 시 해당 레이어 타이머만 취소.
   const pendingTimerMapRef = useRef<Map<string, Set<ReturnType<typeof setTimeout>>>>(new Map());
-  // Web Audio sources are scheduled on the AudioContext clock and must be
-  // cancelled separately from the UI timers used for vertex pulses.
-  const pendingAudioMapRef = useRef<Map<string, Set<ScheduledWebAudio>>>(new Map());
-  const audioNeedsRescheduleAllRef = useRef(true);
-  const audioNeedsRescheduleLayersRef = useRef<Set<string>>(new Set());
-  const audioMeasureStartTimeRef = useRef<number | null>(null);
-  const audioMeasureDurationSecRef = useRef(0);
 
   /** 특정 레이어의 대기 중 타이머를 모두 취소한다 */
   const clearLayerTimers = useCallback((layerId: string) => {
@@ -203,19 +179,6 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
   const clearPendingTimers = useCallback(() => {
     pendingTimerMapRef.current.forEach((timers) => timers.forEach(clearTimeout));
     pendingTimerMapRef.current.clear();
-  }, []);
-
-  const clearLayerAudio = useCallback((layerId: string) => {
-    const sources = pendingAudioMapRef.current.get(layerId);
-    if (sources) {
-      sources.forEach((source) => source.cancel());
-      pendingAudioMapRef.current.delete(layerId);
-    }
-  }, []);
-
-  const clearPendingAudio = useCallback(() => {
-    pendingAudioMapRef.current.forEach((sources) => sources.forEach((source) => source.cancel()));
-    pendingAudioMapRef.current.clear();
   }, []);
 
   // ── Per-layer PCM 캐시 (전역 clickPCMCacheRef와 분리) ───────────────────
@@ -245,25 +208,15 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
     layers.forEach((l) => ensurePCM(l.soundSet));
   }, [p.enabled, layers, ensurePCM]);
 
-  // ── ensurePCM ref — 엔진 핸들러가 참조 변경에 영향받지 않도록 ref로 접근 ──
-  // (getClickPCMs → ensurePCM 참조가 바뀌어도 핸들러 재등록이 일어나지 않는다)
-  const ensurePCMRef = useRef(ensurePCM);
-  useEffect(() => { ensurePCMRef.current = ensurePCM; }, [ensurePCM]);
-
   // ── 재생 중단 → absoluteBeat 리셋 ──────────────────────────────────────
   // 엔진이 멈추면 더 이상 콜백이 오지 않으므로 카운터만 초기화한다.
   // 비주얼 리셋(setActiveVertices)은 enabled가 false가 될 때 처리한다.
   useEffect(() => {
     if (!p.isPlaying) {
       clearPendingTimers();
-      clearPendingAudio();
-      audioNeedsRescheduleAllRef.current = true;
-      audioNeedsRescheduleLayersRef.current.clear();
-      audioMeasureStartTimeRef.current = null;
-      audioMeasureDurationSecRef.current = 0;
       absoluteBeatRef.current = 0;
     }
-  }, [p.isPlaying, clearPendingTimers, clearPendingAudio]);
+  }, [p.isPlaying, clearPendingTimers]);
 
   // ── BPM 변경 → 예약된 슬롯 취소 (다음 비트부터 새 BPM 적용) ────────────
   // BPM이 바뀌면 현재 마디에서 아직 발화되지 않은 슬롯을 취소한다.
@@ -274,12 +227,8 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
       prevBpmRef.current = p.bpm;
       bpmRef.current = p.bpm;
       clearPendingTimers();
-      clearPendingAudio();
-      audioNeedsRescheduleAllRef.current = true;
-      audioMeasureStartTimeRef.current = null;
-      audioMeasureDurationSecRef.current = 0;
     }
-  }, [p.bpm, clearPendingTimers, clearPendingAudio]);
+  }, [p.bpm, clearPendingTimers]);
 
   // ── 박자표 변경 → 위상 재정렬 ──────────────────────────────────────────
   // 엔진이 자체 비트 카운터를 0으로 리셋하므로, 폴리곤도 다음 콜백을
@@ -291,18 +240,13 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
       prevMeterRef.current = p.beatsPerMeasure;
       beatsPerMeasureRef.current = p.beatsPerMeasure;
       clearPendingTimers();
-      clearPendingAudio();
-      audioNeedsRescheduleAllRef.current = true;
-      audioMeasureStartTimeRef.current = null;
-      audioMeasureDurationSecRef.current = 0;
       absoluteBeatRef.current = 0;
     }
-  }, [p.beatsPerMeasure, clearPendingTimers, clearPendingAudio]);
+  }, [p.beatsPerMeasure, clearPendingTimers]);
 
   // ── 엔진 비트 핸들러 등록/해제 ──────────────────────────────────────────
-  // 웹에서는 마디의 슬롯을 AudioContext 시간축에 직접 예약한다. UI 꼭짓점
-  // 갱신만 짧은 JS 타이머를 사용하므로, 메인 스레드 지연이 오디오 리듬을 흔들지 않는다.
-  // 네이티브 플레이어는 미래 시점 재생 API가 없어 기존 엔진-비트 기준 재생을 유지한다.
+  // 웹도 꼭짓점 타이머에서 realtime click을 재생한다. AudioContext 미래 예약은
+  // 브라우저별로 무음이 될 수 있어 사용하지 않는다.
   useEffect(() => {
     if (!p.enabled) {
       // 엔진 콜백 해제 및 재생 상태 초기화.
@@ -310,20 +254,13 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
       // 사용자가 폴리곤 모드를 닫았다 다시 열어도 설정한 레이어가 남아 있어야 한다.
       p.engineBeatCallbackRef.current = null;
       clearPendingTimers();
-      clearPendingAudio();
-      audioNeedsRescheduleAllRef.current = true;
-      audioNeedsRescheduleLayersRef.current.clear();
-      audioMeasureStartTimeRef.current = null;
-      audioMeasureDurationSecRef.current = 0;
       absoluteBeatRef.current = 0;
       setOffsetPopup(null);
       setActiveVertices({});
       return;
     }
 
-    audioNeedsRescheduleAllRef.current = true;
-
-    // Native 사운드 재생 헬퍼 — 웹은 scheduleWebSound에서 AudioContext에 예약한다.
+    // Native 사운드 재생 헬퍼.
     const playNativeSound = (layer: PolygonLayer, beatType: Exclude<VertexBeatType, "mute">) => {
       // layer.volume (0-1)를 전역 볼륨에 곱해 레이어별 음량을 제어한다.
       const layerVol = Math.max(0, Math.min(1, layer.volume ?? 1.0));
@@ -363,39 +300,6 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
       }
     };
 
-    const scheduleWebSound = (
-      layer: PolygonLayer,
-      beatType: Exclude<VertexBeatType, "mute">,
-      when: number,
-    ): ScheduledWebAudio | null => {
-      const layerVol = Math.max(0, Math.min(1, layer.volume ?? 1.0));
-      const soundRole = beatType === "strong" ? "strong" : beatType === "accent" ? "high" : "low";
-      const cached =
-        polygonPCMCacheRef.current.get(layer.soundSet)
-        ?? p.clickPCMCacheRef.current[layer.soundSet];
-      if (cached) {
-        return playPCMOnWeb(cached[soundRole], p.volumeRef.current * layerVol, when);
-      }
-      ensurePCMRef.current(layer.soundSet);
-      return scheduleWebClickAt(soundRole, "both", p.volumeRef.current * layerVol, when);
-    };
-
-    const addScheduledAudio = (layerId: string, source: ScheduledWebAudio | null) => {
-      if (!source) return;
-      let sources = pendingAudioMapRef.current.get(layerId);
-      if (!sources) {
-        sources = new Set();
-        pendingAudioMapRef.current.set(layerId, sources);
-      }
-      sources.add(source);
-      source.onEnded?.(() => {
-        sources?.delete(source);
-        if (sources?.size === 0 && pendingAudioMapRef.current.get(layerId) === sources) {
-          pendingAudioMapRef.current.delete(layerId);
-        }
-      });
-    };
-
     p.engineBeatCallbackRef.current = () => {
       // 이 핸들러는 React lifecycle 밖(엔진 오디오 스레드)에서 호출된다.
       // 최신 레이어/BPM/박자표는 ref를 통해 읽는다.
@@ -407,54 +311,6 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
       const beatWithinMeasure = absbeat % beatsPerMeasure;
       const beatDurationMs = 60000 / Math.max(20, bpm);
       const beatStartMs = beatWithinMeasure * beatDurationMs; // 마디 시작 기준
-
-      // 웹: 새 마디는 전체 마디를 한 번에 예약한다. 편집·템포 변경 뒤에는
-      // 다음 엔진 비트부터 아직 지나지 않은 슬롯만 새 시간축으로 예약한다.
-      if (Platform.OS === "web") {
-        const ctx = getWebAudioContext();
-        const rescheduleAll =
-          beatWithinMeasure === 0 || audioNeedsRescheduleAllRef.current;
-        const requestedLayers = audioNeedsRescheduleLayersRef.current;
-        if (ctx && (rescheduleAll || requestedLayers.size > 0)) {
-          const measureDurationSec = (beatsPerMeasure * beatDurationMs) / 1000;
-          let measureStartTime = audioMeasureStartTimeRef.current;
-          if (audioNeedsRescheduleAllRef.current || measureStartTime === null) {
-            // A changed configuration takes effect on this engine beat. This
-            // deliberately reanchors once, then subsequent measures advance
-            // from the AudioContext timeline instead of callback arrival time.
-            measureStartTime = ctx.currentTime - beatStartMs / 1000;
-          } else if (beatWithinMeasure === 0) {
-            const predicted = measureStartTime + audioMeasureDurationSecRef.current;
-            // An unusually delayed JS callback cannot schedule in the past.
-            // Reanchor only in that recovery case; ordinary measures retain
-            // one continuous AudioContext clock.
-            measureStartTime = predicted < ctx.currentTime - 0.02
-              ? ctx.currentTime
-              : predicted;
-          }
-          audioMeasureStartTimeRef.current = measureStartTime;
-          audioMeasureDurationSecRef.current = measureDurationSec;
-
-          layers.forEach((layer) => {
-            if (!rescheduleAll && !requestedLayers.has(layer.id)) return;
-            const sides = Math.max(1, layer.sides);
-            const slotDurationMs = (beatsPerMeasure * beatDurationMs) / sides;
-            for (let k = 0; k < sides; k++) {
-              const slotTimeMs = k * slotDurationMs;
-              if (slotTimeMs < beatStartMs) continue;
-              const beatType = getVertexBeatType(layer, k);
-              if (beatType === "mute") continue;
-              const offsetMs = (layer.offsets[k] ?? 0) * slotDurationMs;
-              addScheduledAudio(
-                layer.id,
-                scheduleWebSound(layer, beatType, measureStartTime + (slotTimeMs + offsetMs) / 1000),
-              );
-            }
-            requestedLayers.delete(layer.id);
-          });
-          audioNeedsRescheduleAllRef.current = false;
-        }
-      }
 
       layers.forEach((layer) => {
         const sides = Math.max(1, layer.sides);
@@ -513,7 +369,25 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
           schedule(delayMs, () => {
             // 오디오 트리거를 먼저 실행해, 뒤이은 React 상태 갱신(재조정 비용)이
             // 같은 타이머 콜백 안에서 실제 재생 호출을 지연시키지 않게 한다.
-            if (Platform.OS !== "web") playNativeSound(layer, beatType);
+            if (Platform.OS === "web") {
+              const layerVol = Math.max(0, Math.min(1, layer.volume ?? 1.0));
+              const soundRole = beatTypeToWebClickRole(beatType);
+              const cached =
+                polygonPCMCacheRef.current.get(layer.soundSet)
+                ?? p.clickPCMCacheRef.current[layer.soundSet];
+              const played = cached
+                ? playPCMOnWebRealtime(
+                    cached[soundRole],
+                    p.volumeRef.current * layerVol,
+                  )
+                : false;
+              if (!played) {
+                ensurePCM(layer.soundSet);
+                playWebClick(soundRole, "both", p.volumeRef.current * layerVol);
+              }
+            } else {
+              playNativeSound(layer, beatType);
+            }
             setActiveVertices((prev) =>
               prev[layer.id] === k ? prev : { ...prev, [layer.id]: k },
             );
@@ -526,16 +400,11 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
       // enabled가 false로 바뀌거나 unmount 시 핸들러 해제 + 대기 타이머 정리
       p.engineBeatCallbackRef.current = null;
       clearPendingTimers();
-      clearPendingAudio();
-      audioNeedsRescheduleAllRef.current = true;
-      audioNeedsRescheduleLayersRef.current.clear();
-      audioMeasureStartTimeRef.current = null;
-      audioMeasureDurationSecRef.current = 0;
     };
   // enabled가 변경될 때만 핸들러를 재등록한다.
   // layers/bpm/beatsPerMeasure/ensurePCM은 ref로 읽으므로 의존성 불필요.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [p.enabled, p.engineBeatCallbackRef, clearPendingTimers, clearPendingAudio, clearLayerAudio]);
+  }, [p.enabled, p.engineBeatCallbackRef, clearPendingTimers]);
 
   // ── 레이어 관리 ─────────────────────────────────────────────────────────
 
@@ -554,7 +423,6 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
     };
     setLayers((prev) => [...prev, newLayer]);
     layersRef.current = [...layersRef.current, newLayer];
-    audioNeedsRescheduleLayersRef.current.add(id);
     setEditingLayerId(id);
     ensurePCM(newLayer.soundSet);
   }, [layers, ensurePCM]);
@@ -562,8 +430,6 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
   const handleDeleteLayer = useCallback((id: string) => {
     // 삭제 전 해당 레이어의 대기 중 타이머를 즉시 취소
     clearLayerTimers(id);
-    clearLayerAudio(id);
-    audioNeedsRescheduleLayersRef.current.delete(id);
     // layersRef를 즉시 갱신 — effect 실행 전에 엔진 비트가 오면 삭제된
     // 레이어를 다시 읽어 슬롯을 재예약하는 경쟁 조건 방지
     layersRef.current = layersRef.current.filter((l) => l.id !== id);
@@ -574,7 +440,7 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
       delete next[id];
       return next;
     });
-  }, [clearLayerTimers, clearLayerAudio]);
+  }, [clearLayerTimers]);
 
   /**
    * 레이어 배열을 변환하고 layersRef와 state를 동시에 갱신한다.
@@ -595,8 +461,6 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
       // 재생 중 편집: 옛 데이터로 예약된 이 레이어의 잔여 이벤트를 취소.
       // 남은 비트는 침묵하고 다음 비트부터 새 설정으로 발화한다.
       clearLayerTimers(id);
-      clearLayerAudio(id);
-      audioNeedsRescheduleLayersRef.current.add(id);
       applyLayerMutation((prev) =>
         prev.map((l) => {
           if (l.id !== id) return l;
@@ -629,14 +493,12 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
       );
       if (patch.soundSet) ensurePCM(patch.soundSet);
     },
-    [ensurePCM, clearLayerTimers, clearLayerAudio, applyLayerMutation],
+    [ensurePCM, clearLayerTimers, applyLayerMutation],
   );
 
   const handleSetOffset = useCallback(
     (layerId: string, vertexIdx: number, offset: number) => {
       clearLayerTimers(layerId);
-      clearLayerAudio(layerId);
-      audioNeedsRescheduleLayersRef.current.add(layerId);
       applyLayerMutation((prev) =>
         prev.map((l) => {
           if (l.id !== layerId) return l;
@@ -646,15 +508,13 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
         }),
       );
     },
-    [clearLayerTimers, clearLayerAudio, applyLayerMutation],
+    [clearLayerTimers, applyLayerMutation],
   );
 
   // ── 꼭짓점 강세 순환 (S → A → N → M) ──────────────────────────────────
   const handleVertexBeatTypeCycle = useCallback(
     (layerId: string, vertexIdx: number) => {
       clearLayerTimers(layerId);
-      clearLayerAudio(layerId);
-      audioNeedsRescheduleLayersRef.current.add(layerId);
       applyLayerMutation((prev) =>
         prev.map((l) => {
           if (l.id !== layerId) return l;
@@ -668,7 +528,7 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
         }),
       );
     },
-    [clearLayerTimers, clearLayerAudio, applyLayerMutation],
+    [clearLayerTimers, applyLayerMutation],
   );
 
   // ── 커스텀 사운드 등록 ──────────────────────────────────────────────────

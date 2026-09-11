@@ -534,162 +534,193 @@ describe("usePolygonMode — engine callback driven", () => {
     setTimeoutSpy.mockRestore();
   });
 
-  // ── Web Audio clock: 소리는 JS 타이머가 아닌 AudioContext 미래 시점에 예약 ──
-
-  it("web schedules every 4:4 polygon click against one AudioContext clock", () => {
+  it("web plays one realtime click at each vertex callback", () => {
     Platform.OS = "web";
     const renderer = require("@/lib/audio-renderer");
-    const handles = Array.from({ length: 4 }, () => ({ cancel: jest.fn() }));
-    renderer.getWebAudioContext.mockReturnValue({ currentTime: 10 });
-    renderer.scheduleWebClickAt.mockImplementation(() => handles.shift() ?? { cancel: jest.fn() });
-
     const params = makeParams();
-    renderHook(() => usePolygonMode(params));
-    fireBeat(params.engineBeatCallbackRef);
-
-    const scheduledAt = (renderer.scheduleWebClickAt as jest.Mock).mock.calls.map(
-      (call: any[]) => call[3],
-    );
-    expect(scheduledAt).toEqual([10, 10.5, 11, 11.5]);
-  });
-
-  it("web PCM layers call AudioBufferSource.start with future AudioContext times", () => {
-    Platform.OS = "web";
-    const renderer = require("@/lib/audio-renderer");
-    const starts = jest.fn();
-    const audioContext = {
-      currentTime: 30,
-      destination: {},
-      createBuffer: jest.fn(() => ({ getChannelData: () => ({ set: jest.fn() }) })),
-      createBufferSource: jest.fn(() => ({
-        connect: jest.fn(),
-        disconnect: jest.fn(),
-        start: starts,
-        stop: jest.fn(),
-      })),
-      createGain: jest.fn(() => ({
-        connect: jest.fn(),
-        disconnect: jest.fn(),
-        gain: { value: 0 },
-      })),
-    };
-    renderer.getWebAudioContext.mockReturnValue(audioContext);
-    const pcms = {
-      strong: new Float32Array([0, 1]),
-      high: new Float32Array([0, 1]),
-      low: new Float32Array([0, 1]),
-    };
-    const params = makeParams({ clickPCMCacheRef: { current: { classic: pcms } } });
-    renderHook(() => usePolygonMode(params));
-
-    fireBeat(params.engineBeatCallbackRef);
-    expect(starts.mock.calls.map((call: any[]) => call[0])).toEqual([30, 30.5, 31, 31.5]);
-  });
-
-  it("web advances the next measure from its prior AudioContext anchor, not callback arrival", () => {
-    Platform.OS = "web";
-    const renderer = require("@/lib/audio-renderer");
-    const audioContext = { currentTime: 10 };
-    renderer.getWebAudioContext.mockReturnValue(audioContext);
-    renderer.scheduleWebClickAt.mockImplementation(() => ({ cancel: jest.fn() }));
-
-    const params = makeParams();
-    renderHook(() => usePolygonMode(params));
-    fireBeat(params.engineBeatCallbackRef); // measure 1 anchor = 10
-    fireBeat(params.engineBeatCallbackRef, 3);
-    audioContext.currentTime = 11.99; // next engine callback arrives just before its 12.0 audio anchor
-    fireBeat(params.engineBeatCallbackRef);
-
-    const scheduledAt = (renderer.scheduleWebClickAt as jest.Mock).mock.calls
-      .slice(4)
-      .map((call: any[]) => call[3]);
-    expect(scheduledAt).toEqual([12, 12.5, 13, 13.5]);
-  });
-
-  it("web aligns 5:4 and 3:4 layers to the same high-BPM AudioContext measure", () => {
-    Platform.OS = "web";
-    const renderer = require("@/lib/audio-renderer");
-    renderer.getWebAudioContext.mockReturnValue({ currentTime: 2 });
-    renderer.scheduleWebClickAt.mockImplementation(() => ({ cancel: jest.fn() }));
-
-    const params = makeParams({ bpm: 300 });
     const { result } = renderHook(() => usePolygonMode(params));
-    const firstId = result.current.layers[0].id;
-    act(() => { result.current.handleUpdateLayer(firstId, { sides: 5 }); });
-    act(() => { result.current.handleAddLayer(); });
-    const secondId = result.current.layers[1].id;
-    act(() => { result.current.handleUpdateLayer(secondId, { sides: 3 }); });
+    const layerId = result.current.layers[0].id;
 
-    fireBeat(params.engineBeatCallbackRef);
+    fireBeat(params.engineBeatCallbackRef, 4);
 
-    const scheduledAt = (renderer.scheduleWebClickAt as jest.Mock).mock.calls.map(
-      (call: any[]) => call[3] as number,
-    );
-    // 300 BPM·4박 마디 = 0.8초. 5각형과 3각형 모두 시각 2.0에서 시작한다.
-    expect(scheduledAt.slice(0, 5)).toEqual([2, 2.16, 2.32, 2.48, 2.64]);
-    expect(scheduledAt.slice(5)).toEqual([2, 2 + 0.8 / 3, 2 + 1.6 / 3]);
+    expect(renderer.playWebClick).toHaveBeenCalledTimes(4);
+    expect(renderer.scheduleWebClickAt).not.toHaveBeenCalled();
+    expect(result.current.activeVertices[layerId]).toBe(3);
   });
 
-  it("web cancels already-scheduled audio when a layer is edited or playback stops", () => {
+  it("web realtime playback uses each layer's cached PCM and gain", () => {
     Platform.OS = "web";
     const renderer = require("@/lib/audio-renderer");
-    const handles = Array.from({ length: 8 }, () => ({ cancel: jest.fn() }));
-    renderer.getWebAudioContext.mockReturnValue({ currentTime: 20 });
-    renderer.scheduleWebClickAt.mockImplementation(() => handles.shift() ?? { cancel: jest.fn() });
+    const starts: jest.Mock[] = [];
+    const gains: number[] = [];
+    const audioContext = {
+      state: "running",
+      currentTime: 7,
+      sampleRate: 44100,
+      destination: {},
+      createBuffer: jest.fn((_channels: number, length: number) => ({
+        getChannelData: () => ({ set: jest.fn() }),
+        length,
+      })),
+      createBufferSource: jest.fn(() => {
+        const source = {
+          connect: jest.fn(),
+          disconnect: jest.fn(),
+          start: jest.fn(),
+          buffer: null as any,
+          onended: null as (() => void) | null,
+        };
+        starts.push(source.start);
+        return source;
+      }),
+      createGain: jest.fn(() => {
+        const gain = { value: 0 };
+        Object.defineProperty(gain, "value", {
+          get: () => gains[gains.length - 1],
+          set: (value: number) => { gains.push(value); },
+        });
+        return { connect: jest.fn(), disconnect: jest.fn(), gain };
+      }),
+      resume: jest.fn(() => Promise.resolve()),
+    };
+    renderer.getWebAudioContext.mockReturnValue(audioContext);
+    const classic = {
+      strong: new Float32Array([1]),
+      high: new Float32Array([2]),
+      low: new Float32Array([3]),
+    };
+    const custom = {
+      strong: new Float32Array([4]),
+      high: new Float32Array([5]),
+      low: new Float32Array([6]),
+    };
+    const params = makeParams({
+      volumeRef: { current: 0.6 },
+      clickPCMCacheRef: { current: { classic } },
+    });
+    const { result } = renderHook(() => usePolygonMode(params));
+    act(() => { result.current.handleAddLayer(); });
+    act(() => { result.current.setLayerCustomSound(result.current.layers[1].id, custom); });
+    fireBeat(params.engineBeatCallbackRef);
 
+    expect(starts).toHaveLength(2);
+    expect(renderer.playWebClick).not.toHaveBeenCalled();
+    expect(audioContext.createBuffer).toHaveBeenCalledWith(1, 1, 44100);
+    expect(gains).toEqual([0.6, 0.6]);
+  });
+
+  it("web cached PCM failures fall back to playWebClick with role and gain", () => {
+    Platform.OS = "web";
+    const renderer = require("@/lib/audio-renderer");
+    renderer.getWebAudioContext.mockReturnValue({
+      state: "running",
+      currentTime: 0,
+      sampleRate: 44100,
+      createBuffer: jest.fn(() => { throw new Error("decode unavailable"); }),
+    });
+    const params = makeParams({
+      volumeRef: { current: 0.4 },
+      clickPCMCacheRef: { current: { classic: {
+        strong: new Float32Array([1]),
+        high: new Float32Array([1]),
+        low: new Float32Array([1]),
+      } } },
+    });
+    const { result } = renderHook(() => usePolygonMode(params));
+    act(() => { result.current.handleUpdateLayer(result.current.layers[0].id, { role: "strong", volume: 0.5 }); });
+    fireBeat(params.engineBeatCallbackRef);
+
+    expect(renderer.playWebClick).toHaveBeenCalledWith("strong", "both", 0.2);
+  });
+
+  it("web does not play muted vertices", () => {
+    Platform.OS = "web";
+    const renderer = require("@/lib/audio-renderer");
+    const params = makeParams();
+    const { result } = renderHook(() => usePolygonMode(params));
+    const layerId = result.current.layers[0].id;
+    act(() => { result.current.handleVertexBeatTypeCycle(layerId, 1); });
+    act(() => { result.current.handleVertexBeatTypeCycle(layerId, 1); });
+
+    fireBeat(params.engineBeatCallbackRef, 4);
+
+    expect(renderer.playWebClick).toHaveBeenCalledTimes(3);
+  });
+
+  it("web applies vertex offsets through the realtime timer", () => {
+    Platform.OS = "web";
+    const renderer = require("@/lib/audio-renderer");
+    const params = makeParams();
+    const { result } = renderHook(() => usePolygonMode(params));
+    const layerId = result.current.layers[0].id;
+    act(() => {
+      result.current.handleUpdateLayer(layerId, {
+        sides: 3,
+        offsets: [0, 0.25, 0],
+      });
+    });
+
+    fireBeat(params.engineBeatCallbackRef); // vertex 0
+    fireBeat(params.engineBeatCallbackRef); // vertex 1, 333.33ms later
+    expect(renderer.playWebClick).toHaveBeenCalledTimes(1);
+    advanceMs(300);
+    expect(renderer.playWebClick).toHaveBeenCalledTimes(1);
+    advanceMs(40);
+    expect(renderer.playWebClick).toHaveBeenCalledTimes(2);
+  });
+
+  it("web emits exactly N clicks per measure on realtime timers", () => {
+    Platform.OS = "web";
+    const renderer = require("@/lib/audio-renderer");
+    const params = makeParams();
+    const { result } = renderHook(() => usePolygonMode(params));
+    act(() => {
+      result.current.handleUpdateLayer(result.current.layers[0].id, { sides: 5 });
+    });
+
+    fireBeat(params.engineBeatCallbackRef, 4);
+    expect(renderer.playWebClick).toHaveBeenCalledTimes(1);
+    advanceMs(399);
+    expect(renderer.playWebClick).toHaveBeenCalledTimes(4);
+    advanceMs(1);
+    expect(renderer.playWebClick).toHaveBeenCalledTimes(5);
+  });
+
+  it("web edit and stop cancel pending realtime vertex timers", () => {
+    Platform.OS = "web";
+    const renderer = require("@/lib/audio-renderer");
     const params = makeParams();
     const { result, rerender } = renderHook(
       (next: UsePolygonModeParams) => usePolygonMode(next),
       { initialProps: params },
     );
-    fireBeat(params.engineBeatCallbackRef);
-    const scheduled = (renderer.scheduleWebClickAt as jest.Mock).mock.results
-      .map((entry: any) => entry.value)
-      .filter(Boolean);
-    expect(scheduled).toHaveLength(4);
+    const layerId = result.current.layers[0].id;
+    act(() => {
+      result.current.handleUpdateLayer(layerId, { sides: 3, offsets: [0, 0.5, 0] });
+    });
+    fireBeat(params.engineBeatCallbackRef, 2);
+    expect(renderer.playWebClick).toHaveBeenCalledTimes(1);
 
-    act(() => { result.current.handleUpdateLayer(result.current.layers[0].id, { sides: 3 }); });
-    scheduled.forEach((handle: { cancel: jest.Mock }) => expect(handle.cancel).toHaveBeenCalledTimes(1));
-
-    renderer.scheduleWebClickAt.mockClear();
-    fireBeat(params.engineBeatCallbackRef);
-    const replacement = (renderer.scheduleWebClickAt as jest.Mock).mock.results
-      .map((entry: any) => entry.value)
-      .filter(Boolean);
-    expect(replacement).toHaveLength(2);
+    act(() => { result.current.handleUpdateLayer(layerId, { sides: 4 }); });
+    advanceMs(1000);
+    expect(renderer.playWebClick).toHaveBeenCalledTimes(1);
 
     rerender({ ...params, isPlaying: false });
-    replacement.forEach((handle: { cancel: jest.Mock }) => expect(handle.cancel).toHaveBeenCalledTimes(1));
+    advanceMs(2000);
+    expect(renderer.playWebClick).toHaveBeenCalledTimes(1);
   });
 
-  it("web cancels all old sources before BPM or meter replacements", () => {
+  it("web plays clicks for multiple polygon layers without duplicate scheduling", () => {
     Platform.OS = "web";
     const renderer = require("@/lib/audio-renderer");
-    const handles = Array.from({ length: 16 }, () => ({ cancel: jest.fn() }));
-    renderer.getWebAudioContext.mockReturnValue({ currentTime: 40 });
-    renderer.scheduleWebClickAt.mockImplementation(() => handles.shift() ?? { cancel: jest.fn() });
-
     const params = makeParams();
-    const { rerender } = renderHook(
-      (next: UsePolygonModeParams) => usePolygonMode(next),
-      { initialProps: params },
-    );
-    fireBeat(params.engineBeatCallbackRef);
-    const initial = (renderer.scheduleWebClickAt as jest.Mock).mock.results.map((entry: any) => entry.value);
+    const { result } = renderHook(() => usePolygonMode(params));
+    act(() => { result.current.handleAddLayer(); });
 
-    rerender({ ...params, bpm: 240 });
-    initial.forEach((handle: { cancel: jest.Mock }) => expect(handle.cancel).toHaveBeenCalledTimes(1));
-    renderer.scheduleWebClickAt.mockClear();
     fireBeat(params.engineBeatCallbackRef);
-    expect((renderer.scheduleWebClickAt as jest.Mock).mock.calls.length).toBeGreaterThan(0);
 
-    const bpmReplacement = (renderer.scheduleWebClickAt as jest.Mock).mock.results.map((entry: any) => entry.value);
-    rerender({ ...params, bpm: 240, beatsPerMeasure: 3 });
-    bpmReplacement.forEach((handle: { cancel: jest.Mock }) => expect(handle.cancel).toHaveBeenCalledTimes(1));
-    renderer.scheduleWebClickAt.mockClear();
-    fireBeat(params.engineBeatCallbackRef);
-    // 3/4에서도 4각형은 한 마디를 네 번으로 나눈다.
-    expect((renderer.scheduleWebClickAt as jest.Mock).mock.calls).toHaveLength(4);
+    expect(renderer.playWebClick).toHaveBeenCalledTimes(2);
+    expect(renderer.scheduleWebClickAt).not.toHaveBeenCalled();
   });
 
   // ── getClickPCMs 참조 변경 시 엔진 핸들러가 재등록되지 않음 ────────────
