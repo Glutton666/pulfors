@@ -154,39 +154,32 @@ export function useBeatTypeControls(
   // ── handleBeatTypeChange ─────────────────────────────────────────────────────
   const handleBeatTypeChange = useCallback(
     (index: number, type: BeatType) => {
-      setBeatTypes((prev) => {
-        const next = [...prev];
-        next[index] = type;
-        if (barModeRef.current) {
-          barConfigRef.current.beatTypes = next;
-        } else {
-          dialConfigRef.current.beatTypes = next;
-        }
-        return next;
-      });
+      const activeConfig = barModeRef.current
+        ? barConfigRef.current
+        : dialConfigRef.current;
+      const nextTypes = [...activeConfig.beatTypes];
+      nextTypes[index] = type;
+      const existingSubs = activeConfig.beatSubdivisions[String(index)];
+      const nextSubdivisions = existingSubs?.length
+        ? {
+            ...activeConfig.beatSubdivisions,
+            [String(index)]: [type, ...existingSubs.slice(1)] as BeatType[],
+          }
+        : activeConfig.beatSubdivisions;
 
-      // Synchronise the first subdivision cell with the new beat type
-      setBeatSubdivisions((prev) => {
-        const subs = prev[String(index)];
-        if (!subs || subs.length === 0) return prev;
-        const newSubs = {
-          ...prev,
-          [String(index)]: [type, ...subs.slice(1)] as BeatType[],
-        };
-        if (barModeRef.current) {
-          barConfigRef.current.beatSubdivisions = newSubs;
-        } else {
-          dialConfigRef.current.beatSubdivisions = newSubs;
-        }
-        engineRef.current?.setAllBeatSubdivisions(newSubs);
-        return newSubs;
-      });
+      // Update the active profile before scheduling React state so an immediate
+      // play action cannot observe the previous mode's render snapshot.
+      activeConfig.beatTypes = nextTypes;
+      activeConfig.beatSubdivisions = nextSubdivisions;
+      setBeatTypes(nextTypes);
+      setBeatSubdivisions(nextSubdivisions);
+      if (existingSubs?.length) {
+        engineRef.current?.setAllBeatSubdivisions(nextSubdivisions);
+      }
 
       const engine = engineRef.current;
       if (engine) {
-        const currentTypes = [...engine.getBeatTypes()];
-        currentTypes[index] = type;
-        engine.setBeatTypes(currentTypes);
+        engine.setBeatTypes(nextTypes);
       }
       scheduleReRender();
     },

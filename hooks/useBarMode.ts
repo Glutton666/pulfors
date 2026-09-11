@@ -235,8 +235,8 @@ export function useBarMode(p: UseBarModeParams): UseBarModeResult {
   const [barRepeats, setBarRepeats] = useState<Record<number, BarRepeat>>({});
   const [loopBlocks, setLoopBlocks] = useState<LoopBlock[]>([]);
   const [barStartBeat, setBarStartBeat] = useState<number | null>(null);
-  const [barLoopMode, setBarLoopMode] = useState<"loop" | "once">("once");
-  const [blockPlayMode, setBlockPlayMode] = useState<
+  const [barLoopMode, setBarLoopModeState] = useState<"loop" | "once">("once");
+  const [blockPlayMode, setBlockPlayModeState] = useState<
     "sequential" | "loop" | "random"
   >("loop");
 
@@ -258,6 +258,33 @@ export function useBarMode(p: UseBarModeParams): UseBarModeResult {
     blockPlayModeRef.current = blockPlayMode;
   }, [blockPlayMode]);
 
+  const setBarLoopMode = useCallback<React.Dispatch<React.SetStateAction<"loop" | "once">>>(
+    (nextOrUpdater) => {
+      const next = typeof nextOrUpdater === "function"
+        ? nextOrUpdater(barLoopModeRef.current)
+        : nextOrUpdater;
+      barLoopModeRef.current = next;
+      barConfigRef.current.barLoopMode = next;
+      setBarLoopModeState(next);
+    },
+    [],
+  );
+
+  const setBlockPlayMode = useCallback<
+    React.Dispatch<React.SetStateAction<"sequential" | "loop" | "random">>
+  >(
+    (nextOrUpdater) => {
+      const next = typeof nextOrUpdater === "function"
+        ? nextOrUpdater(blockPlayModeRef.current)
+        : nextOrUpdater;
+      blockPlayModeRef.current = next;
+      barConfigRef.current.blockPlayMode = next;
+      setBlockPlayModeState(next);
+      p.engineRef.current?.setBlockPlayMode(next);
+    },
+    [p.engineRef],
+  );
+
   // ─────────────────────────────────────────────────────────────────────────
   // handleBarBpmChange
   // ─────────────────────────────────────────────────────────────────────────
@@ -266,9 +293,8 @@ export function useBarMode(p: UseBarModeParams): UseBarModeResult {
     const clamped = Math.max(20, Math.min(300, newBpm));
     setBarBpm(clamped);
     barBpmRef.current = clamped;
-    p.persistSettings({ bpm: clamped });
     p.onBarBpmChange(clamped);
-  }, [p.onBarBpmChange, p.persistSettings]);
+  }, [p.onBarBpmChange]);
 
   // ─────────────────────────────────────────────────────────────────────────
   // handleBarModeChange
@@ -284,20 +310,9 @@ export function useBarMode(p: UseBarModeParams): UseBarModeResult {
       setBarStartBeat(null);
 
       if (toBarMode) {
-        // Save current dial config before switching to bar mode.
-        p.dialConfigRef.current = {
-          beatsPerMeasure: p.beatsPerMeasure,
-          beatTypes: [...p.beatTypes],
-          beatSubdivisions: { ...p.beatSubdivisions },
-          subdivisionPattern: [...p.subdivisionPattern],
-          noteSamples: { ...p.noteSamples },
-          noteSampleNames: { ...p.noteSampleNames },
-          noteSampleSources: { ...p.noteSampleSources },
-          noteSampleChannels: { ...p.noteSampleChannels },
-          noteSampleVolumes: { ...p.noteSampleVolumes },
-          noteSampleSpeeds: { ...p.noteSampleSpeeds },
-        };
-
+        // The dial ref is canonical and is updated synchronously by every Beat
+        // editor. Do not rebuild it from React state here: an edit and mode
+        // switch can occur in the same event before that state commits.
         const savedBarConfig = barConfigRef.current;
         if (savedBarConfig.hasBeenConfigured) {
           // A bar session is a persistent editing surface. Restoring this
@@ -397,26 +412,8 @@ export function useBarMode(p: UseBarModeParams): UseBarModeResult {
           engine.clearBarBpmOverrides();
         }
       } else {
-        // Snapshot current bar state before leaving.
-        barConfigRef.current = {
-          ...barConfigRef.current,
-          beatsPerMeasure: p.beatsPerMeasure,
-          beatTypes: [...p.beatTypes],
-          beatSubdivisions: { ...p.beatSubdivisions },
-          subdivisionPattern: [...p.subdivisionPattern],
-          barRepeats: { ...barRepeats },
-          loopBlocks: [...loopBlocks],
-          noteSamples: { ...p.noteSamples },
-          noteSampleNames: { ...p.noteSampleNames },
-          noteSampleSources: { ...p.noteSampleSources },
-          noteSampleChannels: { ...p.noteSampleChannels },
-          noteSampleVolumes: { ...p.noteSampleVolumes },
-          noteSampleSpeeds: { ...p.noteSampleSpeeds },
-          barLoopMode,
-          blockPlayMode,
-          hasBeenConfigured: true,
-        };
-        // Restore dial config.
+        // Bar editors update barConfigRef synchronously. Preserve that canonical
+        // snapshot and restore the independent dial profile from its own ref.
         const dc = p.dialConfigRef.current;
         p.setBeatsPerMeasure(dc.beatsPerMeasure);
         p.setBeatTypes([...dc.beatTypes]);

@@ -287,7 +287,7 @@ export function selectCurrentBarConfig(input: CurrentBarConfigInput): CurrentBar
     loopBlocks: [],
     barLoopMode: "once",
     blockPlayMode: "loop",
-    subdivisionPattern: [...input.subdivisionPattern],
+    subdivisionPattern: [...(dc.subdivisionPattern ?? ["accent"])],
     noteSamples: { ...dc.noteSamples },
     noteSampleNames: { ...dc.noteSampleNames },
     noteSampleSources: { ...dc.noteSampleSources },

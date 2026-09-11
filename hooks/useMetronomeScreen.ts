@@ -266,6 +266,7 @@ export function useMetronomeScreen() {
     },
   });
   const barModeRef = _barModeRefHolder.current;
+  const handleBarModeChangeRef = useRef<(toBarMode: boolean) => void>(() => {});
   const _noteModeRefHolder = useRef<React.MutableRefObject<boolean>>({
     get current(): boolean { return activeModeRef.current === "note"; },
     set current(v: boolean) {
@@ -487,7 +488,10 @@ export function useMetronomeScreen() {
         closeScoreMode();
         return true;
       }
-      if (barModeRef.current) { setBarMode(false); barModeRef.current = false; return true; }
+      if (barModeRef.current) {
+        handleBarModeChangeRef.current(false);
+        return true;
+      }
       Alert.alert("앱 종료", "앱을 종료하시겠습니까?", [
         { text: "취소", style: "cancel" },
         { text: "종료", style: "destructive", onPress: () => BackHandler.exitApp() },
@@ -799,6 +803,8 @@ export function useMetronomeScreen() {
     scheduleReRender,
     t,
   });
+  const handleBarBpmChangeRef = useRef(handleBarBpmChange);
+  handleBarBpmChangeRef.current = handleBarBpmChange;
 
   /**
    * Wraps barMode's handleBarModeChange with BPM isolation logic:
@@ -828,6 +834,7 @@ export function useMetronomeScreen() {
       updateBpmRef.current(prevGlobalBpmRef.current);
     }
   }, [barModeHandleBarModeChange, setBarBpm, barBpmRef]);
+  handleBarModeChangeRef.current = handleBarModeChange;
 
   const getPlaybackContext = useCallback((
     overrides: { mode?: unknown; bpm?: number; activeBarIndex?: number } = {},
@@ -1152,6 +1159,14 @@ export function useMetronomeScreen() {
       noteSampleVolumesRef.current = volumes;
       setNoteSampleSpeeds(speeds);
       noteSampleSpeedsRef.current = speeds;
+      Object.assign(dialConfigRef.current, {
+        noteSamples: { ...samples },
+        noteSampleNames: { ...names },
+        noteSampleSources: { ...sources },
+        noteSampleChannels: { ...channels },
+        noteSampleVolumes: { ...volumes },
+        noteSampleSpeeds: { ...speeds },
+      });
       setNoteSampleMetroChannels(metroChannels);
       noteSampleMetroChannelsRef.current = metroChannels;
       if (Object.keys(samples).length > 0) {
@@ -1264,6 +1279,9 @@ export function useMetronomeScreen() {
 
   const handleNoteRecordSave = useCallback(async (uri: string, name: string, source: SampleSource, channel: SampleChannel, metronomeChannel: MetroChannel, sampleGain = 1, sampleSpeed = 1) => {
     if (!recorderTarget) return;
+    const targetConfig = barModeRef.current
+      ? barConfigRef.current
+      : dialConfigRef.current;
     const key = `${recorderTarget.beat}-${recorderTarget.sub}`;
     invalidateSamplePCMCache(key);
     const updated = await setNoteSample(recorderTarget.beat, recorderTarget.sub, uri, noteSamplesRef.current);
@@ -1284,6 +1302,14 @@ export function useMetronomeScreen() {
     const updatedSpeeds = await setNoteSampleSpeed(recorderTarget.beat, recorderTarget.sub, sampleSpeed, noteSampleSpeedsRef.current);
     setNoteSampleSpeeds(updatedSpeeds);
     noteSampleSpeedsRef.current = updatedSpeeds;
+    Object.assign(targetConfig, {
+      noteSamples: { ...updated },
+      noteSampleNames: { ...updatedNames },
+      noteSampleSources: { ...updatedSources },
+      noteSampleChannels: { ...updatedChannels },
+      noteSampleVolumes: { ...updatedVolumes },
+      noteSampleSpeeds: { ...updatedSpeeds },
+    });
     const updatedMetroChannels = await setNoteSampleMetroChannel(recorderTarget.beat, metronomeChannel, noteSampleMetroChannelsRef.current);
     setNoteSampleMetroChannels(updatedMetroChannels);
     noteSampleMetroChannelsRef.current = updatedMetroChannels;
@@ -1294,12 +1320,15 @@ export function useMetronomeScreen() {
 
   const handleNoteRecordSuggestBpm = useCallback((detectedBpm: number) => {
     const clamped = Math.max(20, Math.min(300, Math.round(detectedBpm)));
-    setBpm(clamped);
-    engineRef.current?.setBpm(clamped * (4 / beatDenominatorRef.current));
+    if (barModeRef.current) handleBarBpmChangeRef.current(clamped);
+    else updateBpmRef.current(clamped);
   }, []);
 
   const handleNoteRecordDelete = useCallback(async () => {
     if (!recorderTarget) return;
+    const targetConfig = barModeRef.current
+      ? barConfigRef.current
+      : dialConfigRef.current;
     const key = `${recorderTarget.beat}-${recorderTarget.sub}`;
     invalidateSamplePCMCache(key);
     const updated = await removeNoteSample(recorderTarget.beat, recorderTarget.sub, noteSamplesRef.current);
@@ -1320,6 +1349,14 @@ export function useMetronomeScreen() {
     const updatedSpeeds = await removeNoteSampleSpeed(recorderTarget.beat, recorderTarget.sub, noteSampleSpeedsRef.current);
     setNoteSampleSpeeds(updatedSpeeds);
     noteSampleSpeedsRef.current = updatedSpeeds;
+    Object.assign(targetConfig, {
+      noteSamples: { ...updated },
+      noteSampleNames: { ...updatedNames },
+      noteSampleSources: { ...updatedSources },
+      noteSampleChannels: { ...updatedChannels },
+      noteSampleVolumes: { ...updatedVolumes },
+      noteSampleSpeeds: { ...updatedSpeeds },
+    });
     const beatStillHasSamples = Object.keys(updated).some((k) => k.startsWith(`${recorderTarget.beat}-`));
     if (!beatStillHasSamples) {
       const updatedMetroChannels = await removeNoteSampleMetroChannel(recorderTarget.beat, noteSampleMetroChannelsRef.current);
@@ -1668,6 +1705,16 @@ export function useMetronomeScreen() {
       noteSampleSourcesRef.current = {};
       noteSampleChannelsRef.current = {};
       noteSampleMetroChannelsRef.current = {};
+      for (const config of [dialConfigRef.current, barConfigRef.current]) {
+        Object.assign(config, {
+          noteSamples: {},
+          noteSampleNames: {},
+          noteSampleSources: {},
+          noteSampleChannels: {},
+          noteSampleVolumes: {},
+          noteSampleSpeeds: {},
+        });
+      }
       loadedPracticeNoteRef.current = null;
 
       if (engine) {
@@ -1802,7 +1849,10 @@ export function useMetronomeScreen() {
     setBeatDenominator((prev) => {
       const next: 2 | 4 | 8 = prev === 4 ? 8 : prev === 8 ? 2 : 4;
       // 표시 BPM 변경 없이 분모에 따른 엔진 속도 갱신
-      engineRef.current?.setBpm(bpm * (4 / next));
+      const activeBpm = barModeRef.current
+        ? barBpmRef.current
+        : bpmRef.current;
+      engineRef.current?.setBpm(activeBpm * (4 / next));
       persistSettings({ beatDenominator: next });
       halfTimeFlash.value = withSequence(
         withTiming(0.25, { duration: 80 }),
@@ -1810,7 +1860,7 @@ export function useMetronomeScreen() {
       );
       return next;
     });
-  }, [bpm, persistSettings]);
+  }, [persistSettings]);
 
   // ── Beat-type controls (updateTimeSignature + handleBeatTypeChange) ──────────
   // Extracted to useBeatTypeControls (task #532). Behaviour is identical;
@@ -2410,13 +2460,14 @@ export function useMetronomeScreen() {
 
   // handleNativeKeyDown / handleNativeKeyUp — useKeyboardShortcuts 내부에서 생성돼 반환된다.
   const { handleNativeKeyDown, handleNativeKeyUp } = useKeyboardShortcuts({
-    keyBindingsRef, bpmRef, updateBpmRef, beatsPerMeasureRef, updateTimeSignatureRef,
+    keyBindingsRef, bpmRef, barBpmRef, updateBpmRef, handleBarBpmChangeRef,
+    beatsPerMeasureRef, updateTimeSignatureRef,
     barModeRef, noteModeRef, stopwatchTimerRef, stopwatchTimerLandscapeRef,
-    subdivisionPatternRef, beatTypesRef, handleNoteTogglePlayRef, anyModalOpenRef,
+    subdivisionPatternRef, beatTypesRef, dialConfigRef, handleNoteTogglePlayRef, anyModalOpenRef,
     showKbShortcutsRef, showNativeKbHintRef, engineRef,
-    togglePlayPauseRef, setNoteMode, setBarMode, setShowKbShortcuts, setShowNativeKbHint,
+    togglePlayPauseRef, setNoteMode, handleBarModeChangeRef, setShowKbShortcuts, setShowNativeKbHint,
     setActiveModal, setBarLoopMode, setBlockPlayMode, setBeatsPerMeasure, setBeatTypes,
-    setSubdivisionPattern, persistSettings,
+    setBeatSubdivisions, setSubdivisionPattern, persistSettings,
   });
 
   // ── Notification bridge (TOGGLE_PLAY / BPM_UP / BPM_DOWN from lock screen) ─
@@ -2596,25 +2647,51 @@ export function useMetronomeScreen() {
         if (seamlessNext) {
           seamlessNextEntryRef.current = null;
           const entryIsBar = seamlessNext.mode === "bar";
+          const wasBarMode = barModeRef.current;
+          if (!wasBarMode && entryIsBar) {
+            prevGlobalBpmRef.current = bpmRef.current;
+          }
           // ref를 동기적으로 갱신 (togglePlayPause와 동일한 순서)
           barModeRef.current    = entryIsBar;
           barLoopModeRef.current = (seamlessNext.barLoopMode || "once") as "loop" | "once";
-          barConfigRef.current  = {
-            ...barConfigRef.current,
-            beatsPerMeasure:  seamlessNext.beatsPerMeasure,
-            beatTypes:        [...seamlessNext.beatTypes],
-            beatSubdivisions: { ...seamlessNext.beatSubdivisions },
-            barRepeats:       { ...(seamlessNext.barRepeats  || {}) },
-            loopBlocks:       [...(seamlessNext.loopBlocks   || [])],
-            barLoopMode:      (seamlessNext.barLoopMode  || "once") as "loop" | "once",
-            blockPlayMode:    (seamlessNext.blockPlayMode || "loop") as "sequential" | "loop" | "random",
-          };
-          dialConfigRef.current = {
-            ...dialConfigRef.current,
-            beatsPerMeasure:  seamlessNext.beatsPerMeasure,
-            beatTypes:        [...seamlessNext.beatTypes],
-            beatSubdivisions: { ...seamlessNext.beatSubdivisions },
-          };
+          const nextSubdivisionPattern: BeatType[] =
+            seamlessNext.subdivisionPattern?.length
+              ? [...seamlessNext.subdivisionPattern]
+              : ["accent"];
+          if (entryIsBar) {
+            barConfigRef.current = {
+              ...barConfigRef.current,
+              beatsPerMeasure: seamlessNext.beatsPerMeasure,
+              beatTypes: [...seamlessNext.beatTypes],
+              beatSubdivisions: { ...seamlessNext.beatSubdivisions },
+              subdivisionPattern: nextSubdivisionPattern,
+              barRepeats: { ...(seamlessNext.barRepeats || {}) },
+              loopBlocks: [...(seamlessNext.loopBlocks || [])],
+              barLoopMode: (seamlessNext.barLoopMode || "once") as "loop" | "once",
+              blockPlayMode: (seamlessNext.blockPlayMode || "loop") as "sequential" | "loop" | "random",
+              noteSamples: { ...(seamlessNext.noteSamples || {}) },
+              noteSampleNames: { ...(seamlessNext.noteSampleNames || {}) },
+              noteSampleSources: { ...(seamlessNext.noteSampleSources || {}) },
+              noteSampleChannels: { ...(seamlessNext.noteSampleChannels || {}) },
+              noteSampleVolumes: { ...(seamlessNext.noteSampleVolumes || {}) },
+              noteSampleSpeeds: { ...(seamlessNext.noteSampleSpeeds || {}) },
+              hasBeenConfigured: true,
+            };
+          } else {
+            dialConfigRef.current = {
+              ...dialConfigRef.current,
+              beatsPerMeasure: seamlessNext.beatsPerMeasure,
+              beatTypes: [...seamlessNext.beatTypes],
+              beatSubdivisions: { ...seamlessNext.beatSubdivisions },
+              subdivisionPattern: nextSubdivisionPattern,
+              noteSamples: { ...(seamlessNext.noteSamples || {}) },
+              noteSampleNames: { ...(seamlessNext.noteSampleNames || {}) },
+              noteSampleSources: { ...(seamlessNext.noteSampleSources || {}) },
+              noteSampleChannels: { ...(seamlessNext.noteSampleChannels || {}) },
+              noteSampleVolumes: { ...(seamlessNext.noteSampleVolumes || {}) },
+              noteSampleSpeeds: { ...(seamlessNext.noteSampleSpeeds || {}) },
+            };
+          }
           // 현재 마디의 정확한 다음 마디 시작 시각을 캡처
           // (applyEntryToEngineCore 전에 캡처 — 그 함수가 measureDurationMs를 변경할 수 있음)
           const nextMeasureStart =
@@ -2629,14 +2706,21 @@ export function useMetronomeScreen() {
             engine.requestStopAfterMeasure();
           }
           // React 상태 비동기 갱신 (UI 업데이트용, 엔진은 이미 재시작됨)
-          updateBpmRef.current(seamlessNext.bpm);
+          if (entryIsBar) {
+            barBpmRef.current = seamlessNext.bpm;
+            setBarBpm(seamlessNext.bpm);
+          } else {
+            updateBpmRef.current(seamlessNext.bpm);
+          }
           setBeatsPerMeasure(seamlessNext.beatsPerMeasure);
           setBeatTypes([...seamlessNext.beatTypes]);
           setBeatSubdivisions({ ...seamlessNext.beatSubdivisions });
-          setBarMode(entryIsBar);
-          setBarLoopMode(seamlessNext.barLoopMode || "once");
-          setBarRepeats({ ...(seamlessNext.barRepeats  || {}) });
-          setLoopBlocks([...(seamlessNext.loopBlocks   || [])]);
+          setSubdivisionPattern(nextSubdivisionPattern);
+          if (entryIsBar) {
+            setBarLoopMode(seamlessNext.barLoopMode || "once");
+            setBarRepeats({ ...(seamlessNext.barRepeats || {}) });
+            setLoopBlocks([...(seamlessNext.loopBlocks || [])]);
+          }
           setActiveStagePracticeEntryId(seamlessNext.id);
           scheduleReRender();
           return; // 일반 정지 로직 스킵
@@ -2725,11 +2809,15 @@ export function useMetronomeScreen() {
       }
       const avgInterval = totalInterval / (taps.length - 1);
       const detectedBpm = Math.round(60000 / avgInterval);
-      updateBpm(detectedBpm);
+      if (barModeRef.current) {
+        handleBarBpmChange(detectedBpm);
+      } else {
+        updateBpm(detectedBpm);
+      }
     }
 
     tapTimesRef.current = taps;
-  }, [updateBpm]);
+  }, [handleBarBpmChange, updateBpm]);
 
   const handleBeatSubdivisionChange = useCallback(
     (beatIndex: number, pattern: BeatType[] | null) => {
@@ -2800,17 +2888,20 @@ export function useMetronomeScreen() {
   // 단일 셀로 대체하고, 선택 해제(null) 시에는 이전 마디의 패턴이 남지 않도록 초기화한다.
   useEffect(() => {
     if (!barMode) return;
+    let nextPattern: BeatType[];
     if (barStartBeat === null) {
-      setSubdivisionPattern(["normal"]);
-      return;
-    }
-    const stored = beatSubdivisions[String(barStartBeat)];
-    if (stored && stored.length > 0) {
-      setSubdivisionPattern([...stored]);
+      nextPattern = ["normal"];
     } else {
-      const bt = beatTypes[barStartBeat] ?? "normal";
-      setSubdivisionPattern([bt]);
+      const stored = beatSubdivisions[String(barStartBeat)];
+      if (stored && stored.length > 0) {
+        nextPattern = [...stored];
+      } else {
+        const bt = beatTypes[barStartBeat] ?? "normal";
+        nextPattern = [bt];
+      }
     }
+    barConfigRef.current.subdivisionPattern = nextPattern;
+    setSubdivisionPattern(nextPattern);
   }, [barMode, barStartBeat]);
 
   const handleReset = useCallback(() => {
@@ -3016,8 +3107,8 @@ export function useMetronomeScreen() {
         barConfigRef.current.beatSubdivisions = newSubs;
       } else {
         dialConfigRef.current.beatSubdivisions = newSubs;
+        persistSettings({ beatSubdivisions: newSubs });
       }
-      persistSettings({ beatSubdivisions: newSubs });
     },
     [beatsPerMeasure, persistSettings]
   );
@@ -3049,8 +3140,8 @@ export function useMetronomeScreen() {
           barConfigRef.current.beatSubdivisions = { ...newSubs };
         } else {
           dialConfigRef.current.beatSubdivisions = { ...newSubs };
+          persistSettings({ beatSubdivisions: newSubs });
         }
-        persistSettings({ beatSubdivisions: newSubs });
       }
     },
     [findDropTarget, subdivisionPattern, beatSubdivisions, persistSettings, applyToAllBeats, applyBeatStaffSubdivision, clearDragState]
@@ -3291,7 +3382,7 @@ export function useMetronomeScreen() {
   } = usePracticeBookLoad({
     engineRef,
     barModeRef, noteModeRef,
-    barConfigRef, barBpmRef, dialConfigRef,
+    barConfigRef, barBpmRef, bpmRef, dialConfigRef,
     beatDenominatorRef,
     noteSamplesRef, noteSampleNamesRef, noteSampleSourcesRef, noteSampleChannelsRef, noteSampleVolumesRef,
     noteSampleSpeedsRef,
@@ -3304,7 +3395,7 @@ export function useMetronomeScreen() {
     setBpm, setBarBpm, setBeatsPerMeasure, setBeatTypes, setBeatSubdivisions,
     setBarRepeats, setLoopBlocks, setBarLoopMode, setBlockPlayMode, setSubdivisionPattern,
     setNoteSamples, setNoteSampleNames, setNoteSampleSources, setNoteSampleChannels, setNoteSampleVolumes, setNoteSampleSpeeds,
-    setBarMode, setNoteMode,
+    setBarMode: handleBarModeChange, setNoteMode,
     setIsPlaying, setIsPreparing,
     setNoteQueue, setNotePlayMode, setNoteCurrentIndex, setNoteIsPlaying, setNoteBarEntries,
     stopRenderedAudio, clearSamplePlayStates, resetPlaybackVisuals,
@@ -3656,25 +3747,27 @@ export function useMetronomeScreen() {
 
   const currentBarConfig = useMemo(() => selectCurrentBarConfig({
     barMode,
-    bpm,
-    beatsPerMeasure,
-    beatTypes,
-    beatSubdivisions,
-    barRepeats,
-    loopBlocks,
-    barLoopMode,
-    blockPlayMode,
-    subdivisionPattern,
-    noteSamples,
-    noteSampleNames,
-    noteSampleSources,
-    noteSampleChannels,
-    noteSampleVolumes,
-    noteSampleSpeeds,
+    bpm: barMode ? barBpm : bpm,
+    beatsPerMeasure: barMode ? barConfigRef.current.beatsPerMeasure : beatsPerMeasure,
+    beatTypes: barMode ? barConfigRef.current.beatTypes : beatTypes,
+    beatSubdivisions: barMode ? barConfigRef.current.beatSubdivisions : beatSubdivisions,
+    barRepeats: barMode ? barConfigRef.current.barRepeats : barRepeats,
+    loopBlocks: barMode ? barConfigRef.current.loopBlocks : loopBlocks,
+    barLoopMode: barMode ? barConfigRef.current.barLoopMode : barLoopMode,
+    blockPlayMode: barMode ? barConfigRef.current.blockPlayMode : blockPlayMode,
+    subdivisionPattern: barMode
+      ? (barConfigRef.current.subdivisionPattern ?? ["accent"])
+      : subdivisionPattern,
+    noteSamples: barMode ? barConfigRef.current.noteSamples : noteSamples,
+    noteSampleNames: barMode ? barConfigRef.current.noteSampleNames : noteSampleNames,
+    noteSampleSources: barMode ? barConfigRef.current.noteSampleSources : noteSampleSources,
+    noteSampleChannels: barMode ? barConfigRef.current.noteSampleChannels : noteSampleChannels,
+    noteSampleVolumes: barMode ? barConfigRef.current.noteSampleVolumes : noteSampleVolumes,
+    noteSampleSpeeds: barMode ? barConfigRef.current.noteSampleSpeeds : noteSampleSpeeds,
     dialConfig: dialConfigRef.current,
     barClockMode: barConfigRef.current.barClockMode,
     barTimerDuration: barConfigRef.current.barTimerDuration,
-  }), [barMode, bpm, beatsPerMeasure, beatTypes, beatSubdivisions, barRepeats, loopBlocks, barLoopMode, blockPlayMode, subdivisionPattern, noteSamples, noteSampleNames, noteSampleSources, noteSampleChannels, noteSampleVolumes, noteSampleSpeeds]);
+  }), [barMode, barBpm, bpm, beatsPerMeasure, beatTypes, beatSubdivisions, barRepeats, loopBlocks, barLoopMode, blockPlayMode, subdivisionPattern, noteSamples, noteSampleNames, noteSampleSources, noteSampleChannels, noteSampleVolumes, noteSampleSpeeds]);
 
   // handleLoadPracticeEntry → usePracticeBookLoad
 
@@ -4125,7 +4218,7 @@ export function useMetronomeScreen() {
     setSubdivisionPattern,
     setFlashMode,
     setHapticMode,
-    setBarMode,
+    setBarMode: handleBarModeChange,
     setBarRepeats,
     setLoopBlocks,
     // Refs exposed for JSX inline callbacks

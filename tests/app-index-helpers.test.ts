@@ -459,15 +459,18 @@ test("selectCurrentBarConfig: returned containers are independent clones", () =>
   assert.equal(input.loopBlocks.length, 1);
 });
 
-test("selectCurrentBarConfig: subdivisionPattern always cloned regardless of mode", () => {
+test("selectCurrentBarConfig: subdivisionPattern is cloned from the active mode profile", () => {
   const inA = baseInput(true);
   const outA = selectCurrentBarConfig(inA);
   outA.subdivisionPattern.push("normal");
   assert.equal(inA.subdivisionPattern.length, 2);
   const inB = baseInput(false);
+  inB.subdivisionPattern = ["mute", "mute"];
+  inB.dialConfig.subdivisionPattern = ["strong", "normal", "normal"];
   const outB = selectCurrentBarConfig(inB);
-  outB.subdivisionPattern.push("normal");
-  assert.equal(inB.subdivisionPattern.length, 2);
+  assert.deepEqual(outB.subdivisionPattern, ["strong", "normal", "normal"]);
+  outB.subdivisionPattern.push("accent");
+  assert.deepEqual(inB.dialConfig.subdivisionPattern, ["strong", "normal", "normal"]);
 });
 
 test("selectCurrentBarConfig: barMode preserves bpm regardless of dialConfig", () => {

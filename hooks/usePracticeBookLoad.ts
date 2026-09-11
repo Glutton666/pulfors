@@ -40,6 +40,7 @@ export interface UsePracticeBookLoadParams {
   noteModeRef: React.MutableRefObject<boolean>;
   barConfigRef: React.MutableRefObject<BarConfig>;
   barBpmRef?: React.MutableRefObject<number>;
+  bpmRef: React.MutableRefObject<number>;
   dialConfigRef: React.MutableRefObject<DialConfig>;
   beatDenominatorRef: React.MutableRefObject<2 | 4 | 8>;
   noteSamplesRef: React.MutableRefObject<NoteSampleMap>;
@@ -144,7 +145,7 @@ export function usePracticeBookLoad({
   barModeRef,
   noteModeRef,
   barConfigRef,
-  barBpmRef,
+  barBpmRef, bpmRef,
   dialConfigRef,
   beatDenominatorRef,
   noteSamplesRef,
@@ -219,7 +220,6 @@ export function usePracticeBookLoad({
       (entry.loopBlocks || []) as LoopBlock[],
       { ...entry.barRepeats },
     );
-    setBpm(entry.bpm);
     // The shared loader is also used by linked practice-book entries. Keep the
     // bar-mode fallback tempo in sync so a legacy entry without an override
     // cannot inherit a tempo from a previously opened bar session.
@@ -262,17 +262,6 @@ export function usePracticeBookLoad({
     barConfigRef.current = entryToBarConfig(entry);
 
     if (!barMode) {
-      dialConfigRef.current = {
-        beatsPerMeasure,
-        beatTypes: [...beatTypes],
-        beatSubdivisions: { ...beatSubdivisions },
-        noteSamples: { ...noteSamples },
-        noteSampleNames: { ...noteSampleNames },
-        noteSampleSources: { ...noteSampleSources },
-        noteSampleChannels: { ...noteSampleChannels },
-        noteSampleVolumes: { ...noteSampleVolumes },
-        noteSampleSpeeds: { ...noteSampleSpeeds },
-      };
       setBarMode(true);
     }
   }, [barMode, beatsPerMeasure, beatTypes, beatSubdivisions, noteSamples, noteSampleNames, noteSampleSources, noteSampleChannels, noteSampleVolumes, noteSampleSpeeds, preloadNoteSampleSounds]);
@@ -355,21 +344,6 @@ export function usePracticeBookLoad({
 
     if (isBeatEntry) {
       if (barMode) {
-        barConfigRef.current = {
-          ...barConfigRef.current,
-          beatsPerMeasure,
-          beatTypes: [...beatTypes],
-          beatSubdivisions: { ...beatSubdivisions },
-          barRepeats: { ...barRepeats },
-          loopBlocks: [...loopBlocks],
-          noteSamples: { ...noteSamples },
-          noteSampleNames: { ...noteSampleNames },
-          noteSampleSources: { ...noteSampleSources },
-          noteSampleChannels: { ...noteSampleChannels },
-          noteSampleVolumes: { ...noteSampleVolumes },
-          noteSampleSpeeds: { ...noteSampleSpeeds },
-          hasBeenConfigured: true,
-        };
         setBarMode(false);
       }
 
@@ -384,6 +358,9 @@ export function usePracticeBookLoad({
         beatsPerMeasure: entry.beatsPerMeasure,
         beatTypes: [...entry.beatTypes],
         beatSubdivisions: { ...entry.beatSubdivisions },
+        subdivisionPattern: entry.subdivisionPattern?.length
+          ? [...entry.subdivisionPattern]
+          : ["accent"],
         noteSamples: { ...entrySamples },
         noteSampleNames: { ...entryNames },
         noteSampleSources: { ...entrySources },
@@ -392,6 +369,7 @@ export function usePracticeBookLoad({
       };
 
       setBpm(entry.bpm);
+      bpmRef.current = entry.bpm;
       setBeatsPerMeasure(entry.beatsPerMeasure);
       setBeatTypes([...entry.beatTypes]);
       setBeatSubdivisions({ ...entry.beatSubdivisions });
@@ -424,17 +402,6 @@ export function usePracticeBookLoad({
       engine.setAllBeatSubdivisions(entry.beatSubdivisions);
     } else {
       if (!barMode) {
-        dialConfigRef.current = {
-          ...dialConfigRef.current,
-          beatsPerMeasure,
-          beatTypes: [...beatTypes],
-          beatSubdivisions: { ...beatSubdivisions },
-          noteSamples: { ...noteSamples },
-          noteSampleNames: { ...noteSampleNames },
-          noteSampleSources: { ...noteSampleSources },
-          noteSampleVolumes: { ...noteSampleVolumes },
-          noteSampleSpeeds: { ...noteSampleSpeeds },
-        };
         setBarMode(true);
       }
 
@@ -449,7 +416,6 @@ export function usePracticeBookLoad({
         (entry.loopBlocks || []) as LoopBlock[],
         { ...entry.barRepeats },
       );
-      setBpm(entry.bpm);
       // Sync bar-mode's independent BPM so it matches the loaded entry
       setBarBpm?.(entry.bpm);
       if (barBpmRef) barBpmRef.current = entry.bpm;
@@ -505,13 +471,20 @@ export function usePracticeBookLoad({
         beatsPerMeasure: entry.beatsPerMeasure,
         beatTypes: [...entry.beatTypes],
         beatSubdivisions: { ...entry.beatSubdivisions },
+        subdivisionPattern: entry.subdivisionPattern?.length
+          ? [...entry.subdivisionPattern]
+          : ["accent"],
         barRepeats: { ...mgRepeats3 },
         loopBlocks: [...mgBlocks3],
+        barLoopMode: entry.barLoopMode || "once",
+        blockPlayMode: entry.blockPlayMode || "loop",
         barClockMode: entry.barClockMode || "stopwatch",
         barTimerDuration: entry.barTimerDuration ?? 180,
         noteSamples: { ...barSamples },
         noteSampleNames: { ...barNames },
         noteSampleSources: { ...barSources },
+        noteSampleChannels: { ...barChannels },
+        noteSampleVolumes: { ...barVolumes },
         noteSampleSpeeds: { ...barSpeeds },
         hasBeenConfigured: true,
       };

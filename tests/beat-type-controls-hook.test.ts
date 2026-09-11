@@ -41,7 +41,13 @@ describe("useBeatTypeControls hook smoke test", () => {
       engineRef: { current: engine as any },
       barModeRef: { current: false },
       barConfigRef: { current: { beatsPerMeasure: 4, beatTypes: [...beatTypes], beatSubdivisions: {} } },
-      dialConfigRef: { current: { beatsPerMeasure: 4, beatTypes: [...beatTypes], beatSubdivisions: {} } },
+      dialConfigRef: {
+        current: {
+          beatsPerMeasure: 4,
+          beatTypes: [...beatTypes],
+          beatSubdivisions: { ...beatSubdivisions },
+        },
+      },
       beatsPerMeasure: 4,
       beatTypes,
       beatSubdivisions,

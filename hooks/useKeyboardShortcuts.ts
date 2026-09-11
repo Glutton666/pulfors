@@ -12,6 +12,7 @@ import type { StopwatchTimerHandle } from "@/components/StopwatchTimer";
 import type { ActiveModal } from "@/lib/modal-routing";
 import type { DebouncedPersister } from "@/lib/persist";
 import type { MetronomeSettings } from "@/lib/storage";
+import type { DialConfig } from "@/app/index.helpers";
 
 export interface UseKeyboardShortcutsResult {
   /** 네이티브 뷰의 onKeyDown 이벤트에 연결할 핸들러 */
@@ -24,7 +25,9 @@ interface UseKeyboardShortcutsParams {
   // Stable refs — all captured at mount time (dep array is [])
   keyBindingsRef: React.MutableRefObject<KeyBindingsMap>;
   bpmRef: React.MutableRefObject<number>;
+  barBpmRef: React.MutableRefObject<number>;
   updateBpmRef: React.MutableRefObject<(bpm: number) => void>;
+  handleBarBpmChangeRef: React.MutableRefObject<(bpm: number) => void>;
   beatsPerMeasureRef: React.MutableRefObject<number>;
   updateTimeSignatureRef: React.MutableRefObject<(beats: number) => void>;
   barModeRef: React.MutableRefObject<boolean>;
@@ -33,15 +36,16 @@ interface UseKeyboardShortcutsParams {
   stopwatchTimerLandscapeRef: React.MutableRefObject<StopwatchTimerHandle | null>;
   subdivisionPatternRef: React.MutableRefObject<BeatType[]>;
   beatTypesRef: React.MutableRefObject<BeatType[]>;
+  dialConfigRef: React.MutableRefObject<DialConfig>;
   handleNoteTogglePlayRef: React.MutableRefObject<(() => void) | null>;
   anyModalOpenRef: React.MutableRefObject<boolean>;
   showKbShortcutsRef: React.MutableRefObject<boolean>;
   showNativeKbHintRef: React.MutableRefObject<boolean>;
   engineRef: React.MutableRefObject<MetronomeEngine | null>;
   togglePlayPauseRef: React.MutableRefObject<() => void>;
+  handleBarModeChangeRef: React.MutableRefObject<(toBarMode: boolean) => void>;
   // Stable setters from useState (identity stable across renders)
   setNoteMode: (v: boolean) => void;
-  setBarMode: (v: boolean) => void;
   setShowKbShortcuts: React.Dispatch<React.SetStateAction<boolean>>;
   setShowNativeKbHint: React.Dispatch<React.SetStateAction<boolean>>;
   setActiveModal: React.Dispatch<React.SetStateAction<ActiveModal>>;
@@ -49,6 +53,7 @@ interface UseKeyboardShortcutsParams {
   setBlockPlayMode: React.Dispatch<React.SetStateAction<"sequential" | "loop" | "random">>;
   setBeatsPerMeasure: React.Dispatch<React.SetStateAction<number>>;
   setBeatTypes: React.Dispatch<React.SetStateAction<BeatType[]>>;
+  setBeatSubdivisions: React.Dispatch<React.SetStateAction<Record<string, BeatType[]>>>;
   setSubdivisionPattern: React.Dispatch<React.SetStateAction<BeatType[]>>;
   persistSettings: DebouncedPersister<MetronomeSettings>;
 }
@@ -63,13 +68,14 @@ interface UseKeyboardShortcutsParams {
  */
 export function useKeyboardShortcuts(params: UseKeyboardShortcutsParams): UseKeyboardShortcutsResult {
   const {
-    keyBindingsRef, bpmRef, updateBpmRef, beatsPerMeasureRef, updateTimeSignatureRef,
+    keyBindingsRef, bpmRef, barBpmRef, updateBpmRef, handleBarBpmChangeRef,
+    beatsPerMeasureRef, updateTimeSignatureRef,
     barModeRef, noteModeRef, stopwatchTimerRef, stopwatchTimerLandscapeRef,
-    subdivisionPatternRef, beatTypesRef, handleNoteTogglePlayRef, anyModalOpenRef,
+    subdivisionPatternRef, beatTypesRef, dialConfigRef, handleNoteTogglePlayRef, anyModalOpenRef,
     showKbShortcutsRef, showNativeKbHintRef, engineRef,
-    togglePlayPauseRef, setNoteMode, setBarMode, setShowKbShortcuts, setShowNativeKbHint,
+    togglePlayPauseRef, setNoteMode, handleBarModeChangeRef, setShowKbShortcuts, setShowNativeKbHint,
     setActiveModal, setBarLoopMode, setBlockPlayMode, setBeatsPerMeasure, setBeatTypes,
-    setSubdivisionPattern, persistSettings,
+    setBeatSubdivisions, setSubdivisionPattern, persistSettings,
   } = params;
 
   // 네이티브 키 핸들러 ref — useEffect 내부에서 등록·해제한다.
@@ -87,8 +93,17 @@ export function useKeyboardShortcuts(params: UseKeyboardShortcutsParams): UseKey
       repeatCountRef.current = 0;
     };
 
+    const applyActiveBpm = (nextBpm: number) => {
+      if (barModeRef.current) {
+        handleBarBpmChangeRef.current(nextBpm);
+      } else {
+        updateBpmRef.current(nextBpm);
+      }
+    };
+
     const applyBpmDelta = (delta: number) => {
-      updateBpmRef.current(bpmRef.current + delta);
+      const activeBpm = barModeRef.current ? barBpmRef.current : bpmRef.current;
+      applyActiveBpm(activeBpm + delta);
     };
 
     const applyBeatDelta = (delta: number) => {
@@ -112,7 +127,11 @@ export function useKeyboardShortcuts(params: UseKeyboardShortcutsParams): UseKey
       // Escape — priority: note mode → bar mode → shortcut modal → native hint → other modals
       if (matchesBinding(e, b.escape)) {
         if (inNoteMode) { e.preventDefault(); setNoteMode(false); return; }
-        if (inBarMode) { e.preventDefault(); setBarMode(false); return; }
+        if (inBarMode) {
+          e.preventDefault();
+          handleBarModeChangeRef.current(false);
+          return;
+        }
         if (showKbShortcutsRef.current) { e.preventDefault(); setShowKbShortcuts(false); return; }
         if (showNativeKbHintRef.current) { e.preventDefault(); setShowNativeKbHint(false); return; }
         if (modalOpen) return;
@@ -157,7 +176,7 @@ export function useKeyboardShortcuts(params: UseKeyboardShortcutsParams): UseKey
           const avgMs = intervals.reduce((a, b) => a + b, 0) / intervals.length;
           const tapBpm = Math.round(60000 / avgMs);
           if (tapBpm >= 20 && tapBpm <= 300) {
-            updateBpmRef.current(tapBpm);
+            applyActiveBpm(tapBpm);
           }
         }
         if (tapTimestamps.length > 8) tapTimestamps.splice(0, tapTimestamps.length - 8);
@@ -258,6 +277,10 @@ export function useKeyboardShortcuts(params: UseKeyboardShortcutsParams): UseKey
             if (cur < 16) {
               const newBeats = cur + 1;
               const newTypes: BeatType[] = [...beatTypesRef.current, type];
+               beatsPerMeasureRef.current = newBeats;
+               beatTypesRef.current = newTypes;
+               dialConfigRef.current.beatsPerMeasure = newBeats;
+               dialConfigRef.current.beatTypes = newTypes;
               setBeatsPerMeasure(newBeats);
               setBeatTypes(newTypes);
               engineRef.current?.setBeatsPerMeasure(newBeats);
@@ -275,11 +298,27 @@ export function useKeyboardShortcuts(params: UseKeyboardShortcutsParams): UseKey
           if (cur > 1) {
             const newBeats = cur - 1;
             const newTypes = beatTypesRef.current.slice(0, newBeats);
+             const cleanedSubdivisions = Object.fromEntries(
+               Object.entries(dialConfigRef.current.beatSubdivisions)
+                 .filter(([key]) => Number(key) < newBeats),
+             );
+             beatsPerMeasureRef.current = newBeats;
+             beatTypesRef.current = newTypes;
+             dialConfigRef.current.beatsPerMeasure = newBeats;
+             dialConfigRef.current.beatTypes = newTypes;
+             dialConfigRef.current.beatSubdivisions = cleanedSubdivisions;
             setBeatsPerMeasure(newBeats);
             setBeatTypes(newTypes);
+             setBeatSubdivisions(cleanedSubdivisions);
+             engineRef.current?.setAllBeatSubdivisions(cleanedSubdivisions);
             engineRef.current?.setBeatsPerMeasure(newBeats);
             engineRef.current?.setBeatTypes(newTypes);
-            if (!inBarMode) persistSettings({ beatsPerMeasure: newBeats });
+             if (!inBarMode) {
+               persistSettings({
+                 beatsPerMeasure: newBeats,
+                 beatSubdivisions: cleanedSubdivisions,
+               });
+             }
           }
           return;
         }
@@ -299,6 +338,8 @@ export function useKeyboardShortcuts(params: UseKeyboardShortcutsParams): UseKey
             const p = subdivisionPatternRef.current;
             if (p.length < 9) {
               const newP: BeatType[] = [...p, type];
+               subdivisionPatternRef.current = newP;
+               dialConfigRef.current.subdivisionPattern = newP;
               setSubdivisionPattern(newP);
               persistSettings({ subdivisionPattern: newP });
             }
@@ -312,6 +353,8 @@ export function useKeyboardShortcuts(params: UseKeyboardShortcutsParams): UseKey
           const p = subdivisionPatternRef.current;
           if (p.length > 1) {
             const newP = p.slice(0, -1);
+             subdivisionPatternRef.current = newP;
+             dialConfigRef.current.subdivisionPattern = newP;
             setSubdivisionPattern(newP);
             persistSettings({ subdivisionPattern: newP });
           }
@@ -328,6 +371,8 @@ export function useKeyboardShortcuts(params: UseKeyboardShortcutsParams): UseKey
         const idx = subCycleOrder.indexOf(first as BeatType);
         const next = subCycleOrder[(idx + 1) % subCycleOrder.length];
         const newP = prev.map(() => next) as BeatType[];
+         subdivisionPatternRef.current = newP;
+         dialConfigRef.current.subdivisionPattern = newP;
         setSubdivisionPattern(newP);
         persistSettings({ subdivisionPattern: newP });
         return;

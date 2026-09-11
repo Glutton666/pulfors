@@ -42,10 +42,16 @@ export function useBeatStaffControls({
     engineRef.current?.setBeatsPerMeasure(nextTypes.length);
     engineRef.current?.setBeatTypes(nextTypes);
     engineRef.current?.setAllBeatSubdivisions(nextSubs);
-    dialConfigRef.current.beatsPerMeasure = nextTypes.length;
-    dialConfigRef.current.beatTypes = nextTypes;
-    dialConfigRef.current.beatSubdivisions = nextSubs;
-    persistSettings({ beatsPerMeasure: nextTypes.length, beatSubdivisions: nextSubs });
+    if (barModeRef.current) {
+      barConfigRef.current.beatsPerMeasure = nextTypes.length;
+      barConfigRef.current.beatTypes = nextTypes;
+      barConfigRef.current.beatSubdivisions = nextSubs;
+    } else {
+      dialConfigRef.current.beatsPerMeasure = nextTypes.length;
+      dialConfigRef.current.beatTypes = nextTypes;
+      dialConfigRef.current.beatSubdivisions = nextSubs;
+      persistSettings({ beatsPerMeasure: nextTypes.length, beatSubdivisions: nextSubs });
+    }
     scheduleReRender();
   }, [
     beatTypes, beatSubdivisions, dialConfigRef, engineRef, persistSettings,
@@ -75,9 +81,12 @@ export function useBeatStaffControls({
         return next;
       });
     }
-    if (barModeRef.current) barConfigRef.current.beatSubdivisions = { ...newSubs };
-    else dialConfigRef.current.beatSubdivisions = { ...newSubs };
-    persistSettings({ beatSubdivisions: newSubs });
+    if (barModeRef.current) {
+      barConfigRef.current.beatSubdivisions = { ...newSubs };
+    } else {
+      dialConfigRef.current.beatSubdivisions = { ...newSubs };
+      persistSettings({ beatSubdivisions: newSubs });
+    }
   }, [
     barConfigRef, barModeRef, beatSubdivisions, dialConfigRef, engineRef,
     persistSettings, setBeatSubdivisions, setBeatTypes,

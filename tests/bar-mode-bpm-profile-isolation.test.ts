@@ -19,7 +19,7 @@ describe("bar mode BPM profile isolation", () => {
     );
   });
 
-  test("bar BPM changes are persisted into the bar settings profile", () => {
-    expect(barModeSource).toContain("p.persistSettings({ bpm: clamped });");
+  test("bar BPM changes never overwrite the persisted Beat BPM", () => {
+    expect(barModeSource).not.toContain("p.persistSettings({ bpm: clamped });");
   });
 });

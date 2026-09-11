@@ -23,6 +23,7 @@ const mockPlayWebRenderedLoop = jest.fn(
 );
 const mockDecodeSampleFile = jest.fn(async (_uri: string) => new Float32Array([0.8, 0.4, 0.2]));
 const mockCreateAudioPlayer = jest.fn((_source: unknown) => ({ ...mockPlayer }));
+const mockApplyDialConfigToEngine = jest.fn();
 
 jest.mock("expo-audio", () => ({
   createAudioPlayer: (source: unknown) => mockCreateAudioPlayer(source),
@@ -78,7 +79,7 @@ jest.mock("@/lib/metronome-engine", () => ({
 }));
 
 jest.mock("@/lib/dial-engine-boundary", () => ({
-  applyDialConfigToEngine: jest.fn(),
+  applyDialConfigToEngine: (...args: unknown[]) => mockApplyDialConfigToEngine(...args),
 }));
 
 jest.mock("@/lib/sample-cache", () => ({
@@ -141,6 +142,12 @@ function makeEngine() {
     start: jest.fn(() => { running = true; }),
     stop: jest.fn(() => { running = false; }),
     buildScheduleOnly: jest.fn(),
+    setBeatTypes: jest.fn(),
+    setAllBeatSubdivisions: jest.fn(),
+    setAllBarRepeats: jest.fn(),
+    setLoopBlocks: jest.fn(),
+    setBlockPlayMode: jest.fn(),
+    setAllBarBpmOverrides: jest.fn(),
     setPreRenderedAudio: jest.fn(),
     setPendingMeasureStartAction: jest.fn(),
   };
@@ -681,6 +688,77 @@ describe("pre-rendered playback reliability", () => {
     expect(player.play).toHaveBeenCalledTimes(1);
   });
 
+  it("configures immediate Bar playback only from the Bar-owned snapshot", async () => {
+    (Platform as unknown as { OS: string }).OS = "android";
+    const engine = makeEngine();
+    const player = { ...mockPlayer, play: jest.fn() };
+    const params = makePlaybackParams(engine, player);
+    params.barModeRef.current = true;
+    params.beatTypes = ["strong", "normal", "normal", "normal"];
+    params.beatSubdivisions = {
+      "0": ["strong", "normal"],
+    };
+    params.barConfigRef.current = {
+      beatTypes: ["mute", "accent"],
+      beatSubdivisions: {
+        "1": ["accent", "normal", "normal"],
+      },
+      barRepeats: {
+        1: { type: "count", value: 2 },
+      },
+      loopBlocks: [],
+    };
+
+    const { result } = renderHook(() => usePlaybackControl(params as any));
+    await act(async () => {
+      await result.current.togglePlayPause();
+    });
+
+    expect(engine.setBeatTypes).toHaveBeenCalledWith(["mute", "accent"]);
+    expect(engine.setAllBeatSubdivisions).toHaveBeenCalledWith({
+      "1": ["accent", "normal", "normal"],
+    });
+    expect(engine.setAllBeatSubdivisions).not.toHaveBeenCalledWith(
+      params.beatSubdivisions,
+    );
+  });
+
+  it("configures immediate Beat playback from dialConfigRef after leaving Bar", async () => {
+    (Platform as unknown as { OS: string }).OS = "android";
+    const engine = makeEngine();
+    const player = { ...mockPlayer, play: jest.fn() };
+    const params = makePlaybackParams(engine, player);
+    params.barModeRef.current = false;
+    params.beatTypes = ["mute", "mute"];
+    params.beatSubdivisions = {
+      "0": ["mute", "mute"],
+    };
+    params.dialConfigRef.current = {
+      beatsPerMeasure: 3,
+      beatTypes: ["strong", "accent", "normal"],
+      beatSubdivisions: {
+        "2": ["normal", "accent", "normal"],
+      },
+    };
+
+    const { result } = renderHook(() => usePlaybackControl(params as any));
+    await act(async () => {
+      await result.current.togglePlayPause();
+    });
+
+    expect(mockApplyDialConfigToEngine).toHaveBeenCalledWith(engine, {
+      beatsPerMeasure: 3,
+      beatTypes: ["strong", "accent", "normal"],
+      beatSubdivisions: {
+        "2": ["normal", "accent", "normal"],
+      },
+    });
+    expect(mockApplyDialConfigToEngine).not.toHaveBeenCalledWith(
+      engine,
+      expect.objectContaining({ beatTypes: params.beatTypes }),
+    );
+  });
+
   it("web playback renders the same note metadata and applies the user master volume", async () => {
     (Platform as unknown as { OS: string }).OS = "web";
     const engine = makeEngine();
@@ -809,7 +887,13 @@ function makePlaybackParams(engine: ReturnType<typeof makeEngine>, player: typeo
     beatSubdivisions: {},
     subdivisionPattern: [],
     barConfigRef: { current: {} },
-    dialConfigRef: { current: {} },
+    dialConfigRef: {
+      current: {
+        beatsPerMeasure: 4,
+        beatTypes: ["strong", "normal", "normal", "normal"],
+        beatSubdivisions: {},
+      },
+    },
     barStartBeatRef: { current: null },
     barLoopModeRef: { current: "loop" },
     blockPlayModeRef: { current: "sequential" },

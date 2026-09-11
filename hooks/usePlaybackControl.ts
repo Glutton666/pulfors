@@ -182,13 +182,14 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
 
   const configureEngine = useCallback((engine: MetronomeEngine) => {
     if (p.barModeRef.current) {
-      engine.setBeatTypes([...(p.barConfigRef.current.beatTypes || [])]);
-      engine.setAllBeatSubdivisions(p.barConfigRef.current.beatSubdivisions || {});
-      engine.setAllBarRepeats(p.barConfigRef.current.barRepeats || {});
-      engine.setLoopBlocks(p.barConfigRef.current.loopBlocks || []);
-      engine.setBlockPlayMode(p.blockPlayModeRef.current);
+      const cfg = p.barConfigRef.current;
+      engine.setBeatTypes([...(cfg.beatTypes || [])]);
+      engine.setAllBeatSubdivisions(cfg.beatSubdivisions || {});
+      engine.setAllBarRepeats(cfg.barRepeats || {});
+      engine.setLoopBlocks(cfg.loopBlocks || []);
+      engine.setBlockPlayMode(cfg.blockPlayMode ?? p.blockPlayModeRef.current);
       const bpmOverrides: Record<number, number> = {};
-      for (const [key, repeat] of Object.entries(p.barConfigRef.current.barRepeats || {})) {
+      for (const [key, repeat] of Object.entries(cfg.barRepeats || {})) {
         if (repeat.bpm) {
           bpmOverrides[Number(key)] = toEngineBpm(
             repeat.bpm,
@@ -198,13 +199,15 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
       }
       engine.setAllBarBpmOverrides(bpmOverrides);
     } else {
-      // The visible Beat-mode state is the playback source of truth. The
-      // persisted config ref can lag React state by one render after a tap.
+      // The Beat-owned ref is updated synchronously by every rhythm editor.
+      // Reading it here avoids a Bar→Beat transition applying stale shared
+      // render state before React commits the restored Beat profile.
+      const cfg = p.dialConfigRef.current;
       applyDialConfigToEngine(engine, {
-        beatsPerMeasure: p.beatsPerMeasure,
-        beatTypes: [...p.beatTypes],
+        beatsPerMeasure: cfg.beatsPerMeasure,
+        beatTypes: [...cfg.beatTypes],
         beatSubdivisions: Object.fromEntries(
-          Object.entries(p.beatSubdivisions).map(([key, pattern]) => [key, [...pattern]]),
+          Object.entries(cfg.beatSubdivisions).map(([key, pattern]) => [key, [...pattern]]),
         ),
       });
     }

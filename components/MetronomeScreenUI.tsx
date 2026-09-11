@@ -28,6 +28,7 @@ import { WorkUpOverviewModal } from "@/components/WorkUpOverviewModal";
 import PracticeStatsGraph from "@/components/PracticeStatsGraph";
 import { StageModeOverlay } from "@/components/StageModeOverlay";
 import { markAudioPlaying, markAudioStopped } from "@/lib/audio-lifecycle";
+import type { BeatType } from "@/lib/metronome-engine";
 import { OnboardingModal } from "@/components/OnboardingModal";
 import { ScoreListScreen } from "@/components/ScoreListScreen";
 import { ScoreEditorScreen } from "@/components/ScoreEditorScreen";
@@ -53,7 +54,10 @@ import {
   type SgTgState,
 } from "@/lib/modal-routing";
 import { loadPracticeBook, type FadeOutSettings, type SoundSet } from "@/lib/storage";
-import { applyEntryToEngine as applyEntryToEngineCore } from "@/app/index.helpers";
+import {
+  applyEntryToEngine as applyEntryToEngineCore,
+  beatSubdivisionCounts as beatSubdivisionCountsPure,
+} from "@/app/index.helpers";
 import { Radius, Spacing, FontSize } from "@/constants/tokens";
 import { showPlayingNotification } from "@/lib/notification-controls";
 import { addActivityLog, saveLoggingEnabled } from "@/lib/activity-log";
@@ -1494,15 +1498,15 @@ export function MetronomeScreenUI(props: Props) {
       <StageModeOverlay
         visible={stageModeActive}
         onOpenDial={() => modeSwitcherDialRef.current?.open()}
-        bpm={bpm}
+        bpm={currentBarConfig.bpm}
         flashOpacity={flashOpacity}
         beatProgress={beatProgress}
         currentBeat={currentBeat}
-        beatsPerMeasure={beatsPerMeasure}
+        beatsPerMeasure={currentBarConfig.beatsPerMeasure}
         beatDenominator={beatDenominator}
-        subdivisionPattern={subdivisionPattern}
-        beatTypes={beatTypes}
-        beatSubdivisions={beatSubdivisions}
+        subdivisionPattern={currentBarConfig.subdivisionPattern}
+        beatTypes={currentBarConfig.beatTypes}
+        beatSubdivisions={currentBarConfig.beatSubdivisions}
         activeSubNote={activeSubNote}
         progressInfo={progressInfo}
         isPlaying={isPlaying}
@@ -1512,15 +1516,16 @@ export function MetronomeScreenUI(props: Props) {
         hapticMode={hapticMode}
         onPlayPause={() => void togglePlayPauseRef.current?.()}
         onExit={() => void exitStageMode()}
-        onBpmChange={updateBpm}
+        onBpmChange={barMode ? handleBarBpmChange : updateBpm}
         onTapTempo={handleTapTempo}
-        onBeatsPerMeasureChange={(n) => {
-          setBeatsPerMeasure(n);
-          engineRef.current?.setBeatsPerMeasure(n);
-        }}
+        onBeatsPerMeasureChange={updateTimeSignature}
         onBeatTypesChange={(types) => {
-          setBeatTypes(types);
-          engineRef.current?.setBeatTypes(types);
+          const changedIndex = currentBarConfig.beatTypes.findIndex(
+            (type, index) => type !== types[index],
+          );
+          if (changedIndex >= 0 && types[changedIndex]) {
+            handleBeatTypeChange(changedIndex, types[changedIndex]);
+          }
         }}
         onBeatDenominatorCycle={handleBeatDenominatorCycle}
         onFlashModeChange={(m) => {
@@ -1535,35 +1540,35 @@ export function MetronomeScreenUI(props: Props) {
         noSetlistContent={
           <>
             <BeatIndicator
-              beatsPerMeasure={beatsPerMeasure}
+              beatsPerMeasure={currentBarConfig.beatsPerMeasure}
               currentBeat={currentBeat}
               isPlaying={isPlaying}
               isPreparing={isPreparing}
               onBeatsChange={updateTimeSignature}
               onTogglePlay={togglePlayPause}
               onPlayLongPress={scoreMode === null && !barMode ? handleBeatQuickSaveOpen : undefined}
-              beatTypes={beatTypes}
+              beatTypes={currentBarConfig.beatTypes}
               onBeatTypeChange={handleBeatTypeChange}
               dropTargetBeat={dropTargetBeat}
-              beatSubdivisionCounts={beatSubdivisionCounts}
-              barMode={false}
+              beatSubdivisionCounts={beatSubdivisionCountsPure(currentBarConfig.beatSubdivisions)}
+              barMode={barMode}
               onBarModeChange={handleBarModeChange}
-              beatSubdivisions={beatSubdivisions}
+              beatSubdivisions={currentBarConfig.beatSubdivisions}
               onBeatSubdivisionChange={handleBeatSubdivisionChange}
               activeSubNote={activeSubNote}
-              barRepeats={barRepeats}
+              barRepeats={currentBarConfig.barRepeats}
               onBarRepeatChange={handleBarRepeatChange}
-              loopBlocks={loopBlocks}
+              loopBlocks={currentBarConfig.loopBlocks}
               onLoopBlocksChange={handleLoopBlocksChange}
-              barLoopMode={barLoopMode}
+              barLoopMode={currentBarConfig.barLoopMode}
               onBarLoopModeChange={setBarLoopMode}
-              blockPlayMode={blockPlayMode}
+              blockPlayMode={currentBarConfig.blockPlayMode}
               onBlockPlayModeChange={setBlockPlayMode}
               beatDenominator={beatDenominator}
               halfTime={halfTime}
             />
             <SubdivisionBar
-              pattern={subdivisionPattern}
+              pattern={currentBarConfig.subdivisionPattern}
               onPatternChange={handlePatternChange}
               onDragStart={handleDragStart}
               onDragMove={handleDragMove}
@@ -1572,8 +1577,8 @@ export function MetronomeScreenUI(props: Props) {
               onReset={handleReset}
               isPlaying={isPlaying}
               activeSubNote={activeSubNote}
-              activeBeatPattern={isPlaying && currentBeat >= 0 ? (beatSubdivisions[String(currentBeat)] || null) : null}
-                currentBeatType={isPlaying && currentBeat >= 0 ? (beatTypes[currentBeat] ?? "normal") : null}
+              activeBeatPattern={isPlaying && currentBeat >= 0 ? (currentBarConfig.beatSubdivisions[String(currentBeat)] || null) : null}
+                currentBeatType={isPlaying && currentBeat >= 0 ? (currentBarConfig.beatTypes[currentBeat] ?? "normal") : null}
             />
           </>
         }
@@ -1590,47 +1595,67 @@ export function MetronomeScreenUI(props: Props) {
           const engine = engineRef.current;
           if (!engine) return;
           const entryIsBar = entry.mode === "bar";
-          updateBpmRef.current(entry.bpm);
-          // 바 모드 항목 선택 시 barBpm 상태도 동기화해야 나중에
-          // 일반 바 모드로 복귀할 때 BPM 표시가 올바르게 유지된다.
+          if (barMode !== entryIsBar) {
+            handleBarModeChange(entryIsBar);
+          }
           if (entryIsBar) {
             barBpmRef.current = entry.bpm;
             setBarBpm(entry.bpm);
+          } else {
+            updateBpmRef.current(entry.bpm);
           }
           setBeatsPerMeasure(entry.beatsPerMeasure);
           setBeatTypes([...entry.beatTypes]);
           setBeatSubdivisions({ ...entry.beatSubdivisions });
-          if (entry.subdivisionPattern && entry.subdivisionPattern.length > 0) {
-            setSubdivisionPattern([...entry.subdivisionPattern]);
-          }
+          const entrySubdivisionPattern: BeatType[] =
+            entry.subdivisionPattern?.length
+              ? [...entry.subdivisionPattern]
+              : ["accent"];
+          setSubdivisionPattern(entrySubdivisionPattern);
           // ── ref를 동기적으로 갱신 ─────────────────────────────────────
-          // barModeRef: applyEntryToEngineCore 전에 갱신해야 바 모드 정지 로직 작동.
           // barConfigRef / dialConfigRef: togglePlayPause 시작 분기가 이 ref들을
           // 엔진에 덮어쓰므로, React 상태 업데이트(async)를 기다리지 않고 여기서
           // 즉시 동기화해야 다음 재생 시 올바른 항목 설정이 적용된다.
-          barModeRef.current = entryIsBar;
-          barConfigRef.current = {
-            ...barConfigRef.current,
-            beatsPerMeasure: entry.beatsPerMeasure,
-            beatTypes:        [...entry.beatTypes],
-            beatSubdivisions: { ...entry.beatSubdivisions },
-            barRepeats:       { ...(entry.barRepeats  || {}) },
-            loopBlocks:       [...(entry.loopBlocks   || [])],
-            barLoopMode:      (entry.barLoopMode  || "once") as "loop" | "once",
-            blockPlayMode:    (entry.blockPlayMode || "loop") as "sequential" | "loop" | "random",
-          };
-          dialConfigRef.current = {
-            ...dialConfigRef.current,
-            beatsPerMeasure: entry.beatsPerMeasure,
-            beatTypes:        [...entry.beatTypes],
-            beatSubdivisions: { ...entry.beatSubdivisions },
-          };
-          barLoopModeRef.current = (entry.barLoopMode || "once") as "loop" | "once";
-          // ─────────────────────────────────────────────────────────────
-          setBarMode(entryIsBar);
-          setBarLoopMode(entry.barLoopMode || "once");
-          setBarRepeats({ ...(entry.barRepeats || {}) });
-          setLoopBlocks([...(entry.loopBlocks || [])]);
+          if (entryIsBar) {
+            barConfigRef.current = {
+              ...barConfigRef.current,
+              beatsPerMeasure: entry.beatsPerMeasure,
+              beatTypes: [...entry.beatTypes],
+              beatSubdivisions: { ...entry.beatSubdivisions },
+              subdivisionPattern: entrySubdivisionPattern,
+              barRepeats: { ...(entry.barRepeats || {}) },
+              loopBlocks: [...(entry.loopBlocks || [])],
+              barLoopMode: (entry.barLoopMode || "once") as "loop" | "once",
+              blockPlayMode: (entry.blockPlayMode || "loop") as "sequential" | "loop" | "random",
+              noteSamples: { ...(entry.noteSamples || {}) },
+              noteSampleNames: { ...(entry.noteSampleNames || {}) },
+              noteSampleSources: { ...(entry.noteSampleSources || {}) },
+              noteSampleChannels: { ...(entry.noteSampleChannels || {}) },
+              noteSampleVolumes: { ...(entry.noteSampleVolumes || {}) },
+              noteSampleSpeeds: { ...(entry.noteSampleSpeeds || {}) },
+              hasBeenConfigured: true,
+            };
+          } else {
+            dialConfigRef.current = {
+              ...dialConfigRef.current,
+              beatsPerMeasure: entry.beatsPerMeasure,
+              beatTypes: [...entry.beatTypes],
+              beatSubdivisions: { ...entry.beatSubdivisions },
+              subdivisionPattern: entrySubdivisionPattern,
+              noteSamples: { ...(entry.noteSamples || {}) },
+              noteSampleNames: { ...(entry.noteSampleNames || {}) },
+              noteSampleSources: { ...(entry.noteSampleSources || {}) },
+              noteSampleChannels: { ...(entry.noteSampleChannels || {}) },
+              noteSampleVolumes: { ...(entry.noteSampleVolumes || {}) },
+              noteSampleSpeeds: { ...(entry.noteSampleSpeeds || {}) },
+            };
+          }
+          if (entryIsBar) {
+            barLoopModeRef.current = (entry.barLoopMode || "once") as "loop" | "once";
+            setBarLoopMode(entry.barLoopMode || "once");
+            setBarRepeats({ ...(entry.barRepeats || {}) });
+            setLoopBlocks([...(entry.loopBlocks || [])]);
+          }
           applyEntryToEngineCore(engine, entry, beatDenominatorRef.current);
           scheduleReRender();
           setActiveStagePracticeEntryId(entry.id);
