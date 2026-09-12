@@ -95,6 +95,20 @@ export const tonePositionToWeights = mapTonePositionToWeights;
 export const getToneWeights = mapTonePositionToWeights;
 export const mapTonePosition = mapTonePositionToWeights;
 
+/**
+ * Maps distance from the pad centre to audible effect strength. A small centre
+ * dead-zone preserves the exact neutral sound, then smoothstep avoids a sudden
+ * jump as a finger leaves the centre.
+ */
+export function toneEffectIntensity(position?: TonePosition | null): number {
+  const p = sanitizeTonePosition(position);
+  const distance = Math.max(Math.abs(p.x), Math.abs(p.y));
+  const deadZone = 0.05;
+  if (distance <= deadZone) return 0;
+  const t = Math.min(1, (distance - deadZone) / (1 - deadZone));
+  return t * t * (3 - 2 * t);
+}
+
 function isStereo(pcm: ClickPCM): pcm is StereoPCM {
   return !(pcm instanceof Float32Array) && pcm != null &&
     pcm.left instanceof Float32Array && pcm.right instanceof Float32Array;
@@ -137,19 +151,13 @@ function hasOnlyFiniteSamples(pcm: Float32Array): boolean {
   return true;
 }
 
-function limitedMagnitude(magnitude: number, ceiling: number): number {
-  const knee = Math.min(0.7, ceiling * 0.72);
-  if (magnitude <= knee) return magnitude;
-  const range = Math.max(1e-9, ceiling - knee);
-  return ceiling - range * Math.exp(-(magnitude - knee) / range);
-}
-
 /**
- * Applies a sample-linked soft-knee limiter to mono or stereo PCM.
+ * Applies a sample-linked envelope limiter to mono or stereo PCM.
  *
  * In stereo each frame uses the louder channel to calculate one shared gain,
- * preserving the stereo image while allowing quieter parts of a boosted click
- * to remain louder instead of turning the whole file down to its single peak.
+ * preserving the stereo image. Attack is immediate at the ceiling and release
+ * is short, so boosted click body remains louder without a discontinuity when
+ * a peak first crosses the ceiling.
  */
 export function limitLinkedPCM(pcm: ClickPCM, ceiling = MAX_CEILING): ClickPCM {
   const outputCeiling = effectiveCeiling(ceiling);
@@ -161,22 +169,26 @@ export function limitLinkedPCM(pcm: ClickPCM, ceiling = MAX_CEILING): ClickPCM {
   }
   if (!isStereo(pcm)) {
     const out = new Float32Array(pcm.length);
+    let gain = 1;
     for (let i = 0; i < pcm.length; i++) {
       const sample = Number.isFinite(pcm[i]) ? pcm[i] : 0;
       const magnitude = Math.abs(sample);
-      const limited = limitedMagnitude(magnitude, outputCeiling);
-      out[i] = sample < 0 ? -limited : limited;
+      const desiredGain = magnitude > outputCeiling ? outputCeiling / magnitude : 1;
+      gain = desiredGain < gain ? desiredGain : gain + (desiredGain - gain) * 0.04;
+      out[i] = Math.max(-outputCeiling, Math.min(outputCeiling, sample * gain));
     }
     return out;
   }
   const length = Math.max(pcm.left.length, pcm.right.length);
   const left = new Float32Array(pcm.left.length);
   const right = new Float32Array(pcm.right.length);
+  let gain = 1;
   for (let i = 0; i < length; i++) {
     const l = i < pcm.left.length && Number.isFinite(pcm.left[i]) ? pcm.left[i] : 0;
     const r = i < pcm.right.length && Number.isFinite(pcm.right[i]) ? pcm.right[i] : 0;
     const framePeak = Math.max(Math.abs(l), Math.abs(r));
-    const gain = framePeak > 0 ? limitedMagnitude(framePeak, outputCeiling) / framePeak : 1;
+    const desiredGain = framePeak > outputCeiling ? outputCeiling / framePeak : 1;
+    gain = desiredGain < gain ? desiredGain : gain + (desiredGain - gain) * 0.04;
     if (i < left.length) left[i] = l * gain;
     if (i < right.length) right[i] = r * gain;
   }
@@ -192,47 +204,49 @@ function processChannel(
   source: Float32Array,
   weights: ToneWeights,
   sampleRate: number,
+  intensity: number,
 ): Float32Array {
-  const out = new Float32Array(source.length);
+  const tailSamples = Math.round(sampleRate * 0.075);
+  const out = new Float32Array(source.length + tailSamples);
   if (source.length === 0) return out;
 
   // One-pole low-pass provides complementary low/high components without a
   // potentially unstable high-order filter.  The cutoff leaves enough
   // distinction for ordinary click samples at common sample rates.
-  const lowAlpha = Math.exp((-2 * Math.PI * 2_400) / sampleRate);
+  const lowAlpha = Math.exp((-2 * Math.PI * 1_800) / sampleRate);
   let lowPass = 0;
   let previousResonator = 0;
   let previousResonator2 = 0;
-  const resonanceFrequency = Math.min(3_500, sampleRate * 0.22);
-  const resonanceRadius = 0.88; // safely inside the unit circle
+  const resonanceFrequency = Math.min(1_500, sampleRate * 0.18);
+  const resonanceRadius = 0.9985; // safely inside the unit circle, with an audible tail
   const resonanceAngle = (2 * Math.PI * resonanceFrequency) / sampleRate;
   const resonanceFeedback = 2 * resonanceRadius * Math.cos(resonanceAngle);
-  const resonanceDamping = (1 - resonanceRadius) * 0.65;
+  const resonanceDamping = 0.025;
 
-  for (let i = 0; i < source.length; i++) {
-    const input = Number.isFinite(source[i]) ? source[i] : 0;
+  for (let i = 0; i < out.length; i++) {
+    const input = i < source.length && Number.isFinite(source[i]) ? source[i] : 0;
     lowPass = (1 - lowAlpha) * input + lowAlpha * lowPass;
     const highPass = input - lowPass;
 
-    // Corner weights are deliberately modest. This gives the limiter room
-    // for transient clicks while still making each corner audibly distinct.
-    let value = input;
-    value += weights.high * 0.85 * highPass;
-    value += weights.low * 0.85 * lowPass;
+    // Each corner is a complete, deliberately distinct voicing. Interpolating
+    // between the four outputs is more audible than adding small EQ offsets to
+    // the same dry click.
+    const attackEnvelope = Math.exp(-i / (sampleRate * 0.0018));
+    const attackShape = input * (0.12 + 3.4 * attackEnvelope);
+    const highShape = 3 * highPass + 0.08 * lowPass;
+    const lowShape = 2.4 * lowPass + 0.08 * highPass;
 
-    // A damped resonator is bounded by radius < 1. The input contribution is
-    // also damped to avoid a large impulse at sample zero.
     const resonator = resonanceFeedback * previousResonator
       - resonanceRadius * resonanceRadius * previousResonator2
       + resonanceDamping * input;
     previousResonator2 = previousResonator;
     previousResonator = Number.isFinite(resonator) ? resonator : 0;
-    value += weights.resonance * 1.8 * previousResonator;
-
-    // Attack is an onset-only envelope, not a sustained gain. Its 3ms decay
-    // is intentionally sample-rate aware and remains finite at any rate.
-    const attackEnvelope = Math.exp(-i / (sampleRate * 0.003));
-    value *= 1 + weights.attack * 0.75 * attackEnvelope;
+    const resonanceShape = 0.35 * input + 8 * previousResonator;
+    const blended = weights.attack * attackShape
+      + weights.high * highShape
+      + weights.resonance * resonanceShape
+      + weights.low * lowShape;
+    const value = input + intensity * (blended - input);
     out[i] = Number.isFinite(value) ? value : 0;
   }
   return out;
@@ -287,12 +301,14 @@ export function processClickPCM(
 
   if (neutral) return limitLinkedPCM(pcm, parsed.ceiling);
   const weights = mapTonePositionToWeights(parsed.position);
+  const intensity = toneEffectIntensity(parsed.position);
+  if (intensity === 0) return limitLinkedPCM(pcm, parsed.ceiling);
   const shaped: ClickPCM = isStereo(pcm)
     ? {
-        left: processChannel(pcm.left, weights, parsed.sampleRate),
-        right: processChannel(pcm.right, weights, parsed.sampleRate),
+        left: processChannel(pcm.left, weights, parsed.sampleRate, intensity),
+        right: processChannel(pcm.right, weights, parsed.sampleRate, intensity),
       }
-    : processChannel(pcm, weights, parsed.sampleRate);
+    : processChannel(pcm, weights, parsed.sampleRate, intensity);
   return limitLinkedPCM(shaped, parsed.ceiling);
 }
 

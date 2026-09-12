@@ -462,10 +462,17 @@ export function renderMeasure(params: RenderMeasureParams): Float32Array | { lef
   const COPIES = 2;
   const measureSamples = Math.ceil((measureDurationMs / 1000) * RENDER_SR);
   const loopSamples = measureSamples * COPIES;
+  const layerMaxClickLen = layerClickPCMs
+    ? Array.from(layerClickPCMs.values()).reduce(
+        (max, pcms) => Math.max(max, pcms.strong.length, pcms.high.length, pcms.low.length),
+        0,
+      )
+    : 0;
   const maxClickLen = Math.max(
     clickPCMs.strong.length,
     clickPCMs.high.length,
     clickPCMs.low.length,
+    layerMaxClickLen,
     Math.ceil(RENDER_SR * 0.15),
   );
   const totalSamples = loopSamples + maxClickLen;
@@ -621,10 +628,17 @@ export async function renderMeasureAbortable(
   const COPIES = 2;
   const measureSamples = Math.ceil((measureDurationMs / 1000) * RENDER_SR);
   const loopSamples = measureSamples * COPIES;
+  const layerMaxClickLen = layerClickPCMs
+    ? Array.from(layerClickPCMs.values()).reduce(
+        (max, pcms) => Math.max(max, pcms.strong.length, pcms.high.length, pcms.low.length),
+        0,
+      )
+    : 0;
   const maxClickLen = Math.max(
     clickPCMs.strong.length,
     clickPCMs.high.length,
     clickPCMs.low.length,
+    layerMaxClickLen,
     Math.ceil(RENDER_SR * 0.15),
   );
   const totalSamples = loopSamples + maxClickLen;

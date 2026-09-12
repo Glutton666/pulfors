@@ -98,6 +98,37 @@ test("레이어 틱에 layerSoundSet 키로 등록된 PCM이 올바르게 렌더
   assert.ok(layerPeak > MAIN_VAL + 0.3, `레이어 PCM이 메인 PCM보다 크다: peak=${layerPeak}, mainVal=${MAIN_VAL}`);
 });
 
+test("긴 레이어 공명 tail이 마디 끝에서 잘리지 않고 다음 루프로 접힌다", () => {
+  const measureDurationMs = 500;
+  const mainPCMs = makeClickPCMs(0, 0, 0, 64);
+  const longLayer = makeClickPCMs(0, 0, 0, Math.round(SR * 0.255));
+  longLayer.strong[longLayer.strong.length - 1] = 0.5;
+  const layerClickPCMs = new Map<string, ClickPCMs>([["cowbell", longLayer]]);
+  const schedule: TickInfo[] = [{
+    time: 490,
+    type: "strong",
+    beat: 1,
+    subBeat: 0,
+    repeatIteration: 0,
+    barRepeatIteration: 0,
+    layerIndex: 1,
+    layerSoundSet: "cowbell",
+  }];
+
+  const result = renderMeasure({
+    schedule,
+    measureDurationMs,
+    clickPCMs: mainPCMs,
+    samplePCMs: new Map(),
+    clickVolume: 1,
+    sampleVolume: 0,
+    layerClickPCMs,
+  });
+  const buffer = result instanceof Float32Array ? result : result.left;
+  const wrappedOffset = msToSample(245);
+  assert.ok(peakAt(buffer, wrappedOffset - 8, 16) > 0.45);
+});
+
 test("레이어 틱이 #idx 키 fallback으로 올바른 PCM을 선택한다", () => {
   const MAIN_VAL = 0.2;
   const LAYER_VAL = 0.7;

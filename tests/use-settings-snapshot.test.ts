@@ -183,6 +183,27 @@ test("beatDenominator is present in the snapshot when volume is changed after se
   expect(latestSave.volume).toBe(0.5);
 });
 
+test("tone changes invalidate the selected set and request a fresh audio render", () => {
+  const params = buildParams();
+  const rerender = jest.fn();
+  params.scheduleReRenderCallbackRef.current = rerender;
+  params.clickPCMCacheRef.current.classic = {
+    strong: new Float32Array([0.5]),
+    high: new Float32Array([0.4]),
+    low: new Float32Array([0.3]),
+  };
+  const { result } = renderHook(() => useSettings(params));
+
+  act(() => {
+    result.current.updateTonePosition({ x: -1, y: 1 });
+  });
+
+  expect(params.clickPCMCacheRef.current.classic).toBeUndefined();
+  expect(params.tonePositionRef.current).toEqual({ x: -1, y: 1 });
+  expect(params.tonePositionsRef.current.classic).toEqual({ x: -1, y: 1 });
+  expect(rerender).toHaveBeenCalledTimes(1);
+});
+
 test("beatDenominator is present in every save, not only in the explicit change call", () => {
   const params = buildParams();
   const { result } = renderHook(() => useSettings(params));
