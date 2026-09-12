@@ -27,6 +27,7 @@ import { PracticeBookModal } from "@/components/PracticeBookModal";
 import { WorkUpOverviewModal } from "@/components/WorkUpOverviewModal";
 import PracticeStatsGraph from "@/components/PracticeStatsGraph";
 import { StageModeOverlay } from "@/components/StageModeOverlay";
+import { StageEmptyPerformanceDisplay } from "@/components/StageEmptyPerformanceDisplay";
 import { markAudioPlaying, markAudioStopped } from "@/lib/audio-lifecycle";
 import type { BeatType } from "@/lib/metronome-engine";
 import { OnboardingModal } from "@/components/OnboardingModal";
@@ -98,6 +99,7 @@ export function MetronomeScreenUI(props: Props) {
     isDragging, dragPos, dragPattern, dropTargetBeat,
     handleDragCancel,
     handlePatternChange, handleDragStart, handleDragMove, handleDragEnd,
+    applyToAllBeats,
     showSubdivisionLongPressHint, setShowSubdivisionLongPressHint,
     activeModal, setActiveModal, openExclusive,
     markMenuItemReturn, clearMenuItemReturn, closeMenuItem, closeScoreMode,
@@ -1537,51 +1539,39 @@ export function MetronomeScreenUI(props: Props) {
           engineRef.current?.setHapticMode(m);
           persistSettings({ hapticMode: m });
         }}
-        noSetlistContent={
-          <>
-            <BeatIndicator
-              beatsPerMeasure={currentBarConfig.beatsPerMeasure}
-              currentBeat={currentBeat}
-              isPlaying={isPlaying}
-              isPreparing={isPreparing}
-              onBeatsChange={updateTimeSignature}
-              onTogglePlay={togglePlayPause}
-              onPlayLongPress={scoreMode === null && !barMode ? handleBeatQuickSaveOpen : undefined}
-              beatTypes={currentBarConfig.beatTypes}
-              onBeatTypeChange={handleBeatTypeChange}
-              dropTargetBeat={dropTargetBeat}
-              beatSubdivisionCounts={beatSubdivisionCountsPure(currentBarConfig.beatSubdivisions)}
-              barMode={barMode}
-              onBarModeChange={handleBarModeChange}
-              beatSubdivisions={currentBarConfig.beatSubdivisions}
-              onBeatSubdivisionChange={handleBeatSubdivisionChange}
-              activeSubNote={activeSubNote}
-              barRepeats={currentBarConfig.barRepeats}
-              onBarRepeatChange={handleBarRepeatChange}
-              loopBlocks={currentBarConfig.loopBlocks}
-              onLoopBlocksChange={handleLoopBlocksChange}
-              barLoopMode={currentBarConfig.barLoopMode}
-              onBarLoopModeChange={setBarLoopMode}
-              blockPlayMode={currentBarConfig.blockPlayMode}
-              onBlockPlayModeChange={setBlockPlayMode}
-              beatDenominator={beatDenominator}
-              halfTime={halfTime}
-            />
-            <SubdivisionBar
-              pattern={currentBarConfig.subdivisionPattern}
-              onPatternChange={handlePatternChange}
-              onDragStart={handleDragStart}
-              onDragMove={handleDragMove}
-              onDragEnd={handleDragEnd}
-              onDragCancel={handleDragCancel}
-              onReset={handleReset}
-              isPlaying={isPlaying}
-              activeSubNote={activeSubNote}
-              activeBeatPattern={isPlaying && currentBeat >= 0 ? (currentBarConfig.beatSubdivisions[String(currentBeat)] || null) : null}
-                currentBeatType={isPlaying && currentBeat >= 0 ? (currentBarConfig.beatTypes[currentBeat] ?? "normal") : null}
-            />
-          </>
-        }
+        noSetlistContent={barMode ? undefined : (
+          <StageEmptyPerformanceDisplay
+            currentBeat={currentBeat}
+            beatsPerMeasure={currentBarConfig.beatsPerMeasure}
+            beatTypes={currentBarConfig.beatTypes}
+            subdivisionPattern={currentBarConfig.subdivisionPattern}
+            beatSubdivisions={currentBarConfig.beatSubdivisions}
+            activeSubNote={activeSubNote}
+            isPlaying={isPlaying}
+            isPreparing={isPreparing}
+            isDark={stageSettings.theme === "dark"}
+            text={stageSettings.theme === "dark" ? "#FFFFFF" : "#1A1A1A"}
+            faint={stageSettings.theme === "dark" ? "rgba(255,255,255,0.48)" : "rgba(0,0,0,0.46)"}
+            accent={C.accent}
+            onPlayPause={() => void togglePlayPauseRef.current?.()}
+            onPlayLongPress={() => {
+              if (isPlaying) {
+                openExclusive("scheduledStart");
+              } else if (scoreMode === null && !barMode) {
+                handleBeatQuickSaveOpen();
+              }
+            }}
+            onBeatsChange={updateTimeSignature}
+            onBeatTypeChange={handleBeatTypeChange}
+            onBeatSubdivisionChange={handleBeatSubdivisionChange}
+            onApplyPatternToAll={applyToAllBeats}
+            onPatternChange={handlePatternChange}
+            onDragStart={handleDragStart}
+            onDragMove={handleDragMove}
+            onDragCancel={handleDragCancel}
+            onReset={handleReset}
+          />
+        )}
         practiceBook={stagePracticeEntries}
         activeEntryId={activeStagePracticeEntryId}
         noteCurrentIndex={noteCurrentIndex}

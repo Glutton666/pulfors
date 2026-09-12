@@ -353,7 +353,7 @@ export function StageModeOverlay({
 }: StageModeOverlayProps) {
   const { t } = useLanguage();
   const insets = useSafeAreaInsets();
-  const { width: winWidth } = useWindowDimensions();
+  const { width: winWidth, height: winHeight } = useWindowDimensions();
   const audioStatusKey =
     audioLifecycle?.phase === "preparing" ? "audioStatusPreparing"
     : audioLifecycle?.phase === "interrupted" ? "audioStatusInterrupted"
@@ -839,6 +839,8 @@ export function StageModeOverlay({
 
   // ── 피커에서 추가 가능한 항목 ─────────────────────────────────────
   const availableEntries = practiceBook;
+  const emptyBeatLandscape =
+    winWidth > winHeight && setlist.length === 0 && Boolean(noSetlistContent);
 
   // ─ 롱프레스 컨텍스트 항목 ─
   const ctxEntry = contextEntryId ? setlist.find((e) => e.id === contextEntryId) : null;
@@ -1057,7 +1059,7 @@ export function StageModeOverlay({
         </View>
       ) : (
         /* ─ 기본 모드 (비트 / 바) ─────────────────────────────── */
-        <View style={styles.mainContent}>
+        <View style={[styles.mainContent, emptyBeatLandscape && styles.mainContentEmptyLandscape]}>
           {/* 전체 진행도 — 바 반복·블록·점프 진행 (재생 중, 진행 정보 있을 때만) */}
           {isPlaying && progressInfo &&
             (progressInfo.barRepeatTotal > 1 || progressInfo.blockRepeatTotal > 1 || (progressInfo.jumpTotal ?? 0) > 0) && (
@@ -1097,8 +1099,15 @@ export function StageModeOverlay({
             </View>
           )}
           {/* 비트 컬럼: 정지 + 셋리스트 없을 때 → noSetlistContent(BeatIndicator), 나머지 → StageBeatColumn(큰 숫자) */}
-          {setlist.length === 0 && !isPlaying && noSetlistContent
-            ? <View style={{ flex: 1, alignSelf: "stretch", alignItems: "center", justifyContent: "center" }}>{noSetlistContent}</View>
+          {setlist.length === 0 && noSetlistContent
+            ? (
+              <View style={[
+                { flex: 1, alignSelf: "stretch", alignItems: "center", justifyContent: "center" },
+                emptyBeatLandscape && styles.emptyBeatLandscapeDisplay,
+              ]}>
+                {noSetlistContent}
+              </View>
+            )
             : (
               <View style={{ flex: 1, alignSelf: "stretch" }}>
                 <StageBeatColumn
@@ -1131,10 +1140,16 @@ export function StageModeOverlay({
           }
 
           {/* 재생/정지 버튼 — 비트 컬럼 아래, BeatIndicator 슬롯 없을 때만 표시 */}
-          {!(setlist.length === 0 && !isPlaying && noSetlistContent) && PlayPauseBtn}
+          {!(setlist.length === 0 && noSetlistContent) && PlayPauseBtn}
 
           {/* BPM 컨트롤러 (재생 중 / 셋리스트 있을 때: 읽기 전용 숫자, 없을 때: 풀 컨트롤러) */}
-          {BpmController}
+          {setlist.length === 0 && noSetlistContent
+            ? (
+              <View style={emptyBeatLandscape ? styles.emptyBeatLandscapeBpm : styles.emptyBeatPortraitBpm}>
+                {BpmController}
+              </View>
+            )
+            : BpmController}
         </View>
       )}
 
@@ -1174,8 +1189,8 @@ export function StageModeOverlay({
         })()
       ) : (
         /* 정지 중: 셋리스트 전체 표시 */
-        <View style={styles.setlistSection}>
-          <View style={styles.setlistHeader}>
+        <View style={[styles.setlistSection, emptyBeatLandscape && styles.setlistSectionEmptyLandscape]}>
+          <View style={[styles.setlistHeader, emptyBeatLandscape && styles.setlistHeaderEmptyLandscape]}>
             <Text style={[styles.setlistLabel, { color: faint }]}>
               {t("stageMode", "setList")}
             </Text>
@@ -1187,6 +1202,7 @@ export function StageModeOverlay({
               <Pressable
                 style={({ pressed }) => [
                   styles.addBtn,
+                  emptyBeatLandscape && styles.addBtnEmptyLandscape,
                   { borderColor: cardBdr, backgroundColor: pressed ? btnBg : cardBg },
                 ]}
                 onPress={() => setPickerOpen(true)}
@@ -1505,6 +1521,26 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     zIndex: 2,
   },
+  mainContentEmptyLandscape: {
+    flexDirection: "row",
+    alignItems: "stretch",
+    justifyContent: "space-between",
+    paddingHorizontal: 12,
+    gap: 12,
+  },
+  emptyBeatLandscapeDisplay: {
+    flex: 3,
+    minWidth: 0,
+  },
+  emptyBeatLandscapeBpm: {
+    flex: 2,
+    minWidth: 240,
+    alignSelf: "center",
+  },
+  emptyBeatPortraitBpm: {
+    width: "100%",
+    marginTop: 12,
+  },
 
   // ── 전체화면 레이아웃 (악보/사진 모드) ──────────────────────────
   fullscreenLayout: {
@@ -1729,6 +1765,15 @@ const styles = StyleSheet.create({
     width: "100%",
     zIndex: 2,
   },
+  setlistSectionEmptyLandscape: {
+    position: "absolute",
+    left: 8,
+    bottom: 6,
+    width: 40,
+  },
+  setlistHeaderEmptyLandscape: {
+    display: "none",
+  },
   setlistHeader: {
     flexDirection: "row",
     alignItems: "center",
@@ -1771,6 +1816,11 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
+  },
+  addBtnEmptyLandscape: {
+    width: 36,
+    height: 36,
+    borderRadius: 9,
   },
   emptySetlistCenter: {
     alignItems: "center",

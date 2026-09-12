@@ -195,6 +195,8 @@ export interface StageBeatColumnProps {
   onSwipeLeft?:         () => void;
   /** 오른쪽 스와이프 → 이전 항목 */
   onSwipeRight?:        () => void;
+  /** 정지 상태에서도 첫 박자를 무대 대기 프리뷰로 선명하게 표시 */
+  standbyPreview?:      boolean;
   labels?: {
     current: string;
     next: string;
@@ -213,6 +215,7 @@ export function StageBeatColumn({
   theme = "dark",
   onSwipeLeft,
   onSwipeRight,
+  standbyPreview = false,
   labels = {
     current: "현재 재생 중",
     next: "다음 재생",
@@ -260,7 +263,9 @@ export function StageBeatColumn({
   const nextType = getBeatType(next0, beatTypes);
 
   const curColor  = stopped
-    ? (theme === "dark" ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.10)")
+    ? standbyPreview
+      ? (theme === "dark" ? "rgba(255,255,255,0.88)" : "rgba(0,0,0,0.82)")
+      : (theme === "dark" ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.10)")
     : colorMap[curType];
 
   const nextColor = theme === "dark"
@@ -276,8 +281,8 @@ export function StageBeatColumn({
   // 숫자뿐 아니라 행·패딩·간격까지 함께 줄여 작은 iPhone에서도
   // 현재/다음 카드 전체가 overflow 영역 안에 들어오게 한다.
   const fit = rootH > 0 ? Math.max(0.45, Math.min(1, rootH / 370)) : 1;
-  const curFont  = Math.round(78 * fit);
-  const nextFont = Math.round(58 * fit);
+  const curFont  = Math.round(78 * fit * (standbyPreview ? 1.25 : 1));
+  const nextFont = Math.round(58 * fit * (standbyPreview ? 0.9 : 1));
   const subSize  = Math.max(8, Math.round(21 * fit));
   const detailHeight = Math.max(28, Math.round(58 * fit));
   const cardPadding = Math.max(4, Math.round(12 * fit));

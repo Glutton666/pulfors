@@ -3971,6 +3971,7 @@ export function useMetronomeScreen() {
     handleDragMove,
     handleDragEnd,
     handleDragCancel,
+    applyToAllBeats,
     showSubdivisionLongPressHint,
     setShowSubdivisionLongPressHint,
     // Modal state
