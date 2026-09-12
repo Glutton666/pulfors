@@ -40,6 +40,23 @@ test("saveSettings + loadSettings: 라운드트립 + 기본값 병합", async ()
   assert.equal(s.flashMode, "accent");
 });
 
+test("loadSettings sanitizes per-sound-set tone positions", async () => {
+  await AsyncStorage.setItem("metronome_settings", JSON.stringify({
+    bpm: 90,
+    beatsPerMeasure: 4,
+    subdivisions: 1,
+    soundSetTonePositions: {
+      classic: { x: 4, y: -3 },
+      custom1: { x: Number.NaN, y: 0.4 },
+      unknown: { x: 1, y: 1 },
+    },
+  }));
+  const settings = await loadSettings();
+  assert.deepEqual(settings.soundSetTonePositions?.classic, { x: 1, y: -1 });
+  assert.deepEqual(settings.soundSetTonePositions?.custom1, { x: 0, y: 0.4 });
+  assert.equal((settings.soundSetTonePositions as Record<string, unknown>).unknown, undefined);
+});
+
 test("전체 초기화는 진행 중인 이전 설정 저장 뒤에 실행되어 값을 되살리지 않는다", async () => {
   const originalSetItem = AsyncStorage.setItem;
   let releaseOldWrite!: () => void;

@@ -18,6 +18,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import type { FlashMode, HapticMode, SoundSet, BuiltinSoundSet, SoundRole, CustomSoundSetConfig } from "@/lib/storage";
 import type { BarRandomConfig } from "@/lib/bar-random-session";
+import type { TonePosition } from "@/lib/metronome-tone-dsp";
 import { SoundPreviewPlayers, type SoundPreviewHandle } from "./settings/SoundPreviewPlayers";
 import { SettingsThemeTab } from "./settings/SettingsThemeTab";
 import { SettingsSoundTab } from "./settings/SettingsSoundTab";
@@ -44,6 +45,8 @@ interface SettingsModalProps {
   onAutoResumeAfterInterruptionChange: (value: boolean) => void;
   soundSet: SoundSet;
   onSoundSetChange: (value: SoundSet) => void;
+  tonePosition: TonePosition;
+  onTonePositionChange: (value: TonePosition) => void;
   layerSoundSets: Record<number, SoundSet>;
   onLayerSoundSetsChange: (value: Record<number, SoundSet>) => void;
   flashMode: FlashMode;
@@ -108,6 +111,8 @@ export function SettingsModal({
   onAutoResumeAfterInterruptionChange,
   soundSet,
   onSoundSetChange,
+  tonePosition,
+  onTonePositionChange,
   layerSoundSets,
   onLayerSoundSetsChange,
   flashMode,
@@ -276,6 +281,8 @@ export function SettingsModal({
             onSampleVolumeChange={onSampleVolumeChange}
             soundSet={soundSet}
             onSoundSetChange={onSoundSetChange}
+            tonePosition={tonePosition}
+            onTonePositionChange={onTonePositionChange}
             layerSoundSets={layerSoundSets}
             onLayerSoundSetsChange={onLayerSoundSetsChange}
             customSoundSets={customSoundSets}

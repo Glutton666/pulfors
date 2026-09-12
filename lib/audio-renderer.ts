@@ -3,6 +3,7 @@ import { File, Paths } from "expo-file-system";
 import { Asset } from "expo-asset";
 import type { BeatType } from "./metronome-engine";
 import { logger } from "./logger";
+import { limitLinkedPCM } from "./metronome-tone-dsp";
 import type { SampleChannel, MetroChannel } from "./stereo-channel";
 
 const RENDER_SR = 44100;
@@ -547,23 +548,19 @@ export function renderMeasure(params: RenderMeasureParams): Float32Array | { lef
       buf[i - loopSamples] += buf[i];
     }
     const out = buf.subarray(0, loopSamples);
-    for (let i = 0; i < out.length; i++) {
-      if ((i & 8191) === 0 && shouldAbort?.()) throw new Error("EXPORT_ABORTED");
-      out[i] = Math.max(-1, Math.min(1, out[i]));
-    }
     return out;
   };
 
   if (!stereoMode) {
     const buffer = new Float32Array(totalSamples);
     renderInto(buffer, null);
-    return finalize(buffer);
+    return limitLinkedPCM(finalize(buffer)) as Float32Array;
   }
 
   const leftBuf = new Float32Array(totalSamples);
   const rightBuf = new Float32Array(totalSamples);
   renderInto(leftBuf, rightBuf);
-  return { left: finalize(leftBuf), right: finalize(rightBuf) };
+  return limitLinkedPCM({ left: finalize(leftBuf), right: finalize(rightBuf) }) as { left: Float32Array; right: Float32Array };
 }
 
 async function renderYield(signal?: AbortSignal): Promise<void> {
@@ -705,23 +702,20 @@ export async function renderMeasureAbortable(
       await renderYield(signal);
     }
     const out = buffer.subarray(0, loopSamples);
-    for (let start = 0; start < out.length; start += chunkSize) {
-      const end = Math.min(start + chunkSize, out.length);
-      for (let i = start; i < end; i++) out[i] = Math.max(-1, Math.min(1, out[i]));
-      await renderYield(signal);
-    }
     return out;
   };
 
   if (!stereoMode) {
     const buffer = new Float32Array(totalSamples);
     await renderInto(buffer, null);
-    return finalize(buffer);
+    return limitLinkedPCM(await finalize(buffer)) as Float32Array;
   }
   const leftBuf = new Float32Array(totalSamples);
   const rightBuf = new Float32Array(totalSamples);
   await renderInto(leftBuf, rightBuf);
-  return { left: await finalize(leftBuf), right: await finalize(rightBuf) };
+  const left = await finalize(leftBuf);
+  const right = await finalize(rightBuf);
+  return limitLinkedPCM({ left, right }) as { left: Float32Array; right: Float32Array };
 }
 
 type StereoPCM = { left: Float32Array; right: Float32Array };
@@ -919,13 +913,14 @@ export function scheduleWebClickAt(
   const gainNode = ctx.createGain();
   gainNode.gain.value = Math.max(0, Math.min(2, gain));
   source.connect(gainNode);
+  const destination = ctx.destination;
   if (channel !== "both" && hasStereoPanner(ctx)) {
     const panner = ctx.createStereoPanner();
     panner.pan.value = channel === "left" ? -1 : 1;
     gainNode.connect(panner);
-    panner.connect(ctx.destination);
+    panner.connect(destination);
   } else {
-    gainNode.connect(ctx.destination);
+    gainNode.connect(destination);
   }
   const startAt = Math.max(ctx.currentTime, when ?? ctx.currentTime);
   source.start(startAt);

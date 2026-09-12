@@ -1,0 +1,355 @@
+{
+  "after": {
+    "blip-high.wav": {
+      "durationMs": 14.989,
+      "peak": 0.950012,
+      "rmsDb": -10.024
+    },
+    "blip-low.wav": {
+      "durationMs": 14.989,
+      "peak": 0.950012,
+      "rmsDb": -11.365
+    },
+    "blip-strong.wav": {
+      "durationMs": 14.989,
+      "peak": 0.950012,
+      "rmsDb": -9.963
+    },
+    "cajon-high.wav": {
+      "durationMs": 34.989,
+      "peak": 0.950012,
+      "rmsDb": -9.692
+    },
+    "cajon-low.wav": {
+      "durationMs": 34.989,
+      "peak": 0.950012,
+      "rmsDb": -8.765
+    },
+    "cajon-strong.wav": {
+      "durationMs": 34.989,
+      "peak": 0.950012,
+      "rmsDb": -10.976
+    },
+    "clave-high.wav": {
+      "durationMs": 24.989,
+      "peak": 0.950012,
+      "rmsDb": -12.34
+    },
+    "clave-low.wav": {
+      "durationMs": 24.989,
+      "peak": 0.950012,
+      "rmsDb": -11.656
+    },
+    "clave-strong.wav": {
+      "durationMs": 24.989,
+      "peak": 0.950012,
+      "rmsDb": -11.563
+    },
+    "click-high.wav": {
+      "durationMs": 17.982,
+      "peak": 0.950012,
+      "rmsDb": -8.93
+    },
+    "click-low.wav": {
+      "durationMs": 14.989,
+      "peak": 0.950012,
+      "rmsDb": -8.556
+    },
+    "click-strong.wav": {
+      "durationMs": 24.989,
+      "peak": 0.950012,
+      "rmsDb": -9.57
+    },
+    "cowbell-high.wav": {
+      "durationMs": 150.0,
+      "peak": 0.899994,
+      "rmsDb": -6.038
+    },
+    "cowbell-low.wav": {
+      "durationMs": 130.0,
+      "peak": 0.899994,
+      "rmsDb": -5.833
+    },
+    "cowbell-strong.wav": {
+      "durationMs": 180.0,
+      "peak": 0.899963,
+      "rmsDb": -6.412
+    },
+    "digital-high.wav": {
+      "durationMs": 10.0,
+      "peak": 0.950012,
+      "rmsDb": -8.428
+    },
+    "digital-low.wav": {
+      "durationMs": 7.982,
+      "peak": 0.950012,
+      "rmsDb": -7.903
+    },
+    "digital-strong.wav": {
+      "durationMs": 13.991,
+      "peak": 0.950012,
+      "rmsDb": -9.206
+    },
+    "jamblock-high.wav": {
+      "durationMs": 21.995,
+      "peak": 0.950012,
+      "rmsDb": -12.467
+    },
+    "jamblock-low.wav": {
+      "durationMs": 21.995,
+      "peak": 0.950012,
+      "rmsDb": -11.673
+    },
+    "jamblock-strong.wav": {
+      "durationMs": 21.995,
+      "peak": 0.950012,
+      "rmsDb": -11.732
+    },
+    "marimba-high.wav": {
+      "durationMs": 60.0,
+      "peak": 0.950012,
+      "rmsDb": -8.447
+    },
+    "marimba-low.wav": {
+      "durationMs": 60.0,
+      "peak": 0.950012,
+      "rmsDb": -7.949
+    },
+    "marimba-strong.wav": {
+      "durationMs": 60.0,
+      "peak": 0.950012,
+      "rmsDb": -8.943
+    },
+    "sine-high.wav": {
+      "durationMs": 40.0,
+      "peak": 0.950012,
+      "rmsDb": -8.011
+    },
+    "sine-low.wav": {
+      "durationMs": 40.0,
+      "peak": 0.950012,
+      "rmsDb": -7.573
+    },
+    "sine-strong.wav": {
+      "durationMs": 40.0,
+      "peak": 0.950012,
+      "rmsDb": -8.492
+    },
+    "stick-high.wav": {
+      "durationMs": 20.0,
+      "peak": 0.950012,
+      "rmsDb": -11.142
+    },
+    "stick-low.wav": {
+      "durationMs": 20.0,
+      "peak": 0.950012,
+      "rmsDb": -11.151
+    },
+    "stick-strong.wav": {
+      "durationMs": 20.0,
+      "peak": 0.950012,
+      "rmsDb": -11.282
+    },
+    "woodblock-high.wav": {
+      "durationMs": 24.989,
+      "peak": 0.950012,
+      "rmsDb": -9.544
+    },
+    "woodblock-low.wav": {
+      "durationMs": 27.982,
+      "peak": 0.950012,
+      "rmsDb": -9.401
+    },
+    "woodblock-strong.wav": {
+      "durationMs": 31.995,
+      "peak": 0.950012,
+      "rmsDb": -10.079
+    }
+  },
+  "before": {
+    "blip-high.wav": {
+      "durationMs": 14.989,
+      "peak": 0.888519,
+      "rmsDb": -11.49
+    },
+    "blip-low.wav": {
+      "durationMs": 14.989,
+      "peak": 0.931305,
+      "rmsDb": -12.614
+    },
+    "blip-strong.wav": {
+      "durationMs": 14.989,
+      "peak": 0.910614,
+      "rmsDb": -11.254
+    },
+    "cajon-high.wav": {
+      "durationMs": 34.989,
+      "peak": 1.0,
+      "rmsDb": -11.026
+    },
+    "cajon-low.wav": {
+      "durationMs": 34.989,
+      "peak": 0.999969,
+      "rmsDb": -10.569
+    },
+    "cajon-strong.wav": {
+      "durationMs": 34.989,
+      "peak": 0.999969,
+      "rmsDb": -12.867
+    },
+    "clave-high.wav": {
+      "durationMs": 24.989,
+      "peak": 0.956024,
+      "rmsDb": -14.452
+    },
+    "clave-low.wav": {
+      "durationMs": 24.989,
+      "peak": 1.0,
+      "rmsDb": -13.622
+    },
+    "clave-strong.wav": {
+      "durationMs": 24.989,
+      "peak": 1.0,
+      "rmsDb": -13.659
+    },
+    "click-high.wav": {
+      "durationMs": 17.982,
+      "peak": 0.911713,
+      "rmsDb": -10.171
+    },
+    "click-low.wav": {
+      "durationMs": 14.989,
+      "peak": 0.933594,
+      "rmsDb": -9.599
+    },
+    "click-strong.wav": {
+      "durationMs": 24.989,
+      "peak": 0.92926,
+      "rmsDb": -10.886
+    },
+    "cowbell-high.wav": {
+      "durationMs": 150.0,
+      "peak": 0.899994,
+      "rmsDb": -6.038
+    },
+    "cowbell-low.wav": {
+      "durationMs": 130.0,
+      "peak": 0.899994,
+      "rmsDb": -5.833
+    },
+    "cowbell-strong.wav": {
+      "durationMs": 180.0,
+      "peak": 0.899963,
+      "rmsDb": -6.412
+    },
+    "digital-high.wav": {
+      "durationMs": 10.0,
+      "peak": 0.934998,
+      "rmsDb": -8.797
+    },
+    "digital-low.wav": {
+      "durationMs": 7.982,
+      "peak": 0.909454,
+      "rmsDb": -8.429
+    },
+    "digital-strong.wav": {
+      "durationMs": 13.991,
+      "peak": 1.0,
+      "rmsDb": -9.317
+    },
+    "jamblock-high.wav": {
+      "durationMs": 21.995,
+      "peak": 1.0,
+      "rmsDb": -14.342
+    },
+    "jamblock-low.wav": {
+      "durationMs": 21.995,
+      "peak": 1.0,
+      "rmsDb": -13.538
+    },
+    "jamblock-strong.wav": {
+      "durationMs": 21.995,
+      "peak": 1.0,
+      "rmsDb": -13.899
+    },
+    "marimba-high.wav": {
+      "durationMs": 60.0,
+      "peak": 0.977783,
+      "rmsDb": -9.737
+    },
+    "marimba-low.wav": {
+      "durationMs": 60.0,
+      "peak": 0.976624,
+      "rmsDb": -9.239
+    },
+    "marimba-strong.wav": {
+      "durationMs": 60.0,
+      "peak": 0.953156,
+      "rmsDb": -10.207
+    },
+    "sine-high.wav": {
+      "durationMs": 40.0,
+      "peak": 0.96106,
+      "rmsDb": -7.981
+    },
+    "sine-low.wav": {
+      "durationMs": 40.0,
+      "peak": 0.958466,
+      "rmsDb": -7.552
+    },
+    "sine-strong.wav": {
+      "durationMs": 40.0,
+      "peak": 0.970673,
+      "rmsDb": -8.431
+    },
+    "stick-high.wav": {
+      "durationMs": 20.0,
+      "peak": 0.802673,
+      "rmsDb": -13.624
+    },
+    "stick-low.wav": {
+      "durationMs": 20.0,
+      "peak": 0.998779,
+      "rmsDb": -12.827
+    },
+    "stick-strong.wav": {
+      "durationMs": 20.0,
+      "peak": 0.902893,
+      "rmsDb": -13.275
+    },
+    "woodblock-high.wav": {
+      "durationMs": 24.989,
+      "peak": 0.999969,
+      "rmsDb": -11.273
+    },
+    "woodblock-low.wav": {
+      "durationMs": 27.982,
+      "peak": 1.0,
+      "rmsDb": -11.437
+    },
+    "woodblock-strong.wav": {
+      "durationMs": 31.995,
+      "peak": 0.999969,
+      "rmsDb": -11.835
+    }
+  },
+  "gainDbBySet": {
+    "blip": 3.49,
+    "cajon": 3.026,
+    "clave": 4.5,
+    "click": 2.171,
+    "cowbell": 0,
+    "digital": 0.797,
+    "jamblock": 4.5,
+    "marimba": 1.737,
+    "sine": 0,
+    "stick": 4.5,
+    "woodblock": 3.437
+  },
+  "policy": {
+    "maxGainDb": 4.5,
+    "peakCeiling": 0.95,
+    "sameGainWithinSoundSet": true,
+    "targetMedianRmsDb": -8.0
+  }
+}

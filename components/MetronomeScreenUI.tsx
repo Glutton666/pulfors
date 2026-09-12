@@ -106,7 +106,7 @@ export function MetronomeScreenUI(props: Props) {
     showSettings, showMenu, showSignalGen, showTuningGuide, showPracticeBook,
     showWorkUp, showOnboarding, showDrumKit, showScheduledStart,
     showFadeOut, showBpmDetect, showPolygon,
-    volume, updateVolume, sampleVolume, updateSampleVolume,
+    volume, updateVolume, tonePosition, updateTonePosition, sampleVolume, updateSampleVolume,
     backgroundPlay, updateBackgroundPlay,
     playbackNotifications, updatePlaybackNotifications,
     autoResumeAfterInterruption, updateAutoResumeAfterInterruption,
@@ -879,6 +879,8 @@ export function MetronomeScreenUI(props: Props) {
         }}
         volume={volume}
         onVolumeChange={updateVolume}
+        tonePosition={tonePosition}
+        onTonePositionChange={updateTonePosition}
         sampleVolume={sampleVolume}
         onSampleVolumeChange={updateSampleVolume}
         backgroundPlay={backgroundPlay}

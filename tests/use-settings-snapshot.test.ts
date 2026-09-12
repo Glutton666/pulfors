@@ -117,6 +117,8 @@ function buildParams(): UseSettingsParams {
     clickPCMCacheRef: { current: {} },
     webClickReadyRef: { current: false },
     soundSetRef: { current: "classic" },
+    tonePositionRef: { current: { x: 0, y: 0 } },
+    tonePositionsRef: { current: {} },
     scheduleReRenderCallbackRef: { current: () => {} },
     applyAudioSettingsCallbackRef: { current: () => {} },
   };

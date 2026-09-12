@@ -34,9 +34,13 @@ import { make_styles, make_csStyles } from "@/components/SettingsModal.styles";
 import { getSoundSetOptions } from "@/components/SettingsModal.helpers";
 import { HelpIcon } from "@/components/HelpIcon";
 import type { SettingsScope } from "@/components/SettingsModal";
+import { XYTonePad } from "@/components/settings/XYTonePad";
+import type { TonePosition } from "@/lib/metronome-tone-dsp";
 
 interface SettingsSoundTabProps {
   scope: SettingsScope;
+  tonePosition?: TonePosition;
+  onTonePositionChange?: (position: TonePosition) => void;
   volume: number;
   onVolumeChange: (volume: number) => void;
   sampleVolume: number;
@@ -64,6 +68,8 @@ interface SettingsSoundTabProps {
 
 export function SettingsSoundTab({
   scope,
+  tonePosition,
+  onTonePositionChange,
   volume,
   onVolumeChange,
   sampleVolume,
@@ -94,6 +100,9 @@ export function SettingsSoundTab({
   const { t } = useLanguage();
   const isGlobal = scope === "global";
   const showsBarControls = scope === "bar";
+  const handleTonePositionChange = useCallback((position: TonePosition) => {
+    onTonePositionChange?.(position);
+  }, [onTonePositionChange]);
 
   // Volume slider state
   const trackRef = useRef<View>(null);
@@ -489,6 +498,24 @@ export function SettingsSoundTab({
           </>
         )}
       </View>
+
+       {/* XY tone pad */}
+       <View style={styles.section}>
+         <XYTonePad
+           tonePosition={tonePosition ?? { x: 0, y: 0 }}
+           onTonePositionChange={handleTonePositionChange}
+           labels={{
+             title: t("settings", "tonePadTitle" as Parameters<typeof t>[1]),
+             attack: t("settings", "toneAttack" as Parameters<typeof t>[1]),
+             high: t("settings", "toneHigh" as Parameters<typeof t>[1]),
+             resonance: t("settings", "toneResonance" as Parameters<typeof t>[1]),
+             low: t("settings", "toneLow" as Parameters<typeof t>[1]),
+             neutral: t("settings", "toneNeutral" as Parameters<typeof t>[1]),
+             reset: t("settings", "toneReset" as Parameters<typeof t>[1]),
+             accessibilityLabel: t("settings", "tonePadAccessibility" as Parameters<typeof t>[1]),
+           }}
+         />
+       </View>
 
       <View style={[styles.divider, { backgroundColor: C.border }]} />
 

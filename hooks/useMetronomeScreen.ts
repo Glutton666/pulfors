@@ -60,6 +60,7 @@ import {
   type BarRandomSession,
 } from "@/lib/bar-random-session";
 import { loadSettings, saveSettings, loadCustomSoundSets, saveCustomSoundSets, loadPracticeBook, savePracticeBook, createPracticeEntry, runStorageMigrations, clearAllAppStorage, type MetronomeSettings } from "@/lib/storage";
+import { NEUTRAL, type TonePosition } from "@/lib/metronome-tone-dsp";
 import type { FlashMode, HapticMode, SoundSet, BuiltinSoundSet, CustomSoundSetConfig, CustomSoundSample, FadeOutSettings, PracticeEntry, MetronomeMode } from "@/lib/storage";
 import type { BarRepeat, LoopBlock } from "@/components/BeatIndicator";
 import type { StopwatchTimerHandle } from "@/components/StopwatchTimer";
@@ -563,6 +564,9 @@ export function useMetronomeScreen() {
   // intentionally created before both hooks so a sound-set change is audible
   // on the very next tick, even before React rerenders the audio pipeline.
   const soundSetRef = useRef<SoundSet>("classic");
+  const tonePositionRef = useRef<TonePosition>({ ...NEUTRAL });
+  const tonePositionsRef = useRef<Partial<Record<SoundSet, TonePosition>>>({});
+  const fatalRenderFailureRef = useRef<() => void>(() => {});
 
   // Stable refs for callbacks that come from useAudioPipeline (called after useSettings).
   // useSettings' loadSettings effect fires asynchronously, so by the time it runs
@@ -583,7 +587,7 @@ export function useMetronomeScreen() {
     beatSubdivisions, setBeatSubdivisions,
     volume, setVolume,
     sampleVolume, setSampleVolume,
-    soundSet, setSoundSet,
+    soundSet, setSoundSet, tonePosition, soundSetTonePositions, setSoundSetTonePositions,
     layerSoundSets, setLayerSoundSets, layerSoundSetsRef,
     flashMode, setFlashMode, flashModeRef,
     hapticMode, setHapticMode,
@@ -605,7 +609,7 @@ export function useMetronomeScreen() {
     persistStatus,
     persistAudioSettingsCallbackRef,
     syncExternalSnapshot,
-    updateVolume, updateSampleVolume, updateSoundSet,
+    updateVolume, updateSampleVolume, updateSoundSet, updateTonePosition,
     updateFlashMode, updateHapticMode, updateAudioOffset,
     updateBpm, updateTimerStopMode, updateUsername,
   } = useSettings({
@@ -619,6 +623,8 @@ export function useMetronomeScreen() {
     clickPCMCacheRef,
     webClickReadyRef,
     soundSetRef,
+    tonePositionRef,
+    tonePositionsRef,
     scheduleReRenderCallbackRef,
     applyAudioSettingsCallbackRef,
     onSettingsLoaded: (settings) => {
@@ -633,16 +639,6 @@ export function useMetronomeScreen() {
       if (settings.landscapeContentType) setLandscapeContentType(settings.landscapeContentType);
       loadCustomSoundSets().then(setCustomSoundSets);
       setIsLoaded(true);
-      // PCM warmup for the loaded sound-set
-      const set = settings.soundSet || "classic";
-      const src = soundSets[set as keyof typeof soundSets] || soundSets.classic;
-      Promise.all([
-        loadAssetPCM(src.strong),
-        loadAssetPCM(src.high),
-        loadAssetPCM(src.low),
-      ]).then(([strong, high, low]) => {
-        clickPCMCacheRef.current[set] = { strong, high, low };
-      }).catch(() => {});
     },
   });
 
@@ -698,9 +694,10 @@ export function useMetronomeScreen() {
     engineRef, soundSet, soundSetRef, volume, customSoundSetsRef,
     layerSoundSetsRef, noteSamplesRef, noteSampleChannelsRef, noteSampleVolumesRef, noteSampleSpeedsRef, barModeRef,
     barMetronomeChannelRef, noteSampleMetroChannelsRef, volumeRef, sampleVolumeRef,
-    clickPCMCacheRef, webClickReadyRef, noteSampleSoundsRef,
+    clickPCMCacheRef, webClickReadyRef, noteSampleSoundsRef, tonePositionRef, tonePositionsRef,
     renderGenerationRef,
     isPlayingRef, bpmRef, t, showRecoveryToast, persistAudioSettingsCallbackRef,
+    fatalRenderFailureRef,
   });
 
   // 폴리곤은 엔진의 메인 비트 콜백을 시계로만 사용하고, 자체 레이어 소리만 낸다.
@@ -1639,6 +1636,10 @@ export function useMetronomeScreen() {
       setBeatTypes(defaultBeatTypes(4));
       setSubdivisionPattern(["accent"]);
       setBeatSubdivisions({});
+      setSoundSetTonePositions({});
+      tonePositionRef.current = { ...NEUTRAL };
+      tonePositionsRef.current = {};
+      clickPCMCacheRef.current = {};
       setBarMode(false);
       setBarStartBeat(null);
       setBarLoopMode("once");
@@ -1969,6 +1970,7 @@ export function useMetronomeScreen() {
     armAudioWatchdogRef,
     soundSetRef,
     volumeRef,
+    tonePositionRef,
     sampleVolumeRef,
     noteSamplesRef,
     noteSampleChannelsRef,
@@ -2315,6 +2317,7 @@ export function useMetronomeScreen() {
   ]);
 
   stopIfPlayingRef.current = stopMetronome;
+  fatalRenderFailureRef.current = stopMetronome;
   const completePracticeSessionRef = useRef(completePracticeSession);
   useEffect(() => { completePracticeSessionRef.current = completePracticeSession; }, [completePracticeSession]);
 
@@ -3997,6 +4000,9 @@ export function useMetronomeScreen() {
     // Settings
     volume,
     updateVolume,
+    tonePosition,
+    soundSetTonePositions,
+    updateTonePosition,
     sampleVolume,
     updateSampleVolume,
     backgroundPlay,

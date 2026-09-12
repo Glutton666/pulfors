@@ -7,6 +7,7 @@ import type { BarRandomStrategy } from "./bar-random-session";
 import { normalizeSampleChannel } from "./stereo-channel";
 import { notifyStorageError } from "./storage-notifier";
 import { logger } from "./logger";
+import { sanitizeTonePosition, type TonePosition } from "./metronome-tone-dsp";
 
 const SETTINGS_KEY = "metronome_settings";
 const PRACTICE_BOOK_KEY = "practice_book";
@@ -181,6 +182,15 @@ export async function saveCustomSoundSets(configs: Record<string, CustomSoundSet
 export const BUILTIN_SOUND_SETS: BuiltinSoundSet[] = ["classic", "woodblock", "cowbell", "digital", "jamblock", "sine", "blip", "clave", "cajon", "marimba", "stick"];
 export const CUSTOM_SOUND_SET_SLOTS: SoundSet[] = ["custom1", "custom2", "custom3"];
 
+function sanitizeTonePositions(value: unknown): Partial<Record<SoundSet, TonePosition>> {
+  if (!isPlainObject(value)) return {};
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter(([key]) => [...BUILTIN_SOUND_SETS, ...CUSTOM_SOUND_SET_SLOTS].includes(key as SoundSet))
+      .map(([key, position]) => [key, sanitizeTonePosition(isPlainObject(position) ? position : undefined)]),
+  ) as Partial<Record<SoundSet, TonePosition>>;
+}
+
 export interface MetronomeSettings {
   bpm: number;
   beatsPerMeasure: number;
@@ -192,6 +202,7 @@ export interface MetronomeSettings {
   backgroundPlay?: boolean;
   playbackNotifications?: boolean;
   soundSet?: SoundSet;
+  soundSetTonePositions?: Partial<Record<SoundSet, TonePosition>>;
   flashMode?: FlashMode;
   hapticMode?: HapticMode;
   audioOffsetMs?: number;
@@ -222,6 +233,7 @@ export interface ModeSettings {
   volume?: number;
   sampleVolume?: number;
   soundSet?: SoundSet;
+  soundSetTonePositions?: Partial<Record<SoundSet, TonePosition>>;
   layerSoundSets?: Record<number, SoundSet>;
   flashMode?: FlashMode;
   hapticMode?: HapticMode;
@@ -290,6 +302,7 @@ const DEFAULT_SETTINGS: MetronomeSettings = {
   backgroundPlay: true,
   playbackNotifications: false,
   soundSet: "classic",
+  soundSetTonePositions: {},
   flashMode: "accent",
   hapticMode: "all",
   audioOffsetMs: 0,
@@ -319,11 +332,13 @@ export async function loadSettings(): Promise<MetronomeSettings> {
       const parsed: unknown = JSON.parse(data);
       if (!isPlainObject(parsed)) return DEFAULT_SETTINGS;
       const merged: MetronomeSettings = { ...DEFAULT_SETTINGS, ...parsed } as MetronomeSettings;
+      merged.soundSetTonePositions = sanitizeTonePositions(merged.soundSetTonePositions);
       merged.barMetronomeChannel = normalizeSampleChannel(merged.barMetronomeChannel);
       const legacyProfile: ModeSettings = {
         volume: merged.volume,
         sampleVolume: merged.sampleVolume,
         soundSet: merged.soundSet,
+        soundSetTonePositions: merged.soundSetTonePositions,
         layerSoundSets: merged.layerSoundSets,
         flashMode: merged.flashMode,
         hapticMode: merged.hapticMode,
@@ -344,6 +359,7 @@ export async function loadSettings(): Promise<MetronomeSettings> {
       for (const mode of ["beat", "bar", "note", "stage"] as MetronomeMode[]) {
         const saved = isPlainObject(savedProfiles[mode]) ? savedProfiles[mode] : {};
         const profile = { ...legacyProfile, ...saved } as ModeSettings;
+        profile.soundSetTonePositions = sanitizeTonePositions(profile.soundSetTonePositions);
         profile.barMetronomeChannel = normalizeSampleChannel(profile.barMetronomeChannel);
         if (mode === "stage") {
           let legacyStageOptions: Partial<StageSettings> = {};

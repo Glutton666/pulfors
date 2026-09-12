@@ -32,6 +32,7 @@ import type { SampleChannel } from "@/lib/stereo-channel";
 import type { AudioPlayer as ExpoAudioPlayer } from "expo-audio";
 import type { PersistAudioSettingsFn } from "@/hooks/useAudioPipeline";
 import type { BarRandomStrategy } from "@/lib/bar-random-session";
+import { NEUTRAL, sanitizeTonePosition, type TonePosition } from "@/lib/metronome-tone-dsp";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -61,6 +62,8 @@ export interface UseSettingsParams {
   webClickReadyRef: React.MutableRefObject<boolean>;
   /** Playback reads this ref from engine callbacks, so it must change synchronously with the UI setting. */
   soundSetRef: React.MutableRefObject<SoundSet>;
+  tonePositionRef: React.MutableRefObject<TonePosition>;
+  tonePositionsRef: React.MutableRefObject<Partial<Record<SoundSet, TonePosition>>>;
   /**
    * Stable ref for scheduleReRender (from useAudioPipeline).
    * Created in useMetronomeScreen before any hook call; .current updated
@@ -107,6 +110,9 @@ export interface UseSettingsResult {
   setSampleVolume: React.Dispatch<React.SetStateAction<number>>;
   soundSet: SoundSet;
   setSoundSet: React.Dispatch<React.SetStateAction<SoundSet>>;
+  soundSetTonePositions: Partial<Record<SoundSet, TonePosition>>;
+  setSoundSetTonePositions: React.Dispatch<React.SetStateAction<Partial<Record<SoundSet, TonePosition>>>>;
+  tonePosition: TonePosition;
   layerSoundSets: Record<number, SoundSet>;
   setLayerSoundSets: React.Dispatch<React.SetStateAction<Record<number, SoundSet>>>;
   layerSoundSetsRef: React.MutableRefObject<Record<number, SoundSet>>;
@@ -171,6 +177,7 @@ export interface UseSettingsResult {
   updateVolume: (v: number) => void;
   updateSampleVolume: (v: number) => void;
   updateSoundSet: (v: SoundSet) => void;
+  updateTonePosition: (v: TonePosition) => void;
   updateFlashMode: (v: FlashMode) => void;
   updateHapticMode: (v: HapticMode) => void;
   updateAudioOffset: (v: number) => void;
@@ -189,7 +196,7 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
     engineRef, baseBpmRef,
     volumeRef, sampleVolumeRef, beatDenominatorRef,
     noteSampleSoundsRef, clickPCMCacheRef, webClickReadyRef, soundSetRef,
-    scheduleReRenderCallbackRef, applyAudioSettingsCallbackRef,
+    scheduleReRenderCallbackRef, applyAudioSettingsCallbackRef, tonePositionRef, tonePositionsRef,
     onSettingsLoaded,
   } = params;
 
@@ -217,6 +224,10 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
   useEffect(() => { sampleVolumeRef.current = sampleVolume; }, [sampleVolume, sampleVolumeRef]);
 
   const [soundSet, setSoundSet] = useState<SoundSet>("classic");
+  const [soundSetTonePositions, setSoundSetTonePositions] = useState<Partial<Record<SoundSet, TonePosition>>>({});
+  const tonePosition = sanitizeTonePosition(soundSetTonePositions[soundSet]);
+  useEffect(() => { tonePositionRef.current = tonePosition; }, [tonePosition, tonePositionRef]);
+  useEffect(() => { tonePositionsRef.current = soundSetTonePositions; }, [soundSetTonePositions, tonePositionsRef]);
 
   const [layerSoundSets, setLayerSoundSets] = useState<Record<number, SoundSet>>({});
   const layerSoundSetsRef = useRef<Record<number, SoundSet>>({});
@@ -272,12 +283,12 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
   const snapshotModeRef = useRef(mode);
   const persistSnapshotRef = useRef<MetronomeSettings>({
     bpm, beatsPerMeasure, beatDenominator, subdivisions: 1, subdivisionPattern, beatSubdivisions,
-    volume, sampleVolume, soundSet, layerSoundSets, flashMode, hapticMode,
+    volume, sampleVolume, soundSet, soundSetTonePositions, layerSoundSets, flashMode, hapticMode,
     audioOffsetMs, timerStopMode, landscapeReversed, beatDirection, username,
     barMetronomeChannel, barCellOpacity, barRowHeight, barStaffNotation, barRandomStrategy, beatStaffNotation,
     modeSettings: {
       [mode]: {
-        volume, sampleVolume, soundSet, layerSoundSets, flashMode, hapticMode,
+        volume, sampleVolume, soundSet, soundSetTonePositions, layerSoundSets, flashMode, hapticMode,
         audioOffsetMs, timerStopMode, landscapeReversed, beatDirection,
          barMetronomeChannel, barCellOpacity, barRowHeight, barStaffNotation, barRandomStrategy, beatStaffNotation,
         ...(mode === "stage" ? { stageOptions: stageSettings } : {}),
@@ -289,7 +300,7 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
   const modeChangedThisRender = snapshotModeRef.current !== mode;
   persistSnapshotRef.current = {
     bpm, beatsPerMeasure, beatDenominator, subdivisions: 1, subdivisionPattern, beatSubdivisions,
-    volume, sampleVolume, soundSet, layerSoundSets, flashMode, hapticMode,
+    volume, sampleVolume, soundSet, soundSetTonePositions, layerSoundSets, flashMode, hapticMode,
     audioOffsetMs, timerStopMode, landscapeReversed, beatDirection, username,
     barMetronomeChannel, barCellOpacity, barRowHeight, barStaffNotation, barRandomStrategy, beatStaffNotation,
     modeSettings: modeChangedThisRender
@@ -298,7 +309,7 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
         ...(persistSnapshotRef.current.modeSettings ?? {}),
         [mode]: {
         ...(persistSnapshotRef.current.modeSettings?.[mode] ?? {}),
-        volume, sampleVolume, soundSet, layerSoundSets, flashMode, hapticMode,
+        volume, sampleVolume, soundSet, soundSetTonePositions, layerSoundSets, flashMode, hapticMode,
         audioOffsetMs, timerStopMode, landscapeReversed, beatDirection,
          barMetronomeChannel, barCellOpacity, barRowHeight, barStaffNotation, barRandomStrategy, beatStaffNotation,
         ...(mode === "stage" ? { stageOptions: stageSettings } : {}),
@@ -438,6 +449,11 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
         setSoundSet(settings.soundSet);
         soundSetRef.current = settings.soundSet;
       }
+      if (settings.soundSetTonePositions) {
+        setSoundSetTonePositions(settings.soundSetTonePositions);
+        tonePositionsRef.current = settings.soundSetTonePositions;
+        tonePositionRef.current = sanitizeTonePosition(settings.soundSetTonePositions[settings.soundSet ?? "classic"]);
+      }
       if (settings.layerSoundSets) {
         setLayerSoundSets(settings.layerSoundSets);
       }
@@ -503,6 +519,12 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
       soundSetRef.current = profile.soundSet;
       clearWebClickBuffers();
       webClickReadyRef.current = false;
+    }
+    if (profile.soundSetTonePositions) {
+      setSoundSetTonePositions(profile.soundSetTonePositions);
+      tonePositionsRef.current = profile.soundSetTonePositions;
+      tonePositionRef.current = sanitizeTonePosition(profile.soundSetTonePositions[profile.soundSet ?? soundSetRef.current]);
+      clickPCMCacheRef.current = {};
     }
     if (profile.layerSoundSets) setLayerSoundSets(profile.layerSoundSets);
     if (profile.flashMode) {
@@ -577,12 +599,24 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
       // next render so a running metronome switches instruments immediately.
       soundSetRef.current = value;
       setSoundSet(value);
+      tonePositionRef.current = sanitizeTonePosition(soundSetTonePositions[value]);
       persistSettings({ soundSet: value });
       scheduleReRenderCallbackRef.current();
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [persistSettings],
+    [persistSettings, soundSetTonePositions, tonePositionRef],
   );
+
+  const updateTonePosition = useCallback((position: TonePosition) => {
+    const nextPosition = sanitizeTonePosition(position);
+    const next = { ...soundSetTonePositions, [soundSet]: nextPosition };
+    setSoundSetTonePositions(next);
+    tonePositionsRef.current = next;
+    tonePositionRef.current = nextPosition;
+    delete clickPCMCacheRef.current[soundSet];
+    persistSettings({ soundSetTonePositions: next });
+    scheduleReRenderCallbackRef.current();
+  }, [clickPCMCacheRef, persistSettings, scheduleReRenderCallbackRef, soundSet, soundSetTonePositions, tonePositionRef, tonePositionsRef]);
 
   const updateFlashMode = useCallback(
     (value: FlashMode) => {
@@ -677,7 +711,7 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
     beatSubdivisions, setBeatSubdivisions,
     volume, setVolume,
     sampleVolume, setSampleVolume,
-    soundSet, setSoundSet,
+    soundSet, setSoundSet, soundSetTonePositions, setSoundSetTonePositions, tonePosition,
     layerSoundSets, setLayerSoundSets, layerSoundSetsRef,
     flashMode, setFlashMode, flashModeRef,
     hapticMode, setHapticMode,
@@ -701,6 +735,7 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
     updateVolume,
     updateSampleVolume,
     updateSoundSet,
+    updateTonePosition,
     updateFlashMode,
     updateHapticMode,
     updateAudioOffset,

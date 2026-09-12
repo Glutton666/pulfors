@@ -24,6 +24,7 @@ import type { PracticeEntry, SoundSet } from "@/lib/storage";
 import { PracticeSessionTracker, type PracticeSessionData } from "@/lib/activity-log";
 import type { Language } from "@/lib/i18n";
 import type { SampleChannel } from "@/lib/stereo-channel";
+import type { TonePosition } from "@/lib/metronome-tone-dsp";
 import type {
   NoteSampleChannelMap,
   NoteSampleMap,
@@ -85,6 +86,7 @@ export interface UsePlaybackControlParams {
   armAudioWatchdogRef: Ref<() => void>;
   soundSetRef: Ref<SoundSet>;
   volumeRef: Ref<number>;
+  tonePositionRef?: Ref<TonePosition>;
   sampleVolumeRef: Ref<number>;
   noteSamplesRef: Ref<NoteSampleMap>;
   noteSampleChannelsRef: Ref<NoteSampleChannelMap>;
@@ -235,7 +237,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
         measureDurationMs: scheduleInfo.durationMs,
         clickPCMs,
         samplePCMs,
-        clickVolume: Math.max(1, p.volumeRef.current),
+        clickVolume: Math.max(0, p.volumeRef.current),
         sampleVolume: samplePCMs.size > 0 ? p.sampleVolumeRef.current : 0,
         sampleVolumes: p.noteSampleVolumesRef.current,
         sampleSpeeds: p.noteSampleSpeedsRef.current,
@@ -244,10 +246,6 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
         metroChannelsByBeat: p.barModeRef.current ? p.noteSampleMetroChannelsRef.current : undefined,
         layerClickPCMs,
       }, signal);
-      if (p.volumeRef.current > 1) {
-        if (pcm instanceof Float32Array) applySoftClip(pcm);
-        else { applySoftClip(pcm.left); applySoftClip(pcm.right); }
-      }
       if (atMeasureBoundary) {
         engine.setPendingMeasureStartAction(() => {
           if (
@@ -262,7 +260,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
           const phaseCompatible = previousDuration !== undefined
             && Math.abs(previousDuration - nextDuration) < 0.001;
           const boundary = phaseCompatible ? previous?.getNextBoundaryTime?.() : undefined;
-          const next = playWebRenderedLoop(pcm, undefined, "both", p.volumeRef.current, boundary);
+          const next = playWebRenderedLoop(pcm, undefined, "both", 1, boundary);
           p.activateWebRenderedLoop(next);
           if (previous) {
             try { previous.stop(boundary); } catch {}
@@ -271,7 +269,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
         });
       } else {
         p.webRenderedLoopRef.current?.stop();
-        p.activateWebRenderedLoop(playWebRenderedLoop(pcm, undefined, "both", p.volumeRef.current));
+        p.activateWebRenderedLoop(playWebRenderedLoop(pcm, undefined, "both", 1));
         engine.setPreRenderedAudio(true);
       }
     } catch (error) {
@@ -377,8 +375,13 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
       // subdivisions those seeks can resolve out of order across normal/accent
       // pools, so native playback always attempts one deterministic rendered loop
       // first. A render failure still falls back to the realtime callbacks below.
+      const tonePosition = p.tonePositionRef?.current;
+      const hasToneShaping = tonePosition
+        ? tonePosition.x !== 0 || tonePosition.y !== 0
+        : false;
       const useRenderedLoop = Platform.OS === "web"
         ? p.barModeRef.current || String(p.soundSetRef.current).startsWith("custom")
+          || p.volumeRef.current > 1 || hasToneShaping
         : true;
 
       if (Platform.OS === "web") {
@@ -446,6 +449,9 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
             return false;
           }
         } else {
+          if (p.volumeRef.current > 1 || hasToneShaping) {
+            throw new Error("Boosted or tone-shaped native playback requires rendered audio");
+          }
           engine.setPreRenderedAudio(false);
           const ticks = engine.getScheduleInfo().ticks as TickInfo[];
           const expectsAudio = ticks.some((tick) => tick.type !== "mute") ||

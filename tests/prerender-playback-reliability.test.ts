@@ -208,7 +208,7 @@ describe("pre-rendered playback reliability", () => {
       sampleChannels,
     }));
     expect(mockRenderMeasure.mock.calls[0][0].samplePCMs.has("0-0")).toBe(true);
-    expect(player?.volume).toBe(0.35);
+    expect(player?.volume).toBe(1);
   });
 
   it("does not restore an old decoded sample into cache after the URI changes", async () => {
@@ -781,7 +781,7 @@ describe("pre-rendered playback reliability", () => {
       expect.any(Float32Array),
       undefined,
       "both",
-      0.35,
+      1,
     );
   });
 
