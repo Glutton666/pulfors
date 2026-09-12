@@ -1145,7 +1145,10 @@ export function StageModeOverlay({
           {/* BPM 컨트롤러 (재생 중 / 셋리스트 있을 때: 읽기 전용 숫자, 없을 때: 풀 컨트롤러) */}
           {setlist.length === 0 && noSetlistContent
             ? (
-              <View style={emptyBeatLandscape ? styles.emptyBeatLandscapeBpm : styles.emptyBeatPortraitBpm}>
+              <View
+                style={emptyBeatLandscape ? styles.emptyBeatLandscapeBpm : styles.emptyBeatPortraitBpm}
+                testID="stage-empty-bpm"
+              >
                 {BpmController}
               </View>
             )

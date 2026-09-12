@@ -128,7 +128,10 @@ export function StageEmptyPerformanceDisplay({
       style={[styles.root, compact && styles.rootCompact, landscape && styles.rootLandscape]}
       testID="stage-empty-performance-display"
     >
-      <View style={[styles.readout, compact && !landscape && styles.readoutCompact, landscape && styles.readoutLandscape]}>
+      <View
+        style={[styles.readout, compact && !landscape && styles.readoutCompact, landscape && styles.readoutLandscape]}
+        testID="stage-empty-readout"
+      >
         <StageBeatColumn
           currentBeat={currentBeat}
           beatsPerMeasure={beatsPerMeasure}
@@ -158,7 +161,11 @@ export function StageEmptyPerformanceDisplay({
               <Text style={[styles.hint, { color: faint }]}>{t("stageMode", "emptyBeatHint")}</Text>
             </View>
           )}
-          <View {...beatSwipe.panHandlers} style={[styles.beatsRow, landscape && styles.beatsRowLandscape]}>
+          <View
+            {...beatSwipe.panHandlers}
+            style={[styles.beatsRow, landscape && styles.beatsRowLandscape]}
+            testID="stage-empty-beats-row"
+          >
             {Array.from({ length: beatsPerMeasure }).map((_, index) => {
               const type = beatTypes[index] ?? "normal";
               const active = type === "strong";
@@ -205,7 +212,7 @@ export function StageEmptyPerformanceDisplay({
               <Text style={[styles.reset, { color: accent }]}>{t("stageMode", "emptyApplyAll")}</Text>
             </Pressable>
           </View>
-          <View style={styles.patternRow}>
+          <View style={styles.patternRow} testID="stage-empty-subdivision">
             <SubdivisionBar
               pattern={subdivisionPattern}
               onPatternChange={onPatternChange}
@@ -239,7 +246,7 @@ const styles = StyleSheet.create({
   root: { flex: 1, width: "100%", alignItems: "center", justifyContent: "center", paddingHorizontal: 18 },
   rootCompact: { paddingHorizontal: 10 },
   rootLandscape: { flexDirection: "row", gap: 10 },
-  readout: { flex: 1, width: "100%", maxWidth: 520, minHeight: 230 },
+  readout: { flex: 1, width: "100%", maxWidth: 520, minHeight: 206 },
   readoutCompact: { flex: 0, height: 180, minHeight: 180 },
   readoutLandscape: { width: "42%", height: "100%", minHeight: 0 },
   editor: { width: "100%", maxWidth: 560, paddingVertical: 8, gap: 8 },
@@ -259,7 +266,7 @@ const styles = StyleSheet.create({
   reset: { fontSize: 11, fontWeight: "800", letterSpacing: 0.4 },
   dragHint: { fontSize: 10, textAlign: "center", opacity: 0.75 },
   playButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, minWidth: 132, height: 48, borderWidth: 1, borderRadius: 24, marginTop: 10 },
-  playButtonCompact: { height: 42, marginTop: 0, transform: [{ translateY: -20 }] },
+  playButtonCompact: { height: 42, marginTop: 0 },
   playButtonLandscape: { minWidth: 104, alignSelf: "center", marginTop: 0, transform: [] },
   playLabel: { fontSize: 13, fontWeight: "800", letterSpacing: 1 },
   pressed: { opacity: 0.55, transform: [{ scale: 0.97 }] },

@@ -36,6 +36,90 @@ async function openSignalGenerator(page: Page) {
   });
 }
 
+async function openEmptyStageBeat(page: Page) {
+  const viewport = page.viewportSize();
+  if (!viewport) throw new Error("viewportSize() is unavailable");
+
+  await page.locator('[data-testid="mode-cycle-label"]').click();
+  await page.waitForTimeout(400);
+
+  // The top-anchored dial starts on Beat. Three 36px steps to the left select Stage.
+  await page.mouse.move(viewport.width / 2 + 54, 82);
+  await page.mouse.down();
+  await page.mouse.move(viewport.width / 2 - 54, 82, { steps: 12 });
+  await page.mouse.up();
+  await page.waitForTimeout(300);
+  await page.mouse.click(viewport.width / 2, viewport.height * 0.72);
+
+  await page.locator('[data-testid="stage-empty-performance-display"]').waitFor({
+    state: "visible",
+    timeout: 10000,
+  });
+}
+
+type Box = { x: number; y: number; width: number; height: number };
+
+function boxesOverlap(a: Box, b: Box, tolerance = 1) {
+  return (
+    a.x + a.width > b.x + tolerance &&
+    b.x + b.width > a.x + tolerance &&
+    a.y + a.height > b.y + tolerance &&
+    b.y + b.height > a.y + tolerance
+  );
+}
+
+async function assertEmptyStageLayout(page: Page) {
+  const ids = [
+    "stage-current-count",
+    "stage-next-count",
+    "stage-empty-beats-row",
+    "stage-empty-subdivision",
+    "stage-empty-play-pause",
+    "stage-empty-bpm",
+    "stage-setlist-add",
+  ] as const;
+
+  const boxes = new Map<string, Box>();
+  for (const id of ids) {
+    const locator = page.locator(`[data-testid="${id}"]`);
+    await expect(locator, `${id} should be visible`).toBeVisible();
+    const box = await locator.boundingBox();
+    expect(box, `${id} should have a layout box`).not.toBeNull();
+    expect(box!.width, `${id} should not have zero width`).toBeGreaterThan(0);
+    expect(box!.height, `${id} should not have zero height`).toBeGreaterThan(0);
+    boxes.set(id, box!);
+  }
+
+  const nonOverlappingPairs = [
+    ["stage-current-count", "stage-next-count"],
+    ["stage-current-count", "stage-empty-beats-row"],
+    ["stage-next-count", "stage-empty-beats-row"],
+    ["stage-empty-beats-row", "stage-empty-subdivision"],
+    ["stage-empty-subdivision", "stage-empty-play-pause"],
+    ["stage-empty-play-pause", "stage-empty-bpm"],
+    ["stage-empty-bpm", "stage-setlist-add"],
+  ] as const;
+  for (const [first, second] of nonOverlappingPairs) {
+    expect(
+      boxesOverlap(boxes.get(first)!, boxes.get(second)!),
+      `${first} ${JSON.stringify(boxes.get(first))} and ${second} ${JSON.stringify(boxes.get(second))} should not overlap`,
+    ).toBe(false);
+  }
+
+  const dimensions = await page.evaluate(() => ({
+    viewportWidth: window.innerWidth,
+    viewportHeight: window.innerHeight,
+    documentWidth: document.documentElement.scrollWidth,
+    documentHeight: document.documentElement.scrollHeight,
+    bodyWidth: document.body.scrollWidth,
+    bodyHeight: document.body.scrollHeight,
+  }));
+  expect(dimensions.documentWidth).toBeLessThanOrEqual(dimensions.viewportWidth + 1);
+  expect(dimensions.bodyWidth).toBeLessThanOrEqual(dimensions.viewportWidth + 1);
+  expect(dimensions.documentHeight).toBeLessThanOrEqual(dimensions.viewportHeight + 1);
+  expect(dimensions.bodyHeight).toBeLessThanOrEqual(dimensions.viewportHeight + 1);
+}
+
 test.describe("responsive smoke @responsive", () => {
   for (const viewport of VIEWPORTS) {
     test(`core controls are reachable without horizontal overflow at ${viewport.name}`, async ({
@@ -124,5 +208,27 @@ test.describe("responsive smoke @responsive", () => {
     expect(box).not.toBeNull();
     expect(box!.x).toBeGreaterThanOrEqual(0);
     expect(box!.x + box!.width).toBeLessThanOrEqual(viewport.width + 1);
+  });
+
+  test("empty Stage Beat layout stays separated across phone rotation and tablet", async ({ page }) => {
+    test.setTimeout(90000);
+    await page.setViewportSize({ width: 402, height: 874 });
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await page.locator('[data-testid="mode-cycle-label"]').waitFor({
+      state: "visible",
+      timeout: 20000,
+    });
+    await skipOnboarding(page);
+    await openEmptyStageBeat(page);
+    await assertEmptyStageLayout(page);
+
+    for (const viewport of [
+      { width: 667, height: 375 },
+      { width: 768, height: 1024 },
+    ]) {
+      await page.setViewportSize(viewport);
+      await expect(page.locator('[data-testid="stage-empty-performance-display"]')).toBeVisible();
+      await assertEmptyStageLayout(page);
+    }
   });
 });
