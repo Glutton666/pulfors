@@ -65,3 +65,5 @@ package-lock.json
 test-results/
 playwright-report/
 .cache/ms-playwright/
+static-build/
+static-build/
