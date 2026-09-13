@@ -18,6 +18,7 @@ interface SimplifiedStaffNotationProps {
   colors: BarModeColors;
   meterDenominator: 2 | 4 | 8;
   rightInset?: number;
+  viewBoxWidth?: number;
 }
 
 // Match the usable staff area's phone aspect ratio. A much wider viewBox made
@@ -61,25 +62,28 @@ export function getStaffRhythmNotation(
   };
 }
 
-function noteX(index: number, count: number): number {
-  if (count <= 1) return VIEWBOX_WIDTH / 2;
-  return 16 + (index * (VIEWBOX_WIDTH - 32)) / (count - 1);
+function noteX(index: number, count: number, width: number): number {
+  if (count <= 1) return width / 2;
+  const inset = Math.min(16, Math.max(7, width * 0.1));
+  return inset + (index * (width - inset * 2)) / (count - 1);
 }
 
 function RhythmGroup({
   count,
   notation,
   colors: C,
+  width,
 }: {
   count: number;
   notation: StaffRhythmNotation;
   colors: BarModeColors;
+  width: number;
 }) {
   if (!notation.useBeam && !notation.useBracket) return null;
-  const firstStem = noteX(0, count) + 3.6;
-  const lastStem = noteX(count - 1, count) + 3.6;
-  const bracketFirst = noteX(0, count) - 7;
-  const bracketLast = noteX(count - 1, count) + 7;
+  const firstStem = noteX(0, count, width) + 3.6;
+  const lastStem = noteX(count - 1, count, width) + 3.6;
+  const bracketFirst = noteX(0, count, width) - 7;
+  const bracketLast = noteX(count - 1, count, width) + 7;
   return (
     <G testID={notation.isTuplet ? `bar-tuplet-${count}` : `bar-rhythm-group-${count}`}>
       {notation.useBeam && Array.from({ length: notation.beamCount }, (_, beam) => (
@@ -107,7 +111,7 @@ function RhythmGroup({
       {notation.isTuplet && (
         <SvgText
           testID={`bar-tuplet-number-${count}`}
-          x={(noteX(0, count) + noteX(count - 1, count)) / 2}
+          x={(noteX(0, count, width) + noteX(count - 1, count, width)) / 2}
           y={TUPLET_BEAM_Y - 1.3}
           fill={C.accent}
           fontSize={6.2}
@@ -129,6 +133,7 @@ export function SimplifiedStaffNotation({
   colors: C,
   meterDenominator,
   rightInset = 0,
+  viewBoxWidth = VIEWBOX_WIDTH,
 }: SimplifiedStaffNotationProps) {
   const visibleNotes = notes.length > 0 ? notes : ["normal" as BeatType];
   const notation = getStaffRhythmNotation(meterDenominator, visibleNotes.length);
@@ -141,7 +146,7 @@ export function SimplifiedStaffNotation({
       <Svg
         width="100%"
         height="100%"
-        viewBox={`0 0 ${VIEWBOX_WIDTH} ${VIEWBOX_HEIGHT}`}
+        viewBox={`0 0 ${viewBoxWidth} ${VIEWBOX_HEIGHT}`}
         preserveAspectRatio="xMidYMid meet"
       >
         {[0, 1, 2, 3, 4].map((line) => (
@@ -149,19 +154,19 @@ export function SimplifiedStaffNotation({
             key={line}
             x1={0}
             y1={STAFF_TOP + line * STAFF_GAP}
-            x2={VIEWBOX_WIDTH}
+            x2={viewBoxWidth}
             y2={STAFF_TOP + line * STAFF_GAP}
             stroke={C.textTertiary}
             strokeOpacity={isCurrentBeat ? 0.58 : 0.38}
             strokeWidth={line === 2 ? 1.1 : 0.7}
           />
         ))}
-        <RhythmGroup count={visibleNotes.length} notation={notation} colors={C} />
+        <RhythmGroup count={visibleNotes.length} notation={notation} colors={C} width={viewBoxWidth} />
         {visibleNotes.map((type, index) => (
           <StaffNoteGlyph
             key={`${type}-${index}`}
             type={type}
-            x={noteX(index, visibleNotes.length)}
+            x={noteX(index, visibleNotes.length, viewBoxWidth)}
             active={isCurrentBeat && index === activeSubNote}
             index={index}
             beamCount={notation.beamCount}

@@ -89,8 +89,14 @@ export function BeatStaffMode({
 
   return (
     <View {...pan.panHandlers} style={styles.root} testID="beat-staff-area">
-      {onOpenSettings && <Pressable onPress={onOpenSettings} style={styles.settings} testID="open-beat-settings"><Text style={{ color: C.textSecondary }}>{settingsText}</Text></Pressable>}
-      <View style={styles.meter}><Text style={[styles.meterText, { color: C.textTertiary }]}>{beatsPerMeasure}/{beatDenominator}</Text></View>
+      <View style={styles.header}>
+        <Text style={[styles.meterText, { color: C.textTertiary }]}>{beatsPerMeasure}/{beatDenominator}</Text>
+        {onOpenSettings && (
+          <Pressable onPress={onOpenSettings} style={styles.settings} testID="open-beat-settings">
+            <Text style={{ color: C.textSecondary }}>{settingsText}</Text>
+          </Pressable>
+        )}
+      </View>
       {rows.map((row, ri) => (
         <View key={ri} style={styles.row}>
           {row.map((beat) => {
@@ -117,7 +123,15 @@ export function BeatStaffMode({
               }}
                 onLayout={measureCells}
               >
-                <SimplifiedStaffNotation beat={beat} notes={notes} activeSubNote={activeSubNote} isCurrentBeat={isPlaying && currentBeat === beat} colors={{ ...C, background: C.background, backgroundSecondary: C.backgroundSecondary }} meterDenominator={beatDenominator} />
+                <SimplifiedStaffNotation
+                  beat={beat}
+                  notes={notes}
+                  activeSubNote={activeSubNote}
+                  isCurrentBeat={isPlaying && currentBeat === beat}
+                  colors={{ ...C, background: C.background, backgroundSecondary: C.backgroundSecondary }}
+                  meterDenominator={beatDenominator}
+                  viewBoxWidth={76}
+                />
               </Pressable>
             );
           })}
@@ -155,11 +169,11 @@ export function BeatStaffMode({
 
 const styles = StyleSheet.create({
   root: { width: "100%", maxWidth: 860, alignItems: "center", gap: 10, paddingHorizontal: 12 },
+  header: { width: "100%", minHeight: 30, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   row: { width: "100%", flexDirection: "row", justifyContent: "center", gap: 8 },
   cell: { flex: 1, maxWidth: 210, borderWidth: 1, borderRadius: 10, overflow: "hidden" },
-  meter: { position: "absolute", left: 14, top: 0 },
   meterText: { fontSize: 15, fontWeight: "700", letterSpacing: 1 },
-  settings: { position: "absolute", right: 8, top: -4, padding: 8, zIndex: 2 },
+  settings: { minHeight: 30, justifyContent: "center", paddingHorizontal: 8 },
   controls: { flexDirection: "row", alignItems: "center", gap: 8 },
   controlButton: { minWidth: 92, minHeight: 40, borderWidth: 1, borderRadius: 20, alignItems: "center", justifyContent: "center", paddingHorizontal: 18 },
   addButton: { width: 40, height: 40, borderWidth: 1, borderRadius: 20, alignItems: "center", justifyContent: "center" },
