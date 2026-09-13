@@ -880,23 +880,36 @@ export function useMetronomeScreen() {
   useEffect(() => {
     if (Platform.OS !== "web") return;
     let unlocked = false;
-    const unlock = () => {
-      if (unlocked) return;
-      unlocked = true;
-      const ctx = getWebAudioContext();
-      if (ctx && ctx.state === "suspended") {
-        ctx.resume().catch(() => {});
-      }
-      // 이벤트 리스너 제거 (1회만 실행)
+    let unlocking = false;
+    const removeUnlockListeners = () => {
       window.removeEventListener("pointerdown", unlock, true);
       window.removeEventListener("keydown", unlock, true);
+    };
+    const unlock = async () => {
+      if (unlocked || unlocking) return;
+      const ctx = getWebAudioContext();
+      // 첫 입력 시점에 컨텍스트가 아직 만들어지지 않았으면 다음 입력에서 다시
+      // 시도한다. 예전에는 이 경우도 완료 처리해 이후 재생 버튼에서 autoplay
+      // 거부가 발생할 수 있었다.
+      if (!ctx) return;
+      unlocking = true;
+      try {
+        if (ctx.state === "suspended") {
+          await ctx.resume();
+        }
+        if (ctx.state === "running") {
+          unlocked = true;
+          removeUnlockListeners();
+        }
+      } catch {
+        // 브라우저가 아직 허용하지 않았으면 다음 실제 사용자 입력에서 재시도한다.
+      } finally {
+        unlocking = false;
+      }
     };
     window.addEventListener("pointerdown", unlock, true);
     window.addEventListener("keydown", unlock, true);
-    return () => {
-      window.removeEventListener("pointerdown", unlock, true);
-      window.removeEventListener("keydown", unlock, true);
-    };
+    return removeUnlockListeners;
   }, []);
 
   // 재생 시작 1회만 풀 cut-off 위험 측정 (관측 전용).

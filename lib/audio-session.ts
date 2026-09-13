@@ -139,26 +139,10 @@ export async function acquireAudioSession(callerId: string, mode: SessionMode): 
   // 새 세션이 시작될 때 (이전에 활성 caller가 없었다면) 사용자 토글 추적 리셋.
   if (activeCallers.size === 0) userToggledDuringSession = false;
   activeCallers.set(callerId, mode);
-  // 마이크/녹음을 시작하면 메트로놈 출력이 끊기거나 카테고리가 충돌하므로
-  // 메트로놈이 재생 중이라면 자동 일시정지한다.
-  const needsPause = mode === "recording" || mode === "mic";
-  if (needsPause && !pausedByUs && bridge) {
-    try {
-      if (bridge.isRunning()) {
-        markAudioInterrupted("session");
-        suppressUserToggle++;
-        try {
-          bridge.pause();
-          androidProbe?.stop();
-        } finally {
-          suppressUserToggle--;
-        }
-        pausedByUs = true;
-      }
-    } catch (e) {
-      logger.warn("[audioSession] metronome pause failed:", e);
-    }
-  }
+  // 녹음·마이크도 mixWithOthers + allowsRecording 세션으로 전환해 현재 메트로놈
+  // 출력을 유지한다. 입력을 시작했다는 이유만으로 bridge.pause()를 호출하지 않는다.
+  // 기기 스피커로 재생 중이면 녹음 파일에 메트로놈 소리가 들어갈 수 있으며,
+  // 이는 중단 없는 모니터링을 선택한 결과다.
   await applyMode(needsRecordingCategory(), false);
 }
 
