@@ -626,6 +626,46 @@ describe("pre-rendered playback reliability", () => {
     expect(params.showPlaybackStartFailure).not.toHaveBeenCalled();
   });
 
+  it("does not report a startup failure when the rendered player is superseded by another render, even while boosted", async () => {
+    // Regression test: buildRenderedPlayer() collapsed "superseded by another
+    // render" (aborted) and "genuinely failed to render" (failed) into the
+    // same null, so a boosted/tone-shaped start racing an unrelated
+    // stopRenderedAudio() call used to surface a false "startup failed" toast.
+    (Platform as unknown as { OS: string }).OS = "android";
+    const engine = makeEngine();
+    const params = makePlaybackParams(engine, null);
+    params.volumeRef.current = 1.5; // boosted — old code always threw when player was null
+    (params as any).buildRenderedPlayerDetailed = jest.fn(async () => ({ status: "aborted" as const }));
+    const { result } = renderHook(() => usePlaybackControl(params as any));
+
+    await act(async () => {
+      await result.current.togglePlayPause();
+    });
+
+    expect(params.showPlaybackStartFailure).not.toHaveBeenCalled();
+    expect(engine.start).not.toHaveBeenCalled();
+    expect(params.setIsPlaying).not.toHaveBeenCalledWith(true);
+    // The stale attempt must still release isPreparing — a bare early return
+    // without cleanup would leave the UI stuck showing "preparing" forever.
+    expect(params.setIsPreparing).toHaveBeenCalledWith(false);
+  });
+
+  it("still reports a startup failure for a genuine render failure while boosted", async () => {
+    (Platform as unknown as { OS: string }).OS = "android";
+    const engine = makeEngine();
+    const params = makePlaybackParams(engine, null);
+    params.volumeRef.current = 1.5;
+    (params as any).buildRenderedPlayerDetailed = jest.fn(async () => ({ status: "failed" as const }));
+    const { result } = renderHook(() => usePlaybackControl(params as any));
+
+    await act(async () => {
+      await result.current.togglePlayPause();
+    });
+
+    expect(params.showPlaybackStartFailure).toHaveBeenCalledTimes(1);
+    expect(engine.start).not.toHaveBeenCalled();
+  });
+
   it("applies one deadline to Android focus preparation before audio startup", async () => {
     jest.useFakeTimers();
     (Platform as unknown as { OS: string }).OS = "android";
