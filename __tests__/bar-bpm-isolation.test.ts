@@ -14,6 +14,7 @@
 import { renderHook, act } from "@testing-library/react";
 import { useBarMode } from "@/hooks/useBarMode";
 import type { UseBarModeParams } from "@/hooks/useBarMode";
+import type { BeatType } from "@/lib/metronome-engine";
 
 // ── 모듈 모킹 ──────────────────────────────────────────────────────────────
 
@@ -91,6 +92,7 @@ function makeEngine() {
     setBarBpmOverride: jest.fn(),
     setAllBarRepeats: jest.fn(),
     setAllBarBpmOverrides: jest.fn(),
+    clearBarBpmOverrides: jest.fn(),
     setLoopBlocks: jest.fn(),
     setBlockPlayMode: jest.fn(),
     flushSchedule: jest.fn(),
@@ -273,5 +275,59 @@ describe("useBarMode — barBpm 독립 BPM", () => {
 
     expect(setSubdivisionPattern).toHaveBeenCalledWith(["accent"]);
     expect(params.engineRef.current?.setAllBeatSubdivisions).toHaveBeenCalledWith({});
+  });
+
+  it("비트↔바 전환 시 각 모드의 strong 위치를 UI와 엔진에 함께 복원한다", () => {
+    const beatTypes: BeatType[] = ["strong", "normal", "normal", "normal"];
+    const barTypes: BeatType[] = ["normal", "normal", "strong", "normal"];
+    const engine = makeEngine();
+    const setBeatTypes = jest.fn();
+    const setBarMode = jest.fn();
+    const params = makeParams({
+      engineRef: { current: engine as any },
+      setBeatTypes,
+      setBarMode,
+      dialConfigRef: {
+        current: {
+          beatsPerMeasure: 4,
+          beatTypes,
+          beatSubdivisions: {},
+          subdivisionPattern: ["accent"],
+          noteSamples: {},
+          noteSampleNames: {},
+          noteSampleSources: {},
+          noteSampleChannels: {},
+          noteSampleVolumes: {},
+          noteSampleSpeeds: {},
+        },
+      },
+    });
+    const { result } = renderHook(() => useBarMode(params));
+
+    act(() => {
+      result.current.barConfigRef.current = {
+        ...result.current.barConfigRef.current,
+        hasBeenConfigured: true,
+        beatsPerMeasure: 4,
+        beatTypes: barTypes,
+        subdivisionPattern: ["accent"],
+      };
+      result.current.handleBarModeChange(true);
+    });
+
+    expect(setBeatTypes).toHaveBeenLastCalledWith(barTypes);
+    expect(engine.setBeatTypes).toHaveBeenLastCalledWith(barTypes);
+    expect(setBarMode).toHaveBeenLastCalledWith(true);
+
+    setBeatTypes.mockClear();
+    engine.setBeatTypes.mockClear();
+
+    act(() => {
+      result.current.handleBarModeChange(false);
+    });
+
+    expect(setBeatTypes).toHaveBeenLastCalledWith(beatTypes);
+    expect(engine.setBeatTypes).toHaveBeenLastCalledWith(beatTypes);
+    expect(setBarMode).toHaveBeenLastCalledWith(false);
   });
 });

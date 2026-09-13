@@ -91,6 +91,21 @@ describe("Beat and Bar rhythm profile isolation", () => {
     expect(screenSource).toContain("hasBeenConfigured: true,");
   });
 
+  test("Beat and Bar transitions restore each profile's strong-beat positions in both UI and engine", () => {
+    expect(barModeSource).toContain(
+      "p.setBeatTypes([...savedBarConfig.beatTypes]);",
+    );
+    expect(barModeSource).toContain(
+      "engine.setBeatTypes([...savedBarConfig.beatTypes]);",
+    );
+    expect(barModeSource).toContain(
+      "p.setBeatTypes([...dc.beatTypes]);",
+    );
+    expect(barModeSource).toContain(
+      "applyDialConfigToEngine(engine, dc);",
+    );
+  });
+
   test("Bar drag edits never persist into the Beat settings profile", () => {
     expect(screenSource).toContain(
       "dialConfigRef.current.beatSubdivisions = newSubs;\n        persistSettings({ beatSubdivisions: newSubs });",

@@ -1,7 +1,5 @@
 import React from "react";
-import { Platform, Text, View, type TextStyle } from "react-native";
-import { LinearGradient } from "expo-linear-gradient";
-import MaskedView from "@react-native-masked-view/masked-view";
+import { Text, View, type TextStyle } from "react-native";
 
 interface GradientLetterProps {
   letter: string;
@@ -9,18 +7,16 @@ interface GradientLetterProps {
   height: number;
   fontSize: number;
   lineHeight: number;
-  /** 위→아래 그라디언트 색상. 최소 2개. */
+  /** 글자 대비색 후보. 첫 색을 모든 플랫폼에서 사용한다. */
   colors: [string, string, ...string[]];
-  /** 웹 폴백(단색 텍스트)에만 적용되는 그림자 색. */
+  /** 글자의 가독성을 높이는 그림자 색. */
   textShadowColor?: string;
 }
 
 /**
- * 굵은 글자(예: 스트롱 비트의 "S")를 세로 그라디언트로 채워서 그린다.
- *
- * MaskedView(텍스트 모양으로 그라디언트를 마스킹)를 쓰는데, 웹에서는
- * react-native-masked-view의 지원이 불안정하고 이 앱은 웹도 지원하므로
- * 웹에서는 그라디언트의 첫 색으로 단색 텍스트를 그리는 폴백을 쓴다.
+ * 굵은 글자(예: 스트롱 비트의 "S")를 모든 플랫폼에서 안정적으로 그린다.
+ * 네이티브 MaskedView 텍스트는 release 빌드에서 빈 마스크가 되거나 작은
+ * 셀 안에서 잘릴 수 있으므로, 배경 그라디언트 위에 대비색 Text를 사용한다.
  */
 export function GradientLetter({
   letter,
@@ -38,39 +34,20 @@ export function GradientLetter({
     textAlign: "center",
   };
 
-  if (Platform.OS === "web") {
-    return (
-      <View style={{ width, height, alignItems: "center", justifyContent: "center" }}>
-        <Text
-          style={[
-            textStyle,
-            { color: colors[0] },
-            textShadowColor
-              ? { textShadowColor, textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 3 }
-              : null,
-          ]}
-        >
-          {letter}
-        </Text>
-      </View>
-    );
-  }
-
   return (
-    <MaskedView
-      style={{ width, height }}
-      maskElement={
-        <View style={{ width, height, alignItems: "center", justifyContent: "center" }}>
-          <Text style={[textStyle, { color: "#000" }]}>{letter}</Text>
-        </View>
-      }
-    >
-      <LinearGradient
-        colors={colors}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 0, y: 1 }}
-        style={{ width, height }}
-      />
-    </MaskedView>
+    <View style={{ width, height, alignItems: "center", justifyContent: "center" }}>
+      <Text
+        testID="gradient-letter-text"
+        style={[
+          textStyle,
+          { color: colors[0] },
+          textShadowColor
+            ? { textShadowColor, textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 3 }
+            : null,
+        ]}
+      >
+        {letter}
+      </Text>
+    </View>
   );
 }
