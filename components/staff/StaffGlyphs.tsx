@@ -4,6 +4,7 @@ import {
   G,
   Line,
   Path,
+  Text as SvgText,
 } from "react-native-svg";
 import type { BeatType } from "@/components/beat-indicator.types";
 
@@ -82,10 +83,18 @@ export function StaffNoteGlyph({
       <G testID={`bar-note-strong-${index}`} opacity={opacity}>
         <Line x1={x + 3.6} y1={stemTop} x2={x + 3.6} y2={noteY} stroke={stroke} strokeWidth={1.3} />
         {flags}
-        <Ellipse cx={x} cy={noteY} rx={4.1} ry={2.8} fill="none" stroke={stroke} strokeWidth={1.35} />
-        <Line x1={x - 2.6} y1={noteY - 2} x2={x + 2.6} y2={noteY + 2} stroke={stroke} strokeWidth={1.25} />
-        <Line x1={x + 2.6} y1={noteY - 2} x2={x - 2.6} y2={noteY + 2} stroke={stroke} strokeWidth={1.25} />
-        <Line testID={`bar-note-strong-strike-${index}`} x1={x - 5.4} y1={noteY} x2={x + 5.4} y2={noteY} stroke={stroke} strokeWidth={1.35} />
+        <Ellipse cx={x} cy={noteY} rx={4.5} ry={3.7} fill="none" stroke={stroke} strokeWidth={1.35} />
+        <SvgText
+          testID={`bar-note-strong-label-${index}`}
+          x={x}
+          y={noteY + 2}
+          fill={stroke}
+          fontSize={5.8}
+          fontWeight="800"
+          textAnchor="middle"
+        >
+          S
+        </SvgText>
       </G>
     );
   }
