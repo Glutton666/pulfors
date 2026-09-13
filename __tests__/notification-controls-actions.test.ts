@@ -17,11 +17,11 @@ describe("notification playback actions", () => {
     expect(toggle?.options.opensAppToForeground).toBe(false);
   });
 
-  it("opens the app for play after the foreground service has stopped", () => {
+  it("keeps play inside the notification while the paused service hold is active", () => {
     const toggle = buildNotificationActions(false).find(
       (action) => action.identifier === "TOGGLE_PLAY",
     );
 
-    expect(toggle?.options.opensAppToForeground).toBe(true);
+    expect(toggle?.options.opensAppToForeground).toBe(false);
   });
 });

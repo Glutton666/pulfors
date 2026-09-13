@@ -24,12 +24,53 @@
 import { Platform } from "react-native";
 import { logger } from "./logger";
 import { applyAudioModeIfChanged } from "./audio-mode-cache";
+import type { AudioPlayer } from "expo-audio";
 
 /**
  * 포그라운드 서비스 활성 여부를 추적합니다.
  * 중복 호출 시 setAudioModeAsync 재실행을 방지합니다.
  */
 let isForegroundActive = false;
+let pausedNotificationPlayer: AudioPlayer | null = null;
+
+/**
+ * 정지 알림의 재생 액션을 앱 화면 없이 받을 수 있도록 무음 AudioPlayer로
+ * MediaSessionService를 유지한다. 실제 무음 WAV를 사용해 volume 적용 레이스에도
+ * 소리가 새어 나오지 않는다.
+ */
+export async function holdForegroundForPausedNotification(): Promise<void> {
+  if (Platform.OS !== "android" || pausedNotificationPlayer) return;
+  await requestForegroundPlayback();
+  let player: AudioPlayer | null = null;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { createAudioPlayer } = require("expo-audio") as typeof import("expo-audio");
+    player = createAudioPlayer(
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      require("@/assets/sounds/silence.wav"),
+      { updateInterval: 10_000 },
+    );
+    player.loop = true;
+    player.volume = 0;
+    player.play();
+    pausedNotificationPlayer = player;
+    logger.info("[foreground-service] paused notification hold started");
+  } catch (e) {
+    try { player?.pause(); } catch {}
+    try { player?.release(); } catch {}
+    relinquishForegroundPlayback();
+    logger.warn("[foreground-service] paused notification hold failed:", e);
+  }
+}
+
+export function releasePausedNotificationHold(): void {
+  const player = pausedNotificationPlayer;
+  pausedNotificationPlayer = null;
+  if (!player) return;
+  try { player.pause(); } catch {}
+  try { player.release(); } catch {}
+  logger.info("[foreground-service] paused notification hold released");
+}
 
 /**
  * 메트로놈 재생 시작 시 호출합니다.

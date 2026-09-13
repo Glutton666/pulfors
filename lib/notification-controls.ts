@@ -3,6 +3,8 @@ import Constants from "expo-constants";
 import { createT, type Language } from "@/lib/i18n";
 import { logger } from "./logger";
 import {
+  holdForegroundForPausedNotification,
+  releasePausedNotificationHold,
   requestForegroundPlayback,
   relinquishForegroundPlayback,
 } from "./android-foreground-service";
@@ -77,10 +79,9 @@ export function buildNotificationActions(isPlaying: boolean, lang: Language = "k
       buttonTitle: isPlaying
         ? `⏸ ${t("notification", "pause")}`
         : `▶ ${t("notification", "play")}`,
-      // 재생 중에는 foreground service가 살아 있으므로 일시정지를 백그라운드에서
-      // 처리할 수 있다. 정지 뒤에는 서비스와 JS 프로세스가 잠들 수 있으므로,
-      // 재생 액션은 앱을 깨워 마운트된 notification bridge가 확실히 처리하게 한다.
-      options: { opensAppToForeground: !isPlaying },
+      // 재생 중과 정지 알림 유지 중 모두 MediaSessionService가 살아 있으므로
+      // 앱 화면을 열지 않고 알림 안에서 처리한다.
+      options: { opensAppToForeground: false },
     },
     {
       identifier: "BPM_UP",
@@ -166,6 +167,7 @@ export async function showPlayingNotification(
   // Android: AudioControlsService(foreground service)가 백그라운드에서
   // 오디오를 유지하도록 AudioModule을 설정합니다.
   // 알림 표시와 병렬로 실행해 지연을 최소화합니다.
+  releasePausedNotificationHold();
   void requestForegroundPlayback();
 
   const N = await getNotifications();
@@ -224,10 +226,6 @@ export async function showPausedNotification(
   mode: string,
   lang: Language = "ko"
 ) {
-  // Android: 메트로놈이 정지되면 포그라운드 서비스 상태를 초기화합니다.
-  // AudioPlayer가 정지되면 AudioControlsService가 자동으로 stopForeground()를
-  // 호출하므로 JS 레벨 상태만 초기화합니다.
-  relinquishForegroundPlayback();
   if (!arePlaybackNotificationsEnabled()) {
     await dismissNotification();
     return;
@@ -240,6 +238,9 @@ export async function showPausedNotification(
   if (!N) return;
 
   try {
+    // 정지 상태에서도 무음 플레이어로 MediaSessionService를 유지해야 알림의
+    // 재생 액션을 앱 화면을 띄우지 않고 받을 수 있다.
+    await holdForegroundForPausedNotification();
     await N.setNotificationCategoryAsync(
       CATEGORY_ID,
       buildNotificationActions(false, lang)
@@ -247,7 +248,11 @@ export async function showPausedNotification(
     if (
       !arePlaybackNotificationsEnabled() ||
       getPlaybackNotificationsRevision() !== preferenceRevision
-    ) return;
+    ) {
+      releasePausedNotificationHold();
+      relinquishForegroundPlayback();
+      return;
+    }
 
     await N.scheduleNotificationAsync({
       identifier: NOTIFICATION_ID,
@@ -255,6 +260,8 @@ export async function showPausedNotification(
       trigger: null,
     });
   } catch (e) {
+    releasePausedNotificationHold();
+    relinquishForegroundPlayback();
     logger.warn("Show paused notification error:", e);
   }
 }
@@ -262,6 +269,8 @@ export async function showPausedNotification(
 export async function dismissNotification() {
   if (Platform.OS === "web") return;
   if (isExpoGo) return;
+  releasePausedNotificationHold();
+  relinquishForegroundPlayback();
 
   const N = await getNotifications();
   if (!N) return;

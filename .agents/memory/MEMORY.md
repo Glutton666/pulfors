@@ -51,6 +51,7 @@
 - [Bar staff rhythm notation](bar-staff-rhythm-notation.md) — derive note value from the lower power-of-two subdivision bucket; duration affects notehead fill as well as beams.
 - [Audio warm-up isolation](audio-warmup-isolation.md) — never mute/play shared click pools on a delayed timer; it can race both realtime and rendered playback startup.
 - [Notification preference races](notification-preference-races.md) — disabling a notification needs an epoch check before every async publish, not only an initial enabled guard.
+- [Paused notification replay](paused-notification-replay.md) — background-only replay needs a live Android MediaSessionService; keep it with true-silence audio while the paused notification remains.
 - [Capped meter changes](capped-meter-changes.md) — never call the meter updater with an unchanged capped count; equality intentionally resets beat types.
 - [Audio startup handshake](audio-startup-handshake.md) — playing UI waits for accepted output; every start/stop owns and invalidates an activity epoch, including delayed native seeks.
 - [Native dense-pattern playback](native-dense-pattern-playback.md) — native Beat playback is rendered-first; async per-tick seek/play can reorder accent and normal output.
