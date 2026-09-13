@@ -4,7 +4,7 @@ import {
   createInitialDialConfig,
   type BarConfig,
   type DialConfig,
-} from "@/app/index.helpers";
+} from "@/lib/index.helpers";
 
 /**
  * Owns the bar mode configuration ref. The ref is the source of truth for the

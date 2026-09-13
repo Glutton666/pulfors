@@ -14,7 +14,7 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "test": "jest --testPathIgnorePatterns='e2e/'",
-    "test:e2e": "playwright test --grep-invert @known-failure",
+    "test:e2e": "playwright test",
     "test:e2e:all": "playwright test",
     "typecheck": "tsc --noEmit",
     "typecheck:server": "tsc --noEmit --project tsconfig.server.json",

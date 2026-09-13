@@ -3,9 +3,7 @@ import Colors from "@/constants/colors";
 import type { ScaleValues } from "@/lib/scale";
 
 export const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
-  screen: {
-    flex: 1,
-  },
+  screen: { flex: 1 },
   content: {
     flex: 1,
     paddingHorizontal: S.isTablet ? 40 : 24,
@@ -26,21 +24,9 @@ export const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.crea
     paddingHorizontal: S.ms(16, 0.3),
     overflow: "hidden" as const,
   },
-  topSection: {
-    flex: 5,
-    justifyContent: "flex-end",
-    alignItems: "center",
-  },
-  topSectionPortraitBar: {
-    flex: 5,
-    justifyContent: "flex-start",
-    alignItems: "center",
-  },
-  topSectionLandscapeBar: {
-    flex: 1,
-    justifyContent: "flex-start",
-    alignItems: "stretch",
-  },
+  topSection: { flex: 5, justifyContent: "flex-end", alignItems: "center" },
+  topSectionPortraitBar: { flex: 5, justifyContent: "flex-start", alignItems: "center" },
+  topSectionLandscapeBar: { flex: 1, justifyContent: "flex-start", alignItems: "stretch" },
   topSectionLandscapeBeat: {
     flex: 3,
     justifyContent: "center",
@@ -88,10 +74,7 @@ export const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.crea
     alignItems: "center",
     justifyContent: "center",
   },
-  menuOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.3)",
-  },
+  menuOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.3)" },
   menuDropdown: {
     position: "absolute",
     right: S.ms(20, 0.3),
@@ -114,9 +97,7 @@ export const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.crea
     paddingHorizontal: S.ms(18, 0.4),
     paddingVertical: S.ms(14, 0.4),
   },
-  menuItemPressed: {
-    backgroundColor: C.surfaceLight,
-  },
+  menuItemPressed: { backgroundColor: C.surfaceLight },
   menuItemText: {
     fontFamily: "SpaceGrotesk_500Medium",
     fontSize: S.ms(15, 0.4),
@@ -127,9 +108,7 @@ export const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.crea
     paddingVertical: S.ms(8, 0.3),
     gap: S.ms(8, 0.3),
   },
-  menuItemTextLandscape: {
-    fontSize: S.ms(13, 0.3),
-  },
+  menuItemTextLandscape: { fontSize: S.ms(13, 0.3) },
   menuDivider: {
     height: 1,
     backgroundColor: C.border,

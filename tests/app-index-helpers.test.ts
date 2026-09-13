@@ -16,7 +16,7 @@ import {
   selectCurrentBarConfig,
   computeLandscapeStats,
   type CurrentBarConfigInput,
-} from "../app/index.helpers";
+} from "../lib/index.helpers";
 import type { BeatType } from "../lib/metronome-engine";
 
 const mkPracticeLog = (timestamp: number, mode: "dial" | "bar", duration: number) => ({

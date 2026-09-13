@@ -26,7 +26,7 @@ import {
 } from "@/lib/persist";
 import { clearWebClickBuffers } from "@/lib/audio-renderer";
 import type { ClickPCMs } from "@/lib/audio-renderer";
-import { defaultBeatTypes } from "@/app/index.helpers";
+import { defaultBeatTypes } from "@/lib/index.helpers";
 import type { MetronomeEngine, BeatType } from "@/lib/metronome-engine";
 import type { SampleChannel } from "@/lib/stereo-channel";
 import type { AudioPlayer as ExpoAudioPlayer } from "expo-audio";

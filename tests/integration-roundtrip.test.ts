@@ -18,7 +18,7 @@ import {
   selectCurrentBarConfig,
   type DialConfig,
   type BarConfig,
-} from "../app/index.helpers";
+} from "../lib/index.helpers";
 import type { PracticeEntry } from "../lib/storage";
 import {
   sanitizeBackupData,

@@ -30,11 +30,11 @@
  *   H10. prepareProgress is null after prepare resolves (cleared in finally)
  *   H11. prepareProgress is null after stop() even if prepare never resolved
  *   H12. double play() while isPreparing is ignored (idempotent guard)
- *   H13. prepareScoreAudio rejection does not crash — finally still fires RAF
+ *   H13. score/drum preparation rejection is reported and never starts RAF
  */
 
 import { renderHook, act } from "@testing-library/react";
-import { Platform } from "react-native";
+import { Alert, Platform } from "react-native";
 
 // ── Module mock — lib/score-audio ────────────────────────────────────────────
 jest.mock("../lib/score-audio", () => ({
@@ -53,6 +53,9 @@ import * as scoreAudio from "../lib/score-audio";
 const mockPrepare = scoreAudio.prepareScoreAudio as jest.MockedFunction<
   typeof scoreAudio.prepareScoreAudio
 >;
+const mockPrepareDrum = scoreAudio.prepareDrumAudio as jest.MockedFunction<
+  typeof scoreAudio.prepareDrumAudio
+>;
 
 // ── Subject under test ───────────────────────────────────────────────────────
 import { useScorePlayback } from "../hooks/useScorePlayback";
@@ -61,7 +64,7 @@ import { useScorePlayback } from "../hooks/useScorePlayback";
 // Minimal valid document with one measure containing quarter-note C4 (MIDI 60).
 // buildPlayTimeline returns notes: [{midiNote: 60, ...}] → allMidi = [60]
 // → native prepare path fires (Platform.OS = "ios" by default in the stub).
-import type { ScoreDocument } from "../lib/score-types";
+import type { ScoreDocument, ScoreNote } from "../lib/score-types";
 
 const DOC_WITH_NOTES: ScoreDocument = {
   id: "test-doc-notes",
@@ -105,7 +108,7 @@ const DOC_PERCUSSION: ScoreDocument = {
 
 /**
  * Flush all queued microtasks (Promise.resolve chain) three times to ensure
- * the .catch(() => {}).finally(() => ...) chain in the hook fully settles.
+ * the preparation success/failure chain in the hook fully settles.
  * Must be called inside act() to properly flush React state updates.
  */
 const flushMicrotasks = async () => {
@@ -120,6 +123,12 @@ let rafSpy: jest.SpyInstance;
 
 beforeEach(() => {
   mockPrepare.mockClear();
+  mockPrepare.mockReset();
+  mockPrepare.mockResolvedValue(undefined);
+  mockPrepareDrum.mockClear();
+  mockPrepareDrum.mockReset();
+  mockPrepareDrum.mockResolvedValue(undefined);
+  (Alert.alert as jest.Mock).mockClear();
   (scoreAudio.scheduleMeasureNotes as jest.Mock).mockClear();
   (scoreAudio.stopAllScoreNotes as jest.Mock).mockClear();
 
@@ -405,9 +414,7 @@ describe("useScorePlayback — edge cases (H12–H13)", () => {
     expect(rafSpy).toHaveBeenCalledTimes(1);
   });
 
-  it("H13: prepareScoreAudio rejection does not crash — finally still fires RAF", async () => {
-    // The hook uses .catch(() => {}).finally(() => startRaf()) so a rejection
-    // is swallowed and playback still starts.  This documents that intent.
+  it("H13: prepareScoreAudio rejection is reported and does not start playback", async () => {
     mockPrepare.mockRejectedValue(new Error("simulated prepare failure"));
 
     const { result } = renderHook(() => useScorePlayback(DOC_WITH_NOTES));
@@ -417,8 +424,27 @@ describe("useScorePlayback — edge cases (H12–H13)", () => {
       await flushMicrotasks();
     });
 
-    expect(rafSpy).toHaveBeenCalledTimes(1);
-    expect(result.current.isPlaying).toBe(true);
+    expect(rafSpy).not.toHaveBeenCalled();
+    expect(result.current.isPlaying).toBe(false);
+    expect(result.current.isPreparing).toBe(false);
+    expect(Alert.alert).toHaveBeenCalledTimes(1);
+  });
+
+  it("H13b: prepareDrumAudio rejection is reported and does not mark audio ready", async () => {
+    mockPrepare.mockResolvedValue(undefined);
+    mockPrepareDrum.mockRejectedValue(new Error("simulated drum prepare failure"));
+
+    const { result } = renderHook(() => useScorePlayback(DOC_WITH_NOTES));
+
+    await act(async () => {
+      result.current.play();
+      await flushMicrotasks();
+    });
+
+    expect(rafSpy).not.toHaveBeenCalled();
+    expect(result.current.isPlaying).toBe(false);
+    expect(result.current.isPreparing).toBe(false);
+    expect(Alert.alert).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -637,6 +663,150 @@ describe("useScorePlayback — instrument change during prepare uses fresh pairs
     // The re-prepare pairs must reflect "violin", not the old "piano"
     const rePreparePairs = mockPrepare.mock.calls[1][4] as Array<{ midi: number; instrumentId: string }>;
     expect(rePreparePairs.every((p) => p.instrumentId === "violin")).toBe(true);
+  });
+});
+
+describe("useScorePlayback — same-measure content invalidation (H18)", () => {
+  it("H18: editing a note in the existing measure discards prepared audio and timeline", async () => {
+    mockPrepare.mockResolvedValue(undefined);
+
+    const editedDoc: ScoreDocument = {
+      ...DOC_WITH_NOTES,
+      parts: [{
+        ...DOC_WITH_NOTES.parts[0],
+        measures: [{
+          ...DOC_WITH_NOTES.parts[0].measures[0],
+          elements: [{
+            ...(DOC_WITH_NOTES.parts[0].measures[0].elements[0] as ScoreNote),
+            pitch: { step: "D", octave: 4 },
+          }],
+        }],
+      }],
+    };
+
+    const { result, rerender } = renderHook(
+      (doc: ScoreDocument) => useScorePlayback(doc),
+      { initialProps: DOC_WITH_NOTES },
+    );
+
+    await act(async () => {
+      result.current.play();
+      await flushMicrotasks();
+    });
+    expect(mockPrepare).toHaveBeenCalledTimes(1);
+    act(() => { result.current.pause(); });
+    expect(result.current.totalMs).toBe(2000);
+
+    // The measure count and measure ID are unchanged, but the note changed.
+    act(() => { rerender(editedDoc); });
+    expect(result.current.totalMs).toBe(0);
+
+    await act(async () => {
+      result.current.play();
+      await flushMicrotasks();
+    });
+    expect(mockPrepare).toHaveBeenCalledTimes(2);
+    expect(result.current.isPlaying).toBe(true);
+  });
+
+  it("H18b: editing timing in the existing measure rebuilds the timeline", async () => {
+    mockPrepare.mockResolvedValue(undefined);
+
+    const slowerDoc: ScoreDocument = {
+      ...DOC_WITH_NOTES,
+      parts: [{
+        ...DOC_WITH_NOTES.parts[0],
+        measures: [{
+          ...DOC_WITH_NOTES.parts[0].measures[0],
+          bpm: 60,
+        }],
+      }],
+    };
+
+    const { result, rerender } = renderHook(
+      (doc: ScoreDocument) => useScorePlayback(doc),
+      { initialProps: DOC_WITH_NOTES },
+    );
+
+    await act(async () => {
+      result.current.play();
+      await flushMicrotasks();
+    });
+    act(() => { result.current.pause(); });
+    act(() => { rerender(slowerDoc); });
+
+    await act(async () => {
+      result.current.play();
+      await flushMicrotasks();
+    });
+    expect(result.current.totalMs).toBe(4000);
+    expect(mockPrepare).toHaveBeenCalledTimes(2);
+  });
+
+  it("H18c: edits during pending preparation publish the fresh timeline before RAF starts", async () => {
+    const resolvers: Array<() => void> = [];
+    mockPrepare.mockImplementation(
+      () => new Promise<void>((resolve) => resolvers.push(resolve)),
+    );
+
+    const editedDoc: ScoreDocument = {
+      ...DOC_WITH_NOTES,
+      parts: [{
+        ...DOC_WITH_NOTES.parts[0],
+        measures: [{
+          ...DOC_WITH_NOTES.parts[0].measures[0],
+          bpm: 60,
+          elements: [{
+            ...(DOC_WITH_NOTES.parts[0].measures[0].elements[0] as ScoreNote),
+            pitch: { step: "D", octave: 4 },
+          }],
+        }],
+      }],
+    };
+    const rafCallbacks: Array<FrameRequestCallback> = [];
+    rafSpy.mockImplementation((callback: FrameRequestCallback) => {
+      rafCallbacks.push(callback);
+      return rafCallbacks.length;
+    });
+
+    const { result, rerender } = renderHook(
+      (doc: ScoreDocument) => useScorePlayback(doc),
+      { initialProps: DOC_WITH_NOTES },
+    );
+
+    act(() => { result.current.play(); });
+    expect(resolvers).toHaveLength(1);
+
+    // Same measure count, but both note content and timing change while the
+    // first preparation is still pending.
+    act(() => { rerender(editedDoc); });
+    expect(resolvers).toHaveLength(2);
+    expect(result.current.totalMs).toBe(4000);
+
+    const dateNowSpy = jest.spyOn(Date, "now").mockReturnValue(0);
+    await act(async () => {
+      resolvers[0](); // stale preparation
+      resolvers[1](); // latest preparation
+      await flushMicrotasks();
+    });
+
+    // Only the latest preparation starts playback, and it sees the fresh
+    // timeline rather than the empty ref from the old implementation.
+    expect(rafCallbacks).toHaveLength(1);
+    expect(result.current.isPlaying).toBe(true);
+    act(() => { rafCallbacks[0](0); });
+    const scheduleCalls = (scoreAudio.scheduleMeasureNotes as jest.Mock).mock.calls;
+    expect(scheduleCalls).toHaveLength(1);
+    expect(scheduleCalls[0][0][0].midiNote).toBe(50); // D4 in score-playback
+
+    // The replacement timeline has the edited 60 BPM duration and completes
+    // instead of looping forever on total=0.
+    dateNowSpy.mockReturnValue(4000);
+    act(() => {
+      rafCallbacks[1](4000);
+    });
+    expect(result.current.isPlaying).toBe(false);
+    dateNowSpy.mockRestore();
   });
 });
 

@@ -89,15 +89,8 @@ export function applyEntryToState(entry: PracticeEntry): AppliedEntryState {
 }
 
 /**
- * Pure projection of a PracticeEntry into the BarConfig shape held in barConfigRef.
- * Centralizes default values for blockPlayMode/barClockMode/barTimerDuration so
- * apply (write) and selectCurrentBarConfig (read) stay in lockstep and can be
- * verified via roundtrip tests.
- *
- * Notes:
- * - barLoopMode is forced to "once" to match legacy applyEntryToEngine behavior;
- *   the entry's own barLoopMode is dropped intentionally (kept for parity).
- * - Maps are shallow-cloned so callers can mutate without affecting the entry.
+ * Pure projection of a PracticeEntry into the BarConfig shape held in
+ * barConfigRef. Centralizes defaults so apply and select stay in lockstep.
  */
 export function entryToBarConfig(entry: PracticeEntry): BarConfig {
   const rawBlocks = entry.loopBlocks ?? [];
@@ -123,19 +116,6 @@ export function entryToBarConfig(entry: PracticeEntry): BarConfig {
   };
 }
 
-/**
- * 엔진 setter 시퀀스 추출. 라이브 컴포넌트(`applyEntryToEngine`,
- * `noteStartPlayingEntry`)에서 똑같이 호출되던 8단 setter 호출을 한 곳에 모아
- * - 호출 순서가 바뀔 일이 없게 단일 source로 만들고
- * - fake 엔진 spy로 단위 테스트가 가능하도록 한다.
- *
- * 인자 `engine`은 `MetronomeEngine`의 사용 메서드만 추린 부분 인터페이스라
- * 테스트에서 spy 객체로 그대로 주입할 수 있다.
- *
- * 호출 순서·인자가 바뀌면 사용자가 연습 항목을 불러올 때 마지막에 적용된 값이
- * 이전 값을 덮어써서 화면과 실제 재생이 어긋나는 사고가 가능하므로, 이 헬퍼를
- * 단일 진입점으로 유지한다.
- */
 export interface EntryEngineSetters {
   setBpm(bpm: number): void;
   setBeatsPerMeasure(beats: number): void;
@@ -160,11 +140,6 @@ export function applyEntryToEngine(engine: EntryEngineSetters, entry: PracticeEn
   engine.setBlockPlayMode(entry.blockPlayMode || "loop");
   engine.setRandomBarOrder?.(entry.randomBarOrder?.length ? entry.randomBarOrder : null);
   engine.setAllBarRepeats(migratedRepeats);
-  // BPM 오버라이드는 양수만 추출. 0/음수/누락은 "오버라이드 없음"으로 간주
-  // (이전 인라인 코드의 truthy 체크와 동일 의도). 엔진은 20~300으로 클램프하므로
-  // 0을 흘려보내면 20으로 잘못 강제될 수 있어, 이 경계는 헬퍼에서 막는다.
-  // denominator 정규화: 바 오버라이드 BPM도 메인 BPM과 동일하게 quarter-note 단위로
-  // 변환해 엔진에 넘긴다.
   const bpmOverrides: Record<number, number> = {};
   for (const [k, v] of Object.entries(migratedRepeats)) {
     if (typeof v.bpm === "number" && v.bpm > 0) {

@@ -77,4 +77,4 @@ Preferred communication style: Simple, everyday language.
 
 ## Behavior Notes
 
-- **Per-bar BPM override (`PracticeEntry.barRepeats[*].bpm`)**: Only positive numbers are honored. `0`, negative values, and missing fields are treated as "no override" by both `applyEntryToEngine` and `applyEntryToState` (app/index.helpers.ts). This prevents the engine's 20–300 clamp from silently rewriting `0` into `20`. Pre–Task #37 inline code used a JS truthy check, which had the same effect for falsy values; the helper formalizes that policy.
+- **Per-bar BPM override (`PracticeEntry.barRepeats[*].bpm`)**: Only positive numbers are honored. `0`, negative values, and missing fields are treated as "no override" by both `applyEntryToEngine` and `applyEntryToState` (lib/index.helpers.ts). This prevents the engine's 20–300 clamp from silently rewriting `0` into `20`. Pre–Task #37 inline code used a JS truthy check, which had the same effect for falsy values; the helper formalizes that policy.

@@ -46,7 +46,7 @@ lint 대상에서 제외합니다.
 # Expo 웹 앱이 포트 8081에서 실행 중이어야 함
 npm run test:e2e
 
-# 알려진 제품 실패를 포함한 모든 E2E
+# 모든 E2E
 npm run test:e2e:all
 
 # 단일 시나리오
@@ -61,16 +61,12 @@ npx playwright test e2e/modal-open-close.spec.ts
   - 메인 메뉴 → 음원 분리 항목 클릭 → 음원 분리 모달 열기 → X 닫기
 - `e2e/score-note-preview-setting.spec.ts` — 악보 음표 미리 듣기 설정
 - `e2e/signal-generator-scroll.spec.ts` — 작은 화면 신호 발생기 스크롤 및 재생
-  - 현재 짧은 화면에서 모달 스크롤 영역이 뷰포트보다 커지면서 실제로 스크롤되지
-    않는 제품 버그를 재현하므로 `@known-failure`로 표시합니다.
-  - 기본 CI에서는 제외하고 `npm run test:e2e:all`에서 계속 재현합니다.
-  - 짧은 화면 모달 스크롤 문제가 해결되면 태그를 제거해 기본 CI에 포함합니다.
+  - 짧은 화면에서도 모달 카드가 명시적으로 높이를 확보하고 실제로 스크롤되는지 검증합니다.
 - `e2e/subdivision-shake-reset.spec.ts` — 웹 서브디비전 흔들기 초기화
 - `e2e/subdivision-type-picker.spec.ts` — 서브디비전 타입 선택
 
-CI는 `npm run test:e2e`로 `@known-failure`를 제외한 E2E를 모두 실행합니다.
-새 E2E 파일은 별도 목록 수정 없이 자동으로 CI에 포함되며, 제외가 필요하면 재현
-가능한 제품 버그와 해제 조건을 이 문서에 기록해야 합니다. 일시적인 브라우저 시작
+CI는 `npm run test:e2e`로 모든 E2E를 실행합니다. 새 E2E 파일은 별도 목록 수정 없이
+자동으로 CI에 포함됩니다. 일시적인 브라우저 시작
 실패를 위해 CI에서 한 번 재시도하고, 실패 시 trace·video·screenshot 결과를
 artifact로 보존합니다.
 

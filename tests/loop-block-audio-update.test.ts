@@ -7,7 +7,7 @@ import { MetronomeEngine } from "../lib/metronome-engine";
 import type { LoopBlock } from "../components/beat-indicator.types";
 
 // 실제 프로덕션 코드 경로 직접 import — handleLoopBlocksChange가 이 함수를 위임한다.
-import { applyLoopBlocksChange } from "../app/index.helpers";
+import { applyLoopBlocksChange } from "../lib/index.helpers";
 
 // ──────────────────────────────────────────────────────────────
 // MetronomeEngine.setLoopBlocks / getLoopBlocks 단위 테스트

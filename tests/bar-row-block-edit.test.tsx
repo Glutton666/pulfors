@@ -1,5 +1,6 @@
 /** @jest-environment jsdom */
 import React from "react";
+import type { FC, ReactNode } from "react";
 import { fireEvent, render } from "@testing-library/react";
 
 import {
@@ -9,29 +10,37 @@ import {
 import { getStaffRhythmNotation } from "@/components/bar-mode/SimplifiedStaffNotation";
 import { StaffRestGlyph } from "@/components/staff/StaffGlyphs";
 
-jest.mock("@expo/vector-icons", () => ({
-  Ionicons: () => null,
-}));
+jest.mock("@expo/vector-icons", () => {
+  const MockIonicons: FC = () => null;
+  MockIonicons.displayName = "MockIonicons";
+  return { Ionicons: MockIonicons };
+});
 
 jest.mock("expo-linear-gradient", () => {
   const React = require("react");
+  const MockLinearGradient: FC<any> = ({ children, testID, ...props }) =>
+    React.createElement("div", { ...props, "data-testid": testID }, children);
+  MockLinearGradient.displayName = "MockLinearGradient";
   return {
-    LinearGradient: ({ children, testID, ...props }: any) =>
-      React.createElement("div", { ...props, "data-testid": testID }, children),
+    LinearGradient: MockLinearGradient,
   };
 });
 
 jest.mock("react-native-svg", () => {
   const React = require("react");
-  const element = (tag: string) => ({
-    children,
-    testID,
-    ...props
-  }: {
-    children?: React.ReactNode;
-    testID?: string;
-    [key: string]: unknown;
-  }) => React.createElement(tag, { ...props, "data-testid": testID }, children);
+  const element = (tag: string) => {
+    const MockSvgElement: FC<{
+      children?: ReactNode;
+      testID?: string;
+      [key: string]: unknown;
+    }> = ({
+      children,
+      testID,
+      ...props
+    }) => React.createElement(tag, { ...props, "data-testid": testID }, children);
+    MockSvgElement.displayName = `MockSvg${tag}`;
+    return MockSvgElement;
+  };
   return {
     __esModule: true,
     default: element("svg"),

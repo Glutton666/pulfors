@@ -13,7 +13,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { applyEntryToEngine, applyEntryToState, type EntryEngineSetters } from "../app/index.helpers";
+import { applyEntryToEngine, applyEntryToState, type EntryEngineSetters } from "../lib/index.helpers";
 import type { PracticeEntry } from "../lib/storage";
 import type { BeatType } from "../lib/metronome-engine";
 import type { BarRepeat, LoopBlock } from "../components/beat-indicator.types";

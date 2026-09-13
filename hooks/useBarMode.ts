@@ -29,12 +29,12 @@ import {
 import type {
   BarConfig,
   DialConfig,
-} from "@/app/index.helpers";
+} from "@/lib/index.helpers";
 import {
   defaultBeatTypes,
   createInitialBarConfig,
   applyLoopBlocksChange,
-} from "@/app/index.helpers";
+} from "@/lib/index.helpers";
 import {
   saveNoteSamples,
   saveNoteSampleNames,

@@ -3,8 +3,8 @@ import {
   applyEntryToEngine as applyEntryToEngineCore,
   entryToBarConfig,
   migrateLayerBlocks,
-} from "@/app/index.helpers";
-import type { BarConfig, DialConfig } from "@/app/index.helpers";
+} from "@/lib/index.helpers";
+import type { BarConfig, DialConfig } from "@/lib/index.helpers";
 import { loadPracticeBook } from "@/lib/storage";
 import type { PracticeEntry } from "@/lib/storage";
 import type { BeatType, MetronomeEngine } from "@/lib/metronome-engine";

@@ -3,10 +3,11 @@
 // ============================================================
 
 import { useState, useRef, useCallback, useEffect } from "react";
-import { Platform } from "react-native";
+import { Alert, Platform } from "react-native";
 import { buildPlayTimeline, findCurrentEvent, totalTimelineMs } from "@/lib/score-playback";
 import type { PlayEvent } from "@/lib/score-playback";
 import type { ScoreDocument, DrumType } from "@/lib/score-types";
+import { captureException } from "@/lib/error-tracking";
 import {
   getPrepareBatchSize,
   prepareScoreAudio,
@@ -58,7 +59,7 @@ export function useScorePlayback(doc: ScoreDocument): ScorePlaybackState {
   // - prepareParamsRef: 준비 중일 때 non-null (음표-악기 쌍 목록 보관)
   // - startRafRef: 준비 완료 후 호출할 startRaf 함수
   const prepareParamsRef = useRef<{
-    noteInstrumentPairs: Array<{ midi: number; instrumentId: string }>;
+    noteInstrumentPairs: { midi: number; instrumentId: string }[];
     drumTypes: DrumType[];
   } | null>(null);
   const startRafRef = useRef<(() => void) | null>(null);
@@ -134,7 +135,7 @@ export function useScorePlayback(doc: ScoreDocument): ScorePlaybackState {
 
   /** 내부 prepare 헬퍼 — play()와 악기 변경 effect 양쪽에서 호출 */
   const _runPrepare = useCallback((
-    noteInstrumentPairs: Array<{ midi: number; instrumentId: string }>,
+    noteInstrumentPairs: { midi: number; instrumentId: string }[],
     drumTypes: DrumType[],
   ) => {
     const sessionId = ++prepareSessionRef.current;
@@ -161,14 +162,30 @@ export function useScorePlayback(doc: ScoreDocument): ScorePlaybackState {
       ),
       prepareDrumAudio(drumTypes),
     ])
-      .catch(() => {})
-      .finally(() => {
+      .then(() => {
         if (prepareSessionRef.current !== sessionId) return;
         prepareParamsRef.current = null;
         setIsPreparing(false);
         setPrepareProgress(null);
         isAudioReadyRef.current = true;
         startRafRef.current?.();
+      })
+      .catch((error: unknown) => {
+        if (prepareSessionRef.current !== sessionId) return;
+        prepareParamsRef.current = null;
+        startRafRef.current = null;
+        setIsPreparing(false);
+        setPrepareProgress(null);
+        // A failed preparation is not a usable cache. In particular, do not
+        // start the playhead: doing so makes silent playback look successful.
+        isAudioReadyRef.current = false;
+        isPlayingRef.current = false;
+        stopAllScoreNotes();
+        captureException(error, { category: "score-playback", operation: "prepare-audio" });
+        Alert.alert(
+          "재생 오류",
+          "악보 오디오를 준비하지 못했습니다. 다시 시도해 주세요.",
+        );
       });
   }, []);
 
@@ -192,7 +209,7 @@ export function useScorePlayback(doc: ScoreDocument): ScorePlaybackState {
       // 네이티브: WAV 파일 준비가 완료된 뒤 재생 시작
       // (pause→play 재개 시에는 isAudioReadyRef가 true → 재준비 건너뜀)
       // 다악기 악보를 지원하기 위해 각 음표를 해당 파트 악기와 함께 수집합니다.
-      const noteInstrumentPairs: Array<{ midi: number; instrumentId: string }> = [];
+      const noteInstrumentPairs: { midi: number; instrumentId: string }[] = [];
       const drumTypes: DrumType[] = [];
       for (const ev of timeline) {
         for (const n of ev.notes) {
@@ -212,33 +229,6 @@ export function useScorePlayback(doc: ScoreDocument): ScorePlaybackState {
 
     startRaf();
   }, [doc, tick, isPreparing, _runPrepare]);
-
-  // 준비 도중 악기가 바뀌면 새 악기로 다시 준비
-  // - prepareParamsRef.current: null이면 준비 중이 아니므로 즉시 리턴
-  // - 세션 ID 증가 → 이전 prepare의 .finally()가 startRaf를 호출하지 않음
-  // - 새 prepare가 완료되면 startRafRef.current()로 재생 시작
-  const partInstrumentId = doc.parts[0]?.instrumentId;
-  useEffect(() => {
-    // 악기 변경 시 항상 무효화 — idle/pause/완료 상태에서도 새 악기로 재준비 필요
-    isAudioReadyRef.current = false;
-    if (!prepareParamsRef.current) return;
-    // 현재 doc 타임라인을 새로 빌드해 최신 instrumentId를 반영합니다.
-    // (stale prepareParamsRef 재사용 시 이전 악기 ID가 그대로 남는 버그 수정)
-    const freshTimeline = buildPlayTimeline(doc);
-    const freshPairs: Array<{ midi: number; instrumentId: string }> = [];
-    const freshDrumTypes: DrumType[] = [];
-    for (const ev of freshTimeline) {
-      for (const n of ev.notes) {
-        if (n.drumType) {
-          freshDrumTypes.push(n.drumType);
-          continue;
-        }
-        freshPairs.push({ midi: n.midiNote, instrumentId: n.instrumentId ?? ev.instrumentId });
-      }
-    }
-    _runPrepare(freshPairs, freshDrumTypes);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [partInstrumentId]);
 
   const pause = useCallback(() => {
     if (!isPlayingRef.current) return;
@@ -260,6 +250,7 @@ export function useScorePlayback(doc: ScoreDocument): ScorePlaybackState {
     prepareParamsRef.current = null;
     startRafRef.current = null;
     isAudioReadyRef.current = false;
+    timelineRef.current = [];
     setIsPreparing(false);
     setPrepareProgress(null);
     isPlayingRef.current = false;
@@ -269,6 +260,7 @@ export function useScorePlayback(doc: ScoreDocument): ScorePlaybackState {
     setCurrentMeasureIdx(0);
     setPlayheadFraction(0);
     setCurrentLinkedEntryId(undefined);
+    setTotalMs(0);
     resumeOffsetRef.current = 0;
     if (rafRef.current !== null) {
       cancelAnimationFrame(rafRef.current);
@@ -277,25 +269,67 @@ export function useScorePlayback(doc: ScoreDocument): ScorePlaybackState {
   }, []);
 
   // 다른 악보로 전환 시 재생 중지
+  const docIdRef = useRef(doc.id);
   useEffect(() => {
+    if (docIdRef.current === doc.id) return;
+    docIdRef.current = doc.id;
+    // The content-signature effect below rebuilds an in-flight preparation
+    // against the new document before allowing its completion to start.
+    if (prepareParamsRef.current) return;
     stop();
   }, [doc.id, stop]);
 
-  // 재생 중 마디 수가 바뀌면 타임라인이 구식이 되므로 중지
-  const measureCountRef = useRef(doc.parts[0]?.measures.length ?? 0);
-  useEffect(() => {
-    const newCount = doc.parts[0]?.measures.length ?? 0;
-    if (measureCountRef.current !== newCount) {
-      measureCountRef.current = newCount;
-      if (isPlayingRef.current) stop();
-    }
+  // 재생에 영향을 주는 악보 내용이 바뀌면, 마디 수가 같아도 준비된
+  // 오디오와 타임라인을 폐기합니다. 메타데이터/표시 설정 변경은 제외해
+  // pause → resume이 불필요하게 재준비되지 않도록 합니다.
+  const playbackSignature = JSON.stringify({
+    parts: doc.parts,
+    bpm: doc.bpm,
+    timeSignature: doc.timeSignature,
+    keySignature: doc.keySignature,
   });
+  const playbackSignatureRef = useRef(playbackSignature);
+  useEffect(() => {
+    if (playbackSignatureRef.current === playbackSignature) return;
+    playbackSignatureRef.current = playbackSignature;
+
+    const preparingReplacement = Boolean(prepareParamsRef.current);
+    // Publish the replacement timeline before starting the replacement
+    // preparation. Its completion callback can start RAF immediately, so the
+    // ref must never briefly point at an empty timeline for that session.
+    const freshTimeline = preparingReplacement ? buildPlayTimeline(doc) : null;
+    isAudioReadyRef.current = false;
+    timelineRef.current = freshTimeline ?? [];
+    lastSeqIdxRef.current = -1;
+    resumeOffsetRef.current = 0;
+    setTotalMs(freshTimeline ? totalTimelineMs(freshTimeline) : 0);
+
+    if (preparingReplacement && freshTimeline) {
+      // In-flight preparation must use the edited notes/timing/instrument.
+      // Starting a new session invalidates the old promise's completion.
+       const freshPairs: { midi: number; instrumentId: string }[] = [];
+      const freshDrumTypes: DrumType[] = [];
+      for (const ev of freshTimeline) {
+        for (const n of ev.notes) {
+          if (n.drumType) {
+            freshDrumTypes.push(n.drumType);
+            continue;
+          }
+          freshPairs.push({ midi: n.midiNote, instrumentId: n.instrumentId ?? ev.instrumentId });
+        }
+      }
+      _runPrepare(freshPairs, freshDrumTypes);
+    } else if (isPlayingRef.current) {
+      stop();
+    }
+  }, [doc, playbackSignature, _runPrepare, stop]);
 
   // unmount cleanup
   useEffect(() => {
+    const prepareSessionRefForCleanup = prepareSessionRef;
     return () => {
       // 진행 중인 prepare 비동기 작업 무효화
-      prepareSessionRef.current++;
+      prepareSessionRefForCleanup.current++;
       prepareParamsRef.current = null;
       isPlayingRef.current = false;
       stopAllScoreNotes();

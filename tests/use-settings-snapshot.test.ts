@@ -94,8 +94,8 @@ jest.mock("@/lib/audio-renderer", () => ({
   clearWebClickBuffers: jest.fn(),
 }));
 
-// app/index.helpers stub
-jest.mock("@/app/index.helpers", () => ({
+// lib/index.helpers stub
+jest.mock("@/lib/index.helpers", () => ({
   defaultBeatTypes: (n: number) => Array.from({ length: n }, () => "normal"),
 }));
 

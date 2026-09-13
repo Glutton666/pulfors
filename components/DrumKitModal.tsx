@@ -353,7 +353,14 @@ export function DrumKitModal({ visible, onClose }: DrumKitModalProps) {
         >
           <View style={styles.header}>
             <Text style={[styles.title, { color: C.text }]}>{t("drumKit", "title")}</Text>
-            <Pressable onPress={onClose} hitSlop={8} testID="drum-kit-close">
+            <Pressable
+              onPress={onClose}
+              hitSlop={8}
+              testID="drum-kit-close"
+              accessibilityRole="button"
+              accessibilityLabel={t("drumKit", "close")}
+              accessibilityHint={t("drumKit", "closeHint")}
+            >
               <Ionicons name="close" size={S.ms(22, 0.4)} color={C.textSecondary} />
             </Pressable>
           </View>

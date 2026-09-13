@@ -111,6 +111,8 @@ export function MenuScreen({
           borderBottomColor: C.border,
         }}
         accessibilityRole="button"
+        accessibilityLabel={showLab ? t("main", "menuBack") : t("switcher", "openDial")}
+        accessibilityHint={showLab ? t("main", "menuBackHint") : t("switcher", "openDialHint")}
       >
         <Ionicons
           name={showLab ? "chevron-back" : "menu"}

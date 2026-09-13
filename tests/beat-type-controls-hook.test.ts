@@ -8,7 +8,7 @@ import { renderHook, act } from "@testing-library/react";
 import { useBeatTypeControls } from "../hooks/useBeatTypeControls";
 import type { BeatType } from "../lib/metronome-engine";
 
-jest.mock("@/app/index.helpers", () => ({
+jest.mock("@/lib/index.helpers", () => ({
   defaultBeatTypes: (count: number) =>
     Array.from({ length: count }, (_, index) => (index === 0 ? "strong" : "normal")),
 }));

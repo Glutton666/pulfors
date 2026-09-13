@@ -67,8 +67,8 @@ import type { StopwatchTimerHandle } from "@/components/StopwatchTimer";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useDeepLink } from "@/contexts/DeepLinkContext";
 import { useVoiceAssistant } from "@/contexts/VoiceAssistantContext";
-import { make_styles } from "@/app/index.styles";
-import { defaultBeatTypes, isSafeNoteSampleUri, createInitialDialConfig, createInitialBarConfig, hydrateDialConfigFromSettings, createShuffledIndices as createShuffledIndicesPure, applyQueueInsert, beatSubdivisionCounts as beatSubdivisionCountsPure, selectCurrentBarConfig, computeLandscapeStats, entryToBarConfig, applyEntryToEngine as applyEntryToEngineCore, migrateLayerBlocks, applyLoopBlocksChange } from "@/app/index.helpers";
+import { make_styles } from "@/lib/index.styles";
+import { defaultBeatTypes, isSafeNoteSampleUri, createInitialDialConfig, createInitialBarConfig, hydrateDialConfigFromSettings, createShuffledIndices as createShuffledIndicesPure, applyQueueInsert, beatSubdivisionCounts as beatSubdivisionCountsPure, selectCurrentBarConfig, computeLandscapeStats, entryToBarConfig, applyEntryToEngine as applyEntryToEngineCore, migrateLayerBlocks, applyLoopBlocksChange } from "@/lib/index.helpers";
 import { serializeNoteQueueEntries } from "@/lib/note-queue-helpers";
 import {
   type ActiveModal,

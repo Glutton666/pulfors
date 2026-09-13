@@ -5,21 +5,18 @@ import { safePlayAndConfirm } from "@/lib/audio-utils";
 import { toEngineBpm, soundSets } from "@/lib/metronome-engine";
 import { applyDialConfigToEngine } from "@/lib/dial-engine-boundary";
 import {
-  applySoftClip,
   ensureWebClickBuffers,
   getWebAudioContext,
   playWebRenderedLoop,
-  renderMeasure,
   renderMeasureAbortable,
   beginAbortableRender,
   abortActiveRender,
   finishAbortableRender,
   isRenderAborted,
 } from "@/lib/audio-renderer";
-import type { ClickPCMs, SamplePCMEntry, TickInfo } from "@/lib/audio-renderer";
-import type { WebRenderedLoop } from "@/lib/audio-renderer";
+import type { ClickPCMs, SamplePCMEntry, TickInfo, WebRenderedLoop } from "@/lib/audio-renderer";
 import type { BeatType, MetronomeEngine } from "@/lib/metronome-engine";
-import type { BarConfig, DialConfig } from "@/app/index.helpers";
+import type { BarConfig, DialConfig } from "@/lib/index.helpers";
 import type { PracticeEntry, SoundSet } from "@/lib/storage";
 import { PracticeSessionTracker, type PracticeSessionData } from "@/lib/activity-log";
 import type { Language } from "@/lib/i18n";
@@ -40,7 +37,6 @@ import {
   markAudioPlaying,
   markAudioPreparing,
   markAudioRecovering,
-  markAudioRecoveryFailed,
   markAudioStopped,
 } from "@/lib/audio-lifecycle";
 
@@ -152,7 +148,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
     if (!session) return;
     if (interrupted) session.interrupt();
     else session.pause();
-  }, [p, renderGenerationRef]);
+  }, [p]);
 
   const completePracticeSession = useCallback((
     endReason: NonNullable<PracticeSessionData["endReason"]> = "manual",
@@ -277,7 +273,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
     } finally {
       finishAbortableRender(renderGenerationRef, signal);
     }
-  }, [p]);
+  }, [p, renderGenerationRef]);
 
   const stopMetronome = useCallback(() => {
     if (!p.isPlayingRef.current && !p.isPreparingRef.current) return;
@@ -363,6 +359,15 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
     p.stopRenderedAudio();
     configureEngine(engine);
 
+    let localNativePlayer: AudioPlayer | null = null;
+    let nativePlayerPublished = false;
+    const releaseLocalNativePlayer = () => {
+      if (!localNativePlayer || nativePlayerPublished) return;
+      try { localNativePlayer.pause(); } catch {}
+      try { localNativePlayer.release(); } catch {}
+      localNativePlayer = null;
+    };
+
     try {
       if (Platform.OS === "android" && androidProbeReady) {
         await awaitWithin(androidProbeReady, "Android audio focus");
@@ -427,12 +432,15 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
         const player = useRenderedLoop
           ? await awaitWithin(p.buildRenderedPlayer(), "Native rendered player")
           : null;
+        localNativePlayer = player;
         if (cancelled()) {
-          try { player?.release(); } catch {}
+          releaseLocalNativePlayer();
           return false;
         }
         if (player) {
           p.renderedPlayerRef.current = player;
+          nativePlayerPublished = true;
+          localNativePlayer = null;
           engine.setPreRenderedAudio(true);
           // safePlayAndConfirm invokes play() synchronously before returning its
           // confirmation promise. Start the engine in the same turn so rendered
@@ -483,6 +491,10 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
       }
       return true;
     } catch (error) {
+      // A rendered player belongs to this startup attempt until it is
+      // published. Cancellation can happen while the async builder is
+      // resolving, so do not leave an unpublished native player alive.
+      releaseLocalNativePlayer();
       if (cancelled()) return false;
       p.capturePlaybackError("Audio startup failed", error, "warning");
       cancelPlaybackAttempt(true);

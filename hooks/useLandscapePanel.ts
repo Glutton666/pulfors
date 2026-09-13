@@ -3,7 +3,7 @@ import * as ImagePicker from "expo-image-picker";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { captureBreadcrumb } from "@/lib/error-tracking";
 import { ensurePermission } from "@/lib/permissions";
-import { computeLandscapeStats } from "@/app/index.helpers";
+import { computeLandscapeStats } from "@/lib/index.helpers";
 import { loadActivityLogs } from "@/lib/activity-log";
 import type { ActivityLog } from "@/lib/activity-log";
 import type { TranslationFn } from "@/lib/i18n";

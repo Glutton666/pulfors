@@ -58,7 +58,7 @@ import { loadPracticeBook, type FadeOutSettings, type SoundSet } from "@/lib/sto
 import {
   applyEntryToEngine as applyEntryToEngineCore,
   beatSubdivisionCounts as beatSubdivisionCountsPure,
-} from "@/app/index.helpers";
+} from "@/lib/index.helpers";
 import { Radius, Spacing, FontSize } from "@/constants/tokens";
 import { showPlayingNotification } from "@/lib/notification-controls";
 import { addActivityLog, saveLoggingEnabled } from "@/lib/activity-log";

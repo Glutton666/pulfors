@@ -408,7 +408,14 @@ export function TuningGuideModal({ visible, onClose, onSelectFreq, lang, accentC
           <View style={tgStyles.header}>
             <MaterialCommunityIcons name="music-note-outline" size={S.ms(18, 0.4)} color={accentColor} />
             <Text style={[tgStyles.title, { color: accentColor }]}>{t("signalGenerator", "tuningGuide")}</Text>
-            <Pressable onPress={handleClose} hitSlop={12} style={tgStyles.closeBtn}>
+            <Pressable
+              onPress={handleClose}
+              hitSlop={12}
+              style={tgStyles.closeBtn}
+              accessibilityRole="button"
+              accessibilityLabel={t("signalGenerator", "close")}
+              accessibilityHint={t("signalGenerator", "closeHint")}
+            >
               <Ionicons name="close" size={S.ms(18, 0.4)} color={C.textSecondary} />
             </Pressable>
           </View>
@@ -760,7 +767,10 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
   const dynamicCardWidth = isLandscape
     ? Math.min(winW * 0.92, 1100)
     : Math.min(Math.max(300, S.screenWidth * 0.92), webMaxCard);
-  const dynamicCardHeight = isLandscape ? winH * 0.88 : undefined;
+  // Keep the portrait card bounded as well as max-constrained. Without an
+  // explicit height, React Native Web lets the ScrollView measure to its full
+  // content height, so short viewports cannot scroll to the waveform controls.
+  const dynamicCardHeight = isLandscape ? winH * 0.88 : winH * 0.83;
   const landscapeGap = isLandscape ? Math.max(8, winW * 0.012) : 0;
   const landscapePadH = isLandscape ? Math.max(12, winW * 0.018) : 0;
   const landscapePadV = isLandscape ? Math.max(10, winH * 0.025) : 0;
@@ -1290,9 +1300,16 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
           keyboardVerticalOffset={0}
           style={styles.keyboardAvoiding}
         >
-        <View style={[styles.card, { backgroundColor: C.surface, borderColor: C.border, width: dynamicCardWidth }, !isLandscape && { padding: cardPad, gap: cardGap }, isLandscape && { paddingVertical: landscapePadV, paddingHorizontal: landscapePadH, height: dynamicCardHeight, maxHeight: "95%" as const, alignItems: "stretch" as const }]}>
+        <View style={[styles.card, { backgroundColor: C.surface, borderColor: C.border, width: dynamicCardWidth, height: dynamicCardHeight }, !isLandscape && { padding: cardPad, gap: cardGap }, isLandscape && { paddingVertical: landscapePadV, paddingHorizontal: landscapePadH, maxHeight: "95%" as const, alignItems: "stretch" as const }]}>
           {isLandscape && (
-            <Pressable onPress={handleClose} hitSlop={12} style={{ position: "absolute" as const, top: landscapePadV * 0.6, right: landscapePadH * 0.6, zIndex: 10 }}>
+            <Pressable
+              onPress={handleClose}
+              hitSlop={12}
+              style={{ position: "absolute" as const, top: landscapePadV * 0.6, right: landscapePadH * 0.6, zIndex: 10 }}
+              accessibilityRole="button"
+              accessibilityLabel={t("signalGenerator", "close")}
+              accessibilityHint={t("signalGenerator", "closeHint")}
+            >
               <Ionicons name="close" size={S.ms(20, 0.4)} color={C.textSecondary} />
             </Pressable>
           )}
@@ -1301,7 +1318,14 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
               <View style={styles.header}>
                 <MaterialCommunityIcons name="waveform" size={S.ms(20, 0.4)} color={C.accent} />
                 <Text style={[styles.title, { color: C.accent }]}>{t("signalGenerator", "title")}</Text>
-                <Pressable onPress={handleClose} hitSlop={12} style={styles.closeBtn}>
+                <Pressable
+                  onPress={handleClose}
+                  hitSlop={12}
+                  style={styles.closeBtn}
+                  accessibilityRole="button"
+                  accessibilityLabel={t("signalGenerator", "close")}
+                  accessibilityHint={t("signalGenerator", "closeHint")}
+                >
                   <Ionicons name="close" size={S.ms(20, 0.4)} color={C.textSecondary} />
                 </Pressable>
               </View>
@@ -1309,10 +1333,13 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
             </>
           )}
 
-          <View style={isLandscape ? { flexDirection: "row" as const, gap: landscapeGap, alignItems: "stretch" as const, flex: 1 } : undefined}>
+          <View style={isLandscape
+            ? { flexDirection: "row" as const, gap: landscapeGap, alignItems: "stretch" as const, flex: 1 }
+            : { flex: 1, minHeight: 0 }
+          }>
           {/* LEFT column: controls (same as portrait) */}
           <ScrollView
-            style={isLandscape ? { flex: 1 } : undefined}
+            style={{ flex: 1, minHeight: 0 }}
             contentContainerStyle={!isLandscape ? { flexGrow: 1 } : undefined}
             showsVerticalScrollIndicator={false}
             bounces={false}
@@ -1369,7 +1396,13 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
                     {frequencyToNote(pitchTargetFreq).name}{frequencyToNote(pitchTargetFreq).octave}
                     {" "}{Math.round(pitchTargetFreq)} {t("signalGenerator", "hzUnit")}
                   </Text>
-                  <Pressable onPress={clearPitchTarget} hitSlop={6}>
+                  <Pressable
+                    onPress={clearPitchTarget}
+                    hitSlop={6}
+                    accessibilityRole="button"
+                    accessibilityLabel={t("signalGenerator", "clearTarget")}
+                    accessibilityHint={t("signalGenerator", "clearTargetHint")}
+                  >
                     <Ionicons name="close-circle" size={12} color={C.textTertiary} />
                   </Pressable>
                 </View>

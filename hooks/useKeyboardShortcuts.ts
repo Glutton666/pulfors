@@ -12,7 +12,7 @@ import type { StopwatchTimerHandle } from "@/components/StopwatchTimer";
 import type { ActiveModal } from "@/lib/modal-routing";
 import type { DebouncedPersister } from "@/lib/persist";
 import type { MetronomeSettings } from "@/lib/storage";
-import type { DialConfig } from "@/app/index.helpers";
+import type { DialConfig } from "@/lib/index.helpers";
 
 export interface UseKeyboardShortcutsResult {
   /** 네이티브 뷰의 onKeyDown 이벤트에 연결할 핸들러 */

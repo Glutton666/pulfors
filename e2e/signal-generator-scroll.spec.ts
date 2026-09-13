@@ -17,7 +17,7 @@
  *
  * 안정성 설계:
  *   - testID 기반 셀렉터 사용 → locale(언어) 독립적
- *   - 스크롤은 data-testid="signal-scroll" 컨테이너를 대상으로 wheel 이벤트 적용
+ *   - 스크롤은 data-testid="signal-scroll" 컨테이너의 실제 scrollTop 변경으로 적용
  *   - 파형 버튼: data-testid="signal-wave-{sine|square|triangle|sawtooth}"
  *   - 재생/정지 버튼: data-testid="signal-toggle"
  *
@@ -36,20 +36,14 @@ import { test, expect, type Page } from "@playwright/test";
 
 const VIEWPORT = { width: 375, height: 667 };
 
-/** 온보딩이 있으면 모두 건너뛴다 (최대 5회). */
+/** 온보딩이 있으면 모두 건너뛴다 (최대 8회). */
 async function skipOnboarding(page: Page) {
-  for (let i = 0; i < 5; i++) {
-    const skip = page
-      .getByRole("button")
-      .filter({ hasText: /건너뛰기|skip/i });
+  for (let i = 0; i < 8; i++) {
+    const skip = page.getByText(/건너뛰기|skip/i);
     const count = await skip.count();
     if (count === 0) break;
     await skip.first().click();
-    await page
-      .getByRole("button")
-      .filter({ hasText: /건너뛰기|skip/i })
-      .waitFor({ state: "hidden", timeout: 2000 })
-      .catch(() => {});
+    await page.waitForTimeout(400);
   }
 }
 
@@ -70,27 +64,30 @@ async function openSignalGenerator(page: Page) {
 
   const signalToggle = page.locator('[data-testid="signal-toggle"]');
 
-  await page
-    .getByRole("menuitem", { name: /signal generator|시그널 제너레이터/i })
-    .click();
+  const signalMenuItem = page.getByRole("menuitem", {
+    name: /signal generator|시그널 제너레이터/i,
+  });
+  await signalMenuItem.waitFor({ state: "visible", timeout: 10000 });
+  await signalMenuItem.click();
 
   await signalToggle.waitFor({ state: "attached", timeout: 10000 });
 }
 
 /**
- * data-testid="signal-scroll" 컨테이너를 대상으로 wheel 이벤트를 발생시켜
- * 아래 방향으로 스크롤한다.
+ * data-testid="signal-scroll" 컨테이너의 실제 스크롤 가능한 끝까지 이동해
+ * 콘텐츠 높이에 따라 달라지는 고정 delta/wheel 이벤트에 의존하지 않는다.
  */
-async function scrollSignalModal(page: Page, deltaY = 400) {
+async function scrollSignalModal(page: Page) {
   const scrollContainer = page.locator('[data-testid="signal-scroll"]');
   await scrollContainer.waitFor({ state: "visible" });
-  const box = await scrollContainer.boundingBox();
-  if (!box) throw new Error("signal-scroll bounding box not found");
-  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-  await page.mouse.wheel(0, deltaY);
+  await scrollContainer.evaluate((element) => {
+    const node = element as HTMLElement;
+    node.scrollTop = node.scrollHeight;
+    node.dispatchEvent(new Event("scroll", { bubbles: true }));
+  });
 }
 
-test.describe("SignalGeneratorModal 스크롤 (375×667 iPhone SE)", { tag: "@known-failure" }, () => {
+test.describe("SignalGeneratorModal 스크롤 (375×667 iPhone SE)", () => {
   test.use({ viewport: VIEWPORT });
 
   test.beforeEach(async ({ page }) => {
@@ -106,9 +103,7 @@ test.describe("SignalGeneratorModal 스크롤 (375×667 iPhone SE)", { tag: "@kn
   }) => {
     await openSignalGenerator(page);
 
-    await scrollSignalModal(page, 500);
-    await page.waitForTimeout(400);
-
+    await scrollSignalModal(page);
     for (const waveType of ["sine", "square", "triangle", "sawtooth"]) {
       await expect(
         page.locator(`[data-testid="signal-wave-${waveType}"]`),
@@ -123,15 +118,11 @@ test.describe("SignalGeneratorModal 스크롤 (375×667 iPhone SE)", { tag: "@kn
   }) => {
     await openSignalGenerator(page);
 
-    await scrollSignalModal(page, 500);
-    await page.waitForTimeout(400);
-
+    await scrollSignalModal(page);
     const toggleBtn = page.locator('[data-testid="signal-toggle"]');
     await expect(toggleBtn).toBeInViewport();
 
     await toggleBtn.click();
-
-    await page.waitForTimeout(600);
 
     await expect(toggleBtn).toBeVisible();
     await expect(toggleBtn).toBeEnabled();

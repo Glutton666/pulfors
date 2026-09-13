@@ -8,13 +8,10 @@ import {
   decodeSampleFile,
   loadAssetPCM,
   parseTrimInfo,
-  renderMeasure,
-  applySoftClip,
   saveRenderedWav,
   ensureWebClickBuffers,
   playWebRenderedLoop,
   getWebAudioContext,
-  clearWebClickBuffers,
   scheduleWebClickAt,
   beginAbortableRender,
   abortActiveRender,
@@ -22,10 +19,14 @@ import {
   isRenderAborted,
   renderMeasureAbortable,
 } from "@/lib/audio-renderer";
-import { syncStereoArtifact, releaseStereoArtifact } from "@/lib/sample-cache";
+import {
+  syncStereoArtifact,
+  releaseStereoArtifact,
+  releaseStereoArtifactIfCurrent,
+} from "@/lib/sample-cache";
 import { captureBreadcrumb } from "@/lib/error-tracking";
 import { safePlay } from "@/lib/audio-utils";
-import { isSafeNoteSampleUri } from "@/app/index.helpers";
+import { isSafeNoteSampleUri } from "@/lib/index.helpers";
 import type {
   ClickPCMs,
   SamplePCMEntry,
@@ -38,8 +39,7 @@ import type { NoteSampleMap, NoteSampleChannelMap, NoteSampleMetroChannelMap, No
 import type { SampleChannel } from "@/lib/stereo-channel";
 import { NEUTRAL, processClickPCM, type TonePosition } from "@/lib/metronome-tone-dsp";
 import { useAudioPlayers } from "@/hooks/useAudioPlayers";
-import type { BuiltinPlayers, SoundSetPlayers } from "@/hooks/useAudioPlayers";
-import { BUILTIN_POOL_SIZE } from "@/hooks/useAudioPlayers";
+import type { BuiltinPlayers } from "@/hooks/useAudioPlayers";
 import {
   setAutoResumeAfterInterruption as setAudioSessionAutoResume,
   setAudioSessionBackgroundPlay,
@@ -191,7 +191,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
   // ── Player pool ownership (moved from useMetronomeScreen) ───────────────────
   // allPlayersRef, soundSetRef, highToggle/lowToggle/strongToggle are now owned
   // here. useMetronomeScreen's tick callback reads these via the return value.
-  const { allPlayers, allPlayersRef, soundSetRef, highToggle, lowToggle, strongToggle, setPoolsVolume } =
+  const { allPlayersRef, soundSetRef, highToggle, lowToggle, strongToggle, setPoolsVolume } =
     useAudioPlayers(soundSet, params.soundSetRef);
 
   // 3 refs now live in useMetronomeScreen (shared with useSettings)
@@ -279,6 +279,11 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
   // ── Owned refs ──────────────────────────────────────────────────────────────
   const renderedPlayerRef = useRef<ExpoAudioPlayer | null>(null);
   const pendingRenderedPlayerRef = useRef<ExpoAudioPlayer | null>(null);
+  const releasedPlayersRef = useRef(new WeakSet<object>());
+  const mountedRef = useRef(true);
+  const samplePreloadGenerationRef = useRef(0);
+  const samplePreloadKeysRef = useRef(new Set<string>());
+  const samplePreloadOwnerRef = useRef(new Map<string, number>());
   const samplePCMCacheRef = useRef<Map<string, SamplePCMEntry>>(new Map());
   const samplePCMUriRef = useRef<Map<string, string>>(new Map());
   const renderedUrlRef = useRef<string | null>(null);
@@ -300,7 +305,9 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
   useEffect(() => { showRecoveryToastRef.current = showRecoveryToast; }, [showRecoveryToast]);
 
   const clearRealtimeWebAudio = useCallback(() => {
-    realtimeSourcesRef.current.forEach((source) => source.cancel());
+    realtimeSourcesRef.current.forEach((source) => {
+      try { source.cancel(); } catch {}
+    });
     realtimeSourcesRef.current.clear();
   }, []);
 
@@ -349,6 +356,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
     channel: SampleChannel | "off",
     atPerformanceTime: number,
   ): boolean => {
+    if (!mountedRef.current) return false;
     const ctx = getWebAudioContext();
     if (!ctx || ctx.state !== "running") return false;
     let adapter = webClockAdapterRef.current;
@@ -377,6 +385,10 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
   }, [recordAudioActivity, volumeRef]);
 
   const activateWebRenderedLoop = useCallback((loop: WebRenderedLoop) => {
+    if (!mountedRef.current) {
+      try { loop.stop(); } catch {}
+      return;
+    }
     webRenderedLoopRef.current = loop;
     const ctx = getWebAudioContext();
     if (ctx) {
@@ -405,7 +417,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
     ensureWebClickBuffers(src as any)
       .then((ok) => { if (ok) webClickReadyRef.current = true; })
       .catch(() => {});
-  }, [soundSet]);
+  }, [soundSet, webClickReadyRef]);
 
   // ── PCM helpers ─────────────────────────────────────────────────────────────
   const trimPCM = useCallback((decoded: DecodedSample, durationSec: number): DecodedSample => {
@@ -462,7 +474,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
     const result: ClickPCMs = { strong: shape(strong), high: shape(high), low: shape(low) };
     clickPCMCacheRef.current[set] = result;
     return result;
-  }, [tonePositionRef, tonePositionsRef, trimPCM]);
+  }, [clickPCMCacheRef, customSoundSetsRef, tonePositionRef, tonePositionsRef, trimPCM]);
 
   const getSamplePCMs = useCallback(async (samples: NoteSampleMap, signal?: AbortSignal): Promise<Map<string, SamplePCMEntry>> => {
     const map = new Map<string, SamplePCMEntry>();
@@ -519,9 +531,18 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
       if (pcms) map.set(`#${li}`, pcms);
     }
     return map;
-  }, [getClickPCMs]);
+  }, [getClickPCMs, layerSoundSetsRef, soundSetRef]);
 
   // ── Core audio player lifecycle ──────────────────────────────────────────────
+  const releaseAudioPlayer = useCallback((player: ExpoAudioPlayer, pause = true) => {
+    if (releasedPlayersRef.current.has(player)) return;
+    releasedPlayersRef.current.add(player);
+    if (pause) {
+      try { player.pause(); } catch {}
+    }
+    try { player.release(); } catch {}
+  }, []);
+
   const buildRenderedPlayerDetailed = useCallback(async (): Promise<
     | { status: "ready"; player: ExpoAudioPlayer }
     | { status: "aborted" }
@@ -558,7 +579,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
         layerClickPCMs,
       }, signal);
       const wavUri = await saveRenderedWav(pcm);
-      if (generation !== renderGenerationRef.current) {
+      if (!mountedRef.current || generation !== renderGenerationRef.current) {
         if (Platform.OS === "web") {
           try { URL.revokeObjectURL(wavUri); } catch {}
         }
@@ -568,7 +589,16 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
         try { URL.revokeObjectURL(renderedUrlRef.current); } catch {}
       }
       renderedUrlRef.current = wavUri;
-      const player = createAudioPlayer(wavUri);
+      let player: ExpoAudioPlayer;
+      try {
+        player = createAudioPlayer(wavUri);
+      } catch (error) {
+        if (Platform.OS === "web") {
+          try { URL.revokeObjectURL(wavUri); } catch {}
+          if (renderedUrlRef.current === wavUri) renderedUrlRef.current = null;
+        }
+        throw error;
+      }
       player.loop = true;
       // 예전엔 1.0 고정값이라 사용자가 설정한 실제 볼륨(예: 0.8)을 무시하고
       // pre-rendered 루프로 전환되는 순간 항상 최대 볼륨으로 재생됐다
@@ -584,7 +614,23 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
     } finally {
       finishAbortableRender(renderGenerationRef, signal);
     }
-  }, [getClickPCMs, getLayerClickPCMsForSchedule, getSamplePCMs]);
+  }, [
+    barMetronomeChannelRef,
+    barModeRef,
+    engineRef,
+    getClickPCMs,
+    getLayerClickPCMsForSchedule,
+    getSamplePCMs,
+    noteSampleChannelsRef,
+    noteSampleMetroChannelsRef,
+    noteSampleSpeedsRef,
+    noteSampleVolumesRef,
+    noteSamplesRef,
+    renderGenerationRef,
+    sampleVolumeRef,
+    soundSetRef,
+    volumeRef,
+  ]);
 
   const buildRenderedPlayer = useCallback(async (): Promise<ExpoAudioPlayer | null> => {
     const result = await buildRenderedPlayerDetailed();
@@ -595,9 +641,8 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
     const pending = pendingRenderedPlayerRef.current;
     pendingRenderedPlayerRef.current = null;
     if (!pending) return;
-    try { pending.pause(); } catch {}
-    try { pending.release(); } catch {}
-  }, []);
+    releaseAudioPlayer(pending);
+  }, [releaseAudioPlayer]);
 
   const stopRenderedAudio = useCallback(() => {
     renderGenerationRef.current += 1;
@@ -606,11 +651,11 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
     engineRef.current?.setPendingMeasureStartAction(null);
     releasePendingRenderedPlayer();
     if (webRenderedLoopRef.current) {
-      webRenderedLoopRef.current.stop();
+      try { webRenderedLoopRef.current.stop(); } catch {}
       webRenderedLoopRef.current = null;
     }
     if (renderedPlayerRef.current) {
-      try { renderedPlayerRef.current.pause(); renderedPlayerRef.current.release(); } catch {}
+      releaseAudioPlayer(renderedPlayerRef.current);
       renderedPlayerRef.current = null;
     }
     if (Platform.OS === "web" && renderedUrlRef.current) {
@@ -621,7 +666,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
     if (engine) engine.setPreRenderedAudio(false);
     outputStateRef.current.transition("idle");
     webClockAdapterRef.current?.invalidate();
-  }, [clearRealtimeWebAudio, releasePendingRenderedPlayer, renderGenerationRef]);
+  }, [clearRealtimeWebAudio, engineRef, releaseAudioPlayer, releasePendingRenderedPlayer, renderGenerationRef]);
 
   const scheduleReRender = useCallback(() => {
     renderGenerationRef.current += 1;
@@ -630,6 +675,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
     releasePendingRenderedPlayer();
     if (reRenderTimerRef.current) clearTimeout(reRenderTimerRef.current);
     reRenderTimerRef.current = setTimeout(async () => {
+       if (!mountedRef.current) return;
       const engine = engineRef.current;
       if (!engine?.getIsRunning()) return;
       engine.setPendingMeasureStartAction(null);
@@ -709,18 +755,21 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
           }
           const player = result.player;
           const generation = renderGenerationRef.current;
-          if (!engine.getIsRunning()) { try { player.release(); } catch {} return; }
+           if (!mountedRef.current || !engine.getIsRunning()) {
+             releaseAudioPlayer(player);
+             return;
+           }
           pendingRenderedPlayerRef.current = player;
           engine.setPendingMeasureStartAction(() => {
-            if (generation !== renderGenerationRef.current || !engine.getIsRunning()) {
+             if (!mountedRef.current || generation !== renderGenerationRef.current || !engine.getIsRunning()) {
               if (pendingRenderedPlayerRef.current === player) {
                 pendingRenderedPlayerRef.current = null;
               }
-              try { player.release(); } catch {}
+               releaseAudioPlayer(player);
               return;
             }
             if (renderedPlayerRef.current) {
-              try { renderedPlayerRef.current.pause(); renderedPlayerRef.current.release(); } catch {}
+               releaseAudioPlayer(renderedPlayerRef.current);
               renderedPlayerRef.current = null;
             }
             pendingRenderedPlayerRef.current = null;
@@ -728,12 +777,36 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
             engine.setPreRenderedAudio(true);
             safePlay(player, "preRender.initial");
           });
-        } catch {
+         } catch {
+           if (!mountedRef.current) return;
           fatalRenderFailureRef.current();
         }
       }
     }, 300);
-  }, [activateWebRenderedLoop, buildRenderedPlayerDetailed, fatalRenderFailureRef, getClickPCMs, getLayerClickPCMsForSchedule, getSamplePCMs, releasePendingRenderedPlayer, stopRenderedAudio, tonePositionRef, volumeRef]);
+   }, [
+     activateWebRenderedLoop,
+     barMetronomeChannelRef,
+     barModeRef,
+     buildRenderedPlayerDetailed,
+     engineRef,
+     fatalRenderFailureRef,
+     getClickPCMs,
+     getLayerClickPCMsForSchedule,
+     getSamplePCMs,
+     noteSampleChannelsRef,
+     noteSampleMetroChannelsRef,
+     noteSampleSpeedsRef,
+     noteSampleVolumesRef,
+     noteSamplesRef,
+     releaseAudioPlayer,
+     releasePendingRenderedPlayer,
+     renderGenerationRef,
+     sampleVolumeRef,
+     soundSetRef,
+     stopRenderedAudio,
+     tonePositionRef,
+     volumeRef,
+   ]);
 
   const invalidateSamplePCMCache = useCallback((key?: string) => {
     renderGenerationRef.current += 1;
@@ -748,13 +821,38 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
 
   // ── Note sample player management ───────────────────────────────────────────
   const preloadNoteSampleSounds = useCallback(async (samples: NoteSampleMap, keepExisting?: boolean) => {
+    const preloadGeneration = ++samplePreloadGenerationRef.current;
     const existing = noteSampleSoundsRef.current;
     const newPlayers: Record<string, ExpoAudioPlayer> = {};
     const keysToKeep = new Set<string>();
+    const ownedArtifactUris = new Map<string, string>();
+    const releaseNewPlayers = () => {
+      for (const [key, player] of Object.entries(newPlayers)) {
+        if (!keysToKeep.has(key)) releaseAudioPlayer(player);
+      }
+    };
+    const releaseOwnedArtifacts = () => {
+      for (const [key, uri] of ownedArtifactUris) {
+        // A newer preload for this key owns the replacement. Its completion
+        // (or unmount cleanup) is responsible for that artifact instead.
+        if (samplePreloadOwnerRef.current.get(key) === preloadGeneration) {
+          void releaseStereoArtifactIfCurrent(key, uri);
+        }
+      }
+    };
+    const isCurrent = () =>
+      mountedRef.current && preloadGeneration === samplePreloadGenerationRef.current;
 
     for (const [key, uri] of Object.entries(samples)) {
+      if (!isCurrent()) {
+        releaseNewPlayers();
+        return;
+      }
+      samplePreloadKeysRef.current.add(key);
+      samplePreloadOwnerRef.current.set(key, preloadGeneration);
       if (!isSafeNoteSampleUri(uri)) {
         captureBreadcrumb({ category: "sample.preload", message: "Unsafe URI blocked", level: "warning", data: { key, uriPrefix: uri.slice(0, 80) } });
+        samplePreloadKeysRef.current.delete(key);
         continue;
       }
       const channel = noteSampleChannelsRef.current[key] ?? "both";
@@ -762,7 +860,15 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
       try { result = await syncStereoArtifact(key, uri, channel); }
       catch (e) {
         captureBreadcrumb({ category: "sample.preload", message: "syncStereoArtifact failed", level: "warning", data: { key, error: String(e) } });
+        samplePreloadKeysRef.current.delete(key);
         continue;
+      }
+      ownedArtifactUris.set(key, result.uri);
+      if (!isCurrent()) {
+        samplePreloadKeysRef.current.delete(key);
+        releaseNewPlayers();
+        releaseOwnedArtifacts();
+        return;
       }
       if (keepExisting && existing[key] && !result.changed) {
         const player = existing[key];
@@ -783,15 +889,33 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
           captureBreadcrumb({ category: "sample.preload", message: "Failed", level: "warning", data: { key, error: String(e) } });
         }
       }
+      samplePreloadKeysRef.current.delete(key);
+    }
+    if (!isCurrent()) {
+      releaseNewPlayers();
+      releaseOwnedArtifacts();
+      return;
     }
     for (const [key, s] of Object.entries(existing)) {
       if (!keysToKeep.has(key)) {
-        try { s.release(); } catch {}
+        releaseAudioPlayer(s);
         if (!samples[key]) { await releaseStereoArtifact(key); }
       }
     }
+    if (!isCurrent()) {
+      releaseNewPlayers();
+      releaseOwnedArtifacts();
+      return;
+    }
     noteSampleSoundsRef.current = newPlayers;
-  }, []);
+  }, [
+    noteSampleChannelsRef,
+    noteSampleSoundsRef,
+    noteSampleSpeedsRef,
+    noteSampleVolumesRef,
+    releaseAudioPlayer,
+    sampleVolumeRef,
+  ]);
 
   const clearSamplePlayStates = useCallback(() => {
     for (const [, state] of Object.entries(samplePlayStateRef.current)) {
@@ -809,7 +933,23 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
       }
       try { player.seekTo(startSec); } catch {}
     }
-  }, []);
+  }, [noteSampleSoundsRef, noteSamplesRef]);
+
+  const cleanupNoteSampleResources = useCallback(() => {
+    clearSamplePlayStates();
+    const players = noteSampleSoundsRef.current;
+    noteSampleSoundsRef.current = {};
+    for (const player of Object.values(players)) releaseAudioPlayer(player, false);
+
+    const artifactKeys = new Set([
+      ...Object.keys(players),
+      ...Object.keys(noteSamplesRef.current),
+      ...samplePreloadKeysRef.current,
+    ]);
+    // releaseStereoArtifact is idempotent at the cache boundary. Do not await
+    // here: React effect cleanup must synchronously invalidate producers first.
+    for (const key of artifactKeys) void releaseStereoArtifact(key);
+  }, [clearSamplePlayStates, noteSampleSoundsRef, noteSamplesRef, releaseAudioPlayer]);
 
   // ── Playback-recovery watchdog ───────────────────────────────────────────────
   const clearAudioWatchdog = useCallback(() => {
@@ -820,11 +960,16 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
   }, []);
 
   const armAudioWatchdog = useCallback(() => {
+    if (!mountedRef.current) return;
     clearAudioWatchdog();
     audioRetryCountRef.current = 0;
     lastAudioFireRef.current = 0;
 
     const runCheck = () => {
+      if (!mountedRef.current) {
+        audioWatchdogTimerRef.current = null;
+        return;
+      }
       const engine = engineRef.current;
       if (!engine?.getIsRunning() || !isPlayingRef.current) {
         audioWatchdogTimerRef.current = null;
@@ -897,12 +1042,55 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
 
     armTimeRef.current = Date.now();
     audioWatchdogTimerRef.current = setTimeout(runCheck, 4000);
-  }, [clearAudioWatchdog, stopRenderedAudio, t]);
+  }, [
+    bpmRef,
+    clearAudioWatchdog,
+    engineRef,
+    isPlayingRef,
+    soundSetRef,
+    stopRenderedAudio,
+    t,
+    webClickReadyRef,
+  ]);
 
   useEffect(() => {
     armAudioWatchdogRef.current = armAudioWatchdog;
     clearAudioWatchdogRef.current = clearAudioWatchdog;
   }, [armAudioWatchdog, clearAudioWatchdog]);
+
+  const cleanupAudioResources = useCallback(() => {
+    if (!mountedRef.current) return;
+    // Invalidate every producer before releasing anything. This prevents a
+    // render/preload continuation from publishing a resource after unmount.
+    mountedRef.current = false;
+    renderGenerationRef.current += 1;
+    abortActiveRender(renderGenerationRef);
+    invalidateAudioStartupProbe();
+    clearAudioWatchdog();
+    if (reRenderTimerRef.current) {
+      clearTimeout(reRenderTimerRef.current);
+      reRenderTimerRef.current = null;
+    }
+    stopRenderedAudio();
+    cleanupNoteSampleResources();
+    samplePCMCacheRef.current.clear();
+    samplePCMUriRef.current.clear();
+    samplePreloadKeysRef.current.clear();
+  }, [
+    cleanupNoteSampleResources,
+    clearAudioWatchdog,
+    invalidateAudioStartupProbe,
+    renderGenerationRef,
+    stopRenderedAudio,
+  ]);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    // A StrictMode effect replay is a new producer lifetime even though the
+    // hook refs are preserved between the two effect setups.
+    samplePreloadGenerationRef.current += 1;
+    return cleanupAudioResources;
+  }, [cleanupAudioResources]);
 
   return {
     // Player pool

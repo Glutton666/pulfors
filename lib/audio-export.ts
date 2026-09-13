@@ -13,7 +13,7 @@ import {
   type SamplePCMEntry,
   type TickInfo,
 } from "./audio-renderer";
-import { applyEntryToEngine } from "@/app/index.helpers";
+import { applyEntryToEngine } from "@/lib/index.helpers";
 import type { PracticeEntry } from "./storage";
 import { logger } from "./logger";
 import {

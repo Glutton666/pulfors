@@ -35,7 +35,7 @@ jest.mock("@/lib/storage", () => ({
   ),
 }));
 
-jest.mock("@/app/index.helpers", () => ({
+jest.mock("@/lib/index.helpers", () => ({
   createInitialBarConfig: () => ({
     beatsPerMeasure: 0,
     beatTypes: [],

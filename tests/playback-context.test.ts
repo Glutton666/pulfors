@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import type { BarConfig } from "../app/index.helpers";
+import type { BarConfig } from "../lib/index.helpers";
 import { resolvePlaybackContext } from "../lib/playback-context";
 
 const barConfig = (bpms: Record<number, number> = {}): Pick<BarConfig, "barRepeats"> => ({

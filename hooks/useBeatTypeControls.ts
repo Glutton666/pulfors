@@ -18,7 +18,7 @@
 import { useCallback } from "react";
 import { Platform } from "react-native";
 import * as Haptics from "expo-haptics";
-import { defaultBeatTypes } from "@/app/index.helpers";
+import { defaultBeatTypes } from "@/lib/index.helpers";
 import type { BeatType } from "@/lib/metronome-engine";
 import type { MetronomeEngine } from "@/lib/metronome-engine";
 import type { DebouncedPersister } from "@/lib/persist";

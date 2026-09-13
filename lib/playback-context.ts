@@ -1,4 +1,4 @@
-import type { BarConfig } from "@/app/index.helpers";
+import type { BarConfig } from "@/lib/index.helpers";
 import { createT, type Language } from "@/lib/i18n";
 
 export type PlaybackMode =

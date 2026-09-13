@@ -197,6 +197,21 @@ export async function releaseStereoArtifact(
   }
 }
 
+/**
+ * Releases an artifact only when the cache still points at the URI returned by
+ * the producer that created it. This protects a late producer completion from
+ * deleting a newer preload's replacement for the same sample key.
+ */
+export async function releaseStereoArtifactIfCurrent(
+  key: string,
+  expectedUri: string,
+  deps: SyncDeps = {},
+): Promise<void> {
+  const entry = cache.get(key);
+  if (!entry || entry.effectiveUri !== expectedUri) return;
+  await releaseStereoArtifact(key, deps);
+}
+
 export async function releaseAll(deps: SyncDeps = {}): Promise<void> {
   const entries = Array.from(cache.values());
   cache.clear();
