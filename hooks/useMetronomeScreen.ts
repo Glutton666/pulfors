@@ -136,7 +136,6 @@ import {
   loadAssetPCM,
   parseTrimInfo,
   renderMeasure,
-  applySoftClip,
   saveRenderedWav,
   ensureWebClickBuffers,
   playWebClick,
@@ -639,6 +638,11 @@ export function useMetronomeScreen() {
       if (settings.landscapeContentType) setLandscapeContentType(settings.landscapeContentType);
       loadCustomSoundSets().then(setCustomSoundSets);
       setIsLoaded(true);
+      // PCM warmup for the loaded sound-set — pre-populates clickPCMCacheRef via
+      // getClickPCMs' own caching so the first Play doesn't pay asset-load +
+      // tone-shaping cost inline inside startPreparedPlayback's 8s deadline.
+      // (A previous refactor dropped this entirely — 2026-09-14 review.)
+      getClickPCMs(settings.soundSet || "classic").catch(() => {});
     },
   });
 
@@ -685,7 +689,7 @@ export function useMetronomeScreen() {
     isAudioStartupEpochCurrent, recordAudioActivity, waitForFirstAudioActivity,
     armAudioWatchdogRef, clearAudioWatchdogRef,
     samplePlayStateRef,
-    buildRenderedPlayer, scheduleReRender, stopRenderedAudio,
+    buildRenderedPlayer, buildRenderedPlayerDetailed, scheduleReRender, stopRenderedAudio,
     getClickPCMs, getSamplePCMs, getLayerClickPCMsForSchedule,
     invalidateSamplePCMCache, preloadNoteSampleSounds, clearSamplePlayStates,
     armAudioWatchdog, clearAudioWatchdog,
@@ -1966,6 +1970,7 @@ export function useMetronomeScreen() {
     waitForFirstAudioActivity,
     renderGenerationRef,
     buildRenderedPlayer,
+    buildRenderedPlayerDetailed,
     clearAudioWatchdogRef,
     armAudioWatchdogRef,
     soundSetRef,

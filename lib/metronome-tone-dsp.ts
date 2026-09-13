@@ -65,9 +65,6 @@ export function sanitizeTonePosition(position?: Partial<TonePosition> | null): T
   return x === 0 && y === 0 ? NEUTRAL : { x, y };
 }
 
-/** Alias useful to callers that describe the operation as clamping. */
-export const clampTonePosition = sanitizeTonePosition;
-
 /**
  * Bilinearly interpolates the four pad corners:
  *
@@ -89,11 +86,6 @@ export function mapTonePositionToWeights(position?: TonePosition | null): ToneWe
     low: tx * ty,
   };
 }
-
-/** Short alias for UI code and tests. */
-export const tonePositionToWeights = mapTonePositionToWeights;
-export const getToneWeights = mapTonePositionToWeights;
-export const mapTonePosition = mapTonePositionToWeights;
 
 /**
  * Maps distance from the pad centre to audible effect strength. A small centre
@@ -129,26 +121,39 @@ function effectiveCeiling(ceiling: number): number {
   return Math.max(1e-9, validCeiling(ceiling) - CEILING_MARGIN);
 }
 
-function peakOf(pcm: Float32Array): number {
+/**
+ * Scans a channel once for both its peak (of finite samples only, matching
+ * the previous peakOf behaviour) and whether every sample is finite. The
+ * common no-op path used to do these as two separate full-array passes.
+ */
+function scanChannel(pcm: Float32Array): { peak: number; allFinite: boolean } {
   let peak = 0;
+  let allFinite = true;
   for (let i = 0; i < pcm.length; i++) {
     const value = pcm[i];
-    if (Number.isFinite(value)) peak = Math.max(peak, Math.abs(value));
+    if (Number.isFinite(value)) {
+      const magnitude = Math.abs(value);
+      if (magnitude > peak) peak = magnitude;
+    } else {
+      allFinite = false;
+    }
   }
-  return peak;
+  return { peak, allFinite };
 }
 
-function linkedPeak(pcm: ClickPCM): number {
-  return isStereo(pcm)
-    ? Math.max(peakOf(pcm.left), peakOf(pcm.right))
-    : peakOf(pcm);
-}
-
-function hasOnlyFiniteSamples(pcm: Float32Array): boolean {
-  for (let i = 0; i < pcm.length; i++) {
-    if (!Number.isFinite(pcm[i])) return false;
+/**
+ * True when a channel (or, for stereo, both channels) is already finite and
+ * under the ceiling — the common no-op case for both limitLinkedPCM and
+ * processClickPCM's neutral fast path. One scanChannel pass per channel.
+ */
+function isUnderCeiling(pcm: ClickPCM, ceiling: number): boolean {
+  if (!isStereo(pcm)) {
+    const { peak, allFinite } = scanChannel(pcm);
+    return peak <= ceiling && allFinite;
   }
-  return true;
+  const l = scanChannel(pcm.left);
+  const r = scanChannel(pcm.right);
+  return Math.max(l.peak, r.peak) <= ceiling && l.allFinite && r.allFinite;
 }
 
 /**
@@ -161,12 +166,7 @@ function hasOnlyFiniteSamples(pcm: Float32Array): boolean {
  */
 export function limitLinkedPCM(pcm: ClickPCM, ceiling = MAX_CEILING): ClickPCM {
   const outputCeiling = effectiveCeiling(ceiling);
-  const peak = linkedPeak(pcm);
-  if (peak <= outputCeiling && (!isStereo(pcm)
-    ? hasOnlyFiniteSamples(pcm)
-    : hasOnlyFiniteSamples(pcm.left) && hasOnlyFiniteSamples(pcm.right))) {
-    return pcm;
-  }
+  if (isUnderCeiling(pcm, outputCeiling)) return pcm;
   if (!isStereo(pcm)) {
     const out = new Float32Array(pcm.length);
     let gain = 1;
@@ -194,11 +194,6 @@ export function limitLinkedPCM(pcm: ClickPCM, ceiling = MAX_CEILING): ClickPCM {
   }
   return { left, right };
 }
-
-/** Mono-friendly spelling of the linked limiter. */
-export const limitPCM = limitLinkedPCM;
-export const limitLinkedOutput = limitLinkedPCM;
-export const applyLinkedLimiter = limitLinkedPCM;
 
 function processChannel(
   source: Float32Array,
@@ -292,10 +287,7 @@ export function processClickPCM(
 ): ClickPCM {
   const parsed = parseProcessArguments(positionOrOptions, sampleRateOrOptions);
   const neutral = parsed.position.x === 0 && parsed.position.y === 0;
-  if (neutral && linkedPeak(pcm) <= effectiveCeiling(parsed.ceiling)
-    && (!isStereo(pcm)
-      ? hasOnlyFiniteSamples(pcm)
-      : hasOnlyFiniteSamples(pcm.left) && hasOnlyFiniteSamples(pcm.right))) {
+  if (neutral && isUnderCeiling(pcm, effectiveCeiling(parsed.ceiling))) {
     return pcm;
   }
 
@@ -311,9 +303,3 @@ export function processClickPCM(
     : processChannel(pcm, weights, parsed.sampleRate, intensity);
   return limitLinkedPCM(shaped, parsed.ceiling);
 }
-
-/** Descriptive aliases retained so callers need not know the implementation's
- * historical "click PCM" terminology. */
-export const processMetronomeTone = processClickPCM;
-export const applyMetronomeTone = processClickPCM;
-export const processMetronomeClick = processClickPCM;

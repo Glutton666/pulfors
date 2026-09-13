@@ -8,6 +8,7 @@ import {
   decodeSampleFile,
   loadAssetPCM,
   parseTrimInfo,
+  renderMeasure,
   saveRenderedWav,
   ensureWebClickBuffers,
   playWebRenderedLoop,
@@ -154,6 +155,16 @@ export interface UseAudioPipelineResult {
   samplePlayStateRef: React.MutableRefObject<Record<string, { playing: boolean; endTimer: ReturnType<typeof setTimeout> | null }>>;
   // ── Functions ────────────────────────────────────────────────────────────
   buildRenderedPlayer: () => Promise<ExpoAudioPlayer | null>;
+  /**
+   * buildRenderedPlayer과 동일한 렌더링을 수행하지만, null 하나로는 구분 못 하는
+   * "다른 렌더에 의해 대체됨(aborted)"과 "진짜 렌더 실패(failed)"를 구분해 반환한다.
+   * 호출자가 aborted를 실패로 오인해 불필요한 에러/폴백을 유발하지 않도록 한다.
+   */
+  buildRenderedPlayerDetailed: () => Promise<
+    | { status: "ready"; player: ExpoAudioPlayer }
+    | { status: "aborted" }
+    | { status: "failed" }
+  >;
   scheduleReRender: () => void;
   stopRenderedAudio: () => void;
   getClickPCMs: (set: SoundSet, signal?: AbortSignal) => Promise<ClickPCMs>;
@@ -1124,6 +1135,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
     clearAudioWatchdogRef,
     samplePlayStateRef,
     buildRenderedPlayer,
+    buildRenderedPlayerDetailed,
     scheduleReRender,
     stopRenderedAudio,
     getClickPCMs,

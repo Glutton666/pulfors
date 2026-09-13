@@ -21,7 +21,7 @@ import type { PracticeEntry, SoundSet } from "@/lib/storage";
 import { PracticeSessionTracker, type PracticeSessionData } from "@/lib/activity-log";
 import type { Language } from "@/lib/i18n";
 import type { SampleChannel } from "@/lib/stereo-channel";
-import type { TonePosition } from "@/lib/metronome-tone-dsp";
+import { toneEffectIntensity, type TonePosition } from "@/lib/metronome-tone-dsp";
 import type {
   NoteSampleChannelMap,
   NoteSampleMap,
@@ -78,6 +78,18 @@ export interface UsePlaybackControlParams {
   waitForFirstAudioActivity: (epoch: number, isCancelled?: () => boolean, timeoutMs?: number) => Promise<boolean>;
   renderGenerationRef: Ref<number>;
   buildRenderedPlayer: () => Promise<AudioPlayer | null>;
+  /**
+   * buildRenderedPlayer의 null만으로는 "다른 렌더에 의해 대체됨(aborted)"과
+   * "진짜 렌더 실패(failed)"를 구분할 수 없어, 대체된 경우까지 실패로 오인해
+   * 불필요한 시작 실패 에러를 던지는 레이스 컨디션이 있었다. 있으면 이 버전을
+   * 우선 사용해 그 둘을 구분한다. optional인 이유는 기존 테스트 mock과의
+   * 하위 호환 유지용.
+   */
+  buildRenderedPlayerDetailed?: () => Promise<
+    | { status: "ready"; player: AudioPlayer }
+    | { status: "aborted" }
+    | { status: "failed" }
+  >;
   clearAudioWatchdogRef: Ref<() => void>;
   armAudioWatchdogRef: Ref<() => void>;
   soundSetRef: Ref<SoundSet>;
@@ -381,8 +393,12 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
       // pools, so native playback always attempts one deterministic rendered loop
       // first. A render failure still falls back to the realtime callbacks below.
       const tonePosition = p.tonePositionRef?.current;
+      // toneEffectIntensity()가 정의하는 것과 같은 중심부 데드존(0.05)을 존중한다.
+      // 좌표가 정확히 0이 아니어도 그 데드존 안이면 DSP가 실제로는 완전히 중립과
+      // 동일한 소리를 내므로(processClickPCM의 intensity===0 우회 경로), 여기서도
+      // "톤 조정됨"으로 취급하지 않아야 불필요하게 더 취약한 렌더 경로로 몰지 않는다.
       const hasToneShaping = tonePosition
-        ? tonePosition.x !== 0 || tonePosition.y !== 0
+        ? toneEffectIntensity(tonePosition) > 0
         : false;
       const useRenderedLoop = Platform.OS === "web"
         ? p.barModeRef.current || String(p.soundSetRef.current).startsWith("custom")
@@ -429,15 +445,30 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
           if (!active) throw new Error("No initial Web Audio activity");
         }
       } else {
-        const player = useRenderedLoop
-          ? await awaitWithin(p.buildRenderedPlayer(), "Native rendered player")
-          : null;
-        localNativePlayer = player;
+        // buildRenderedPlayer()의 null만으로는 "다른 렌더에 의해 대체됨(aborted)"과
+        // "진짜 렌더 실패(failed)"를 구분할 수 없다. 예전엔 aborted도 failed와
+        // 똑같이 취급해, 부스트/톤 조정 중에는 아무 문제 없었는데도 순수 레이스
+        // 컨디션으로 "시작 실패" 에러를 던지는 경우가 있었다. 있으면 상세 버전을
+        // 써서 그 둘을 구분한다(없으면 이전 동작으로 폴백). 로컬 변수
+        // (localNativePlayer)로도 같이 들고 있어서, 공용 ref에 등록되기 전에
+        // 취소/에러가 나도 releaseLocalNativePlayer()가 확실히 정리한다.
+        const detailedResult = useRenderedLoop
+          ? p.buildRenderedPlayerDetailed
+            ? await awaitWithin(p.buildRenderedPlayerDetailed(), "Native rendered player")
+            : await awaitWithin(p.buildRenderedPlayer(), "Native rendered player").then(
+                (built): { status: "ready"; player: AudioPlayer } | { status: "failed" } =>
+                  built ? { status: "ready" as const, player: built } : { status: "failed" as const },
+              )
+          : ({ status: "failed" } as const);
+        if (detailedResult.status === "ready") {
+          localNativePlayer = detailedResult.player;
+        }
         if (cancelled()) {
           releaseLocalNativePlayer();
           return false;
         }
-        if (player) {
+        if (detailedResult.status === "ready") {
+          const player = detailedResult.player;
           p.renderedPlayerRef.current = player;
           nativePlayerPublished = true;
           localNativePlayer = null;
@@ -456,6 +487,16 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
           if (cancelled()) {
             return false;
           }
+        } else if (detailedResult.status === "aborted") {
+          // 이 시도의 렌더가 다른 무언가(설정 변경, 노트 편집, 알림 액션 등이
+          // 직접 부르는 stopRenderedAudio())에 의해 대체됐다 — cancelled()는
+          // startAttemptRef가 바뀔 때만 true가 되므로, 새 재생 시도 없이
+          // stopRenderedAudio만 호출된 이 경로에서는 아직 false다. 아무것도
+          // 실패하지 않았으니 실패 알림 없이(notifyFailure=false) 정리만 하고
+          // 끝낸다 — 그냥 return false만 하면 isPreparing이 영원히 true로
+          // 걸린 채 남는다.
+          cancelPlaybackAttempt(false);
+          return false;
         } else {
           if (p.volumeRef.current > 1 || hasToneShaping) {
             throw new Error("Boosted or tone-shaped native playback requires rendered audio");
