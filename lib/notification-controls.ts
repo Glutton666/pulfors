@@ -77,12 +77,10 @@ export function buildNotificationActions(isPlaying: boolean, lang: Language = "k
       buttonTitle: isPlaying
         ? `⏸ ${t("notification", "pause")}`
         : `▶ ${t("notification", "play")}`,
-      // BPM 버튼과 동일하게 백그라운드에서 처리한다 — 다른 미디어 앱처럼
-      // 잠금화면/알림에서 재생·일시정지가 앱을 열지 않고 반영돼야 한다
-      // (2026-08-24 사용자 요청). 포그라운드 서비스가 살아있는 재생 중
-      // 상태에서는 안정적으로 처리되지만, 완전히 종료된 프로세스에서
-      // 콜드스타트로 처리되는 경우 반응이 늦을 수 있다 — 폰에서 확인 필요.
-      options: { opensAppToForeground: false },
+      // 재생 중에는 foreground service가 살아 있으므로 일시정지를 백그라운드에서
+      // 처리할 수 있다. 정지 뒤에는 서비스와 JS 프로세스가 잠들 수 있으므로,
+      // 재생 액션은 앱을 깨워 마운트된 notification bridge가 확실히 처리하게 한다.
+      options: { opensAppToForeground: !isPlaying },
     },
     {
       identifier: "BPM_UP",
