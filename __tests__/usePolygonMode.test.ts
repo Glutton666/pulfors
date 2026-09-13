@@ -64,6 +64,7 @@ function makeParams(
     clickPCMCacheRef: { current: {} },
     volumeRef: { current: 0.75 },
     getClickPCMs: jest.fn().mockResolvedValue({ strong: new Float32Array(), high: new Float32Array(), low: new Float32Array() }),
+    recordAudioActivity: jest.fn(() => true),
     ...overrides,
   };
 }
@@ -98,6 +99,20 @@ describe("usePolygonMode — engine callback driven", () => {
   });
 
   // ── 1. 4박자 롤오버 ─────────────────────────────────────────────────────
+
+  it("reports the first audible polygon click as audio activity", () => {
+    Platform.OS = "web";
+    const { playWebClick } = jest.requireMock("@/lib/audio-renderer") as {
+      playWebClick: jest.Mock;
+    };
+    playWebClick.mockReturnValue(true);
+    const params = makeParams();
+    renderHook(() => usePolygonMode(params));
+
+    fireBeat(params.engineBeatCallbackRef);
+
+    expect(params.recordAudioActivity).toHaveBeenCalledTimes(1);
+  });
 
   // bpm=120, beatsPerMeasure=4 → 마디 2000ms. 4각형 슬롯 간격 500ms = 비트 간격.
   // 비트별 예약: 각 비트에서 해당 구간의 슬롯이 delay 0으로 즉시 발화한다.

@@ -4214,6 +4214,7 @@ export function useMetronomeScreen() {
     dismissGoalPopup,
     // Audio helpers used inline in JSX
     getClickPCMs,
+    recordAudioActivity,
     polygonOnBeatRef,
     scheduleReRender,
     stopRenderedAudio,

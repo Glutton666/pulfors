@@ -62,6 +62,8 @@ export interface UsePolygonModeParams {
   volumeRef: React.MutableRefObject<number>;
   /** PCM 로더 콜백 (web에서 레이어별 사운드셋 비동기 로드) */
   getClickPCMs: (set: SoundSet) => Promise<ClickPCMs>;
+  /** 폴리곤 자체 출력도 시작 확인·watchdog에 오디오 활동으로 보고한다. */
+  recordAudioActivity: () => boolean;
 }
 
 export interface UsePolygonModeResult {
@@ -261,7 +263,7 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
     }
 
     // Native 사운드 재생 헬퍼.
-    const playNativeSound = (layer: PolygonLayer, beatType: Exclude<VertexBeatType, "mute">) => {
+    const playNativeSound = (layer: PolygonLayer, beatType: Exclude<VertexBeatType, "mute">): boolean => {
       // layer.volume (0-1)를 전역 볼륨에 곱해 레이어별 음량을 제어한다.
       const layerVol = Math.max(0, Math.min(1, layer.volume ?? 1.0));
       const soundRole = beatType === "strong" ? "strong" : beatType === "accent" ? "high" : "low";
@@ -289,7 +291,10 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
           message: `layer=${layer.id.slice(0, 8)} sides=${layer.sides} role=${soundRole} slot=${toggleKey}#${idx} hasPlayer=${!!player}`,
           level: "debug",
         });
-        if (player) safePlayWithVolume(player, layerVol * p.volumeRef.current, "polygon.beat");
+        if (player) {
+          safePlayWithVolume(player, layerVol * p.volumeRef.current, "polygon.beat");
+          return true;
+        }
       } catch (e) {
         captureBreadcrumb({
           category: "polygon.beat",
@@ -298,6 +303,7 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
           data: { error: String(e) },
         });
       }
+      return false;
     };
 
     p.engineBeatCallbackRef.current = () => {
@@ -375,7 +381,7 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
               const cached =
                 polygonPCMCacheRef.current.get(layer.soundSet)
                 ?? p.clickPCMCacheRef.current[layer.soundSet];
-              const played = cached
+              let played = cached
                 ? playPCMOnWebRealtime(
                     cached[soundRole],
                     p.volumeRef.current * layerVol,
@@ -383,10 +389,11 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
                 : false;
               if (!played) {
                 ensurePCM(layer.soundSet);
-                playWebClick(soundRole, "both", p.volumeRef.current * layerVol);
+                played = playWebClick(soundRole, "both", p.volumeRef.current * layerVol);
               }
+              if (played) p.recordAudioActivity();
             } else {
-              playNativeSound(layer, beatType);
+              if (playNativeSound(layer, beatType)) p.recordAudioActivity();
             }
             setActiveVertices((prev) =>
               prev[layer.id] === k ? prev : { ...prev, [layer.id]: k },
