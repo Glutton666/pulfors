@@ -762,6 +762,7 @@ export const translations = {
     playModeLoop: { ko: "연속", en: "Loop" },
     playModeRandom: { ko: "랜덤", en: "Random" },
     nowPlaying: { ko: "재생 중", en: "Now Playing" },
+    beatUnit: { ko: "비트", en: "Beat" },
     items: { ko: "개 항목", en: "items" },
     save: { ko: "저장", en: "Save" },
     reset: { ko: "초기화", en: "Reset" },

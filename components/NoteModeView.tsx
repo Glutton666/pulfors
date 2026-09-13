@@ -30,6 +30,8 @@ interface NoteModeViewProps {
   playMode: "once" | "loop" | "random";
   currentIndex: number;
   isPlaying: boolean;
+  currentBeat: number;
+  activeSubNote: number;
   /** 현재 재생 중인 엔트리의 완료된 마디 수 (0-based) */
   playingBarIdx?: number;
   onAddToQueue: (entry: PracticeEntry) => void;
@@ -316,6 +318,8 @@ export function NoteModeView({
   playMode,
   currentIndex,
   isPlaying,
+  currentBeat,
+  activeSubNote,
   playingBarIdx,
   onAddToQueue,
   onRemoveFromQueue,
@@ -380,6 +384,47 @@ export function NoteModeView({
   const currentEntry = queue[currentIndex];
   const prevEntry = currentIndex > 0 ? queue[currentIndex - 1] : (playMode === "loop" && queue.length > 0 ? queue[queue.length - 1] : null);
   const nextEntry = currentIndex < queue.length - 1 ? queue[currentIndex + 1] : (playMode === "loop" && queue.length > 0 ? queue[0] : null);
+  const totalBeats = Math.max(1, currentEntry?.beatsPerMeasure ?? 1);
+  const visibleBeat = currentBeat >= 0 && currentBeat < totalBeats ? currentBeat : -1;
+  const activePattern = visibleBeat >= 0
+    ? currentEntry?.beatSubdivisions?.[String(visibleBeat)]?.length
+      ? currentEntry.beatSubdivisions[String(visibleBeat)]
+      : [currentEntry?.beatTypes?.[visibleBeat] ?? "normal"]
+    : [];
+
+  const renderBeatProgress = (compact = false, onPhoto = false) => (
+    <View
+      testID="note-beat-progress"
+      style={[
+        styles.beatProgress,
+        compact && styles.beatProgressCompact,
+        onPhoto && styles.beatProgressOnPhoto,
+      ]}
+      accessibilityRole="text"
+      accessibilityLabel={`${t("noteMode", "beatUnit")} ${visibleBeat >= 0 ? visibleBeat + 1 : "-"} / ${totalBeats}`}
+    >
+      <View style={[styles.beatNumberRow, compact && styles.beatNumberRowCompact]}>
+        <Text testID="note-current-beat" style={[styles.beatNumber, compact && styles.beatNumberCompact, onPhoto && { color: "#fff" }]}>
+          {visibleBeat >= 0 ? visibleBeat + 1 : "—"}
+        </Text>
+        <Text style={[styles.beatTotal, onPhoto && { color: "rgba(255,255,255,0.76)" }]}>/ {totalBeats}</Text>
+      </View>
+      <View testID="note-subdivision-progress" style={styles.beatSubdivisionRow}>
+        {activePattern.map((type, index) => (
+          <View
+            key={`${visibleBeat}-${index}`}
+            testID={`note-subdivision-${index}`}
+            style={[
+              styles.beatSubdivisionDot,
+              { backgroundColor: BEAT_COLORS[type] || C.textSecondary },
+              index === activeSubNote && styles.beatSubdivisionDotActive,
+              onPhoto && index !== activeSubNote && { opacity: 0.72 },
+            ]}
+          />
+        ))}
+      </View>
+    </View>
+  );
 
   const renderPlayingStrip = () => (
     <View style={[styles.playingStrip, isLandscape && { flexDirection: "column" as const }]}>
@@ -451,6 +496,7 @@ export function NoteModeView({
             styles.landscapePlayingRight,
             hasImgL && { backgroundColor: "rgba(0,0,0,0.55)" },
           ]}>
+            {renderBeatProgress(true, hasImgL)}
             <View style={{ flexDirection: "row" as const, alignItems: "center" as const, gap: S.ms(8, 0.3), marginBottom: S.ms(6, 0.3) }}>
               <View style={[styles.progressBadge, { backgroundColor: hasImgL ? "rgba(0,0,0,0.45)" : C.accent + "22" }]}>
                 <Text style={[styles.progressText, { color: hasImgL ? "#fff" : C.accent }]}>{currentIndex + 1}/{queue.length}</Text>
@@ -513,11 +559,13 @@ export function NoteModeView({
           </View>
         </View>
 
+        {hasImg && renderBeatProgress(true, true)}
+
         {/* 이미지 없을 때만 플레이스홀더 표시 */}
         {!hasImg && (
           <View style={styles.playingImageArea}>
             <View style={styles.playingImagePlaceholder}>
-              <Ionicons name="musical-notes" size={S.ms(48, 0.4)} color={C.textTertiary} />
+              {renderBeatProgress()}
               <Text style={styles.playingImagePlaceholderText}>{currentEntry?.label}</Text>
             </View>
           </View>
@@ -899,6 +947,73 @@ const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
     fontFamily: "SpaceGrotesk_600SemiBold",
     fontSize: S.ms(11, 0.3),
     color: C.text,
+  },
+  beatProgress: {
+    alignSelf: "center",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: S.ms(8, 0.3),
+    paddingHorizontal: S.ms(18, 0.3),
+    paddingVertical: S.ms(12, 0.3),
+    borderRadius: S.ms(16, 0.3),
+    backgroundColor: C.surfaceLight,
+    borderWidth: 1,
+    borderColor: C.accent + "55",
+  },
+  beatProgressCompact: {
+    alignSelf: "flex-start",
+    flexDirection: "row",
+    gap: S.ms(10, 0.3),
+    paddingHorizontal: S.ms(10, 0.3),
+    paddingVertical: S.ms(5, 0.3),
+    borderRadius: S.ms(10, 0.3),
+    marginBottom: S.ms(6, 0.3),
+  },
+  beatProgressOnPhoto: {
+    backgroundColor: "rgba(0,0,0,0.58)",
+    borderColor: "rgba(255,255,255,0.25)",
+  },
+  beatNumberRow: {
+    flexDirection: "row",
+    alignItems: "baseline",
+  },
+  beatNumberRowCompact: {
+    minWidth: S.ms(48, 0.3),
+  },
+  beatNumber: {
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: S.ms(54, 0.4),
+    lineHeight: S.ms(58, 0.4),
+    color: C.accent,
+  },
+  beatNumberCompact: {
+    fontSize: S.ms(24, 0.4),
+    lineHeight: S.ms(28, 0.4),
+  },
+  beatTotal: {
+    marginLeft: S.ms(5, 0.3),
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: S.ms(14, 0.3),
+    color: C.textTertiary,
+  },
+  beatSubdivisionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: S.ms(5, 0.3),
+    minHeight: S.ms(12, 0.3),
+  },
+  beatSubdivisionDot: {
+    width: S.ms(8, 0.3),
+    height: S.ms(8, 0.3),
+    borderRadius: S.ms(4, 0.3),
+    opacity: 0.4,
+  },
+  beatSubdivisionDotActive: {
+    width: S.ms(12, 0.3),
+    height: S.ms(12, 0.3),
+    borderRadius: S.ms(6, 0.3),
+    opacity: 1,
   },
   playControls: {
     flexDirection: "row",

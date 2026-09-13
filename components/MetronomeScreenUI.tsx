@@ -1028,6 +1028,8 @@ export function MetronomeScreenUI(props: Props) {
             playMode={notePlayMode}
             currentIndex={noteCurrentIndex}
             isPlaying={noteIsPlaying}
+            currentBeat={currentBeat}
+            activeSubNote={activeSubNote}
             playingBarIdx={noteMeasureCount}
             onAddToQueue={handleNoteAddToQueue}
             onRemoveFromQueue={handleNoteRemoveFromQueue}

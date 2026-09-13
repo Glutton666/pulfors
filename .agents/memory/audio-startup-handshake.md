@@ -12,3 +12,5 @@ Realtime engine visual callbacks can precede confirmed output. Keep only their l
 **Why:** Native seek and decoder work can finish after cancellation. A global timestamp or an epoch invalidated only on some paths lets a stale callback produce a late click or mark a newer recovery as successful. Dropping callbacks during preparation makes the audible first click lead the screen by one beat.
 
 **How to apply:** Any new playback entry point should use the shared startup handshake. Any new teardown path must invalidate both the async start attempt and audio activity ownership, discard pending visuals, and preserve interrupted/recovering lifecycle when the OS owns the pause.
+
+Queue-based playback may call the engine directly after changing React state. Set both the global and mode-specific playing refs before `engine.start()` because beat 0 may fire synchronously and the visual batcher reads refs, not pending state.

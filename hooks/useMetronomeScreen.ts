@@ -3265,6 +3265,10 @@ export function useMetronomeScreen() {
       engine.setPreRenderedAudio(false);
     }
 
+    // The engine can emit beat 0 synchronously from start(). Update refs first
+    // so the RAF visual batcher does not discard the first note-mode beat.
+    isPlayingRef.current = true;
+    noteIsPlayingRef.current = true;
     setIsPlaying(true);
     setNoteIsPlaying(true);
     engine.start();
