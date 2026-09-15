@@ -4,6 +4,7 @@ import {
   NOTE_NAMES,
   MAX_LOCAL_BASE64_CHARS,
   base64ToBytes,
+  decodePcm16Base64,
   frequencyToNote,
   noteToFreq,
   realFFT,
@@ -50,6 +51,12 @@ test("base64ToBytes: 잘못된 문자는 빈 배열로 거절", () => {
 test("base64ToBytes: 로컬 한도 초과 입력은 디코드 전에 빈 배열로 거절", () => {
   const r = base64ToBytes("A".repeat(MAX_LOCAL_BASE64_CHARS + 1));
   assert.equal(r.length, 0);
+});
+
+test("decodePcm16Base64: little-endian signed PCM을 float 샘플로 변환", () => {
+  // 0x0000, 0x4000, 0xC000 => 0, 0.5, -0.5
+  const pcm = Buffer.from([0x00, 0x00, 0x00, 0x40, 0x00, 0xC0]).toString("base64");
+  assert.deepEqual(Array.from(decodePcm16Base64(pcm)), [0, 0.5, -0.5]);
 });
 
 test("frequencyToNote: A4 = 440Hz → A/4/0cents", () => {
@@ -151,4 +158,17 @@ test("fftPeakDetect: 합성 440Hz peak 탐지", () => {
   const r = fftPeakDetect(mag, sampleRate, fftSize, 27.5, 4200, -80);
   assert.ok(r);
   assert.ok(Math.abs(r!.freq - 440) < 10, `expected ~440 got ${r!.freq}`);
+});
+
+test("fftPeakDetect: 배음 없는 순수한 440Hz도 실제 피크를 탐지", () => {
+  const sampleRate = 44100;
+  const fftSize = 8192;
+  const samples = new Float32Array(fftSize);
+  for (let i = 0; i < fftSize; i++) {
+    const window = 0.5 * (1 - Math.cos(2 * Math.PI * i / (fftSize - 1)));
+    samples[i] = Math.sin(2 * Math.PI * 440 * i / sampleRate) * window;
+  }
+  const result = fftPeakDetect(realFFT(samples), sampleRate, fftSize);
+  assert.ok(result);
+  assert.ok(Math.abs(result!.freq - 440) < 10, `expected ~440 got ${result!.freq}`);
 });

@@ -39,7 +39,7 @@ import {
 import { TUNING_DATA } from "@/lib/tuning-data";
 import {
   NOTE_NAMES,
-  base64ToBytes,
+  decodePcm16Base64,
   realFFT,
   frequencyToNote,
   fftPeakDetect,
@@ -830,6 +830,8 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
   const [micDetectedFreq, setMicDetectedFreq] = useState<number | null>(null);
   const [micDetectedNote, setMicDetectedNote] = useState<string | null>(null);
   const [micAnalyzed, setMicAnalyzed] = useState(false);
+  const [micError, setMicError] = useState<"permission" | "startFailed" | null>(null);
+  const [micNoInput, setMicNoInput] = useState(false);
   const [pitchTargetFreq, setPitchTargetFreq] = useState<number | null>(null);
   const micDetectedFreqRef = useRef<number | null>(null);
   const micActiveRef = useRef(false);
@@ -843,6 +845,8 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
   const [spectrumTick, setSpectrumTick] = useState(0);
   const audioRecordSubRef = useRef<{ remove: () => void } | null>(null);
   const pcmBufferRef = useRef<number[]>([]);
+  const micInputWatchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const micDataReceivedRef = useRef(false);
 
   const engineRef = useRef(new SignalGeneratorEngine());
   const isPlayingRef = useRef(false);
@@ -940,6 +944,7 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
       if (micAudioCtxRef.current) { try { micAudioCtxRef.current.close(); } catch {} micAudioCtxRef.current = null; }
       if (micStreamRef.current) { micStreamRef.current.getTracks().forEach((t: any) => t.stop()); micStreamRef.current = null; }
       if (audioRecordSubRef.current) { audioRecordSubRef.current.remove(); audioRecordSubRef.current = null; }
+      if (micInputWatchdogRef.current) { clearTimeout(micInputWatchdogRef.current); micInputWatchdogRef.current = null; }
       if (Platform.OS !== "web") { try { AudioRecord!.stop(); } catch {} }
     };
   }, []);
@@ -948,6 +953,13 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
   const stopMic = useCallback(() => {
     micActiveRef.current = false;
     setMicListening(false);
+    setMicError(null);
+    setMicNoInput(false);
+    micDataReceivedRef.current = false;
+    if (micInputWatchdogRef.current) {
+      clearTimeout(micInputWatchdogRef.current);
+      micInputWatchdogRef.current = null;
+    }
     if (Platform.OS === "web") {
       if (micRafRef.current) { cancelAnimationFrame(micRafRef.current); micRafRef.current = null; }
       if (micSourceRef.current) { try { micSourceRef.current.disconnect(); } catch {} micSourceRef.current = null; }
@@ -991,8 +1003,14 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         logger.warn("[MicTuner] getUserMedia not available");
         setMicListening(false);
+        setMicError("startFailed");
         return;
       }
+      setMicError(null);
+      setMicNoInput(false);
+      setMicAnalyzed(false);
+      setMicDetectedFreq(null);
+      setMicDetectedNote(null);
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: false,
@@ -1096,14 +1114,46 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
       detect();
     } catch (e) {
       logger.warn("[MicTuner] Web mic error:", e);
+      if (micStreamRef.current) {
+        micStreamRef.current.getTracks().forEach((t: any) => t.stop());
+        micStreamRef.current = null;
+      }
+      if (micRafRef.current) {
+        cancelAnimationFrame(micRafRef.current);
+        micRafRef.current = null;
+      }
+      if (micSourceRef.current) {
+        try { micSourceRef.current.disconnect(); } catch {}
+        micSourceRef.current = null;
+      }
+      if (micAudioCtxRef.current) {
+        try { micAudioCtxRef.current.close(); } catch {}
+        micAudioCtxRef.current = null;
+      }
+      micActiveRef.current = false;
       setMicListening(false);
+      const errorName = typeof e === "object" && e !== null && "name" in e
+        ? String((e as { name?: unknown }).name)
+        : "";
+      setMicError(errorName === "NotAllowedError" || errorName === "PermissionDeniedError" ? "permission" : "startFailed");
     }
   }, [pickDominantFreq]);
 
   const startNativeMic = useCallback(async () => {
     const ok = await ensurePermission("mic", t);
-    if (!ok) return;
+    if (!ok) {
+      setMicError("permission");
+      setMicListening(false);
+      return;
+    }
     try {
+      if (!AudioRecord) throw new Error("AudioRecord native module unavailable");
+      setMicError(null);
+      setMicNoInput(false);
+      setMicAnalyzed(false);
+      setMicDetectedFreq(null);
+      setMicDetectedNote(null);
+      micDataReceivedRef.current = false;
       AudioRecord!.init({
         sampleRate: 44100,
         channels: 1,
@@ -1117,12 +1167,16 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
 
       const sub = AudioRecord!.on("data", (data: string) => {
         if (!micActiveRef.current) return;
-        const bytes = base64ToBytes(data);
-        const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-        const buf = pcmBufferRef.current;
-        for (let i = 0; i + 1 < bytes.length; i += 2) {
-          buf.push(view.getInt16(i, true) / 32768);
+        micDataReceivedRef.current = true;
+        setMicNoInput(false);
+        if (micInputWatchdogRef.current) {
+          clearTimeout(micInputWatchdogRef.current);
+          micInputWatchdogRef.current = null;
         }
+        const samples = decodePcm16Base64(data);
+        if (samples.length === 0) return;
+        const buf = pcmBufferRef.current;
+        for (let i = 0; i < samples.length; i++) buf.push(samples[i]);
         while (buf.length >= WINDOW_SIZE) {
           const win = new Float32Array(buf.splice(0, WINDOW_SIZE));
           let rms = 0;
@@ -1151,13 +1205,26 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
       micActiveRef.current = true;
       setMicListening(true);
       AudioRecord!.start();
+      micInputWatchdogRef.current = setTimeout(() => {
+        micInputWatchdogRef.current = null;
+        if (micActiveRef.current && !micDataReceivedRef.current) {
+          setMicNoInput(true);
+          captureBreadcrumb({ category: "micTuner", message: "Native AudioRecord produced no input data", level: "warning" });
+        }
+      }, 2000);
     } catch (e) {
       logger.warn("[NativeMic] Error starting:", e);
       captureBreadcrumb({ category: "micTuner", message: "Native AudioRecord start error", level: "error" });
       if (audioRecordSubRef.current) { audioRecordSubRef.current.remove(); audioRecordSubRef.current = null; }
       try { AudioRecord!.stop(); } catch {}
       setMicListening(false);
+      setMicError("startFailed");
+      setMicNoInput(false);
       micActiveRef.current = false;
+      if (micInputWatchdogRef.current) {
+        clearTimeout(micInputWatchdogRef.current);
+        micInputWatchdogRef.current = null;
+      }
     }
   }, [t]);
 
@@ -1408,9 +1475,17 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
                 </View>
               )}
             </View>
-            {(micDetectedFreq || micListening) && (
+            {(micDetectedFreq || micListening || micError) && (
             <View style={[styles.micSection, isLandscape && { gap: Spacing.xs }]}>
-              {micDetectedFreq ? (
+              {micError ? (
+                <Text style={[styles.micDetectedHint, { color: C.danger }, isLandscape && { fontSize: FontSize.micro }]}>
+                  {t("signalGenerator", micError === "permission" ? "micPermissionRequired" : "micStartFailed")}
+                </Text>
+              ) : micNoInput ? (
+                <Text style={[styles.micDetectedHint, { color: C.danger }, isLandscape && { fontSize: FontSize.micro }]}>
+                  {t("signalGenerator", "micNoInput")}
+                </Text>
+              ) : micDetectedFreq ? (
                 <View style={[styles.micDetectedWrap, isLandscape && { marginTop: Spacing.xxs }]}>
                   <View style={{ flexDirection: "row" as const, alignItems: "center" as const, gap: Spacing.xs, flexWrap: "wrap" as const, justifyContent: "center" as const }}>
                     <Text style={[styles.micDetectedHint, { color: micListening ? C.accent : C.textTertiary }, isLandscape && { fontSize: FontSize.micro }]}>

@@ -34,6 +34,24 @@ export function base64ToBytes(base64: string): Uint8Array {
   return bytes;
 }
 
+/**
+ * react-native-audio-record emits little-endian signed 16-bit PCM as base64.
+ * Keep this conversion separate from the FFT path so malformed chunks can be
+ * rejected without partially mutating the recorder buffer.
+ */
+export function decodePcm16Base64(base64: string): Float32Array {
+  const bytes = base64ToBytes(base64);
+  const sampleCount = Math.floor(bytes.byteLength / 2);
+  if (sampleCount === 0) return new Float32Array(0);
+
+  const view = new DataView(bytes.buffer, bytes.byteOffset, sampleCount * 2);
+  const samples = new Float32Array(sampleCount);
+  for (let i = 0; i < sampleCount; i++) {
+    samples[i] = view.getInt16(i * 2, true) / 32768;
+  }
+  return samples;
+}
+
 export function decodeWavBase64(
   base64: string,
   sampleRate: number,
@@ -201,10 +219,31 @@ export function fftPeakDetect(
   }
   if (!hasSignal) return null;
 
+  // Only score actual local spectral peaks. Scoring every bin lets the
+  // numerical noise just above the noise floor win the HPS product when a
+  // clean sine has few or no harmonics.
+  const candidateBins: number[] = [];
+  let strongestDb = noiseFloor;
+  for (let i = minBin; i <= maxBin; i++) {
+    if (linMag[i] <= 0) continue;
+    strongestDb = Math.max(strongestDb, freqData[i]);
+    const left = i > minBin ? linMag[i - 1] : 0;
+    const right = i < maxBin ? linMag[i + 1] : 0;
+    if (linMag[i] >= left && linMag[i] >= right) {
+      candidateBins.push(i);
+    }
+  }
+  if (candidateBins.length === 0) return null;
+
+  // Ignore small noise peaks while still allowing quiet signals to pass when
+  // they are clearly above the configured floor.
+  const minimumPeakDb = Math.max(noiseFloor + 6, strongestDb - 60);
+  const significantBins = candidateBins.filter((i) => freqData[i] >= minimumPeakDb);
+  if (significantBins.length === 0) return null;
+
   let peakHps = -Infinity;
   let peakIdx = -1;
-  for (let i = minBin; i <= maxBin; i++) {
-    if (linMag[i] === 0) continue;
+  for (const i of significantBins) {
     let hps = linMag[i];
     for (let h = 2; h <= 5; h++) {
       const hBin = Math.min(Math.round(i * h), linMag.length - 1);
