@@ -1088,6 +1088,9 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
           // 침묵이 일정 시간 지속되면 readings 초기화
           readings = [];
           windowStart = nowMs;
+            // 스트림은 살아 있지만 입력이 무음인 상태를 "감지 중"과
+            // 구분해 사용자에게 표시한다.
+            setMicAnalyzed(true);
         }
 
         // UPDATE_MS마다 readings에서 지배적 주파수 계산 후 UI 갱신
