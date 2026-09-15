@@ -130,6 +130,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
   const seamlessRef = p.seamlessNextEntryRef ?? seamlessNextEntryRef;
   const renderGenerationRef = p.renderGenerationRef;
   const startAttemptRef = useRef(0);
+  const scheduledStartTokenRef = useRef<symbol | null>(null);
 
   const startOrResumePracticeSession = useCallback(() => {
     if (!p.loggingEnabled) return;
@@ -224,7 +225,11 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
     engine.buildScheduleOnly();
   }, [p]);
 
-  const renderWebLoop = useCallback(async (engine: MetronomeEngine, atMeasureBoundary: boolean) => {
+  const renderWebLoop = useCallback(async (
+    engine: MetronomeEngine,
+    atMeasureBoundary: boolean,
+    startAtPerformanceTime?: number,
+  ) => {
     const generation = ++renderGenerationRef.current;
     const signal = beginAbortableRender(renderGenerationRef);
     try {
@@ -277,7 +282,12 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
         });
       } else {
         p.webRenderedLoopRef.current?.stop();
-        p.activateWebRenderedLoop(playWebRenderedLoop(pcm, undefined, "both", 1));
+        const context = getWebAudioContext();
+        const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+        const startAtAudioTime = startAtPerformanceTime !== undefined && context
+          ? context.currentTime + Math.max(0, startAtPerformanceTime - now) / 1000
+          : undefined;
+        p.activateWebRenderedLoop(playWebRenderedLoop(pcm, undefined, "both", 1, startAtAudioTime));
         engine.setPreRenderedAudio(true);
       }
     } catch (error) {
@@ -289,6 +299,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
 
   const stopMetronome = useCallback(() => {
     if (!p.isPlayingRef.current && !p.isPreparingRef.current) return;
+    scheduledStartTokenRef.current = null;
     startAttemptRef.current += 1;
     renderGenerationRef.current += 1;
     abortActiveRender(renderGenerationRef);
@@ -313,6 +324,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
     notifyFailure = false,
     preserveLifecycle = false,
   ) => {
+    scheduledStartTokenRef.current = null;
     startAttemptRef.current += 1;
     renderGenerationRef.current += 1;
     abortActiveRender(renderGenerationRef);
@@ -337,13 +349,30 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
     engine: MetronomeEngine,
     startBeat: number | undefined,
     androidProbeReady?: Promise<unknown>,
+    startAtPerformanceTime?: number,
   ): Promise<boolean> => {
     const attempt = ++startAttemptRef.current;
     const startupEpoch = p.beginAudioStartupProbe();
-    const deadline = Date.now() + 8000;
+    let deadline = Date.now() + 8000;
     const cancelled = () =>
       attempt !== startAttemptRef.current || p.preparingCancelledRef.current;
     const remainingMs = () => Math.max(0, deadline - Date.now());
+    const waitForScheduledStart = async () => {
+      if (startAtPerformanceTime === undefined) return;
+      const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+      const delay = startAtPerformanceTime - now;
+      if (delay > 0) {
+        await new Promise<void>((resolve) => setTimeout(resolve, delay));
+      }
+      deadline = Math.max(deadline, Date.now() + 2000);
+    };
+    const startEngine = () => {
+      if (startAtPerformanceTime !== undefined && Platform.OS === "web") {
+        engine.start({ startFromBeat: startBeat, startAtPerformanceTime });
+      } else {
+        engine.start(startBeat);
+      }
+    };
     const awaitWithin = async <T,>(promise: Promise<T>, label: string): Promise<T> => {
       const remaining = remainingMs();
       if (remaining <= 0) throw new Error(`Audio startup timed out: ${label}`);
@@ -423,20 +452,25 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
         }
 
         if (useRenderedLoop) {
-          await awaitWithin(renderWebLoop(engine, false), "Web rendered loop");
+          await awaitWithin(
+            renderWebLoop(engine, false, startAtPerformanceTime),
+            "Web rendered loop",
+          );
           if (cancelled()) {
             return false;
           }
           if (!p.webRenderedLoopRef.current?.isRunning()) {
             throw new Error("Web rendered loop did not start");
           }
-          engine.start(startBeat);
+          startEngine();
+          await waitForScheduledStart();
         } else {
           engine.setPreRenderedAudio(false);
           const ticks = engine.getScheduleInfo().ticks as TickInfo[];
           const expectsAudio = ticks.some((tick) => tick.type !== "mute") ||
             Object.keys(p.noteSamplesRef.current).length > 0;
-          engine.start(startBeat);
+          startEngine();
+          await waitForScheduledStart();
           const active = !expectsAudio || await p.waitForFirstAudioActivity(
             startupEpoch,
             cancelled,
@@ -477,8 +511,12 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
           // confirmation promise. Start the engine in the same turn so rendered
           // audio and visual scheduling share one launch anchor; only publishing
           // the playing UI waits for confirmation.
+          await waitForScheduledStart();
+          if (cancelled()) {
+            return false;
+          }
           const playConfirmation = safePlayAndConfirm(player, "metronome.start.native");
-          engine.start(startBeat);
+          startEngine();
           const accepted = await awaitWithin(
             playConfirmation,
             "Native playback request",
@@ -505,7 +543,11 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
           const ticks = engine.getScheduleInfo().ticks as TickInfo[];
           const expectsAudio = ticks.some((tick) => tick.type !== "mute") ||
             Object.keys(p.noteSamplesRef.current).length > 0;
-          engine.start(startBeat);
+          await waitForScheduledStart();
+          if (cancelled()) {
+            return false;
+          }
+          startEngine();
           const active = !expectsAudio || await p.waitForFirstAudioActivity(
             startupEpoch,
             cancelled,
@@ -558,6 +600,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
     }
     if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     if (p.isPlayingRef.current) {
+      scheduledStartTokenRef.current = null;
       p.notifyUserToggle();
       startAttemptRef.current += 1;
       renderGenerationRef.current += 1;
@@ -596,6 +639,56 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
     await startPreparedPlayback(engine, undefined);
   }, [p, startPreparedPlayback]);
 
+  const startScheduledMetronome = useCallback(async (startAtPerformanceTime: number) => {
+    const engine = p.engineRef.current;
+    if (!engine || scheduledStartTokenRef.current) return false;
+    if (p.isPlayingRef.current) {
+      const playback = p.getPlaybackContext();
+      startAttemptRef.current += 1;
+      renderGenerationRef.current += 1;
+      abortActiveRender(renderGenerationRef);
+      p.invalidateAudioStartupProbe();
+      p.clearAudioWatchdogRef.current();
+      engine.stop();
+      p.stopRenderedAudio();
+      p.clearSamplePlayStates();
+      p.setIsPreparing(false);
+      p.isPreparingRef.current = false;
+      p.setIsPlaying(false);
+      p.isPlayingRef.current = false;
+      p.notifyVoicePlayState(false);
+      p.resetPlaybackVisuals();
+      markAudioStopped();
+      p.showPausedNotification(playback.bpm, playback.modeLabel, p.languageRef.current);
+      pausePracticeSession(false);
+      p.onPlaybackStopped?.();
+    } else if (p.isPreparingRef.current) {
+      cancelPlaybackAttempt(false);
+    }
+    const token = Symbol("scheduled-start");
+    scheduledStartTokenRef.current = token;
+    const androidProbeReady = p.notifyUserToggle();
+    const startBeat = p.barModeRef.current ? p.barStartBeatRef.current : undefined;
+    try {
+      return await startPreparedPlayback(
+        engine,
+        startBeat ?? undefined,
+        androidProbeReady,
+        startAtPerformanceTime,
+      );
+    } finally {
+      if (scheduledStartTokenRef.current === token) {
+        scheduledStartTokenRef.current = null;
+      }
+    }
+  }, [cancelPlaybackAttempt, p, pausePracticeSession, renderGenerationRef, startPreparedPlayback]);
+
+  const cancelScheduledMetronome = useCallback(() => {
+    if (!scheduledStartTokenRef.current) return;
+    scheduledStartTokenRef.current = null;
+    cancelPlaybackAttempt(false);
+  }, [cancelPlaybackAttempt]);
+
   const retryAudioRecovery = useCallback(async () => {
     if (p.isPreparingRef.current) return;
     renderGenerationRef.current += 1;
@@ -615,6 +708,8 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
     togglePlayPause,
     togglePlayPauseRef,
     startMetronome,
+    startScheduledMetronome,
+    cancelScheduledMetronome,
     stopMetronome,
     retryAudioRecovery,
     cancelPlaybackAttempt,

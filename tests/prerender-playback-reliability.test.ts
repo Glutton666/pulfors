@@ -977,6 +977,118 @@ describe("pre-rendered playback reliability", () => {
     );
   });
 
+  it("prepares scheduled native playback before the target but starts at the target", async () => {
+    jest.useFakeTimers();
+    (Platform as unknown as { OS: string }).OS = "ios";
+    const engine = makeEngine();
+    const player = { ...mockPlayer, play: jest.fn() };
+    const params = makePlaybackParams(engine, player);
+    const { result } = renderHook(() => usePlaybackControl(params as any));
+    const target = performance.now() + 5000;
+    let pendingStart!: Promise<boolean | undefined>;
+
+    act(() => {
+      pendingStart = result.current.startScheduledMetronome(target);
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(params.buildRenderedPlayer).toHaveBeenCalledTimes(1);
+    expect(player.play).not.toHaveBeenCalled();
+    expect(engine.start).not.toHaveBeenCalled();
+
+    await act(async () => {
+      jest.advanceTimersByTime(4999);
+      await Promise.resolve();
+    });
+    expect(player.play).not.toHaveBeenCalled();
+    expect(engine.start).not.toHaveBeenCalled();
+
+    await act(async () => {
+      jest.advanceTimersByTime(1);
+      await pendingStart;
+    });
+    expect(player.play).toHaveBeenCalledTimes(1);
+    expect(engine.start).toHaveBeenCalledTimes(1);
+    expect(params.setIsPlaying).toHaveBeenLastCalledWith(true);
+  });
+
+  it("replaces already-playing audio when scheduled preparation begins", async () => {
+    jest.useFakeTimers();
+    (Platform as unknown as { OS: string }).OS = "ios";
+    const engine = makeEngine();
+    engine.start();
+    engine.start.mockClear();
+    const player = { ...mockPlayer, play: jest.fn() };
+    const params = makePlaybackParams(engine, player);
+    params.isPlayingRef.current = true;
+    const { result } = renderHook(() => usePlaybackControl(params as any));
+    const target = performance.now() + 5000;
+    let pendingStart!: Promise<boolean | undefined>;
+
+    act(() => {
+      pendingStart = result.current.startScheduledMetronome(target);
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(engine.stop).toHaveBeenCalledTimes(1);
+    expect(params.stopRenderedAudio).toHaveBeenCalled();
+    expect(params.buildRenderedPlayer).toHaveBeenCalledTimes(1);
+    expect(player.play).not.toHaveBeenCalled();
+
+    await act(async () => {
+      jest.advanceTimersByTime(5000);
+      await pendingStart;
+    });
+
+    expect(player.play).toHaveBeenCalledTimes(1);
+    expect(engine.start).toHaveBeenCalledTimes(1);
+  });
+
+  it("only cancels audio owned by an active scheduled start", async () => {
+    jest.useFakeTimers();
+    (Platform as unknown as { OS: string }).OS = "ios";
+    const engine = makeEngine();
+    const player = { ...mockPlayer, play: jest.fn() };
+    const params = makePlaybackParams(engine, player);
+    params.isPlayingRef.current = true;
+    const { result } = renderHook(() => usePlaybackControl(params as any));
+
+    act(() => {
+      result.current.cancelScheduledMetronome();
+    });
+    expect(engine.stop).not.toHaveBeenCalled();
+    expect(params.setIsPlaying).not.toHaveBeenCalled();
+
+    params.isPlayingRef.current = false;
+    const target = performance.now() + 5000;
+    let pendingStart!: Promise<boolean | undefined>;
+    act(() => {
+      pendingStart = result.current.startScheduledMetronome(target);
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    act(() => {
+      result.current.cancelScheduledMetronome();
+      jest.advanceTimersByTime(5000);
+    });
+    await act(async () => {
+      await pendingStart;
+    });
+
+    expect(player.play).not.toHaveBeenCalled();
+    expect(engine.start).not.toHaveBeenCalled();
+    expect(params.setIsPreparing).toHaveBeenLastCalledWith(false);
+  });
+
   it("does not start an obsolete web render after a newer render begins", async () => {
     (Platform as unknown as { OS: string }).OS = "web";
     const engine = makeEngine();

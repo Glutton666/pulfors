@@ -15,6 +15,7 @@ import { onAccentColor } from "@/lib/color-contrast";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useScale } from "@/lib/scale";
 import { Radius, Spacing, FontSize } from "@/constants/tokens";
+import { getScheduledPreparationDelay } from "@/lib/scheduled-start";
 
 export interface ScheduledStartModalProps {
   visible: boolean;
@@ -22,6 +23,7 @@ export interface ScheduledStartModalProps {
   bpm: number;
   beatsPerMeasure: number;
   onScheduled: (params: { startAtPerformanceTime: number }) => void;
+  onCancelScheduled?: () => void;
 }
 
 const OFFSET_STEP = 50;
@@ -137,6 +139,7 @@ export function ScheduledStartModal({
   bpm,
   beatsPerMeasure,
   onScheduled,
+  onCancelScheduled,
 }: ScheduledStartModalProps) {
   const { colors: C } = useTheme();
   const { t } = useLanguage();
@@ -159,11 +162,16 @@ export function ScheduledStartModal({
   const clockTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const tickTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const fireTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const prepareTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reservationActiveRef = useRef(false);
+  const onCancelScheduledRef = useRef(onCancelScheduled);
+  onCancelScheduledRef.current = onCancelScheduled;
 
   const clearAll = useCallback(() => {
     if (clockTimerRef.current) { clearInterval(clockTimerRef.current); clockTimerRef.current = null; }
     if (tickTimerRef.current) { clearInterval(tickTimerRef.current); tickTimerRef.current = null; }
     if (fireTimerRef.current) { clearTimeout(fireTimerRef.current); fireTimerRef.current = null; }
+    if (prepareTimerRef.current) { clearTimeout(prepareTimerRef.current); prepareTimerRef.current = null; }
   }, []);
 
   const updateNow = useCallback(() => {
@@ -193,7 +201,22 @@ export function ScheduledStartModal({
     };
   }, [visible, counting, clearAll, updateNow]);
 
-  useEffect(() => { return () => clearAll(); }, [clearAll]);
+  useEffect(() => {
+    if (!visible && reservationActiveRef.current) {
+      reservationActiveRef.current = false;
+      onCancelScheduledRef.current?.();
+    }
+  }, [visible]);
+
+  useEffect(() => {
+    return () => {
+      clearAll();
+      if (reservationActiveRef.current) {
+        reservationActiveRef.current = false;
+        onCancelScheduledRef.current?.();
+      }
+    };
+  }, [clearAll]);
 
   const computeFireAt = useCallback((): number | null => {
     const now = new Date();
@@ -217,6 +240,7 @@ export function ScheduledStartModal({
       return;
     }
     setPastError(false);
+    reservationActiveRef.current = true;
     const delayMs = fireAt - Date.now();
     const startAtPerf =
       typeof performance !== "undefined" && typeof performance.now === "function"
@@ -235,17 +259,30 @@ export function ScheduledStartModal({
       }
     }, 250);
 
+    const beginPreparation = () => {
+      prepareTimerRef.current = null;
+      onScheduled({ startAtPerformanceTime: startAtPerf });
+    };
+    const prepareDelayMs = getScheduledPreparationDelay(delayMs);
+    if (prepareDelayMs === 0) {
+      beginPreparation();
+    } else {
+      prepareTimerRef.current = setTimeout(beginPreparation, prepareDelayMs);
+    }
+
     fireTimerRef.current = setTimeout(() => {
       fireTimerRef.current = null;
       clearAll();
       setCounting(false);
-      onScheduled({ startAtPerformanceTime: startAtPerf });
+      reservationActiveRef.current = false;
       onClose();
     }, delayMs);
   }, [computeFireAt, clearAll, onScheduled, onClose]);
 
   const handleCancel = useCallback(() => {
     clearAll();
+    reservationActiveRef.current = false;
+    onCancelScheduledRef.current?.();
     setCounting(false);
     setCountdownMs(0);
     updateNow();

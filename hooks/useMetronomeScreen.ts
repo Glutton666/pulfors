@@ -1941,6 +1941,8 @@ export function useMetronomeScreen() {
     togglePlayPause,
     togglePlayPauseRef,
     startMetronome,
+    startScheduledMetronome,
+    cancelScheduledMetronome,
     stopMetronome,
     retryAudioRecovery,
     cancelPlaybackAttempt,
@@ -3981,6 +3983,8 @@ export function useMetronomeScreen() {
     handleTapTempo,
     handleReset,
     startMetronome,
+    startScheduledMetronome,
+    cancelScheduledMetronome,
     retryAudioRecovery,
     handleTimerExpired,
     // Beat subdivision drag

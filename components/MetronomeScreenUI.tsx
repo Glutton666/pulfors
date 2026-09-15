@@ -94,7 +94,7 @@ export function MetronomeScreenUI(props: Props) {
     layerProgressMap, halfTime,
     togglePlayPause, updateBpm, updateTimeSignature, handleBeatTypeChange, handleBeatStaffDelete,
     handleBeatSubdivisionChange, handleBeatDenominatorCycle, handleTapTempo,
-    handleReset, startMetronome, handleTimerExpired,
+    handleReset, startMetronome, startScheduledMetronome, cancelScheduledMetronome, handleTimerExpired,
     beatSubdivisionCounts, beatDirection, setBeatDirection,
     isDragging, dragPos, dragPattern, dropTargetBeat,
     handleDragCancel,
@@ -654,15 +654,9 @@ export function MetronomeScreenUI(props: Props) {
           bpm={bpm}
           beatsPerMeasure={beatsPerMeasure}
           onScheduled={({ startAtPerformanceTime }) => {
-            const engine = engineRef.current;
-            if (!engine) return;
-            engine.stop();
-            resetPlaybackVisuals();
-            setIsPlaying(true);
-            engine.start({ startAtPerformanceTime });
-            markAudioPlaying();
-            startOrResumePracticeSession();
+            void startScheduledMetronome(startAtPerformanceTime);
           }}
+          onCancelScheduled={cancelScheduledMetronome}
         />
       )}
 
