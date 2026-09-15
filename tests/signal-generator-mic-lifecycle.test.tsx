@@ -202,4 +202,28 @@ describe("SignalGeneratorModal native microphone lifecycle", () => {
     expect(view.getByText(/440(\.0)? signalGenerator\.hzUnit/)).toBeTruthy();
     expect(view.getAllByText("A4").length).toBeGreaterThanOrEqual(1);
   });
+
+  test("long-pressing the microphone opens the analysis session without starting the tuner", () => {
+    const view = render(<SignalGeneratorModal {...makeProps()} />);
+
+    fireEvent.contextMenu(view.getByTestId("signal-mic-toggle"));
+
+    expect(view.getByTestId("signal-analysis-panel")).toBeTruthy();
+    expect(view.getByTestId("signal-analysis-start")).toBeTruthy();
+    expect(AudioRecord.init).not.toHaveBeenCalled();
+  });
+
+  test("analysis start uses the existing microphone lifecycle", async () => {
+    const view = render(<SignalGeneratorModal {...makeProps()} />);
+
+    fireEvent.contextMenu(view.getByTestId("signal-mic-toggle"));
+    await act(async () => {
+      fireEvent.click(view.getByTestId("signal-analysis-start"));
+      await Promise.resolve();
+    });
+
+    expect(AudioRecord.init).toHaveBeenCalledTimes(1);
+    expect(AudioRecord.start).toHaveBeenCalledTimes(1);
+    expect(view.getByTestId("signal-analysis-finish")).toBeTruthy();
+  });
 });

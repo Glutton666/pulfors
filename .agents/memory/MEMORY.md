@@ -61,3 +61,4 @@
 - [Scheduled playback ownership](scheduled-playback-ownership.md) — preloaded starts need token ownership; modal unmount cleanup must use a latest-callback ref.
 - [Expo web static image URLs](expo-web-static-image-urls.md) — RN Image.resolveAssetSource is unavailable on web; use Expo asset metadata and Metro's unstable_path URL for CSS masks.
 - [Microphone lifecycle test harness](microphone-lifecycle-test-harness.md) — compare Web Audio resource counts to a pre-test baseline; native component tests need RN FlatList and KeyboardAvoidingView stubs.
+- [Signal analysis session boundary](signal-analysis-session-boundary.md) — keep live single-note HPS tuning separate from temporary polyphonic timeline capture and replay.

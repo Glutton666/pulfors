@@ -45,6 +45,16 @@ import {
   fftPeakDetect,
   noteToFreq,
 } from "@/lib/signal-analysis";
+import {
+  ANALYSIS_BUCKET_MS,
+  ANALYSIS_DURATION_MS,
+  analyzePcmFrame,
+  analyzeSpectrumFrame,
+  buildAnalysisSummary,
+  encodePcm16WavBase64,
+  type AnalysisFrame,
+  type AnalysisSummary,
+} from "@/lib/signal-analysis-session";
 // react-native-audio-record는 네이티브 전용 — 웹이나 Expo Go에선 없을 수 있음
 let AudioRecord: typeof import("react-native-audio-record").default | null = null;
 if (Platform.OS !== "web") {
@@ -82,6 +92,15 @@ const ARC_RANGE = ARC_END - ARC_START;
 const MIN_FREQ = 20;
 const MAX_FREQ = 20000;
 const VOLUME_LINEAR = 0.3;
+
+type AnalysisPhase = "idle" | "ready" | "recording" | "results";
+
+interface AnalysisCapture {
+  sampleRate: number;
+  startedAt: number;
+  frames: AnalysisFrame[];
+  samples: number[];
+}
 
 function freqToNorm(freq: number): number {
   const logMin = Math.log10(MIN_FREQ);
@@ -833,6 +852,13 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
   const [micError, setMicError] = useState<"permission" | "startFailed" | null>(null);
   const [micNoInput, setMicNoInput] = useState(false);
   const [pitchTargetFreq, setPitchTargetFreq] = useState<number | null>(null);
+  const [analysisPhase, setAnalysisPhase] = useState<AnalysisPhase>("idle");
+  const [analysisElapsedMs, setAnalysisElapsedMs] = useState(0);
+  const [analysisPositionSec, setAnalysisPositionSec] = useState(0);
+  const [analysisDurationSec, setAnalysisDurationSec] = useState(0);
+  const [analysisPlaying, setAnalysisPlaying] = useState(false);
+  const [analysisSummary, setAnalysisSummary] = useState<AnalysisSummary | null>(null);
+  const [analysisAudioUri, setAnalysisAudioUri] = useState<string | null>(null);
   const micDetectedFreqRef = useRef<number | null>(null);
   const micActiveRef = useRef(false);
   const micAudioCtxRef = useRef<any>(null);
@@ -847,6 +873,19 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
   const pcmBufferRef = useRef<number[]>([]);
   const micInputWatchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const micDataReceivedRef = useRef(false);
+  const analysisActiveRef = useRef(false);
+  const analysisCaptureRef = useRef<AnalysisCapture | null>(null);
+  const analysisRecorderRef = useRef<any>(null);
+  const analysisRecorderChunksRef = useRef<Blob[]>([]);
+  const analysisRecorderResolveRef = useRef<((blob: Blob | null) => void) | null>(null);
+  const analysisPlayerRef = useRef<AudioPlayer | null>(null);
+  const analysisAudioUriRef = useRef<string | null>(null);
+  const analysisAnalysisTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const analysisPlaybackTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const analysisLongPressRef = useRef(false);
+  const analysisTimelineWidthRef = useRef(1);
+  const micToggleDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const startMicRef = useRef<() => void>(() => {});
 
   const engineRef = useRef(new SignalGeneratorEngine());
   const isPlayingRef = useRef(false);
@@ -863,6 +902,26 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
       try { nativeSoundRef.current.remove(); } catch {}
       nativeSoundRef.current = null;
     }
+  }, []);
+
+  const disposeAnalysisPlayback = useCallback(() => {
+    if (analysisPlaybackTimerRef.current) {
+      clearInterval(analysisPlaybackTimerRef.current);
+      analysisPlaybackTimerRef.current = null;
+    }
+    setAnalysisPlaying(false);
+    if (analysisPlayerRef.current) {
+      try { analysisPlayerRef.current.pause(); } catch {}
+      try { analysisPlayerRef.current.remove(); } catch {}
+      analysisPlayerRef.current = null;
+    }
+    setAnalysisAudioUri((uri) => {
+      if (uri?.startsWith("blob:")) {
+        try { URL.revokeObjectURL(uri); } catch {}
+      }
+      analysisAudioUriRef.current = null;
+      return null;
+    });
   }, []);
 
   const stopPlayback = useCallback(() => {
@@ -946,7 +1005,23 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
       if (audioRecordSubRef.current) { audioRecordSubRef.current.remove(); audioRecordSubRef.current = null; }
       if (micInputWatchdogRef.current) { clearTimeout(micInputWatchdogRef.current); micInputWatchdogRef.current = null; }
       if (Platform.OS !== "web") { try { AudioRecord!.stop(); } catch {} }
+      if (analysisAnalysisTimerRef.current) clearInterval(analysisAnalysisTimerRef.current);
+      if (analysisPlaybackTimerRef.current) clearInterval(analysisPlaybackTimerRef.current);
+      if (analysisRecorderRef.current && analysisRecorderRef.current.state !== "inactive") {
+        try { analysisRecorderRef.current.stop(); } catch {}
+      }
+      if (analysisPlayerRef.current) {
+        try { analysisPlayerRef.current.remove(); } catch {}
+        analysisPlayerRef.current = null;
+      }
+      const analysisUri = analysisAudioUriRef.current;
+      if (analysisUri?.startsWith("blob:")) {
+        try { URL.revokeObjectURL(analysisUri); } catch {}
+      }
     };
+  // The cleanup deliberately captures only stable refs; the audio URI is
+  // released here as well so an unmounted modal cannot retain a Blob URL.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
 
@@ -956,6 +1031,9 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
     setMicError(null);
     setMicNoInput(false);
     micDataReceivedRef.current = false;
+    if (analysisRecorderRef.current && analysisRecorderRef.current.state !== "inactive") {
+      try { analysisRecorderRef.current.stop(); } catch {}
+    }
     if (micInputWatchdogRef.current) {
       clearTimeout(micInputWatchdogRef.current);
       micInputWatchdogRef.current = null;
@@ -974,6 +1052,187 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
     spectrumDataRef.current = null;
     spectrumPeakBinRef.current = -1;
   }, []);
+
+  const clearMicToggleDebounce = useCallback(() => {
+    if (micToggleDebounceRef.current) {
+      clearTimeout(micToggleDebounceRef.current);
+      micToggleDebounceRef.current = null;
+    }
+  }, []);
+
+  const finishAnalysis = useCallback(async () => {
+    const capture = analysisCaptureRef.current;
+    if (!capture || !analysisActiveRef.current) return;
+    analysisActiveRef.current = false;
+
+    const recorder = analysisRecorderRef.current;
+    const blobPromise = recorder && recorder.state !== "inactive"
+      ? new Promise<Blob | null>((resolve) => {
+        analysisRecorderResolveRef.current = resolve;
+        try {
+          recorder.stop();
+        } catch {
+          resolve(null);
+        }
+      })
+      : Promise.resolve<Blob | null>(null);
+    stopMic();
+
+    const [blob] = await Promise.all([
+      Promise.race([
+        blobPromise,
+        new Promise<Blob | null>((resolve) => setTimeout(() => resolve(null), 700)),
+      ]),
+    ]);
+    const durationMs = Math.min(
+      ANALYSIS_DURATION_MS,
+      Math.max(250, Date.now() - capture.startedAt),
+    );
+    const summary = buildAnalysisSummary(capture.frames, durationMs);
+    setAnalysisSummary(summary);
+    setAnalysisElapsedMs(durationMs);
+    setAnalysisDurationSec(durationMs / 1000);
+    setAnalysisPositionSec(0);
+
+    disposeAnalysisPlayback();
+    let uri: string | null = null;
+    try {
+      if (blob && blob.size > 0 && Platform.OS === "web") {
+        uri = URL.createObjectURL(blob);
+      } else if (capture.samples.length > 0) {
+        const base64 = encodePcm16WavBase64(new Float32Array(capture.samples), capture.sampleRate);
+        const fileUri = `${FileSystem.cacheDirectory || FileSystem.documentDirectory || ""}signal_analysis_${Date.now()}.wav`;
+        await FileSystem.writeAsStringAsync(fileUri, base64, { encoding: FileSystem.EncodingType.Base64 });
+        uri = fileUri;
+      }
+    } catch (error) {
+      logger.warn("[SignalAnalysis] Could not prepare replay audio:", error);
+    }
+
+    if (uri) {
+      try {
+        analysisPlayerRef.current = createAudioPlayer({ uri });
+        analysisAudioUriRef.current = uri;
+        setAnalysisAudioUri(uri);
+      } catch (error) {
+        logger.warn("[SignalAnalysis] Could not create replay player:", error);
+      }
+    }
+    setAnalysisPhase("results");
+  }, [disposeAnalysisPlayback, stopMic]);
+
+  const openAnalysisMode = useCallback(() => {
+    hapticFeedback();
+    clearMicToggleDebounce();
+    stopPlayback();
+    stopMic();
+    disposeAnalysisPlayback();
+    analysisActiveRef.current = false;
+    analysisCaptureRef.current = null;
+    setAnalysisSummary(null);
+    setAnalysisElapsedMs(0);
+    setAnalysisDurationSec(0);
+    setAnalysisPositionSec(0);
+    setAnalysisPhase("ready");
+  }, [clearMicToggleDebounce, disposeAnalysisPlayback, hapticFeedback, stopMic, stopPlayback]);
+
+  const startAnalysis = useCallback(() => {
+    hapticFeedback();
+    disposeAnalysisPlayback();
+    analysisCaptureRef.current = {
+      sampleRate: Platform.OS === "web" ? 48000 : 44100,
+      startedAt: Date.now(),
+      frames: [],
+      samples: [],
+    };
+    analysisActiveRef.current = true;
+    setAnalysisSummary(null);
+    setAnalysisElapsedMs(0);
+    setAnalysisPositionSec(0);
+    setAnalysisPhase("recording");
+    startMicRef.current();
+    if (analysisAnalysisTimerRef.current) clearInterval(analysisAnalysisTimerRef.current);
+    analysisAnalysisTimerRef.current = setInterval(() => {
+      const capture = analysisCaptureRef.current;
+      const elapsed = capture ? Math.min(ANALYSIS_DURATION_MS, Date.now() - capture.startedAt) : 0;
+      setAnalysisElapsedMs(elapsed);
+      if (elapsed >= ANALYSIS_DURATION_MS) {
+        if (analysisAnalysisTimerRef.current) {
+          clearInterval(analysisAnalysisTimerRef.current);
+          analysisAnalysisTimerRef.current = null;
+        }
+        void finishAnalysis();
+      }
+    }, 100);
+  }, [disposeAnalysisPlayback, finishAnalysis, hapticFeedback]);
+
+  const cancelAnalysis = useCallback(() => {
+    analysisActiveRef.current = false;
+    if (analysisAnalysisTimerRef.current) {
+      clearInterval(analysisAnalysisTimerRef.current);
+      analysisAnalysisTimerRef.current = null;
+    }
+    stopMic();
+    disposeAnalysisPlayback();
+    analysisCaptureRef.current = null;
+    setAnalysisSummary(null);
+    setAnalysisPhase("idle");
+  }, [disposeAnalysisPlayback, stopMic]);
+
+  const playAnalysis = useCallback(async () => {
+    const player = analysisPlayerRef.current;
+    if (!player) return;
+    try {
+      if (analysisPositionSec >= Math.max(0, analysisDurationSec - 0.05)) {
+        await player.seekTo(0);
+        setAnalysisPositionSec(0);
+      }
+      player.play();
+      setAnalysisPlaying(true);
+      if (analysisPlaybackTimerRef.current) clearInterval(analysisPlaybackTimerRef.current);
+      analysisPlaybackTimerRef.current = setInterval(() => {
+        const next = Number(player.currentTime) || 0;
+        setAnalysisPositionSec(next);
+        if (next >= analysisDurationSec - 0.05) {
+          if (analysisPlaybackTimerRef.current) {
+            clearInterval(analysisPlaybackTimerRef.current);
+            analysisPlaybackTimerRef.current = null;
+          }
+          setAnalysisPlaying(false);
+        }
+      }, 100);
+    } catch (error) {
+      logger.warn("[SignalAnalysis] Replay failed:", error);
+    }
+  }, [analysisDurationSec, analysisPositionSec]);
+
+  const pauseAnalysis = useCallback(() => {
+    try { analysisPlayerRef.current?.pause(); } catch {}
+    if (analysisPlaybackTimerRef.current) {
+      clearInterval(analysisPlaybackTimerRef.current);
+      analysisPlaybackTimerRef.current = null;
+    }
+    setAnalysisPlaying(false);
+  }, []);
+
+  const seekAnalysis = useCallback((seconds: number) => {
+    const clamped = Math.max(0, Math.min(analysisDurationSec, seconds));
+    setAnalysisPositionSec(clamped);
+    void analysisPlayerRef.current?.seekTo(clamped);
+  }, [analysisDurationSec]);
+
+  const timelinePanResponder = useMemo(() => PanResponder.create({
+    onStartShouldSetPanResponder: () => true,
+    onMoveShouldSetPanResponder: () => true,
+    onPanResponderGrant: (event) => {
+      const x = event.nativeEvent.locationX;
+      seekAnalysis((x / Math.max(1, analysisTimelineWidthRef.current)) * analysisDurationSec);
+    },
+    onPanResponderMove: (event) => {
+      const x = event.nativeEvent.locationX;
+      seekAnalysis((x / Math.max(1, analysisTimelineWidthRef.current)) * analysisDurationSec);
+    },
+  }), [analysisDurationSec, seekAnalysis]);
 
   const pickDominantFreq = useCallback((readings: number[]): number | null => {
     if (readings.length === 0) return null;
@@ -1034,6 +1293,27 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
       source.connect(analyser);
       micSourceRef.current = source;
 
+      if (analysisActiveRef.current && typeof MediaRecorder !== "undefined") {
+        try {
+          const recorder = new MediaRecorder(stream);
+          analysisRecorderChunksRef.current = [];
+          recorder.ondataavailable = (event: any) => {
+            if (event.data?.size > 0) analysisRecorderChunksRef.current.push(event.data);
+          };
+          recorder.onstop = () => {
+            const chunks = analysisRecorderChunksRef.current;
+            const blob = chunks.length > 0 ? new Blob(chunks, { type: chunks[0].type || "audio/webm" }) : null;
+            analysisRecorderRef.current = null;
+            analysisRecorderResolveRef.current?.(blob);
+            analysisRecorderResolveRef.current = null;
+          };
+          recorder.start(250);
+          analysisRecorderRef.current = recorder;
+        } catch (error) {
+          logger.warn("[SignalAnalysis] Web recorder unavailable:", error);
+        }
+      }
+
       micActiveRef.current = true;
       setMicListening(true);
 
@@ -1051,6 +1331,7 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
       let readings: number[] = [];
       let windowStart = Date.now();
       let lastSignalTime = Date.now();
+      let lastAnalysisFrameTime = -ANALYSIS_BUCKET_MS;
       let spectrumFrameCount = 0;
       let frameCount = 0;
 
@@ -1091,6 +1372,21 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
             // 스트림은 살아 있지만 입력이 무음인 상태를 "감지 중"과
             // 구분해 사용자에게 표시한다.
             setMicAnalyzed(true);
+        }
+
+        if (analysisActiveRef.current && analysisCaptureRef.current && nowMs - lastAnalysisFrameTime >= ANALYSIS_BUCKET_MS) {
+          if (rms >= MIC_GATE) analyser.getFloatFrequencyData(fftBuf);
+          const capture = analysisCaptureRef.current;
+          const frameTime = Math.max(0, nowMs - capture.startedAt);
+          capture.frames.push(analyzeSpectrumFrame(
+            fftBuf,
+            audioCtx.sampleRate,
+            analyser.fftSize,
+            frameTime,
+            ANALYSIS_BUCKET_MS,
+            rms,
+          ));
+          lastAnalysisFrameTime = nowMs;
         }
 
         // UPDATE_MS마다 readings에서 지배적 주파수 계산 후 UI 갱신
@@ -1178,6 +1474,11 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
         }
         const samples = decodePcm16Base64(data);
         if (samples.length === 0) return;
+         const analysisCapture = analysisActiveRef.current ? analysisCaptureRef.current : null;
+         if (analysisCapture) {
+           const remaining = Math.max(0, Math.round(analysisCapture.sampleRate * ANALYSIS_DURATION_MS / 1000) - analysisCapture.samples.length);
+           if (remaining > 0) analysisCapture.samples.push(...Array.from(samples.subarray(0, remaining)));
+         }
         const buf = pcmBufferRef.current;
         for (let i = 0; i < samples.length; i++) buf.push(samples[i]);
         while (buf.length >= WINDOW_SIZE) {
@@ -1191,6 +1492,10 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
           }
           const mag = realFFT(win);
           const result = fftPeakDetect(mag, SR, WINDOW_SIZE);
+           if (analysisCapture) {
+             const frameTime = Math.max(0, Date.now() - analysisCapture.startedAt);
+             analysisCapture.frames.push(analyzePcmFrame(win, SR, frameTime, ANALYSIS_BUCKET_MS));
+           }
           setMicAnalyzed(true);
           if (result && result.freq > 20 && result.freq <= 4200) {
             const freq = Math.round(result.freq * 10) / 10;
@@ -1238,6 +1543,7 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
       startNativeMic();
     }
   }, [startMicWeb, startNativeMic]);
+  startMicRef.current = startMic;
 
   const toggleMic = useCallback(() => {
     hapticFeedback();
@@ -1254,16 +1560,14 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
   // 세션도 반복적으로 흔들림). 실제 토글을 짧게 지연시켜, 그 사이 다음 탭이
   // 오면(연타 중) 취소하고 다시 지연시킨다. 연타가 아닌 진짜 단일 탭만
   // 지연 후 한 번 토글된다.
-  const micToggleDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const clearMicToggleDebounce = useCallback(() => {
-    if (micToggleDebounceRef.current) {
-      clearTimeout(micToggleDebounceRef.current);
-      micToggleDebounceRef.current = null;
-    }
-  }, []);
   useEffect(() => clearMicToggleDebounce, [clearMicToggleDebounce]);
 
   const handleMicPress = useCallback(() => {
+    if (analysisLongPressRef.current) {
+      analysisLongPressRef.current = false;
+      clearMicToggleDebounce();
+      return;
+    }
     clearMicToggleDebounce();
     if (onMicTap?.()) {
       stopPlayback();
@@ -1275,6 +1579,11 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
       toggleMic();
     }, 260);
   }, [onMicTap, stopPlayback, stopMic, toggleMic, clearMicToggleDebounce]);
+
+  const handleMicLongPress = useCallback(() => {
+    analysisLongPressRef.current = true;
+    openAnalysisMode();
+  }, [openAnalysisMode]);
 
   const handleClose = useCallback(() => {
     clearMicToggleDebounce();
@@ -1356,6 +1665,185 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [spectrumTick]);
 
+  const analysisProgress = Math.min(
+    1,
+    analysisElapsedMs / ANALYSIS_DURATION_MS,
+  );
+  const analysisPositionRatio = analysisDurationSec > 0
+    ? Math.min(1, analysisPositionSec / analysisDurationSec)
+    : 0;
+  const analysisTimeLabel = (seconds: number) => {
+    const safe = Math.max(0, seconds);
+    return `${Math.floor(safe)}.${Math.floor((safe % 1) * 10)}s`;
+  };
+  const analysisPanel = (
+    <View style={styles.analysisPanel} testID="signal-analysis-panel">
+      <View style={styles.analysisHeader}>
+        <View style={styles.analysisTitleRow}>
+          <MaterialCommunityIcons name="waveform" size={S.ms(20, 0.4)} color={C.accent} />
+          <Text style={[styles.analysisTitle, { color: C.accent }]}>
+            {t("signalGenerator", "analysisTitle")}
+          </Text>
+        </View>
+        <Pressable
+          onPress={cancelAnalysis}
+          hitSlop={10}
+          accessibilityRole="button"
+          accessibilityLabel={t("signalGenerator", "analysisCancel")}
+        >
+          <Ionicons name="close" size={S.ms(20, 0.4)} color={C.textSecondary} />
+        </Pressable>
+      </View>
+
+      {analysisPhase === "ready" && (
+        <View style={styles.analysisReady}>
+          <MaterialCommunityIcons name="microphone-outline" size={42} color={C.accent} />
+          <Text style={styles.analysisHeadline}>{t("signalGenerator", "analysisReady")}</Text>
+          <Text style={styles.analysisDescription}>{t("signalGenerator", "analysisReadyHint")}</Text>
+          <Pressable
+            onPress={startAnalysis}
+            style={[styles.analysisPrimaryButton, { backgroundColor: C.accent }]}
+            testID="signal-analysis-start"
+          >
+            <Ionicons name="radio" size={16} color={onAccentColor(C.accent)} />
+            <Text style={[styles.analysisButtonText, { color: onAccentColor(C.accent) }]}>
+              {t("signalGenerator", "analysisStart")}
+            </Text>
+          </Pressable>
+        </View>
+      )}
+
+      {analysisPhase === "recording" && (
+        <View style={styles.analysisRecording}>
+          <Text style={styles.analysisHeadline}>{t("signalGenerator", "analysisRecording")}</Text>
+          <Text style={[styles.analysisTimer, { color: C.accent }]}>
+            {analysisTimeLabel(analysisElapsedMs / 1000)}
+            <Text style={styles.analysisTimerMuted}> / 10.0s</Text>
+          </Text>
+          <View style={styles.analysisProgressTrack}>
+            <View style={[styles.analysisProgressFill, { width: `${analysisProgress * 100}%`, backgroundColor: C.accent }]} />
+          </View>
+          <Text style={styles.analysisDescription}>{t("signalGenerator", "analysisRecordingHint")}</Text>
+          <Pressable
+            onPress={() => { hapticFeedback(); void finishAnalysis(); }}
+            style={[styles.analysisPrimaryButton, { backgroundColor: C.accent }]}
+            testID="signal-analysis-finish"
+          >
+            <Ionicons name="checkmark" size={16} color={onAccentColor(C.accent)} />
+            <Text style={[styles.analysisButtonText, { color: onAccentColor(C.accent) }]}>
+              {t("signalGenerator", "analysisFinish")}
+            </Text>
+          </Pressable>
+        </View>
+      )}
+
+      {analysisPhase === "results" && (
+        <ScrollView
+          style={styles.analysisResultsScroll}
+          contentContainerStyle={styles.analysisResultsContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          <View style={styles.analysisResultSummary}>
+            <Text style={styles.analysisEyebrow}>{t("signalGenerator", "analysisResult")}</Text>
+            <Text style={[styles.analysisResultDuration, { color: C.accent }]}>
+              {analysisTimeLabel(analysisDurationSec)}
+            </Text>
+          </View>
+          <View
+            style={styles.analysisTimeline}
+            onLayout={(event) => { analysisTimelineWidthRef.current = event.nativeEvent.layout.width; }}
+            {...timelinePanResponder.panHandlers}
+            testID="signal-analysis-timeline"
+          >
+            <View style={styles.analysisTimelineTrack}>
+              {(analysisSummary?.buckets ?? []).map((bucket) => {
+                const hasNotes = bucket.notes.length > 0;
+                const isActive = analysisDurationSec > 0
+                  && analysisPositionSec >= bucket.startMs / 1000
+                  && analysisPositionSec < bucket.endMs / 1000;
+                return (
+                  <View
+                    key={bucket.startMs}
+                    style={[
+                      styles.analysisTimelineBucket,
+                      { backgroundColor: hasNotes ? C.accent : C.surfaceLight },
+                      isActive && { backgroundColor: C.accent, opacity: 1 },
+                    ]}
+                  >
+                    {hasNotes ? <Text style={styles.analysisTimelineNote}>{bucket.dominantNote}</Text> : null}
+                  </View>
+                );
+              })}
+            </View>
+            <View style={[styles.analysisScrubber, { left: `${analysisPositionRatio * 100}%`, backgroundColor: C.accent }]} />
+          </View>
+          <View style={styles.analysisTimelineLabels}>
+            <Text style={styles.analysisSmallText}>{analysisTimeLabel(analysisPositionSec)}</Text>
+            <Text style={styles.analysisSmallText}>{t("signalGenerator", "analysisDragHint")}</Text>
+            <Text style={styles.analysisSmallText}>{analysisTimeLabel(analysisDurationSec)}</Text>
+          </View>
+          <View style={styles.analysisPlaybackRow}>
+            <Pressable
+              onPress={analysisPlaying ? pauseAnalysis : playAnalysis}
+              style={[styles.analysisPlayButton, { backgroundColor: C.accent }]}
+              testID="signal-analysis-play"
+            >
+              <Ionicons name={analysisPlaying ? "pause" : "play"} size={16} color={onAccentColor(C.accent)} />
+              <Text style={[styles.analysisButtonText, { color: onAccentColor(C.accent) }]}>
+                {analysisPlaying ? t("signalGenerator", "analysisPause") : t("signalGenerator", "analysisReplay")}
+              </Text>
+            </Pressable>
+            <Text style={styles.analysisSmallText}>
+              {analysisAudioUri ? t("signalGenerator", "analysisAudioReady") : t("signalGenerator", "analysisAudioUnavailable")}
+            </Text>
+          </View>
+          <Text style={styles.analysisSectionTitle}>{t("signalGenerator", "analysisDistribution")}</Text>
+          {(analysisSummary?.notes ?? []).length > 0 ? (
+            <View style={styles.analysisChart}>
+              {(analysisSummary?.notes ?? []).slice(0, 6).map((note) => (
+                <View key={note.note} style={styles.analysisChartRow}>
+                  <Text style={styles.analysisChartLabel}>{note.note}</Text>
+                  <View style={styles.analysisChartTrack}>
+                    <View style={[styles.analysisChartFill, { width: `${Math.max(3, note.share * 100)}%`, backgroundColor: C.accent }]} />
+                  </View>
+                  <Text style={styles.analysisChartValue}>{Math.round(note.share * 100)}%</Text>
+                </View>
+              ))}
+            </View>
+          ) : (
+            <Text style={styles.analysisSmallText}>{t("signalGenerator", "analysisNoNotes")}</Text>
+          )}
+          <Text style={styles.analysisSectionTitle}>{t("signalGenerator", "analysisTimelineTitle")}</Text>
+          <View style={styles.analysisBucketList}>
+            {(analysisSummary?.buckets ?? []).map((bucket) => (
+              <Pressable
+                key={`row-${bucket.startMs}`}
+                style={styles.analysisBucketRow}
+                onPress={() => seekAnalysis(bucket.startMs / 1000)}
+              >
+                <Text style={styles.analysisBucketTime}>{analysisTimeLabel(bucket.startMs / 1000)}</Text>
+                <Text style={[styles.analysisBucketNotes, { color: bucket.dominantNote ? C.text : C.textTertiary }]}>
+                  {bucket.notes.length > 0 ? bucket.notes.join(" · ") : t("signalGenerator", "analysisSilence")}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+          <Pressable
+            onPress={openAnalysisMode}
+            style={styles.analysisSecondaryButton}
+            testID="signal-analysis-again"
+          >
+            <Ionicons name="refresh" size={15} color={C.accent} />
+            <Text style={[styles.analysisSecondaryButtonText, { color: C.accent }]}>
+              {t("signalGenerator", "analysisAgain")}
+            </Text>
+          </Pressable>
+        </ScrollView>
+      )}
+    </View>
+  );
+
   return (
     <AnimatedModal
       visible={visible}
@@ -1403,6 +1891,7 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
             </>
           )}
 
+          {analysisPhase !== "idle" ? analysisPanel : (
           <View style={isLandscape
             ? { flexDirection: "row" as const, gap: landscapeGap, alignItems: "stretch" as const, flex: 1 }
             : { flex: 1, minHeight: 0 }
@@ -1443,7 +1932,9 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
             {/* 마이크 버튼 — 노브 아래 독립 행 */}
             <View style={styles.micRow}>
               <Pressable
-                    onPress={handleMicPress}
+                onPress={handleMicPress}
+                onLongPress={handleMicLongPress}
+                delayLongPress={500}
                 style={[
                   styles.micEmoji,
                   micListening && styles.micEmojiActive,
@@ -1764,7 +2255,8 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
               )}
             </View>
           )}
-          </View>
+           </View>
+          )}
 
 
         </View>
@@ -2360,6 +2852,254 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     overflow: "visible",
+  },
+  analysisPanel: {
+    flex: 1,
+    minHeight: 0,
+    width: "100%",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: C.border,
+    backgroundColor: C.surfaceLight,
+    padding: 16,
+  },
+  analysisHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 14,
+  },
+  analysisTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+  },
+  analysisTitle: {
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 17,
+  },
+  analysisReady: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+    paddingHorizontal: 12,
+  },
+  analysisHeadline: {
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 18,
+    color: C.text,
+    textAlign: "center",
+  },
+  analysisDescription: {
+    maxWidth: 300,
+    fontFamily: "SpaceGrotesk_400Regular",
+    fontSize: FontSize.caption,
+    lineHeight: 18,
+    color: C.textTertiary,
+    textAlign: "center",
+  },
+  analysisPrimaryButton: {
+    minWidth: 150,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: Spacing.sm,
+    borderRadius: 12,
+    paddingHorizontal: 18,
+    paddingVertical: 11,
+    marginTop: Spacing.sm,
+  },
+  analysisButtonText: {
+    fontFamily: "SpaceGrotesk_600SemiBold",
+    fontSize: FontSize.small,
+  },
+  analysisRecording: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+  },
+  analysisTimer: {
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 38,
+    fontVariant: ["tabular-nums"],
+  },
+  analysisTimerMuted: {
+    fontFamily: "SpaceGrotesk_400Regular",
+    fontSize: 16,
+    color: C.textTertiary,
+  },
+  analysisProgressTrack: {
+    width: "90%",
+    maxWidth: 360,
+    height: 8,
+    borderRadius: Radius.xs,
+    overflow: "hidden",
+    backgroundColor: C.border,
+  },
+  analysisProgressFill: {
+    height: "100%",
+    borderRadius: Radius.xs,
+  },
+  analysisResultsScroll: {
+    flex: 1,
+    minHeight: 0,
+  },
+  analysisResultsContent: {
+    gap: 12,
+    paddingBottom: Spacing.sm,
+  },
+  analysisResultSummary: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    justifyContent: "space-between",
+  },
+  analysisEyebrow: {
+    fontFamily: "SpaceGrotesk_600SemiBold",
+    fontSize: FontSize.caption,
+    color: C.textSecondary,
+    letterSpacing: 1,
+    textTransform: "uppercase",
+  },
+  analysisResultDuration: {
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 18,
+  },
+  analysisTimeline: {
+    height: 70,
+    justifyContent: "center",
+    position: "relative",
+  },
+  analysisTimelineTrack: {
+    height: 46,
+    flexDirection: "row",
+    alignItems: "stretch",
+    gap: Spacing.xxs,
+    overflow: "hidden",
+    borderRadius: Radius.md,
+    backgroundColor: C.border,
+  },
+  analysisTimelineBucket: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    minWidth: 2,
+    opacity: 0.72,
+  },
+  analysisTimelineNote: {
+    fontFamily: "SpaceGrotesk_600SemiBold",
+    fontSize: 8,
+    color: C.white,
+    transform: [{ rotate: "-90deg" }],
+  },
+  analysisScrubber: {
+    position: "absolute",
+    top: 6,
+    bottom: 6,
+    width: 2,
+    marginLeft: -1,
+  },
+  analysisTimelineLabels: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  analysisSmallText: {
+    fontFamily: "SpaceGrotesk_400Regular",
+    fontSize: FontSize.micro,
+    color: C.textTertiary,
+  },
+  analysisPlaybackRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: Spacing.sm,
+  },
+  analysisPlayButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.xs,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: Spacing.sm,
+  },
+  analysisSectionTitle: {
+    fontFamily: "SpaceGrotesk_600SemiBold",
+    fontSize: FontSize.caption,
+    color: C.textSecondary,
+    marginTop: Spacing.xs,
+  },
+  analysisChart: {
+    gap: Spacing.sm,
+  },
+  analysisChartRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+  },
+  analysisChartLabel: {
+    width: 36,
+    fontFamily: "SpaceGrotesk_600SemiBold",
+    fontSize: FontSize.caption,
+    color: C.text,
+  },
+  analysisChartTrack: {
+    flex: 1,
+    height: 10,
+    borderRadius: 5,
+    overflow: "hidden",
+    backgroundColor: C.border,
+  },
+  analysisChartFill: {
+    height: "100%",
+    borderRadius: 5,
+    minWidth: 2,
+  },
+  analysisChartValue: {
+    width: 34,
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: FontSize.micro,
+    color: C.textTertiary,
+    textAlign: "right",
+  },
+  analysisBucketList: {
+    gap: Spacing.xxs,
+  },
+  analysisBucketRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 5,
+    paddingHorizontal: Spacing.sm,
+    borderRadius: 7,
+    backgroundColor: C.surface,
+  },
+  analysisBucketTime: {
+    width: 42,
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: FontSize.micro,
+    color: C.textTertiary,
+  },
+  analysisBucketNotes: {
+    flex: 1,
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: FontSize.caption,
+  },
+  analysisSecondaryButton: {
+    alignSelf: "center",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.xs,
+    borderWidth: 1,
+    borderColor: C.border,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: Spacing.sm,
+    marginTop: Spacing.xs,
+  },
+  analysisSecondaryButtonText: {
+    fontFamily: "SpaceGrotesk_600SemiBold",
+    fontSize: FontSize.caption,
   },
   micSection: {
     alignItems: "center",

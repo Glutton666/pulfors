@@ -263,6 +263,71 @@ export function fftPeakDetect(
   return { freq, peakBin: peakIdx };
 }
 
+export interface MultiPeak {
+  freq: number;
+  peakBin: number;
+  db: number;
+}
+
+/**
+ * Finds several significant local peaks for short analysis frames.
+ *
+ * This complements (rather than replaces) fftPeakDetect: the live tuner
+ * needs one HPS-selected fundamental, while the analysis timeline needs a
+ * small set of simultaneous spectral candidates.
+ */
+export function fftMultiPeakDetect(
+  freqData: Float32Array,
+  sampleRate: number,
+  fftSize: number,
+  minFreq: number = 27.5,
+  maxFreq: number = 4200,
+  noiseFloor: number = -80,
+  maxPeaks: number = 6,
+): MultiPeak[] {
+  const binRes = sampleRate / fftSize;
+  const minBin = Math.max(2, Math.ceil(minFreq / binRes));
+  const maxBin = Math.min(
+    Math.floor(freqData.length - 2),
+    Math.floor(maxFreq / binRes),
+  );
+  if (minBin >= maxBin) return [];
+
+  let strongestDb = noiseFloor;
+  for (let i = minBin; i <= maxBin; i++) strongestDb = Math.max(strongestDb, freqData[i]);
+  if (strongestDb <= noiseFloor) return [];
+
+  const minimumPeakDb = Math.max(noiseFloor + 8, strongestDb - 42);
+  const candidates: MultiPeak[] = [];
+  for (let i = minBin + 1; i < maxBin; i++) {
+    const db = freqData[i];
+    if (db < minimumPeakDb || db < freqData[i - 1] || db < freqData[i + 1]) continue;
+    const left = Math.pow(10, freqData[i - 1] / 20);
+    const center = Math.pow(10, db / 20);
+    const right = Math.pow(10, freqData[i + 1] / 20);
+    const denom = left - 2 * center + right;
+    const refinedBin = denom !== 0 ? i + 0.5 * (left - right) / denom : i;
+    candidates.push({
+      freq: refinedBin * binRes,
+      peakBin: i,
+      db: Math.round(db * 10) / 10,
+    });
+  }
+
+  // Keep distinct notes rather than several adjacent bins of one peak.
+  candidates.sort((a, b) => b.db - a.db);
+  const selected: MultiPeak[] = [];
+  for (const candidate of candidates) {
+    const tooClose = selected.some((peak) =>
+      Math.abs(1200 * Math.log2(candidate.freq / peak.freq)) < 45,
+    );
+    if (tooClose) continue;
+    selected.push(candidate);
+    if (selected.length >= maxPeaks) break;
+  }
+  return selected.sort((a, b) => a.freq - b.freq);
+}
+
 export function analyzeWavLocally(
   base64: string,
   sampleRate: number,

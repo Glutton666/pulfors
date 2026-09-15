@@ -9,7 +9,13 @@ import {
   noteToFreq,
   realFFT,
   fftPeakDetect,
+  fftMultiPeakDetect,
 } from "../lib/signal-analysis";
+import {
+  analyzePcmFrame,
+  buildAnalysisSummary,
+  encodePcm16WavBase64,
+} from "../lib/signal-analysis-session";
 
 test("NOTE_NAMES: 12개 반음", () => {
   assert.equal(NOTE_NAMES.length, 12);
@@ -177,4 +183,43 @@ test("fftPeakDetect: 배음 없는 순수한 440Hz도 실제 피크를 탐지", 
   const result = fftPeakDetect(realFFT(samples), sampleRate, fftSize);
   assert.ok(result);
   assert.ok(Math.abs(result!.freq - 440) < 10, `expected ~440 got ${result!.freq}`);
+});
+
+test("fftMultiPeakDetect: 동시에 존재하는 두 주파수를 모두 반환", () => {
+  const sampleRate = 48000;
+  const fftSize = 4096;
+  const magnitude = new Float32Array(fftSize / 2).fill(-100);
+  for (const [frequency, db] of [[440, -12], [660, -16]] as const) {
+    const bin = Math.round(frequency / (sampleRate / fftSize));
+    magnitude[bin - 1] = -45;
+    magnitude[bin] = db;
+    magnitude[bin + 1] = -45;
+  }
+  const peaks = fftMultiPeakDetect(magnitude, sampleRate, fftSize);
+  assert.equal(peaks.length, 2);
+  assert.ok(Math.abs(peaks[0].freq - 440) < 10);
+  assert.ok(Math.abs(peaks[1].freq - 660) < 10);
+});
+
+test("analysis summary: 프레임을 음별 비중과 0.5초 버킷으로 집계", () => {
+  const sampleRate = 44100;
+  const samples = new Float32Array(4096);
+  for (let i = 0; i < samples.length; i++) {
+    samples[i] = Math.sin(2 * Math.PI * 440 * i / sampleRate);
+  }
+  const frame = analyzePcmFrame(samples, sampleRate, 0, 500);
+  const summary = buildAnalysisSummary([
+    frame,
+    { ...frame, timeMs: 500, peaks: frame.peaks.slice(0, 1) },
+  ], 1000);
+  assert.equal(summary.buckets.length, 2);
+  assert.ok(summary.notes.some((note) => note.note === "A4"));
+  assert.equal(summary.buckets[0].dominantNote, "A4");
+});
+
+test("encodePcm16WavBase64: 임시 재생용 PCM WAV 헤더를 생성", () => {
+  const wav = base64ToBytes(encodePcm16WavBase64(new Float32Array([0, 0.5, -0.5]), 44100));
+  assert.equal(String.fromCharCode(...wav.slice(0, 4)), "RIFF");
+  assert.equal(String.fromCharCode(...wav.slice(8, 12)), "WAVE");
+  assert.equal(wav.length, 50);
 });
