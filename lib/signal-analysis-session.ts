@@ -28,6 +28,7 @@ export interface AnalysisBucket {
   notes: string[];
   dominantNote: string | null;
   rms: number;
+  noteShares: Array<{ note: string; share: number }>;
 }
 
 export interface AnalysisSummary {
@@ -105,21 +106,31 @@ export function buildAnalysisSummary(
     const endMs = Math.min(Math.max(durationMs, startMs + bucketMs), startMs + bucketMs);
     const bucketFrames = frames.filter((frame) => frame.timeMs >= startMs && frame.timeMs < endMs);
     const noteCounts = new Map<string, number>();
+    const noteEnergy = new Map<string, number>();
     for (const frame of bucketFrames) {
       for (const peak of frame.peaks) {
         const info = frequencyToNote(peak.freq);
         const note = `${info.name}${info.octave}`;
         noteCounts.set(note, (noteCounts.get(note) ?? 0) + 1);
+        noteEnergy.set(note, (noteEnergy.get(note) ?? 0) + Math.max(0.001, peak.db + 100));
       }
     }
     const orderedNotes = Array.from(noteCounts.entries())
       .sort((a, b) => b[1] - a[1])
       .map(([note]) => note);
+    const bucketTotalEnergy = Array.from(noteEnergy.values()).reduce((sum, energy) => sum + energy, 0);
+    const noteShares = Array.from(noteEnergy.entries())
+      .map(([note, energy]) => ({
+        note,
+        share: bucketTotalEnergy > 0 ? energy / bucketTotalEnergy : 0,
+      }))
+      .sort((a, b) => b.share - a.share);
     return {
       startMs,
       endMs,
       notes: orderedNotes,
       dominantNote: orderedNotes[0] ?? null,
+      noteShares,
       rms: bucketFrames.length > 0
         ? bucketFrames.reduce((sum, frame) => sum + frame.rms, 0) / bucketFrames.length
         : 0,

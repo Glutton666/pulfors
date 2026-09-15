@@ -1672,6 +1672,15 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
   const analysisPositionRatio = analysisDurationSec > 0
     ? Math.min(1, analysisPositionSec / analysisDurationSec)
     : 0;
+  const analysisSelectedBucket = useMemo(() => {
+    const buckets = analysisSummary?.buckets ?? [];
+    if (buckets.length === 0) return null;
+    return buckets.find((bucket) =>
+      analysisPositionSec >= bucket.startMs / 1000
+      && analysisPositionSec < bucket.endMs / 1000,
+    ) ?? buckets[buckets.length - 1];
+  }, [analysisPositionSec, analysisSummary]);
+  const analysisChartNotes = analysisSelectedBucket?.noteShares ?? [];
   const analysisTimeLabel = (seconds: number) => {
     const safe = Math.max(0, seconds);
     return `${Math.floor(safe)}.${Math.floor((safe % 1) * 10)}s`;
@@ -1762,16 +1771,41 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
                 const isActive = analysisDurationSec > 0
                   && analysisPositionSec >= bucket.startMs / 1000
                   && analysisPositionSec < bucket.endMs / 1000;
+                const intensity = bucket.rms > 0
+                  ? Math.min(1, Math.max(0.1, bucket.rms * 3.5))
+                  : 0.06;
                 return (
                   <View
                     key={bucket.startMs}
-                    style={[
-                      styles.analysisTimelineBucket,
-                      { backgroundColor: hasNotes ? C.accent : C.surfaceLight },
-                      isActive && { backgroundColor: C.accent, opacity: 1 },
-                    ]}
+                    style={styles.analysisTimelineColumn}
                   >
-                    {hasNotes ? <Text style={styles.analysisTimelineNote}>{bucket.dominantNote}</Text> : null}
+                    <View
+                      style={[
+                        styles.analysisTimelineBar,
+                        { height: `${Math.round(intensity * 100)}%` },
+                        !hasNotes && { backgroundColor: C.surfaceLight },
+                        isActive && { borderColor: C.white, borderWidth: 1 },
+                      ]}
+                    >
+                      {bucket.noteShares.slice(0, 3).map((note, index) => (
+                        <View
+                          key={note.note}
+                          style={[
+                            styles.analysisTimelineBarSegment,
+                            {
+                              flex: Math.max(0.08, note.share),
+                              backgroundColor: C.accent,
+                              opacity: index === 0 ? 1 : index === 1 ? 0.66 : 0.4,
+                            },
+                          ]}
+                        />
+                      ))}
+                    </View>
+                    {isActive && bucket.dominantNote ? (
+                      <Text style={styles.analysisTimelineNote} numberOfLines={1}>
+                        {bucket.dominantNote}
+                      </Text>
+                    ) : null}
                   </View>
                 );
               })}
@@ -1798,10 +1832,17 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
               {analysisAudioUri ? t("signalGenerator", "analysisAudioReady") : t("signalGenerator", "analysisAudioUnavailable")}
             </Text>
           </View>
-          <Text style={styles.analysisSectionTitle}>{t("signalGenerator", "analysisDistribution")}</Text>
-          {(analysisSummary?.notes ?? []).length > 0 ? (
+          <View style={styles.analysisChartHeading}>
+            <Text style={styles.analysisSectionTitle}>{t("signalGenerator", "analysisDistribution")}</Text>
+            <Text style={styles.analysisSmallText}>
+              {analysisSelectedBucket
+                ? `${analysisTimeLabel(analysisSelectedBucket.startMs / 1000)}–${analysisTimeLabel(analysisSelectedBucket.endMs / 1000)}`
+                : ""}
+            </Text>
+          </View>
+          {analysisChartNotes.length > 0 ? (
             <View style={styles.analysisChart}>
-              {(analysisSummary?.notes ?? []).slice(0, 6).map((note) => (
+              {analysisChartNotes.slice(0, 6).map((note) => (
                 <View key={note.note} style={styles.analysisChartRow}>
                   <Text style={styles.analysisChartLabel}>{note.note}</Text>
                   <View style={styles.analysisChartTrack}>
@@ -2972,26 +3013,40 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
     position: "relative",
   },
   analysisTimelineTrack: {
-    height: 46,
+    height: 70,
     flexDirection: "row",
-    alignItems: "stretch",
+    alignItems: "flex-end",
     gap: Spacing.xxs,
     overflow: "hidden",
-    borderRadius: Radius.md,
+    borderBottomWidth: 1,
+    borderBottomColor: C.border,
     backgroundColor: C.border,
   },
-  analysisTimelineBucket: {
+  analysisTimelineColumn: {
     flex: 1,
-    alignItems: "center",
     justifyContent: "center",
+    alignItems: "center",
+    alignSelf: "stretch",
     minWidth: 2,
-    opacity: 0.72,
+  },
+  analysisTimelineBar: {
+    width: "100%",
+    minHeight: 4,
+    maxHeight: "88%",
+    flexDirection: "column-reverse",
+    overflow: "hidden",
+    borderRadius: Radius.xs,
+    backgroundColor: C.accent,
+  },
+  analysisTimelineBarSegment: {
+    minHeight: 2,
   },
   analysisTimelineNote: {
     fontFamily: "SpaceGrotesk_600SemiBold",
-    fontSize: 8,
+    fontSize: FontSize.micro,
     color: C.white,
-    transform: [{ rotate: "-90deg" }],
+    position: "absolute",
+    top: 0,
   },
   analysisScrubber: {
     position: "absolute",
