@@ -111,6 +111,7 @@ export function AppPreparationScreen({
     Math.min(MAX_ICON_SIZE, width * 0.56, height * 0.48),
   );
   const currentStatus = isError ? null : labels.stages[stage];
+  const sweepWidth = iconSize * 0.72;
 
   useEffect(() => {
     sweepPosition.stopAnimation();
@@ -136,24 +137,24 @@ export function AppPreparationScreen({
 
   const sweepTranslateX = sweepPosition.interpolate({
     inputRange: [-1, 1],
-    outputRange: [-iconSize * 2.2, iconSize],
+    outputRange: [-sweepWidth, iconSize],
   });
   const sweepContent = (
     <View style={styles.sweepViewport}>
       <AnimatedLinearGradient
         colors={[
           "rgba(255, 255, 255, 0)",
-          "rgba(255, 236, 166, 0.12)",
-          "rgba(255, 255, 255, 0.88)",
-          "rgba(255, 236, 166, 0.12)",
+          "rgba(255, 236, 166, 0.04)",
+          "rgba(255, 255, 255, 0.58)",
+          "rgba(255, 236, 166, 0.08)",
           "rgba(255, 255, 255, 0)",
         ]}
         start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0 }}
+        end={{ x: 1, y: 1 }}
         style={[
           styles.sweep,
           {
-            width: iconSize * 2.2,
+            width: sweepWidth,
             height: iconSize,
             transform: [{ translateX: sweepTranslateX }],
           },
@@ -267,7 +268,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#0D1117",
+    backgroundColor: "#05070B",
     paddingHorizontal: 24,
   },
   content: {
@@ -278,6 +279,7 @@ const styles = StyleSheet.create({
   },
   iconFrame: {
     overflow: "hidden",
+    backgroundColor: "#05070B",
   },
   icon: {
     ...StyleSheet.absoluteFillObject,
