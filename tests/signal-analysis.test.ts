@@ -59,6 +59,12 @@ test("decodePcm16Base64: little-endian signed PCM을 float 샘플로 변환", ()
   assert.deepEqual(Array.from(decodePcm16Base64(pcm)), [0, 0.5, -0.5]);
 });
 
+test("decodePcm16Base64: malformed 청크 뒤에도 다음 정상 PCM을 변환", () => {
+  assert.equal(decodePcm16Base64("not-a-pcm-chunk").length, 0);
+  const valid = Buffer.from([0x00, 0x40, 0x00, 0xC0]).toString("base64");
+  assert.deepEqual(Array.from(decodePcm16Base64(valid)), [0.5, -0.5]);
+});
+
 test("frequencyToNote: A4 = 440Hz → A/4/0cents", () => {
   const r = frequencyToNote(440);
   assert.equal(r.name, "A");
