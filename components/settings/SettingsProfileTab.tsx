@@ -4,7 +4,6 @@ import {
   Text,
   Pressable,
   Platform,
-  Switch,
   TextInput,
   ActivityIndicator,
   Alert,
@@ -12,14 +11,12 @@ import {
 } from "react-native";
 import * as Clipboard from "expo-clipboard";
 import { Ionicons } from "@expo/vector-icons";
-import * as Haptics from "expo-haptics";
 import { Share } from "react-native";
 import { useScale } from "@/lib/scale";
-import { FontSize, Spacing } from "@/constants/tokens";
+import { Spacing } from "@/constants/tokens";
 import { useTheme } from "@/contexts/ThemeContext";
 import { onAccentColor } from "@/lib/color-contrast";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { useVoiceAssistant } from "@/contexts/VoiceAssistantContext";
 import {
   loadPracticeRooms,
   addPracticeRoom,
@@ -30,12 +27,14 @@ import {
 } from "@/lib/practice-room";
 import { loadGoals, saveGoals, type Goal } from "@/lib/activity-log";
 import { make_styles } from "@/components/SettingsModal.styles";
-import { AssistantShortcutsGuide } from "@/components/AssistantShortcutsGuide";
+import { TUNING_DATA } from "@/lib/tuning-data";
 
-interface SettingsProfileTabProps {
+export interface SettingsProfileTabProps {
   visible: boolean;
   username: string;
   onUsernameChange: (val: string) => void;
+  primaryInstrumentId: string | null;
+  onPrimaryInstrumentChange: (id: string | null) => void;
   roomTrackingActive: boolean;
   trackingRoomName: string | null;
   onStartRoomTracking: (room: { id: string; name: string }) => void;
@@ -48,6 +47,8 @@ export function SettingsProfileTab({
   visible,
   username,
   onUsernameChange,
+  primaryInstrumentId,
+  onPrimaryInstrumentChange,
   roomTrackingActive,
   trackingRoomName,
   onStartRoomTracking,
@@ -59,7 +60,6 @@ export function SettingsProfileTab({
   const S = useScale();
   const styles = make_styles(C);
   const { language, t } = useLanguage();
-  const { isSupported: voiceSupported, isEnabled: voiceEnabled, isListening: voiceListening, setEnabled: setVoiceEnabled } = useVoiceAssistant();
 
   const [localUsername, setLocalUsername] = useState(username);
   const [practiceRooms, setPracticeRooms] = useState<PracticeRoom[]>([]);
@@ -67,7 +67,6 @@ export function SettingsProfileTab({
   const [newRoomName, setNewRoomName] = useState("");
   const [addingRoom, setAddingRoom] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
-  const [showAssistantGuide, setShowAssistantGuide] = useState(false);
   const [webUrlCopied, setWebUrlCopied] = useState(false);
   const webUrlCopiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -234,6 +233,76 @@ export function SettingsProfileTab({
           maxLength={30}
           testID="settings-username"
         />
+      </View>
+
+      <View style={[styles.divider, { backgroundColor: C.border }]} />
+
+      {/* Primary instrument */}
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Ionicons name="musical-note-outline" size={S.ms(18, 0.4)} color={C.accent} />
+          <Text style={[styles.sectionLabel, { color: C.text }]}>{t("settings", "primaryInstrument")}</Text>
+        </View>
+        <Text style={[styles.offsetHint, { color: C.textSecondary }]}>
+          {t("settings", "primaryInstrumentHint")}
+        </Text>
+        <View style={{ gap: 8, marginTop: 10 }}>
+          <Pressable
+            onPress={() => onPrimaryInstrumentChange(null)}
+            accessibilityRole="radio"
+            accessibilityState={{ selected: primaryInstrumentId === null }}
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              borderWidth: 1,
+              borderColor: primaryInstrumentId === null ? C.accent : C.border,
+              backgroundColor: primaryInstrumentId === null ? C.accentDim : C.surfaceLight,
+              borderRadius: 10,
+              paddingHorizontal: 12,
+              paddingVertical: 10,
+            }}
+            testID="primary-instrument-none"
+          >
+            <Text style={{ color: C.text, fontFamily: "Inter_500Medium", fontSize: 14 }}>
+              {t("settings", "primaryInstrumentNone")}
+            </Text>
+            {primaryInstrumentId === null && <Ionicons name="checkmark-circle" size={18} color={C.accent} />}
+          </Pressable>
+          {TUNING_DATA.map((category) => (
+            <View key={category.id} style={{ gap: 6 }}>
+              <Text style={{ color: C.textSecondary, fontFamily: "Inter_600SemiBold", fontSize: 12 }}>
+                {category.name[language]}
+              </Text>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+                {category.instruments.map((instrument) => {
+                  const selected = primaryInstrumentId === instrument.id;
+                  return (
+                    <Pressable
+                      key={instrument.id}
+                      onPress={() => onPrimaryInstrumentChange(instrument.id)}
+                      accessibilityRole="radio"
+                      accessibilityState={{ selected }}
+                      style={{
+                        borderWidth: 1,
+                        borderColor: selected ? C.accent : C.border,
+                        backgroundColor: selected ? C.accentDim : C.surfaceLight,
+                        borderRadius: 9,
+                        paddingHorizontal: 10,
+                        paddingVertical: 8,
+                      }}
+                      testID={`primary-instrument-${instrument.id}`}
+                    >
+                      <Text style={{ color: selected ? C.accent : C.text, fontFamily: "Inter_500Medium", fontSize: 13 }}>
+                        {instrument.name[language]}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+          ))}
+        </View>
       </View>
 
       <View style={[styles.divider, { backgroundColor: C.border }]} />
@@ -436,77 +505,6 @@ export function SettingsProfileTab({
         </View>
       )}
 
-      <View style={[styles.divider, { backgroundColor: C.border }]} />
-
-      {/* Voice assistant */}
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <Ionicons name="mic-outline" size={S.ms(18, 0.4)} color={C.accent} />
-          <Text style={[styles.sectionLabel, { color: C.text }]}>{t("settings", "voiceAssistant")}</Text>
-        </View>
-        <Text style={{ color: C.textSecondary, fontSize: FontSize.caption, fontFamily: "Inter_400Regular", marginBottom: Spacing.sm }}>
-          {t("settings", "voiceAssistantHint")}
-        </Text>
-        {voiceSupported ? (
-          <Pressable
-            onPress={() => setVoiceEnabled(!voiceEnabled)}
-            style={{ flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "space-between" as const, paddingVertical: 12, borderTopWidth: 1, borderTopColor: C.overlay10 }}
-          >
-            <Text style={{ color: C.text, fontSize: 14, fontFamily: "Inter_500Medium" }}>
-              {t("settings", "voiceAssistantEnabled")}
-            </Text>
-            <View style={{ flexDirection: "row" as const, alignItems: "center" as const, gap: Spacing.xs }}>
-              {voiceEnabled && voiceListening && (
-                <Text style={{ color: C.accent, fontSize: FontSize.caption, fontFamily: "Inter_400Regular" }}>
-                  {t("settings", "voiceAssistantListening")}
-                </Text>
-              )}
-              <Switch
-                value={voiceEnabled}
-                onValueChange={setVoiceEnabled}
-                trackColor={{ true: C.accent }}
-                thumbColor={C.surface}
-              />
-            </View>
-          </Pressable>
-        ) : (
-          <Text style={{ color: C.textSecondary, fontSize: FontSize.caption, fontFamily: "Inter_400Regular", paddingVertical: Spacing.sm, borderTopWidth: 1, borderTopColor: C.overlay10 }}>
-            {t("settings", "voiceAssistantIosHint")}
-          </Text>
-        )}
-      </View>
-
-      <View style={[styles.divider, { backgroundColor: C.border }]} />
-
-      {/* Assistant integration */}
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <Ionicons name="link-outline" size={S.ms(18, 0.4)} color={C.accent} />
-          <Text style={[styles.sectionLabel, { color: C.text }]}>
-            {language === "ko" ? "어시스턴트 연동" : "Assistant Integration"}
-          </Text>
-        </View>
-        <Text style={{ color: C.textSecondary, fontSize: FontSize.caption, fontFamily: "Inter_400Regular", marginBottom: Spacing.sm }}>
-          {language === "ko"
-            ? "Siri 또는 Google 어시스턴트로 메트로놈을 제어할 수 있습니다."
-            : "Control the metronome with Siri or Google Assistant."}
-        </Text>
-        <Pressable
-          onPress={() => setShowAssistantGuide(true)}
-          style={{ flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "space-between" as const, paddingVertical: 12, borderTopWidth: 1, borderTopColor: C.overlay10 }}
-          testID="assistant-shortcuts-guide"
-        >
-          <Text style={{ color: C.text, fontSize: 14, fontFamily: "Inter_500Medium" }}>
-            {language === "ko" ? "단축어 설정 방법 보기" : "How to set up shortcuts"}
-          </Text>
-          <Ionicons name="chevron-forward" size={18} color={C.textSecondary} />
-        </Pressable>
-      </View>
-
-      <AssistantShortcutsGuide
-        visible={showAssistantGuide}
-        onClose={() => setShowAssistantGuide(false)}
-      />
     </>
   );
 }

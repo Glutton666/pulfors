@@ -8,6 +8,7 @@ import { normalizeSampleChannel } from "./stereo-channel";
 import { notifyStorageError } from "./storage-notifier";
 import { logger } from "./logger";
 import { sanitizeTonePosition, type TonePosition } from "./metronome-tone-dsp";
+import { TUNING_DATA } from "./tuning-data";
 
 const SETTINGS_KEY = "metronome_settings";
 const PRACTICE_BOOK_KEY = "practice_book";
@@ -209,6 +210,7 @@ export interface MetronomeSettings {
   themeColor?: ThemeColor;
   timerStopMode?: "immediate" | "end-of-cycle";
   username?: string;
+  primaryInstrumentId?: string;
   landscapeReversed?: boolean;
   showLandscapeImage?: boolean;
   landscapeContentType?: "photo" | "stats";
@@ -309,6 +311,7 @@ const DEFAULT_SETTINGS: MetronomeSettings = {
   themeColor: "gold",
   timerStopMode: "end-of-cycle",
   username: "",
+  primaryInstrumentId: undefined,
   landscapeReversed: false,
   showLandscapeImage: true,
   landscapeContentType: "photo",
@@ -332,6 +335,13 @@ export async function loadSettings(): Promise<MetronomeSettings> {
       const parsed: unknown = JSON.parse(data);
       if (!isPlainObject(parsed)) return DEFAULT_SETTINGS;
       const merged: MetronomeSettings = { ...DEFAULT_SETTINGS, ...parsed } as MetronomeSettings;
+      const knownInstrumentIds = new Set(
+        TUNING_DATA.flatMap((category) => category.instruments.map((instrument) => instrument.id)),
+      );
+      merged.primaryInstrumentId = typeof merged.primaryInstrumentId === "string"
+        && knownInstrumentIds.has(merged.primaryInstrumentId)
+          ? merged.primaryInstrumentId
+          : undefined;
       merged.soundSetTonePositions = sanitizeTonePositions(merged.soundSetTonePositions);
       merged.barMetronomeChannel = normalizeSampleChannel(merged.barMetronomeChannel);
       const legacyProfile: ModeSettings = {

@@ -57,6 +57,18 @@ test("loadSettings sanitizes per-sound-set tone positions", async () => {
   assert.equal((settings.soundSetTonePositions as Record<string, unknown>).unknown, undefined);
 });
 
+test("loadSettings keeps known primary instruments and clears unknown ids", async () => {
+  await AsyncStorage.setItem("metronome_settings", JSON.stringify({
+    primaryInstrumentId: "guitar6",
+  }));
+  assert.equal((await loadSettings()).primaryInstrumentId, "guitar6");
+
+  await AsyncStorage.setItem("metronome_settings", JSON.stringify({
+    primaryInstrumentId: "not-an-instrument",
+  }));
+  assert.equal((await loadSettings()).primaryInstrumentId, undefined);
+});
+
 test("전체 초기화는 진행 중인 이전 설정 저장 뒤에 실행되어 값을 되살리지 않는다", async () => {
   const originalSetItem = AsyncStorage.setItem;
   let releaseOldWrite!: () => void;

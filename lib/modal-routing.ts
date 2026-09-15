@@ -10,6 +10,8 @@
 
 export type ActiveModal =
   | "settings"
+  | "profile"
+  | "assistant"
   | "menu"
   | "signalGen"
   | "tuningGuide"
@@ -27,6 +29,8 @@ export type ActiveModal =
 export function deriveModalFlags(activeModal: ActiveModal) {
   return {
     showSettings:       activeModal === "settings",
+    showProfile:        activeModal === "profile",
+    showAssistant:      activeModal === "assistant",
     showMenu:           activeModal === "menu",
     showSignalGen:      activeModal === "signalGen",
     showTuningGuide:    activeModal === "tuningGuide",

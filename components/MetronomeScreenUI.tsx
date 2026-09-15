@@ -22,6 +22,8 @@ import { PitchQuizModal } from "@/components/PitchQuizModal";
 import { SubdivisionBar, DragGhost } from "@/components/SubdivisionBar";
 import { StopwatchTimer } from "@/components/StopwatchTimer";
 import { SettingsModal, type SettingsScope } from "@/components/SettingsModal";
+import { ProfileModal } from "@/components/ProfileModal";
+import { AssistantModal } from "@/components/AssistantModal";
 import { SignalGeneratorModal, TuningGuideModal } from "@/components/SignalGeneratorModal";
 import { PracticeBookModal } from "@/components/PracticeBookModal";
 import { WorkUpOverviewModal } from "@/components/WorkUpOverviewModal";
@@ -103,7 +105,7 @@ export function MetronomeScreenUI(props: Props) {
     showSubdivisionLongPressHint, setShowSubdivisionLongPressHint,
     activeModal, setActiveModal, openExclusive,
     markMenuItemReturn, clearMenuItemReturn, closeMenuItem, closeScoreMode,
-    showSettings, showMenu, showSignalGen, showTuningGuide, showPracticeBook,
+     showSettings, showProfile, showAssistant, showMenu, showSignalGen, showTuningGuide, showPracticeBook,
     showWorkUp, showOnboarding, showDrumKit, showScheduledStart,
     showFadeOut, showBpmDetect, showPolygon,
     volume, updateVolume, tonePosition, updateTonePosition, sampleVolume, updateSampleVolume,
@@ -115,7 +117,7 @@ export function MetronomeScreenUI(props: Props) {
     customSoundSets, setCustomSoundSets,
     flashMode, updateFlashMode, hapticMode, updateHapticMode,
     audioOffsetMs, updateAudioOffset, timerStopMode, updateTimerStopMode,
-    loggingEnabled, setLoggingEnabled, username, updateUsername,
+     loggingEnabled, setLoggingEnabled, username, updateUsername, primaryInstrumentId, updatePrimaryInstrumentId,
     roomTrackingActive, trackingRoomName, startRoomTracking, stopRoomTracking, discardRoomTracking,
     handleResetApp, handleOnboardingComplete,
     keyBindings, setKeyBindings, keyBindingsRef,
@@ -569,6 +571,7 @@ export function MetronomeScreenUI(props: Props) {
               setSettingsScope("global");
               openExclusive("settings");
             }}
+            onProfile={() => openMenuItem(() => openExclusive("profile"))}
             onSignalGen={() => {
               openMenuItem(() => {
                 if (loggingEnabled) featureStartRef.current = { name: "signal_generator", start: Date.now() };
@@ -590,9 +593,27 @@ export function MetronomeScreenUI(props: Props) {
             onPolygon={() => {
               openMenuItem(() => openExclusive("polygon"));
             }}
+            onAssistant={() => openMenuItem(() => openExclusive("assistant"))}
           />
         </Animated.View>
       )}
+
+      <ProfileModal
+        visible={showProfile}
+        onClose={closeMenuItem}
+        username={username}
+        onUsernameChange={updateUsername}
+        primaryInstrumentId={primaryInstrumentId}
+        onPrimaryInstrumentChange={updatePrimaryInstrumentId}
+        roomTrackingActive={roomTrackingActive}
+        trackingRoomName={trackingRoomName}
+        onStartRoomTracking={startRoomTracking}
+        onStopRoomTracking={stopRoomTracking}
+        onResetApp={handleResetApp}
+        onShowOnboarding={() => openExclusive("onboarding")}
+      />
+
+      <AssistantModal visible={showAssistant} onClose={closeMenuItem} />
 
       <DrumKitModal
         visible={showDrumKit}

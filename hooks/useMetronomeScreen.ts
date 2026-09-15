@@ -386,6 +386,8 @@ export function useMetronomeScreen() {
   const [activeModal, setActiveModal] = useState<ActiveModal>(null);
   const {
     showSettings,
+     showProfile,
+     showAssistant,
     showMenu,
     showSignalGen,
     showTuningGuide,
@@ -472,6 +474,7 @@ export function useMetronomeScreen() {
     if (Platform.OS !== "android") return;
     const onBack = () => {
       if (showSettings) { setActiveModal(null); return true; }
+      if (showProfile || showAssistant) { closeMenuItem(); return true; }
       if (showTuningGuide) {
         tuningGuideOnSelectRef.current = null;
         // SignalGen에서 진입했었다면 back으로 닫을 때도 재오픈한다.
@@ -515,7 +518,7 @@ export function useMetronomeScreen() {
     };
     const sub = BackHandler.addEventListener("hardwareBackPress", onBack);
     return () => sub.remove();
-  }, [activeModal, showReboot, coreMode, closeScoreMode, closeMenuItem, clearMenuItemReturn, setScoreMode]);
+  }, [activeModal, showReboot, coreMode, closeScoreMode, closeMenuItem, clearMenuItemReturn, setScoreMode, showProfile, showAssistant]);
 
   useEffect(() => {
     if (Platform.OS === "web") return;
@@ -609,7 +612,7 @@ export function useMetronomeScreen() {
     timerStopMode, setTimerStopMode,
     landscapeReversed, setLandscapeReversed,
     beatDirection, setBeatDirection,
-    username, setUsername,
+     username, setUsername, primaryInstrumentId,
     barMetronomeChannel, setBarMetronomeChannel, barMetronomeChannelRef,
     barCellOpacity, setBarCellOpacity,
     barRowHeight, setBarRowHeight,
@@ -625,7 +628,7 @@ export function useMetronomeScreen() {
     syncExternalSnapshot,
     updateVolume, updateSampleVolume, updateSoundSet, updateTonePosition,
     updateFlashMode, updateHapticMode, updateAudioOffset,
-    updateBpm, updateTimerStopMode, updateUsername,
+     updateBpm, updateTimerStopMode, updateUsername, updatePrimaryInstrumentId,
   } = useSettings({
     mode: settingsMode,
     engineRef,
@@ -4067,6 +4070,8 @@ export function useMetronomeScreen() {
     closeMenuItem,
     closeScoreMode,
     showSettings,
+     showProfile,
+     showAssistant,
     showMenu,
     showSignalGen,
     showTuningGuide,
@@ -4111,7 +4116,9 @@ export function useMetronomeScreen() {
     loggingEnabled,
     setLoggingEnabled,
     username,
+     primaryInstrumentId,
     updateUsername,
+     updatePrimaryInstrumentId,
     roomTrackingActive,
     trackingRoomName,
     startRoomTracking,

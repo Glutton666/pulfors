@@ -22,10 +22,9 @@ import type { TonePosition } from "@/lib/metronome-tone-dsp";
 import { SoundPreviewPlayers, type SoundPreviewHandle } from "./settings/SoundPreviewPlayers";
 import { SettingsThemeTab } from "./settings/SettingsThemeTab";
 import { SettingsSoundTab } from "./settings/SettingsSoundTab";
-import { SettingsProfileTab } from "./settings/SettingsProfileTab";
 import { SettingsKeyboardTab } from "./settings/SettingsKeyboardTab";
 
-type SettingsTab = "theme" | "sound" | "profile" | "keyboard";
+type SettingsTab = "theme" | "sound" | "keyboard";
 export type SettingsScope = "global" | "beat" | "bar" | "note" | "stage";
 
 interface SettingsModalProps {
@@ -181,9 +180,6 @@ export function SettingsModal({
   }, [visible]);
 
   useEffect(() => {
-    if (scope !== "global" && activeTab === "profile") {
-      setActiveTab("theme");
-    }
     if (scope === "stage" && activeTab === "keyboard") {
       setActiveTab("theme");
     }
@@ -211,7 +207,7 @@ export function SettingsModal({
   const switchTab = useCallback((tab: SettingsTab) => {
     if (activeTab === tab) return;
     if (Platform.OS !== "web") Haptics.selectionAsync();
-    const tabs: SettingsTab[] = ["theme", "sound", "profile", "keyboard"];
+    const tabs: SettingsTab[] = ["theme", "sound", "keyboard"];
     const currentIdx = tabs.indexOf(activeTab);
     const nextIdx = tabs.indexOf(tab);
     const slideDir = nextIdx > currentIdx ? 1 : -1;
@@ -232,7 +228,6 @@ export function SettingsModal({
   const TAB_ITEMS: { key: SettingsTab; icon: string; label: string }[] = [
     { key: "theme", icon: "color-palette-outline", label: t("settings", "themeTab") },
     { key: "sound", icon: "musical-notes-outline", label: t("settings", "soundTab") },
-    ...(scope === "global" ? [{ key: "profile" as SettingsTab, icon: "person-circle-outline", label: t("settings", "profileTab") }] : []),
     ...(Platform.OS === "web" && scope !== "stage" ? [{ key: "keyboard" as SettingsTab, icon: "keypad-outline", label: t("keyboard", "tabLabel") }] : []),
   ];
 
@@ -300,20 +295,6 @@ export function SettingsModal({
             playSoundPreview={playSoundPreview}
             previewCustomSample={previewCustomSample}
             playCustomSampleUri={playCustomSampleUri}
-          />
-        );
-      case "profile":
-        return (
-          <SettingsProfileTab
-            visible={visible}
-            username={username}
-            onUsernameChange={onUsernameChange}
-            roomTrackingActive={roomTrackingActive}
-            trackingRoomName={trackingRoomName}
-            onStartRoomTracking={onStartRoomTracking}
-            onStopRoomTracking={onStopRoomTracking}
-            onResetApp={onResetApp}
-            onShowOnboarding={onShowOnboarding}
           />
         );
       case "keyboard":

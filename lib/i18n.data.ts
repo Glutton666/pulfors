@@ -200,6 +200,9 @@ export const translations = {
     voiceAssistantEnabled: { ko: "음성 인식 활성화", en: "Enable Voice Recognition" },
     voiceAssistantListening: { ko: "듣는 중…", en: "Listening…" },
     voiceAssistantIosHint: { ko: "iOS에서는 아래 Siri 단축어를 이용해 주세요", en: "On iOS, use the Siri shortcuts below" },
+    primaryInstrument: { ko: "주 악기", en: "Primary instrument" },
+    primaryInstrumentHint: { ko: "자주 연습하는 악기를 선택하세요. 다른 모드의 기본값은 변경되지 않습니다.", en: "Choose the instrument you practice most. This does not change defaults in other modes." },
+    primaryInstrumentNone: { ko: "선택 안 함", en: "Not selected" },
   },
   tripleOptions: {
     all: { ko: "전체", en: "All" },
@@ -692,6 +695,8 @@ export const translations = {
     menuWorkUp: { ko: "활동 기록", en: "Work Up" },
     menuNoteMode: { ko: "노트 모드", en: "Note Mode" },
     menuSettings: { ko: "설정", en: "Settings" },
+     menuProfile: { ko: "프로필", en: "Profile" },
+     menuAssistant: { ko: "음성 어시스턴트", en: "Voice Assistant" },
     menuMore: { ko: "그 외...", en: "More..." },
     menuBack: { ko: "메뉴로 돌아가기", en: "Back to menu" },
     menuBackHint: { ko: "실험실 메뉴를 닫고 기본 메뉴로 돌아갑니다", en: "Close the lab menu and return to the main menu" },

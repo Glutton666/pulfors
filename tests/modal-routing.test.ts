@@ -139,11 +139,19 @@ test("menu return: 메뉴 화면의 각 항목 진입이 메뉴 복귀 상태를
     const body = src.slice(start, src.indexOf("}", start + callback.length + 8) + 1);
     assert.match(body, /openMenuItem\(/, `${callback} 진입 시 메뉴 복귀 상태를 기록하지 않는다`);
   }
+  for (const callback of ["onProfile", "onAssistant"]) {
+    const start = src.indexOf(`${callback}={() =>`);
+    assert.ok(start >= 0, `MenuScreen에 ${callback} 콜백이 없다`);
+    const body = src.slice(start, src.indexOf("}", start + callback.length + 8) + 1);
+    assert.match(body, /openMenuItem\(/, `${callback} 진입 시 메뉴 복귀 상태를 기록하지 않는다`);
+  }
 });
 
 test("modal-routing: 각 activeModal 값은 정확히 해당 show* 플래그만 true로 만든다", () => {
   const cases: Array<[ActiveModal, keyof ReturnType<typeof deriveModalFlags>]> = [
     ["settings",       "showSettings"],
+    ["profile",        "showProfile"],
+    ["assistant",      "showAssistant"],
     ["menu",           "showMenu"],
     ["signalGen",      "showSignalGen"],
     ["tuningGuide",    "showTuningGuide"],

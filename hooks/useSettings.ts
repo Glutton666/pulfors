@@ -136,6 +136,7 @@ export interface UseSettingsResult {
   setBeatDirection: React.Dispatch<React.SetStateAction<"cw" | "ccw">>;
   username: string;
   setUsername: React.Dispatch<React.SetStateAction<string>>;
+  primaryInstrumentId: string | null;
   // ── Bar mode ───────────────────────────────────────────────────────────────
   barMetronomeChannel: SampleChannel;
   setBarMetronomeChannel: React.Dispatch<React.SetStateAction<SampleChannel>>;
@@ -188,6 +189,7 @@ export interface UseSettingsResult {
   updateBpm: (v: number) => void;
   updateTimerStopMode: (v: "immediate" | "end-of-cycle") => void;
   updateUsername: (v: string) => void;
+  updatePrimaryInstrumentId: (v: string | null) => void;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -249,6 +251,7 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
   const [landscapeReversed, setLandscapeReversed] = useState(false);
   const [beatDirection, setBeatDirection] = useState<"cw" | "ccw">("cw");
   const [username, setUsername] = useState("");
+  const [primaryInstrumentId, setPrimaryInstrumentId] = useState<string | null>(null);
 
   const [barMetronomeChannel, setBarMetronomeChannel] = useState<SampleChannel>("both");
   const barMetronomeChannelRef = useRef<SampleChannel>("both");
@@ -290,7 +293,7 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
   const persistSnapshotRef = useRef<MetronomeSettings>({
     bpm, beatsPerMeasure, beatDenominator, subdivisions: 1, subdivisionPattern, beatSubdivisions,
     volume, sampleVolume, soundSet, soundSetTonePositions, layerSoundSets, flashMode, hapticMode,
-    audioOffsetMs, timerStopMode, landscapeReversed, beatDirection, username,
+    audioOffsetMs, timerStopMode, landscapeReversed, beatDirection, username, primaryInstrumentId: primaryInstrumentId ?? undefined,
     barMetronomeChannel, barCellOpacity, barRowHeight, barStaffNotation, barRandomStrategy, beatStaffNotation,
     modeSettings: {
       [mode]: {
@@ -307,7 +310,7 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
   persistSnapshotRef.current = {
     bpm, beatsPerMeasure, beatDenominator, subdivisions: 1, subdivisionPattern, beatSubdivisions,
     volume, sampleVolume, soundSet, soundSetTonePositions, layerSoundSets, flashMode, hapticMode,
-    audioOffsetMs, timerStopMode, landscapeReversed, beatDirection, username,
+    audioOffsetMs, timerStopMode, landscapeReversed, beatDirection, username, primaryInstrumentId: primaryInstrumentId ?? undefined,
     barMetronomeChannel, barCellOpacity, barRowHeight, barStaffNotation, barRandomStrategy, beatStaffNotation,
     modeSettings: modeChangedThisRender
       ? (persistSnapshotRef.current.modeSettings ?? {})
@@ -498,6 +501,7 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
       if (settings.username) {
         setUsername(settings.username);
       }
+      setPrimaryInstrumentId(settings.primaryInstrumentId ?? null);
 
       // Delegate extra init (setIsLoaded, loadCustomSoundSets, PCM warmup, …)
       // to useMetronomeScreen — these are not settings concerns.
@@ -688,6 +692,14 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
     [persistSettings],
   );
 
+  const updatePrimaryInstrumentId = useCallback(
+    (instrumentId: string | null) => {
+      setPrimaryInstrumentId(instrumentId);
+      persistSettings({ primaryInstrumentId: instrumentId ?? undefined });
+    },
+    [persistSettings],
+  );
+
   const updateStageSettings = useCallback(
     (patch: Partial<StageSettings>) => {
       setStageSettings((previous) => {
@@ -730,7 +742,7 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
     timerStopMode, setTimerStopMode,
     landscapeReversed, setLandscapeReversed,
     beatDirection, setBeatDirection,
-    username, setUsername,
+    username, setUsername, primaryInstrumentId,
     barMetronomeChannel, setBarMetronomeChannel, barMetronomeChannelRef,
     barCellOpacity, setBarCellOpacity,
     barRowHeight, setBarRowHeight,
@@ -752,6 +764,6 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
     updateAudioOffset,
     updateBpm,
     updateTimerStopMode,
-    updateUsername,
+    updateUsername, updatePrimaryInstrumentId,
   };
 }

@@ -16,11 +16,13 @@ interface MenuScreenProps {
   onClose: () => void;
   onOpenDial: () => void;
   onSettings: () => void;
+  onProfile: () => void;
   onSignalGen: () => void;
   onWorkUp: () => void;
   onStage: () => void;
   onScore: () => void;
   onPolygon: () => void;
+  onAssistant: () => void;
 }
 
 export function MenuScreen({
@@ -28,11 +30,13 @@ export function MenuScreen({
   onClose,
   onOpenDial,
   onSettings,
+  onProfile,
   onSignalGen,
   onWorkUp,
   onStage,
   onScore,
   onPolygon,
+  onAssistant,
 }: MenuScreenProps) {
   const { colors: C } = useTheme();
   const { t } = useLanguage();
@@ -52,6 +56,12 @@ export function MenuScreen({
       icon: <Ionicons name="settings-outline" size={ICON_SIZE} color={C.textSecondary} />,
       label: t("main", "menuSettings"),
       onPress: onSettings,
+    },
+    {
+      icon: <Ionicons name="person-circle-outline" size={ICON_SIZE} color={C.accent} />,
+      label: t("main", "menuProfile"),
+      onPress: onProfile,
+      testID: "menu-profile",
     },
     {
       icon: <MaterialCommunityIcons name="waveform" size={ICON_SIZE} color={C.accent} />,
@@ -79,6 +89,12 @@ export function MenuScreen({
   }[] = [
     {
       icon: <Ionicons name="mic-outline" size={ICON_SIZE} color={C.accent} />,
+      label: t("main", "menuAssistant"),
+      onPress: onAssistant,
+      testID: "menu-assistant",
+    },
+    {
+      icon: <Ionicons name="people-outline" size={ICON_SIZE} color={C.accent} />,
       label: t("stageMode", "title"),
       onPress: onStage,
       testID: "menu-stage",
