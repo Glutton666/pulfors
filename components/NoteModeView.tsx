@@ -507,6 +507,7 @@ export function NoteModeView({
                 hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                 accessibilityRole="button"
                 accessibilityLabel={t("a11y", "playButton")}
+                testID="note-play-button"
               >
                 <Ionicons name="stop" size={S.ms(20, 0.4)} color="#fff" />
               </Pressable>
@@ -586,6 +587,7 @@ export function NoteModeView({
               onPress={onTogglePlay}
               accessibilityRole="button"
               accessibilityLabel={t("a11y", "playButton")}
+              testID="note-play-button"
             >
               <Ionicons name="stop" size={S.ms(28, 0.4)} color="#fff" />
             </Pressable>
@@ -721,7 +723,7 @@ export function NoteModeView({
         </View>
       </Pressable>
       {!sourceCollapsed && (
-        <View style={[styles.sourceContainer, isLandscape && { flex: 1 }]}>
+        <View style={[styles.sourceContainer, isLandscape && { flex: 1 }]} testID="note-queue-source">
           {barEntries.length === 0 ? (
             <View style={styles.emptySource}>
               <Text style={styles.emptySourceText}>{t("noteMode", "noBarEntries")}</Text>
@@ -792,6 +794,7 @@ export function NoteModeView({
           hitSlop={isLandscape ? { top: 8, bottom: 8, left: 4, right: 4 } : undefined}
           accessibilityRole="button"
           accessibilityLabel={t("a11y", "playButton")}
+          testID="note-play-button"
           accessibilityState={{ selected: isPlaying, disabled: queue.length === 0 }}
         >
           <Ionicons name={isPlaying ? "stop" : "play"} size={isLandscape ? 24 : 28} color="#fff" />

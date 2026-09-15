@@ -580,6 +580,7 @@ export function BarEditorPanel({
       <Animated.View
         style={[styles.editorSection, { borderTopColor: C.overlay08, transform: [{ translateY: editorSwipeAnim }, { translateX: randomPlayShakeAnim }] }]}
         {...editorSwipePan.panHandlers}
+        testID="bar-editor-panel"
       >
         {/* Layer tab row */}
         <View style={[styles.layerTabRow, { borderBottomColor: C.overlay06 }]}>
@@ -813,6 +814,7 @@ export function BarEditorPanel({
                 backgroundColor={C.background}
                 iconSize={ms(34, 0.4)}
                 badgeIconSize={ms(13, 0.4)}
+                testID="bar-play-button"
                 t={t}
               />
             </View>

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Platform, Pressable, Text, View } from "react-native";
+import { Platform, Pressable, Text, View, useWindowDimensions } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -35,6 +35,19 @@ const STEPS: Record<TutorialMode, TutorialStep[]> = {
 };
 
 type TutorialTranslator = (section: "tutorial", key: string) => string;
+type TutorialTargetRect = { top: number; bottom: number; left: number; right: number; width: number; height: number };
+
+function getTutorialTargetId(mode: TutorialMode, action?: TutorialAction): string | null {
+  if (mode === "beat" && (action === "bpm_change" || action === "tap_tempo")) return "bpm-slider";
+  if (mode === "beat" && action === "toggle_play") return "play-button";
+  if (mode === "bar" && action === "bar_edit") return "bar-editor-panel";
+  if (mode === "bar" && action === "bar_add") return "bar-editor-panel";
+  if (mode === "bar" && action === "toggle_play") return "bar-play-button";
+  if (mode === "note" && action === "note_queue") return "note-queue-source";
+  if (mode === "note" && action === "note_play") return "note-play-button";
+  if (mode === "practice" && action === "practice_load") return "practice-entry-list";
+  return null;
+}
 
 export interface ModeTutorialModalProps {
   visible: boolean;
@@ -63,10 +76,13 @@ export function ModeTutorialModal({
   const { t } = useLanguage();
   const S = useScale();
   const insets = useSafeAreaInsets();
+  const { height: windowHeight } = useWindowDimensions();
   const steps = STEPS[mode];
   const [activeIndex, setActiveIndex] = useState(0);
   const [isCompleting, setIsCompleting] = useState(false);
   const advanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [targetRect, setTargetRect] = useState<TutorialTargetRect | null>(null);
+  const [cardHeight, setCardHeight] = useState(180);
 
   useEffect(() => {
     if (advanceTimerRef.current) {
@@ -82,6 +98,37 @@ export function ModeTutorialModal({
   useEffect(() => () => {
     if (advanceTimerRef.current) clearTimeout(advanceTimerRef.current);
   }, []);
+
+  const activeStep = steps[activeIndex];
+  const targetId = getTutorialTargetId(mode, activeStep?.action);
+  useEffect(() => {
+    setTargetRect(null);
+    if (!visible || Platform.OS !== "web" || !targetId) return;
+    const measure = () => {
+      const element = document.querySelector(`[data-testid="${targetId}"]`) as HTMLElement | null;
+      if (!element) return;
+      const rect = element.getBoundingClientRect();
+      if (rect.width > 0 && rect.height > 0) {
+        setTargetRect({
+          top: rect.top,
+          bottom: rect.bottom,
+          left: rect.left,
+          right: rect.right,
+          width: rect.width,
+          height: rect.height,
+        });
+      }
+    };
+    measure();
+    const interval = setInterval(measure, 250);
+    window.addEventListener("resize", measure);
+    window.addEventListener("scroll", measure, true);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("resize", measure);
+      window.removeEventListener("scroll", measure, true);
+    };
+  }, [mode, targetId, visible]);
 
   useEffect(() => {
     if (!visible || !lastAction || isCompleting || activeIndex >= steps.length) return;
@@ -103,12 +150,25 @@ export function ModeTutorialModal({
   const step = steps[activeIndex];
   const progress = `${activeIndex + 1}/${steps.length}`;
   const translate = t as unknown as TutorialTranslator;
-  const cardPlacement = step.action === "toggle_play" || step.action === "bar_edit" || step.action === "note_queue" || step.action === "note_play"
-    ? "bottom"
-    : "top";
-  const cardPositionStyle = cardPlacement === "bottom"
-    ? { bottom: (insets.bottom || 0) + 12 }
-    : { top: (insets.top || (Platform.OS === "web" ? 67 : 0)) + 52 };
+  const safeTop = (insets.top || (Platform.OS === "web" ? 67 : 0)) + 16;
+  const safeBottom = (insets.bottom || 0) + 16;
+  const fallbackBottom = step.action === "toggle_play" || step.action === "bar_edit" || step.action === "note_queue" || step.action === "note_play";
+  const cardPositionStyle = targetRect
+    ? (() => {
+        const topSpace = targetRect.top - safeTop;
+        const bottomSpace = windowHeight - safeBottom - targetRect.bottom;
+        const below = bottomSpace >= cardHeight + 12 || bottomSpace >= topSpace;
+        if (below) {
+          return { top: Math.min(targetRect.bottom + 12, Math.max(safeTop, windowHeight - safeBottom - cardHeight)) };
+        }
+        return { top: Math.max(safeTop, targetRect.top - cardHeight - 12) };
+      })()
+    : fallbackBottom
+      ? { bottom: safeBottom }
+      : { top: safeTop };
+  const skipPositionStyle = "top" in cardPositionStyle
+    ? { top: cardPositionStyle.top + 8 }
+    : { bottom: cardPositionStyle.bottom + 8 };
 
   return (
     <View
@@ -142,6 +202,7 @@ export function ModeTutorialModal({
           shadowRadius: 16,
           elevation: 12,
         }}
+        onLayout={(event) => setCardHeight(event.nativeEvent.layout.height)}
       >
         <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 8 }}>
           <Ionicons name="sparkles-outline" size={S.ms(19, 0.4)} color={C.accent} />
@@ -190,9 +251,7 @@ export function ModeTutorialModal({
         style={{
           position: "absolute",
           right: 24,
-          ...(cardPlacement === "bottom"
-            ? { bottom: (insets.bottom || 0) + 20 }
-            : { top: (insets.top || (Platform.OS === "web" ? 67 : 0)) + 60 }),
+          ...skipPositionStyle,
           paddingHorizontal: 8,
           paddingVertical: 10,
           zIndex: 10001,

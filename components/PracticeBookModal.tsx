@@ -872,6 +872,7 @@ export function PracticeBookModal({
           <FlatList
             key={`grid-${filterMode}`}
             data={filteredEntries}
+            testID="practice-entry-list"
             keyExtractor={(item) => item.id}
             numColumns={2}
             columnWrapperStyle={gridStyles.row}
@@ -893,6 +894,7 @@ export function PracticeBookModal({
           <FlatList
             key={`list-${filterMode}`}
             data={filteredEntries}
+            testID="practice-entry-list"
             keyExtractor={(item) => item.id}
             renderItem={renderItem}
             extraData={editingId}
