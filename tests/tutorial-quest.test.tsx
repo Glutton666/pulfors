@@ -13,6 +13,7 @@ const tutorialTranslations = {
     modeTitle: "Mode tutorial",
     beat: "Beat",
     skip: "Skip",
+    stepCompleted: "Step complete",
     tryItNow: "Try it on the highlighted screen",
     beatBpmTitle: "Change the BPM",
     beatBpmBody: "Move the BPM slider or tap the number to change the tempo.",
@@ -25,6 +26,7 @@ const tutorialTranslations = {
     modeTitle: "모드 튜토리얼",
     beat: "비트",
     skip: "건너뛰기",
+    stepCompleted: "단계 완료",
     tryItNow: "강조된 화면에서 직접 해보세요",
     beatBpmTitle: "BPM을 바꿔보세요",
     beatBpmBody: "BPM 슬라이더를 움직이거나 숫자를 눌러 템포를 바꿔보세요.",
@@ -257,6 +259,7 @@ describe("rendered mode tutorial quests", () => {
   });
 
   test("does not advance for unrelated actions, then completes each matching step", () => {
+    jest.useFakeTimers();
     const onStepComplete = jest.fn();
     const onComplete = jest.fn();
     const view = render(
@@ -276,6 +279,8 @@ describe("rendered mode tutorial quests", () => {
       );
     });
     expect(onStepComplete).toHaveBeenLastCalledWith("bpm");
+    expect(view.getByText("✓ Step complete")).toBeTruthy();
+    act(() => jest.advanceTimersByTime(650));
     expect(view.getByText("2/3")).toBeTruthy();
 
     act(() => {
@@ -286,6 +291,8 @@ describe("rendered mode tutorial quests", () => {
       );
     });
     expect(onStepComplete).toHaveBeenLastCalledWith("tap");
+    expect(view.getByText("✓ Step complete")).toBeTruthy();
+    act(() => jest.advanceTimersByTime(650));
     expect(view.getByText("3/3")).toBeTruthy();
 
     act(() => {
@@ -296,7 +303,10 @@ describe("rendered mode tutorial quests", () => {
       );
     });
     expect(onStepComplete).toHaveBeenLastCalledWith("play");
+    expect(view.getByText("✓ Step complete")).toBeTruthy();
+    act(() => jest.advanceTimersByTime(650));
     expect(onComplete).toHaveBeenCalledTimes(1);
+    jest.useRealTimers();
   });
 
   test("skip invokes the skip callback without requiring audio or microphone setup", () => {
