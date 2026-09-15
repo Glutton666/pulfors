@@ -103,6 +103,12 @@ export function ModeTutorialModal({
   const step = steps[activeIndex];
   const progress = `${activeIndex + 1}/${steps.length}`;
   const translate = t as unknown as TutorialTranslator;
+  const cardPlacement = step.action === "toggle_play" || step.action === "bar_edit" || step.action === "note_queue" || step.action === "note_play"
+    ? "bottom"
+    : "top";
+  const cardPositionStyle = cardPlacement === "bottom"
+    ? { bottom: (insets.bottom || 0) + 12 }
+    : { top: (insets.top || (Platform.OS === "web" ? 67 : 0)) + 52 };
 
   return (
     <View
@@ -114,15 +120,15 @@ export function ModeTutorialModal({
       testID="mode-tutorial"
     >
       <View
-        // The instruction card may overlap controls on short screens. Keep the
-        // card transparent to hit testing so the user can perform the action
-        // underneath; only the explicit skip control opts back in.
-        pointerEvents={Platform.OS === "web" ? "none" : "box-none"}
+        // The card is informational only. It must never become the responder
+        // for the control it is explaining; Skip is rendered as a separate
+        // opt-in Pressable below.
+        pointerEvents="none"
         style={{
           position: "absolute",
           left: 16,
           right: 16,
-          top: (insets.top || (Platform.OS === "web" ? 67 : 0)) + 52,
+          ...cardPositionStyle,
           maxWidth: 620,
           alignSelf: "center",
           backgroundColor: C.surface,
@@ -171,20 +177,29 @@ export function ModeTutorialModal({
           {translate("tutorial", step.bodyKey)}
         </Text>
         <View style={{ flexDirection: "row", justifyContent: "flex-end", alignItems: "center", marginTop: 8, gap: 12 }}>
-          <Pressable
-            onPress={onSkip}
-            pointerEvents="auto"
-            accessibilityRole="button"
-            accessibilityLabel={translate("tutorial", "skip")}
-            style={{ paddingHorizontal: 8, paddingVertical: 10 }}
-          >
-            <Text style={{ color: C.textTertiary, fontSize: S.ms(13, 0.3) }}>{translate("tutorial", "skip")}</Text>
-          </Pressable>
           <Text style={{ color: C.accent, fontSize: S.ms(12, 0.3), fontWeight: "600", flexShrink: 1, textAlign: "right" }}>
             {translate("tutorial", "tryItNow")}
           </Text>
         </View>
       </View>
+      <Pressable
+        onPress={onSkip}
+        pointerEvents="auto"
+        accessibilityRole="button"
+        accessibilityLabel={translate("tutorial", "skip")}
+        style={{
+          position: "absolute",
+          right: 24,
+          ...(cardPlacement === "bottom"
+            ? { bottom: (insets.bottom || 0) + 20 }
+            : { top: (insets.top || (Platform.OS === "web" ? 67 : 0)) + 60 }),
+          paddingHorizontal: 8,
+          paddingVertical: 10,
+          zIndex: 10001,
+        }}
+      >
+        <Text style={{ color: C.textTertiary, fontSize: S.ms(13, 0.3) }}>{translate("tutorial", "skip")}</Text>
+      </Pressable>
     </View>
   );
 }
