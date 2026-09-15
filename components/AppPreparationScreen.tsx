@@ -1,7 +1,5 @@
-import React, { useEffect, useRef } from "react";
+import React from "react";
 import {
-  Animated,
-  Easing,
   Platform,
   Pressable,
   StyleSheet,
@@ -9,11 +7,8 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
-import MaskedView from "@react-native-masked-view/masked-view";
 import { Asset } from "expo-asset";
 import { Image as ExpoImage } from "expo-image";
-import { LinearGradient } from "expo-linear-gradient";
-import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { detectDeviceLanguage } from "@/lib/i18n";
 
 export type PreparationStage =
@@ -56,10 +51,8 @@ function resolveWebAssetUrl(src: number): string {
 const APP_ICON_URI = resolveWebAssetUrl(APP_ICON);
 const APP_ICON_SOURCE =
   Platform.OS === "web" && APP_ICON_URI ? { uri: APP_ICON_URI } : APP_ICON;
-const SWEEP_DURATION_MS = 1400;
 const MIN_ICON_SIZE = 120;
 const MAX_ICON_SIZE = 240;
-const AnimatedLinearGradient = Animated.createAnimatedComponent(LinearGradient);
 
 const copy = {
   ko: {
@@ -90,7 +83,7 @@ const copy = {
 
 /**
  * The first visible surface while app resources are being prepared. The icon
- * stays centered while a short highlight sweeps through its icon surface.
+ * stays centered while the resource currently being prepared is reported.
  * The bottom status reports the resource currently being prepared.
  */
 export function AppPreparationScreen({
@@ -101,8 +94,6 @@ export function AppPreparationScreen({
   language = detectDeviceLanguage(),
   testID = "preparation-screen",
 }: AppPreparationScreenProps) {
-  const reduceMotion = useReducedMotion();
-  const sweepPosition = useRef(new Animated.Value(-1)).current;
   const { width, height } = useWindowDimensions();
   const labels = copy[language];
   const isError = stage === "error";
@@ -111,87 +102,6 @@ export function AppPreparationScreen({
     Math.min(MAX_ICON_SIZE, width * 0.56, height * 0.48),
   );
   const currentStatus = isError ? null : labels.stages[stage];
-  const sweepWidth = iconSize * 0.72;
-
-  useEffect(() => {
-    sweepPosition.stopAnimation();
-    sweepPosition.setValue(-1);
-
-    if (isError || reduceMotion) return;
-
-    const animation = Animated.loop(
-      Animated.timing(sweepPosition, {
-        toValue: 1,
-        duration: SWEEP_DURATION_MS,
-        easing: Easing.inOut(Easing.ease),
-        useNativeDriver: Platform.OS !== "web",
-      }),
-    );
-    animation.start();
-
-    return () => {
-      animation.stop();
-      sweepPosition.stopAnimation();
-    };
-  }, [isError, reduceMotion, sweepPosition]);
-
-  const sweepTranslateX = sweepPosition.interpolate({
-    inputRange: [-1, 1],
-    outputRange: [-sweepWidth, iconSize],
-  });
-  const sweepContent = (
-    <View style={styles.sweepViewport}>
-      <AnimatedLinearGradient
-        colors={[
-          "rgba(255, 255, 255, 0)",
-          "rgba(255, 236, 166, 0.04)",
-          "rgba(255, 255, 255, 0.58)",
-          "rgba(255, 236, 166, 0.08)",
-          "rgba(255, 255, 255, 0)",
-        ]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={[
-          styles.sweep,
-          {
-            width: sweepWidth,
-            height: iconSize,
-            transform: [{ translateX: sweepTranslateX }],
-          },
-        ]}
-      />
-    </View>
-  );
-  const sweepLayer =
-    Platform.OS === "web" ? (
-      APP_ICON_URI ? (
-        <Animated.View
-          pointerEvents="none"
-          style={[
-            styles.webSweepMask,
-            {
-              maskImage: `url("${APP_ICON_URI}")`,
-              WebkitMaskImage: `url("${APP_ICON_URI}")`,
-              maskRepeat: "no-repeat",
-              WebkitMaskRepeat: "no-repeat",
-              maskSize: "100% 100%",
-              WebkitMaskSize: "100% 100%",
-            } as any,
-          ]}
-        >
-          {sweepContent}
-        </Animated.View>
-      ) : null
-    ) : (
-      <MaskedView
-        pointerEvents="none"
-        style={StyleSheet.absoluteFillObject}
-        maskElement={<ExpoImage source={APP_ICON} style={styles.icon} />}
-      >
-        {sweepContent}
-      </MaskedView>
-    );
-
   return (
     <View
       style={styles.screen}
@@ -212,11 +122,6 @@ export function AppPreparationScreen({
             accessibilityLabel="PULPOR app icon"
           />
 
-          {!isError && !reduceMotion && (
-            <View pointerEvents="none" style={StyleSheet.absoluteFillObject}>
-              {sweepLayer}
-            </View>
-          )}
         </View>
 
         {isError ? (
@@ -284,19 +189,6 @@ const styles = StyleSheet.create({
   icon: {
     ...StyleSheet.absoluteFillObject,
     opacity: 1,
-  },
-  sweepViewport: {
-    ...StyleSheet.absoluteFillObject,
-    overflow: "hidden",
-  },
-  sweep: {
-    position: "absolute",
-    left: 0,
-    top: 0,
-  },
-  webSweepMask: {
-    ...StyleSheet.absoluteFillObject,
-    overflow: "hidden",
   },
   statusArea: {
     position: "absolute",
