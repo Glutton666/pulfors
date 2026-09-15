@@ -2,7 +2,6 @@ import React, { useEffect, useRef } from "react";
 import {
   Animated,
   Easing,
-  Image,
   Platform,
   Pressable,
   StyleSheet,
@@ -10,7 +9,7 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
-import MaskedView from "@react-native-masked-view/masked-view";
+import { Image as ExpoImage } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { detectDeviceLanguage } from "@/lib/i18n";
@@ -68,7 +67,7 @@ const copy = {
 
 /**
  * The first visible surface while app resources are being prepared. The icon
- * stays centered while a short highlight sweeps through its actual silhouette.
+ * stays centered while a short highlight sweeps through its icon surface.
  * The bottom status reports the resource currently being prepared.
  */
 export function AppPreparationScreen({
@@ -129,18 +128,18 @@ export function AppPreparationScreen({
           style={[styles.iconFrame, { width: iconSize, height: iconSize }]}
           testID={`${testID}-icon`}
         >
-          <Image
+          <ExpoImage
             source={APP_ICON}
             style={styles.icon}
+            contentFit="cover"
             accessibilityRole="image"
             accessibilityLabel="PULPOR app icon"
           />
 
           {!isError && !reduceMotion && (
-            <MaskedView
+            <View
               pointerEvents="none"
               style={StyleSheet.absoluteFillObject}
-              maskElement={<Image source={APP_ICON} style={styles.icon} />}
             >
               <View style={styles.sweepViewport}>
                 <AnimatedLinearGradient
@@ -163,7 +162,7 @@ export function AppPreparationScreen({
                   ]}
                 />
               </View>
-            </MaskedView>
+            </View>
           )}
         </View>
 
@@ -231,8 +230,7 @@ const styles = StyleSheet.create({
   },
   icon: {
     ...StyleSheet.absoluteFillObject,
-    width: undefined,
-    height: undefined,
+    opacity: 1,
   },
   sweepViewport: {
     ...StyleSheet.absoluteFillObject,
