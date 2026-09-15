@@ -373,6 +373,7 @@ export const translations = {
     practice: { ko: "연습장", en: "Practice" },
     skip: { ko: "건너뛰기", en: "Skip" },
     tryItNow: { ko: "강조된 화면에서 직접 해보세요", en: "Try it on the highlighted screen" },
+    stepCompleted: { ko: "단계 완료", en: "Step complete" },
     beatBpmTitle: { ko: "BPM을 바꿔보세요", en: "Change the BPM" },
     beatBpmBody: { ko: "BPM 슬라이더를 움직이거나 숫자를 눌러 템포를 바꿔보세요.", en: "Move the BPM slider or tap the number to change the tempo." },
     beatTapTitle: { ko: "탭 템포를 사용해보세요", en: "Try tap tempo" },

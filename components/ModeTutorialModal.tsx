@@ -1,6 +1,7 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Platform, Pressable, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useScale } from "@/lib/scale";
@@ -29,7 +30,6 @@ const STEPS: Record<TutorialMode, TutorialStep[]> = {
     { id: "play", action: "note_play", titleKey: "notePlayTitle", bodyKey: "notePlayBody" },
   ],
   practice: [
-    { id: "open", action: "practice_open", titleKey: "practiceOpenTitle", bodyKey: "practiceOpenBody" },
     { id: "load", action: "practice_load", titleKey: "practiceLoadTitle", bodyKey: "practiceLoadBody" },
   ],
 };
@@ -62,27 +62,42 @@ export function ModeTutorialModal({
   const { colors: C } = useTheme();
   const { t } = useLanguage();
   const S = useScale();
+  const insets = useSafeAreaInsets();
   const steps = STEPS[mode];
   const [activeIndex, setActiveIndex] = useState(0);
-
-  const firstIncomplete = useMemo(
-    () => steps.findIndex((step) => !completedSteps.includes(step.id)),
-    [completedSteps, steps],
-  );
+  const [isCompleting, setIsCompleting] = useState(false);
+  const advanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
+    if (advanceTimerRef.current) {
+      clearTimeout(advanceTimerRef.current);
+      advanceTimerRef.current = null;
+    }
     if (!visible) return;
-    setActiveIndex(firstIncomplete < 0 ? steps.length : firstIncomplete);
-  }, [visible, firstIncomplete, steps.length]);
+    const firstIncomplete = steps.findIndex((step) => !completedSteps.includes(step.id));
+    setActiveIndex(firstIncomplete < 0 ? 0 : firstIncomplete);
+    setIsCompleting(false);
+  }, [mode, visible]);
+
+  useEffect(() => () => {
+    if (advanceTimerRef.current) clearTimeout(advanceTimerRef.current);
+  }, []);
 
   useEffect(() => {
-    if (!visible || !lastAction || activeIndex >= steps.length) return;
+    if (!visible || !lastAction || isCompleting || activeIndex >= steps.length) return;
     const step = steps[activeIndex];
     if (step.action !== lastAction || completedSteps.includes(step.id)) return;
     onStepComplete(step.id);
-    if (activeIndex + 1 >= steps.length) onComplete();
-    else setActiveIndex((index) => index + 1);
-  }, [activeIndex, completedSteps, lastAction, onComplete, onStepComplete, steps, visible]);
+    setIsCompleting(true);
+    advanceTimerRef.current = setTimeout(() => {
+      advanceTimerRef.current = null;
+      if (activeIndex + 1 >= steps.length) onComplete();
+      else {
+        setActiveIndex((index) => index + 1);
+        setIsCompleting(false);
+      }
+    }, 650);
+  }, [activeIndex, completedSteps, isCompleting, lastAction, onComplete, onStepComplete, steps, visible]);
 
   if (!visible || activeIndex >= steps.length) return null;
   const step = steps[activeIndex];
@@ -99,10 +114,6 @@ export function ModeTutorialModal({
       testID="mode-tutorial"
     >
       <View
-        pointerEvents="none"
-        style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.38)" }}
-      />
-      <View
         // The instruction card may overlap controls on short screens. Keep the
         // card transparent to hit testing so the user can perform the action
         // underneath; only the explicit skip control opts back in.
@@ -111,14 +122,15 @@ export function ModeTutorialModal({
           position: "absolute",
           left: 16,
           right: 16,
-          bottom: 18,
+          top: (insets.top || (Platform.OS === "web" ? 67 : 0)) + 52,
           maxWidth: 620,
           alignSelf: "center",
           backgroundColor: C.surface,
           borderColor: C.accent,
           borderWidth: 1,
           borderRadius: 18,
-          padding: S.ms(18, 0.5),
+          paddingHorizontal: S.ms(14, 0.4),
+          paddingVertical: S.ms(12, 0.4),
           shadowColor: "#000",
           shadowOpacity: 0.28,
           shadowRadius: 16,
@@ -142,18 +154,23 @@ export function ModeTutorialModal({
                 flex: 1,
                 height: 4,
                 borderRadius: 3,
-                backgroundColor: index <= activeIndex ? C.accent : C.border,
+                backgroundColor:
+                  index < activeIndex || (index === activeIndex && isCompleting)
+                    ? C.accent
+                    : index === activeIndex
+                      ? C.accentDim
+                      : C.border,
               }}
             />
           ))}
         </View>
-        <Text style={{ color: C.text, fontSize: S.ms(19, 0.4), fontWeight: "700", marginBottom: 7 }}>
-          {translate("tutorial", step.titleKey)}
+        <Text style={{ color: isCompleting ? C.accent : C.text, fontSize: S.ms(17, 0.4), fontWeight: "700", marginBottom: 5 }}>
+          {isCompleting ? `✓ ${translate("tutorial", "stepCompleted")}` : translate("tutorial", step.titleKey)}
         </Text>
-        <Text style={{ color: C.textSecondary, fontSize: S.ms(14, 0.35), lineHeight: S.ms(21, 0.35) }}>
+        <Text style={{ color: C.textSecondary, fontSize: S.ms(13, 0.35), lineHeight: S.ms(18, 0.35) }}>
           {translate("tutorial", step.bodyKey)}
         </Text>
-        <View style={{ flexDirection: "row", justifyContent: "flex-end", alignItems: "center", marginTop: 14, gap: 12 }}>
+        <View style={{ flexDirection: "row", justifyContent: "flex-end", alignItems: "center", marginTop: 8, gap: 12 }}>
           <Pressable
             onPress={onSkip}
             pointerEvents="auto"

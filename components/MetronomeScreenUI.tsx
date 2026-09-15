@@ -212,25 +212,24 @@ export function MetronomeScreenUI(props: Props) {
     && usesSharedEasterEggGesture(currentMode, showPolygon);
 
   const tutorialBpmChange = useCallback((value: number) => {
-    recordTutorialAction("bpm_change");
     updateBpm(value);
-  }, [recordTutorialAction, updateBpm]);
+    if (value !== bpm) recordTutorialAction("bpm_change");
+  }, [bpm, recordTutorialAction, updateBpm]);
   const tutorialTapTempo = useCallback(() => {
-    recordTutorialAction("tap_tempo");
     handleTapTempo();
+    recordTutorialAction("tap_tempo");
   }, [handleTapTempo, recordTutorialAction]);
   const tutorialTogglePlay = useCallback(() => {
-    recordTutorialAction("toggle_play");
     togglePlayPause();
+    recordTutorialAction("toggle_play");
   }, [recordTutorialAction, togglePlayPause]);
   const tutorialNotePlay = useCallback(() => {
-    recordTutorialAction("note_play");
     handleNoteTogglePlay();
+    recordTutorialAction("note_play");
   }, [handleNoteTogglePlay, recordTutorialAction]);
   const tutorialSwitchToMode = useCallback((mode: ModeSlot, direction: "left" | "right" = "right") => {
-    if (mode === "practice") recordTutorialAction("practice_open");
     return switchToMode(mode, direction);
-  }, [recordTutorialAction, switchToMode]);
+  }, [switchToMode]);
 
   const saveFailureBannerKey = getPersistFailureBannerKey(
     combinePersisterStatuses(persistStatus, noteSamplePersistStatus),
@@ -295,6 +294,16 @@ export function MetronomeScreenUI(props: Props) {
     setSettingsScope(scope);
     openExclusive("settings");
   }, [openExclusive, settingsReturnModalRef]);
+
+  const replayCurrentModeTutorial = useCallback(() => {
+    const mode = currentMode === "bar" || currentMode === "note" || currentMode === "practice"
+      ? currentMode
+      : "beat";
+    settingsReturnModalRef.current = null;
+    clearMenuItemReturn();
+    setActiveModal(null);
+    setTimeout(() => openModeTutorial(mode, true), 180);
+  }, [clearMenuItemReturn, currentMode, openModeTutorial, setActiveModal, settingsReturnModalRef]);
 
 
   const openModeDial = () => {
@@ -637,7 +646,7 @@ export function MetronomeScreenUI(props: Props) {
         onStopRoomTracking={stopRoomTracking}
         onResetApp={handleResetApp}
         onShowOnboarding={() => openExclusive("onboarding")}
-        onShowTutorial={() => openModeTutorial((currentMode === "bar" || currentMode === "note" || currentMode === "practice") ? currentMode : "beat")}
+        onShowTutorial={replayCurrentModeTutorial}
         onResetTutorials={() => { void resetModeTutorials(); }}
       />
 
@@ -841,8 +850,8 @@ export function MetronomeScreenUI(props: Props) {
           }
         }}
         onLoad={(entry) => {
-          recordTutorialAction("practice_load");
           handleLoadPracticeEntry(entry);
+          recordTutorialAction("practice_load");
         }}
         onSetGoal={handleSetPracticeNoteGoal}
         currentConfig={currentBarConfig}
@@ -1040,7 +1049,7 @@ export function MetronomeScreenUI(props: Props) {
         onRandomBarConfigChange={onRandomBarConfigChange}
         onEnterNoteMode={handleEnterNoteMode}
         onShowOnboarding={() => openExclusive("onboarding")}
-        onShowTutorial={() => openModeTutorial((currentMode === "bar" || currentMode === "note" || currentMode === "practice") ? currentMode : "beat")}
+        onShowTutorial={replayCurrentModeTutorial}
         onResetTutorials={() => { void resetModeTutorials(); }}
         keyBindings={keyBindings}
         onKeyBindingsChange={(kb) => {
@@ -1101,8 +1110,8 @@ export function MetronomeScreenUI(props: Props) {
             onPlayModeChange={setNotePlayMode}
             onTogglePlay={tutorialNotePlay}
             onAddToQueue={(entry) => {
-              recordTutorialAction("note_queue");
               handleNoteAddToQueue(entry);
+              recordTutorialAction("note_queue");
             }}
             onManualNext={handleNoteManualNext}
             onManualNextImmediate={handleNoteManualNextImmediate}
@@ -1139,8 +1148,8 @@ export function MetronomeScreenUI(props: Props) {
             onPlayLongPress={scoreMode === null && !barMode ? handleBeatQuickSaveOpen : undefined}
             beatTypes={beatTypes}
             onBeatTypeChange={(index, type) => {
-              recordTutorialAction("bar_edit");
               handleBeatTypeChange(index, type);
+              recordTutorialAction("bar_edit");
             }}
             dropTargetBeat={dropTargetBeat}
             beatSubdivisionCounts={beatSubdivisionCounts}
@@ -1153,8 +1162,8 @@ export function MetronomeScreenUI(props: Props) {
             barAreaRef={barAreaRef}
             barRepeats={barRepeats}
             onBarRepeatChange={(beat, repeat) => {
-              recordTutorialAction("bar_edit");
               handleBarRepeatChange(beat, repeat);
+              recordTutorialAction("bar_edit");
             }}
             onBarMeterChange={handleBarMeterChange}
             loopBlocks={loopBlocks}
@@ -1231,8 +1240,8 @@ export function MetronomeScreenUI(props: Props) {
             ) : undefined}
             onEnterNoteMode={handleEnterNoteMode}
             onAddBar={(draft) => {
-              recordTutorialAction("bar_add");
               handleAddBar(draft);
+              recordTutorialAction("bar_add");
             }}
             onDeleteBar={handleDeleteBar}
             onCopyBar={handleCopyBar}

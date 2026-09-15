@@ -402,14 +402,24 @@ export function useMetronomeScreen() {
       || (entry.status !== "completed" && entry.status !== "skipped");
   }, []);
 
-  const openModeTutorial = useCallback((mode: TutorialMode) => {
-    if (!tutorialShouldShow(mode)) {
-      setTutorialState((current) => ({ ...current }));
+  const openModeTutorial = useCallback((mode: TutorialMode, restart = false) => {
+    if (restart) {
+      const next: TutorialState = {
+        ...tutorialStateRef.current,
+        [mode]: {
+          contentVersion: TUTORIAL_CONTENT_VERSION,
+          status: "in_progress",
+          completedSteps: [],
+        },
+      };
+      tutorialStateRef.current = next;
+      setTutorialState(next);
+      void saveTutorialState(next).catch(() => {});
     }
     tutorialModeRef.current = mode;
     setTutorialMode(mode);
     setTutorialLastAction(null);
-  }, [tutorialShouldShow]);
+  }, []);
 
   const recordTutorialAction = useCallback((action: TutorialAction) => {
     if (!tutorialModeRef.current) return;
@@ -431,6 +441,7 @@ export function useMetronomeScreen() {
     };
     tutorialStateRef.current = next;
     setTutorialState(next);
+    setTutorialLastAction(null);
     void saveTutorialState(next).catch(() => {});
   }, []);
 
@@ -3697,10 +3708,9 @@ export function useMetronomeScreen() {
       : null;
     if (tutorialTarget && tutorialShouldShow(tutorialTarget)) {
       openModeTutorial(tutorialTarget);
-      if (tutorialTarget === "practice") recordTutorialAction("practice_open");
     }
     modeTransitionCoordinatorRef.current.finish(transitionGeneration);
-  }, [currentMode, coreMode, stageModeActive, showMenu, showPracticeBook, handleExitNoteMode, handleBarModeChange, handleEnterNoteMode, enterStageModeForPlayback, exitStageModeForPlayback, activeModal, openExclusive, modeSlideX, modeSlideY, modeSlideOpacity, windowWidth, openModeTutorial, tutorialShouldShow, recordTutorialAction]);
+  }, [currentMode, coreMode, stageModeActive, showMenu, showPracticeBook, handleExitNoteMode, handleBarModeChange, handleEnterNoteMode, enterStageModeForPlayback, exitStageModeForPlayback, activeModal, openExclusive, modeSlideX, modeSlideY, modeSlideOpacity, windowWidth, openModeTutorial, tutorialShouldShow]);
 
   // ── 상단 중앙 레이블 탭 → 다음 모드 순환 ──
   const MODE_CYCLE: ModeSlot[] = ["beat", "bar", "note", "practice"];
