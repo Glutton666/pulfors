@@ -11,6 +11,11 @@ import {
   loadPracticeBook,
   savePracticeBook,
   createPracticeEntry,
+  loadTutorialState,
+  saveTutorialState,
+  resetTutorialState,
+  updateTutorialMode,
+  TUTORIAL_CONTENT_VERSION,
   type MetronomeSettings,
 } from "../lib/storage";
 
@@ -338,4 +343,41 @@ test("createPracticeEntry: 매번 다른 id", () => {
     barRepeats: {}, barLoopMode: "once", subdivisionPattern: [],
   });
   assert.notEqual(a.id, b.id);
+});
+
+test("tutorial state: modes start independently and persist progress", async () => {
+  const initial = await loadTutorialState();
+  assert.equal(initial.beat.status, "new");
+  assert.equal(initial.bar.status, "new");
+  assert.deepEqual(initial.note.completedSteps, []);
+
+  const progressed = await updateTutorialMode("beat", {
+    status: "in_progress",
+    contentVersion: TUTORIAL_CONTENT_VERSION,
+    completedSteps: ["bpm"],
+  });
+  assert.equal(progressed.beat.status, "in_progress");
+  assert.deepEqual(progressed.beat.completedSteps, ["bpm"]);
+  assert.equal(progressed.bar.status, "new");
+
+  const restored = await loadTutorialState();
+  assert.equal(restored.beat.contentVersion, TUTORIAL_CONTENT_VERSION);
+  assert.deepEqual(restored.beat.completedSteps, ["bpm"]);
+});
+
+test("tutorial state: malformed records are sanitized and resettable", async () => {
+  await AsyncStorage.setItem("metronome_tutorial_state_v1", JSON.stringify({
+    beat: { status: "completed", contentVersion: 1, completedSteps: ["bpm", "bpm", 42] },
+    bar: { status: "unknown", contentVersion: -2, completedSteps: "bad" },
+  }));
+  const sanitized = await loadTutorialState();
+  assert.deepEqual(sanitized.beat.completedSteps, ["bpm"]);
+  assert.equal(sanitized.bar.status, "new");
+  assert.equal(sanitized.bar.contentVersion, 0);
+  assert.deepEqual(sanitized.note.completedSteps, []);
+
+  const reset = await resetTutorialState("beat");
+  assert.equal(reset.beat.status, "new");
+  assert.deepEqual(reset.beat.completedSteps, []);
+  assert.equal(reset.bar.status, "new");
 });

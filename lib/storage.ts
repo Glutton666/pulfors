@@ -84,6 +84,116 @@ export type BuiltinSoundSet = "classic" | "woodblock" | "cowbell" | "digital" | 
 export type SoundSet = BuiltinSoundSet | "custom1" | "custom2" | "custom3";
 export type MetronomeMode = "beat" | "bar" | "note" | "stage";
 
+export type TutorialMode = "beat" | "bar" | "note" | "practice";
+export type TutorialAction =
+  | "bpm_change"
+  | "tap_tempo"
+  | "toggle_play"
+  | "bar_edit"
+  | "bar_add"
+  | "note_queue"
+  | "note_play"
+  | "practice_open"
+  | "practice_load";
+export type TutorialStatus = "new" | "in_progress" | "completed" | "skipped";
+
+export interface TutorialModeState {
+  contentVersion: number;
+  status: TutorialStatus;
+  completedSteps: string[];
+}
+
+export type TutorialState = Record<TutorialMode, TutorialModeState>;
+
+export const TUTORIAL_CONTENT_VERSION = 1;
+export const DEFAULT_TUTORIAL_STATE: TutorialState = {
+  beat: { contentVersion: 0, status: "new", completedSteps: [] },
+  bar: { contentVersion: 0, status: "new", completedSteps: [] },
+  note: { contentVersion: 0, status: "new", completedSteps: [] },
+  practice: { contentVersion: 0, status: "new", completedSteps: [] },
+};
+
+const TUTORIAL_STATE_KEY = "metronome_tutorial_state_v1";
+const TUTORIAL_MODES: TutorialMode[] = ["beat", "bar", "note", "practice"];
+
+function sanitizeTutorialModeState(value: unknown): TutorialModeState {
+  if (!isPlainObject(value)) return { ...DEFAULT_TUTORIAL_STATE.beat };
+  const status: TutorialStatus =
+    value.status === "in_progress" || value.status === "completed" || value.status === "skipped"
+      ? value.status
+      : "new";
+  const completedSteps = Array.isArray(value.completedSteps)
+    ? value.completedSteps.filter((step): step is string => typeof step === "string").slice(0, 32)
+    : [];
+  return {
+    contentVersion: typeof value.contentVersion === "number" && Number.isFinite(value.contentVersion)
+      ? Math.max(0, Math.floor(value.contentVersion))
+      : 0,
+    status,
+    completedSteps: [...new Set(completedSteps)],
+  };
+}
+
+function cloneTutorialState(state: TutorialState): TutorialState {
+  return Object.fromEntries(
+    TUTORIAL_MODES.map((mode) => [mode, {
+      contentVersion: state[mode].contentVersion,
+      status: state[mode].status,
+      completedSteps: [...state[mode].completedSteps],
+    }]),
+  ) as TutorialState;
+}
+
+export async function loadTutorialState(): Promise<TutorialState> {
+  try {
+    const raw = await AsyncStorage.getItem(TUTORIAL_STATE_KEY);
+    if (raw) {
+      const parsed: unknown = JSON.parse(raw);
+      if (isPlainObject(parsed)) {
+        const state = cloneTutorialState(DEFAULT_TUTORIAL_STATE);
+        for (const mode of TUTORIAL_MODES) {
+          state[mode] = sanitizeTutorialModeState(parsed[mode]);
+        }
+        return state;
+      }
+    }
+  } catch (e) {
+    notifyStorageError({ key: TUTORIAL_STATE_KEY, operation: "load", error: e });
+  }
+  return cloneTutorialState(DEFAULT_TUTORIAL_STATE);
+}
+
+export async function saveTutorialState(state: TutorialState): Promise<void> {
+  try {
+    await AsyncStorage.setItem(TUTORIAL_STATE_KEY, JSON.stringify(cloneTutorialState(state)));
+  } catch (e) {
+    notifyStorageError({ key: TUTORIAL_STATE_KEY, operation: "save", error: e });
+    throw e;
+  }
+}
+
+export async function updateTutorialMode(
+  mode: TutorialMode,
+  patch: Partial<TutorialModeState>,
+): Promise<TutorialState> {
+  const state = await loadTutorialState();
+  state[mode] = sanitizeTutorialModeState({ ...state[mode], ...patch });
+  await saveTutorialState(state);
+  return state;
+}
+
+export async function resetTutorialState(mode?: TutorialMode): Promise<TutorialState> {
+  const state = await loadTutorialState();
+  if (mode) state[mode] = { ...DEFAULT_TUTORIAL_STATE[mode], completedSteps: [] };
+  else {
+    for (const entry of TUTORIAL_MODES) {
+      state[entry] = { ...DEFAULT_TUTORIAL_STATE[entry], completedSteps: [] };
+    }
+  }
+  await saveTutorialState(state);
+  return state;
+}
+
 export type SoundRole = "strong" | "high" | "low";
 
 export interface CustomSoundSample {

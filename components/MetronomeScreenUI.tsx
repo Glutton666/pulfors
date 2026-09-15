@@ -49,6 +49,7 @@ import { FadeOutModal } from "@/components/FadeOutModal";
 import { GoalCompletePopup } from "@/components/GoalCompletePopup";
 import { NoteRecorderModal } from "@/components/NoteRecorderModal";
 import { NoteModeView } from "@/components/NoteModeView";
+import { ModeTutorialModal } from "@/components/ModeTutorialModal";
 import { KeyboardShortcutsModal } from "@/components/KeyboardShortcutsModal";
 import { NativeKeyboardHintOverlay } from "@/components/NativeKeyboardHintOverlay";
 import {
@@ -108,6 +109,9 @@ export function MetronomeScreenUI(props: Props) {
      showSettings, showProfile, showAssistant, showMenu, showSignalGen, showTuningGuide, showPracticeBook,
     showWorkUp, showOnboarding, showDrumKit, showScheduledStart,
     showFadeOut, showBpmDetect, showPolygon,
+    tutorialState, tutorialMode, tutorialLastAction,
+    recordTutorialAction, completeTutorialStep, finishModeTutorial, skipModeTutorial,
+    openModeTutorial, resetModeTutorials,
     volume, updateVolume, tonePosition, updateTonePosition, sampleVolume, updateSampleVolume,
     backgroundPlay, updateBackgroundPlay,
     playbackNotifications, updatePlaybackNotifications,
@@ -206,6 +210,27 @@ export function MetronomeScreenUI(props: Props) {
   });
   const showSharedEasterEggQuiz = easterEggActive
     && usesSharedEasterEggGesture(currentMode, showPolygon);
+
+  const tutorialBpmChange = useCallback((value: number) => {
+    recordTutorialAction("bpm_change");
+    updateBpm(value);
+  }, [recordTutorialAction, updateBpm]);
+  const tutorialTapTempo = useCallback(() => {
+    recordTutorialAction("tap_tempo");
+    handleTapTempo();
+  }, [handleTapTempo, recordTutorialAction]);
+  const tutorialTogglePlay = useCallback(() => {
+    recordTutorialAction("toggle_play");
+    togglePlayPause();
+  }, [recordTutorialAction, togglePlayPause]);
+  const tutorialNotePlay = useCallback(() => {
+    recordTutorialAction("note_play");
+    handleNoteTogglePlay();
+  }, [handleNoteTogglePlay, recordTutorialAction]);
+  const tutorialSwitchToMode = useCallback((mode: ModeSlot, direction: "left" | "right" = "right") => {
+    if (mode === "practice") recordTutorialAction("practice_open");
+    return switchToMode(mode, direction);
+  }, [recordTutorialAction, switchToMode]);
 
   const saveFailureBannerKey = getPersistFailureBannerKey(
     combinePersisterStatuses(persistStatus, noteSamplePersistStatus),
@@ -546,7 +571,7 @@ export function MetronomeScreenUI(props: Props) {
         <ModeSwitcherDial
           ref={modeSwitcherDialRef}
           currentMode={currentMode}
-          onSelectMode={switchToMode}
+          onSelectMode={tutorialSwitchToMode}
           topInset={insets.top || webTopInset}
           isLandscape={isLandscape}
           isPlaying={isPlaying}
@@ -612,6 +637,8 @@ export function MetronomeScreenUI(props: Props) {
         onStopRoomTracking={stopRoomTracking}
         onResetApp={handleResetApp}
         onShowOnboarding={() => openExclusive("onboarding")}
+        onShowTutorial={() => openModeTutorial((currentMode === "bar" || currentMode === "note" || currentMode === "practice") ? currentMode : "beat")}
+        onResetTutorials={() => { void resetModeTutorials(); }}
       />
 
       <AssistantModal visible={showAssistant} onClose={closeMenuItem} />
@@ -813,7 +840,10 @@ export function MetronomeScreenUI(props: Props) {
             featureStartRef.current = null;
           }
         }}
-        onLoad={handleLoadPracticeEntry}
+        onLoad={(entry) => {
+          recordTutorialAction("practice_load");
+          handleLoadPracticeEntry(entry);
+        }}
         onSetGoal={handleSetPracticeNoteGoal}
         currentConfig={currentBarConfig}
         username={username}
@@ -837,6 +867,16 @@ export function MetronomeScreenUI(props: Props) {
         onComplete={handleOnboardingComplete}
       />
       )}
+
+      <ModeTutorialModal
+        visible={tutorialMode !== null && !showOnboarding}
+        mode={tutorialMode ?? "beat"}
+        completedSteps={tutorialMode ? tutorialState[tutorialMode].completedSteps : []}
+        lastAction={tutorialLastAction}
+        onStepComplete={completeTutorialStep}
+        onSkip={skipModeTutorial}
+        onComplete={finishModeTutorial}
+      />
 
       <Animated.View
         pointerEvents="none"
@@ -1000,6 +1040,8 @@ export function MetronomeScreenUI(props: Props) {
         onRandomBarConfigChange={onRandomBarConfigChange}
         onEnterNoteMode={handleEnterNoteMode}
         onShowOnboarding={() => openExclusive("onboarding")}
+        onShowTutorial={() => openModeTutorial((currentMode === "bar" || currentMode === "note" || currentMode === "practice") ? currentMode : "beat")}
+        onResetTutorials={() => { void resetModeTutorials(); }}
         keyBindings={keyBindings}
         onKeyBindingsChange={(kb) => {
           setKeyBindings(kb);
@@ -1053,12 +1095,15 @@ export function MetronomeScreenUI(props: Props) {
             currentBeat={currentBeat}
             activeSubNote={activeSubNote}
             playingBarIdx={noteMeasureCount}
-            onAddToQueue={handleNoteAddToQueue}
             onRemoveFromQueue={handleNoteRemoveFromQueue}
             onReorderQueue={handleNoteReorderQueue}
             onInsertNext={handleNoteInsertNext}
             onPlayModeChange={setNotePlayMode}
-            onTogglePlay={handleNoteTogglePlay}
+            onTogglePlay={tutorialNotePlay}
+            onAddToQueue={(entry) => {
+              recordTutorialAction("note_queue");
+              handleNoteAddToQueue(entry);
+            }}
             onManualNext={handleNoteManualNext}
             onManualNextImmediate={handleNoteManualNextImmediate}
             onSave={handleNoteSave}
@@ -1089,11 +1134,14 @@ export function MetronomeScreenUI(props: Props) {
             isPlaying={isPlaying}
             isPreparing={isPreparing}
             onBeatsChange={updateTimeSignature}
-            onTogglePlay={togglePlayPause}
+            onTogglePlay={tutorialTogglePlay}
             onOpenSettings={() => openScopedSettings(barMode ? "bar" : "beat")}
             onPlayLongPress={scoreMode === null && !barMode ? handleBeatQuickSaveOpen : undefined}
             beatTypes={beatTypes}
-            onBeatTypeChange={handleBeatTypeChange}
+            onBeatTypeChange={(index, type) => {
+              recordTutorialAction("bar_edit");
+              handleBeatTypeChange(index, type);
+            }}
             dropTargetBeat={dropTargetBeat}
             beatSubdivisionCounts={beatSubdivisionCounts}
             dialRef={dialRef}
@@ -1104,7 +1152,10 @@ export function MetronomeScreenUI(props: Props) {
             activeSubNote={activeSubNote}
             barAreaRef={barAreaRef}
             barRepeats={barRepeats}
-            onBarRepeatChange={handleBarRepeatChange}
+            onBarRepeatChange={(beat, repeat) => {
+              recordTutorialAction("bar_edit");
+              handleBarRepeatChange(beat, repeat);
+            }}
             onBarMeterChange={handleBarMeterChange}
             loopBlocks={loopBlocks}
             onLoopBlocksChange={handleLoopBlocksChange}
@@ -1171,15 +1222,18 @@ export function MetronomeScreenUI(props: Props) {
               ) : (
                 <BpmSlider
                   bpm={bpm}
-                  onBpmChange={updateBpm}
-                  onTapTempo={handleTapTempo}
+            onBpmChange={tutorialBpmChange}
+            onTapTempo={tutorialTapTempo}
                   onDenominatorCycle={handleBeatDenominatorCycle}
                   isLandscape={true}
                 />
               )
             ) : undefined}
             onEnterNoteMode={handleEnterNoteMode}
-            onAddBar={handleAddBar}
+            onAddBar={(draft) => {
+              recordTutorialAction("bar_add");
+              handleAddBar(draft);
+            }}
             onDeleteBar={handleDeleteBar}
             onCopyBar={handleCopyBar}
             onReorderBar={handleReorderBar}
@@ -1445,8 +1499,8 @@ export function MetronomeScreenUI(props: Props) {
             ) : (
               <BpmSlider
                 bpm={bpm}
-                onBpmChange={updateBpm}
-                onTapTempo={handleTapTempo}
+                onBpmChange={tutorialBpmChange}
+                onTapTempo={tutorialTapTempo}
                 onDenominatorCycle={handleBeatDenominatorCycle}
                 isLandscape={true}
               />
@@ -1470,8 +1524,8 @@ export function MetronomeScreenUI(props: Props) {
           ) : (
             <BpmSlider
               bpm={bpm}
-              onBpmChange={updateBpm}
-              onTapTempo={handleTapTempo}
+              onBpmChange={tutorialBpmChange}
+              onTapTempo={tutorialTapTempo}
               onDenominatorCycle={handleBeatDenominatorCycle}
               isLandscape={false}
             />

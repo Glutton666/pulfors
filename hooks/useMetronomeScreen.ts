@@ -59,7 +59,7 @@ import {
   type BarRandomConfig,
   type BarRandomSession,
 } from "@/lib/bar-random-session";
-import { loadSettings, saveSettings, loadCustomSoundSets, saveCustomSoundSets, loadPracticeBook, savePracticeBook, createPracticeEntry, runStorageMigrations, clearAllAppStorage, type MetronomeSettings } from "@/lib/storage";
+import { loadSettings, saveSettings, loadCustomSoundSets, saveCustomSoundSets, loadPracticeBook, savePracticeBook, createPracticeEntry, runStorageMigrations, clearAllAppStorage, loadTutorialState, saveTutorialState, resetTutorialState, TUTORIAL_CONTENT_VERSION, DEFAULT_TUTORIAL_STATE, type MetronomeSettings, type TutorialAction, type TutorialMode, type TutorialState } from "@/lib/storage";
 import { NEUTRAL, type TonePosition } from "@/lib/metronome-tone-dsp";
 import type { FlashMode, HapticMode, SoundSet, BuiltinSoundSet, CustomSoundSetConfig, CustomSoundSample, FadeOutSettings, PracticeEntry, MetronomeMode } from "@/lib/storage";
 import type { BarRepeat, LoopBlock } from "@/components/BeatIndicator";
@@ -384,6 +384,100 @@ export function useMetronomeScreen() {
   const renderGenerationRef = useRef(0);
   // 단일 활성 모달 상태 머신: null = 모달 없음. openExclusive로만 전환해 mutual exclusion 보장.
   const [activeModal, setActiveModal] = useState<ActiveModal>(null);
+  const [tutorialState, setTutorialState] = useState<TutorialState>(DEFAULT_TUTORIAL_STATE);
+  const [tutorialMode, setTutorialMode] = useState<TutorialMode | null>(null);
+  const [tutorialLastAction, setTutorialLastAction] = useState<TutorialAction | null>(null);
+  const tutorialStateRef = useRef<TutorialState>(DEFAULT_TUTORIAL_STATE);
+  const tutorialModeRef = useRef<TutorialMode | null>(null);
+  useEffect(() => {
+    tutorialStateRef.current = tutorialState;
+  }, [tutorialState]);
+  useEffect(() => {
+    tutorialModeRef.current = tutorialMode;
+  }, [tutorialMode]);
+
+  const tutorialShouldShow = useCallback((mode: TutorialMode, state = tutorialStateRef.current) => {
+    const entry = state[mode];
+    return entry.contentVersion < TUTORIAL_CONTENT_VERSION
+      || (entry.status !== "completed" && entry.status !== "skipped");
+  }, []);
+
+  const openModeTutorial = useCallback((mode: TutorialMode) => {
+    if (!tutorialShouldShow(mode)) {
+      setTutorialState((current) => ({ ...current }));
+    }
+    tutorialModeRef.current = mode;
+    setTutorialMode(mode);
+    setTutorialLastAction(null);
+  }, [tutorialShouldShow]);
+
+  const recordTutorialAction = useCallback((action: TutorialAction) => {
+    if (!tutorialModeRef.current) return;
+    setTutorialLastAction(action);
+  }, []);
+
+  const completeTutorialStep = useCallback((stepId: string) => {
+    const mode = tutorialModeRef.current;
+    if (!mode) return;
+    const current = tutorialStateRef.current;
+    const next: TutorialState = {
+      ...current,
+      [mode]: {
+        ...current[mode],
+        status: "in_progress",
+        contentVersion: TUTORIAL_CONTENT_VERSION,
+        completedSteps: [...new Set([...current[mode].completedSteps, stepId])],
+      },
+    };
+    tutorialStateRef.current = next;
+    setTutorialState(next);
+    void saveTutorialState(next).catch(() => {});
+  }, []);
+
+  const finishModeTutorial = useCallback(() => {
+    const mode = tutorialModeRef.current;
+    if (!mode) return;
+    const next: TutorialState = {
+      ...tutorialStateRef.current,
+      [mode]: {
+        contentVersion: TUTORIAL_CONTENT_VERSION,
+        status: "completed",
+        completedSteps: [...tutorialStateRef.current[mode].completedSteps],
+      },
+    };
+    tutorialStateRef.current = next;
+    setTutorialState(next);
+    tutorialModeRef.current = null;
+    setTutorialMode(null);
+    setTutorialLastAction(null);
+    void saveTutorialState(next).catch(() => {});
+  }, []);
+
+  const skipModeTutorial = useCallback(() => {
+    const mode = tutorialModeRef.current;
+    if (!mode) return;
+    const next: TutorialState = {
+      ...tutorialStateRef.current,
+      [mode]: {
+        contentVersion: TUTORIAL_CONTENT_VERSION,
+        status: "skipped",
+        completedSteps: [...tutorialStateRef.current[mode].completedSteps],
+      },
+    };
+    tutorialStateRef.current = next;
+    setTutorialState(next);
+    tutorialModeRef.current = null;
+    setTutorialMode(null);
+    setTutorialLastAction(null);
+    void saveTutorialState(next).catch(() => {});
+  }, []);
+
+  const resetModeTutorials = useCallback(async () => {
+    const next = await resetTutorialState();
+    tutorialStateRef.current = next;
+    setTutorialState(next);
+    setTutorialLastAction(null);
+  }, []);
   const {
     showSettings,
      showProfile,
@@ -1320,11 +1414,18 @@ export function useMetronomeScreen() {
     AsyncStorage.getItem("metronome_landscape_image").then((val) => {
       if (val) setLandscapeImageUri(val);
     });
-    AsyncStorage.getItem("metronome_onboarding_done").then((val) => {
-      if (!val) {
+    Promise.all([
+      AsyncStorage.getItem("metronome_onboarding_done"),
+      loadTutorialState(),
+    ]).then(([onboardingDone, savedTutorialState]) => {
+      tutorialStateRef.current = savedTutorialState;
+      setTutorialState(savedTutorialState);
+      if (!onboardingDone) {
         setActiveModal("onboarding");
+      } else if (tutorialShouldShow("beat", savedTutorialState)) {
+        openModeTutorial("beat");
       }
-    });
+    }).catch(() => {});
     AsyncStorage.getItem("metronome_subdivision_longpress_hint_v1").then((val) => {
       if (!val) setShowSubdivisionLongPressHint(true);
     });
@@ -1645,6 +1746,7 @@ export function useMetronomeScreen() {
   const handleOnboardingComplete = useCallback(async (result: OnboardingResult) => {
     setActiveModal(null);
     AsyncStorage.setItem("metronome_onboarding_done", "1");
+    if (tutorialShouldShow("beat")) openModeTutorial("beat");
 
     setThemeColor(result.themeColor);
     if (result.themeColor === "custom" && result.customHex) {
@@ -1674,7 +1776,7 @@ export function useMetronomeScreen() {
         captureBreadcrumb({ category: "practice-room", message: "Failed to register practice room", level: "warning", data: { error: String(e) } });
       }
     }
-  }, [setThemeColor, setCustomHex, persistSettings]);
+  }, [setThemeColor, setCustomHex, persistSettings, openModeTutorial, tutorialShouldShow]);
 
   const handleResetApp = useCallback(async () => {
     try {
@@ -3590,8 +3692,15 @@ export function useMetronomeScreen() {
       });
       return;
     }
+    const tutorialTarget = mode === "beat" || mode === "bar" || mode === "note" || mode === "practice"
+      ? mode
+      : null;
+    if (tutorialTarget && tutorialShouldShow(tutorialTarget)) {
+      openModeTutorial(tutorialTarget);
+      if (tutorialTarget === "practice") recordTutorialAction("practice_open");
+    }
     modeTransitionCoordinatorRef.current.finish(transitionGeneration);
-  }, [currentMode, coreMode, stageModeActive, showMenu, showPracticeBook, handleExitNoteMode, handleBarModeChange, handleEnterNoteMode, enterStageModeForPlayback, exitStageModeForPlayback, activeModal, openExclusive, modeSlideX, modeSlideY, modeSlideOpacity, windowWidth]);
+  }, [currentMode, coreMode, stageModeActive, showMenu, showPracticeBook, handleExitNoteMode, handleBarModeChange, handleEnterNoteMode, enterStageModeForPlayback, exitStageModeForPlayback, activeModal, openExclusive, modeSlideX, modeSlideY, modeSlideOpacity, windowWidth, openModeTutorial, tutorialShouldShow, recordTutorialAction]);
 
   // ── 상단 중앙 레이블 탭 → 다음 모드 순환 ──
   const MODE_CYCLE: ModeSlot[] = ["beat", "bar", "note", "practice"];
@@ -4083,6 +4192,15 @@ export function useMetronomeScreen() {
     showFadeOut,
     showBpmDetect,
     showPolygon,
+    tutorialState,
+    tutorialMode,
+    tutorialLastAction,
+    recordTutorialAction,
+    completeTutorialStep,
+    finishModeTutorial,
+    skipModeTutorial,
+    openModeTutorial,
+    resetModeTutorials,
     // Settings
     volume,
     updateVolume,
