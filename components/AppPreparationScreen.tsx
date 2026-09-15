@@ -152,18 +152,19 @@ export function AppPreparationScreen({
               )}
             </View>
           </View>
-        ) : (
-          <View
-            style={styles.statusArea}
-            pointerEvents="none"
-            accessibilityLiveRegion="polite"
-          >
-            <Text style={styles.status} testID={`${testID}-status`}>
-              {currentStatus}
-            </Text>
-          </View>
-        )}
+        ) : null}
       </View>
+      {!isError ? (
+        <View
+          style={styles.statusArea}
+          pointerEvents="none"
+          accessibilityLiveRegion="polite"
+        >
+          <Text style={styles.status} testID={`${testID}-status`}>
+            {currentStatus}
+          </Text>
+        </View>
+      ) : null}
     </View>
   );
 }
