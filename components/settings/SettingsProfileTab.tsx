@@ -28,7 +28,6 @@ import {
 } from "@/lib/practice-room";
 import { loadGoals, saveGoals, type Goal } from "@/lib/activity-log";
 import { make_styles } from "@/components/SettingsModal.styles";
-import { TUNING_DATA } from "@/lib/tuning-data";
 import { filterPrimaryInstrumentCategories } from "@/lib/primary-instrument-search";
 
 export interface SettingsProfileTabProps {
@@ -259,7 +258,6 @@ export function SettingsProfileTab({
             placeholderTextColor={C.textTertiary}
             accessibilityLabel={t("settings", "primaryInstrumentSearchPlaceholder")}
             returnKeyType="search"
-            clearButtonMode="while-editing"
             style={[
               styles.usernameInput,
               {
