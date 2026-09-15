@@ -215,6 +215,10 @@ test("analysis summary: 프레임을 음별 비중과 0.5초 버킷으로 집계
   assert.equal(summary.buckets.length, 2);
   assert.ok(summary.notes.some((note) => note.note === "A4"));
   assert.equal(summary.buckets[0].dominantNote, "A4");
+  assert.ok(summary.buckets[0].noteShares.length > 0);
+  assert.ok(
+    Math.abs(summary.buckets[0].noteShares.reduce((sum, note) => sum + note.share, 0) - 1) < 0.001,
+  );
 });
 
 test("encodePcm16WavBase64: 임시 재생용 PCM WAV 헤더를 생성", () => {

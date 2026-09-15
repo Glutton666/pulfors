@@ -3085,6 +3085,11 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
     color: C.textSecondary,
     marginTop: Spacing.xs,
   },
+  analysisChartHeading: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    justifyContent: "space-between",
+  },
   analysisChart: {
     gap: Spacing.sm,
   },

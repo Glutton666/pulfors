@@ -28,7 +28,7 @@ export interface AnalysisBucket {
   notes: string[];
   dominantNote: string | null;
   rms: number;
-  noteShares: Array<{ note: string; share: number }>;
+  noteShares: { note: string; share: number }[];
 }
 
 export interface AnalysisSummary {
