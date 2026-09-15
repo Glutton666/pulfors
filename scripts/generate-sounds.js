@@ -69,6 +69,14 @@ function softAttack(samples, attackMs) {
   return samples;
 }
 
+// Deterministic noise keeps generated impact sounds reproducible without
+// making the source WAVs sound like static. Each instrument uses a different
+// seed so its attack has a distinct texture.
+function pseudoNoise(index, seed) {
+  const value = Math.sin((index + 1) * 12.9898 + seed * 78.233) * 43758.5453;
+  return (value - Math.floor(value)) * 2 - 1;
+}
+
 // ─── Classic ────────────────────────────────────────────────────────────────
 
 function generateClassicHigh() {
@@ -181,6 +189,36 @@ function generateWoodblockStrong() {
     samples[i] = s * env;
   }
   return fadeOut(softAttack(normalize(samples), 0.2), 4);
+}
+
+// ─── Cowbell ───────────────────────────────────────────────────────────────────
+// 금속 카우벨: 비조화적인 두 공명 + 짧은 금속성 어택.
+// 역할마다 공명 중심을 바꾸되 모두 같은 악기의 울림을 유지한다.
+
+function generateCowbell({ duration, modeA, modeB, modeC, noiseLevel, decay }) {
+  const numSamples = Math.floor(SAMPLE_RATE * duration);
+  const samples = new Float64Array(numSamples);
+  for (let i = 0; i < numSamples; i++) {
+    const t = i / SAMPLE_RATE;
+    const strike = pseudoNoise(i, modeA) * noiseLevel * Math.exp(-t * 700);
+    const body = Math.sin(2 * Math.PI * modeA * t) * Math.exp(-t * decay);
+    const bell = Math.sin(2 * Math.PI * modeB * t + 0.3) * 0.72 * Math.exp(-t * (decay * 0.72));
+    const edge = Math.sin(2 * Math.PI * modeC * t + 1.1) * 0.26 * Math.exp(-t * 240);
+    samples[i] = strike + body + bell + edge;
+  }
+  return fadeOut(normalize(samples), 5);
+}
+
+function generateCowbellHigh() {
+  return generateCowbell({ duration: 0.045, modeA: 720, modeB: 1080, modeC: 2450, noiseLevel: 0.6, decay: 58 });
+}
+
+function generateCowbellLow() {
+  return generateCowbell({ duration: 0.045, modeA: 520, modeB: 790, modeC: 2100, noiseLevel: 0.55, decay: 52 });
+}
+
+function generateCowbellStrong() {
+  return generateCowbell({ duration: 0.045, modeA: 840, modeB: 1260, modeC: 2850, noiseLevel: 0.75, decay: 48 });
 }
 
 // ─── Digital ─────────────────────────────────────────────────────────────────
@@ -398,123 +436,67 @@ function generateBlipStrong() {
 }
 
 // ─── Clave ────────────────────────────────────────────────────────────────────
-// 쿠바 클라베 스틱: 2~3 kHz 중심의 날카로운 클릭 + 짧은 나무 공명
-// 세 파일 모두 동일 길이: 25ms
+// 쿠바 클라베 스틱: 나무 막대가 부딪히는 순간의 건조한 광대역 어택과
+// 2~4 kHz의 짧은 목질 공명. 긴 사인파 울림이 남지 않도록 짧게 자른다.
 
-function generateClaveHigh() {
-  const duration = 0.025;
+function generateClave({ duration, modeA, modeB, noiseLevel, decay }) {
   const numSamples = Math.floor(SAMPLE_RATE * duration);
   const samples = new Float64Array(numSamples);
   for (let i = 0; i < numSamples; i++) {
     const t = i / SAMPLE_RATE;
-    const env = Math.exp(-t * 120);
-    let s = 0;
-    s += Math.sin(2 * Math.PI * 2500 * t) * 1.0;
-    s += Math.sin(2 * Math.PI * 3800 * t) * 0.55;
-    s += Math.sin(2 * Math.PI * 5200 * t) * 0.25;
-    s += Math.sin(2 * Math.PI * 1300 * t) * 0.3;
-    s += Math.sin(2 * Math.PI * 7100 * t) * 0.1;
-    samples[i] = s * env;
+    const click = pseudoNoise(i, modeA) * noiseLevel * Math.exp(-t * 520);
+    const wood = Math.sin(2 * Math.PI * modeA * t) * Math.exp(-t * decay);
+    const overtone = Math.sin(2 * Math.PI * modeB * t + 0.4) * 0.48 * Math.exp(-t * (decay * 1.2));
+    samples[i] = click + wood + overtone;
   }
-  return fadeOut(softAttack(normalize(samples), 0.15), 3);
+  return fadeOut(normalize(samples), 2.5);
+}
+
+function generateClaveHigh() {
+  return generateClave({ duration: 0.020, modeA: 2850, modeB: 4700, noiseLevel: 0.62, decay: 190 });
 }
 
 function generateClaveLow() {
-  const duration = 0.025;
-  const numSamples = Math.floor(SAMPLE_RATE * duration);
-  const samples = new Float64Array(numSamples);
-  for (let i = 0; i < numSamples; i++) {
-    const t = i / SAMPLE_RATE;
-    const env = Math.exp(-t * 110);
-    let s = 0;
-    s += Math.sin(2 * Math.PI * 2000 * t) * 1.0;
-    s += Math.sin(2 * Math.PI * 3100 * t) * 0.5;
-    s += Math.sin(2 * Math.PI * 4400 * t) * 0.22;
-    s += Math.sin(2 * Math.PI * 1000 * t) * 0.28;
-    s += Math.sin(2 * Math.PI * 5900 * t) * 0.08;
-    samples[i] = s * env;
-  }
-  return fadeOut(softAttack(normalize(samples), 0.15), 3);
+  return generateClave({ duration: 0.020, modeA: 2250, modeB: 3700, noiseLevel: 0.52, decay: 175 });
 }
 
 function generateClaveStrong() {
-  const duration = 0.025;
-  const numSamples = Math.floor(SAMPLE_RATE * duration);
-  const samples = new Float64Array(numSamples);
-  for (let i = 0; i < numSamples; i++) {
-    const t = i / SAMPLE_RATE;
-    const env = Math.exp(-t * 100);
-    let s = 0;
-    s += Math.sin(2 * Math.PI * 2900 * t) * 1.0;
-    s += Math.sin(2 * Math.PI * 4500 * t) * 0.6;
-    s += Math.sin(2 * Math.PI * 6200 * t) * 0.3;
-    s += Math.sin(2 * Math.PI * 1600 * t) * 0.35;
-    s += Math.sin(2 * Math.PI * 8000 * t) * 0.12;
-    samples[i] = s * env;
-  }
-  return fadeOut(softAttack(normalize(samples), 0.1), 3);
+  return generateClave({ duration: 0.020, modeA: 3200, modeB: 5200, noiseLevel: 0.78, decay: 165 });
 }
 
 // ─── Cajon ────────────────────────────────────────────────────────────────────
-// 카혼 손가락 탭: 200~400 Hz 나무 상자 공명 + 표면 마찰음
-// high: 타격 위치 높음(가장자리) / low: 중앙 탭 / strong: 강한 슬랩
-// 세 파일 모두 동일 길이: 35ms
+// 카혼 손가락 탭/슬랩: 저역 나무 상자 공명 + 표면 마찰음.
+// low는 중앙의 둥근 바디, high는 가장자리 탭, strong은 짧은 슬랩을 강조한다.
 
-function generateCajonHigh() {
-  const duration = 0.035;
+function generateCajon({ duration, body, bodyDecay, slap, slapDecay, noiseLevel, seed }) {
   const numSamples = Math.floor(SAMPLE_RATE * duration);
   const samples = new Float64Array(numSamples);
   for (let i = 0; i < numSamples; i++) {
     const t = i / SAMPLE_RATE;
-    const bodyEnv = Math.exp(-t * 70);
-    const surfaceEnv = Math.exp(-t * 250);
-    let s = 0;
-    s += Math.sin(2 * Math.PI * 380 * t) * bodyEnv * 1.0;
-    s += Math.sin(2 * Math.PI * 760 * t) * bodyEnv * 0.4;
-    s += Math.sin(2 * Math.PI * 1140 * t) * bodyEnv * 0.15;
-    s += Math.sin(2 * Math.PI * 1800 * t) * surfaceEnv * 0.35;
-    s += Math.sin(2 * Math.PI * 3200 * t) * surfaceEnv * 0.15;
+    const bodyEnv = Math.exp(-t * bodyDecay);
+    const slapEnv = Math.exp(-t * slapDecay);
+    const impact = pseudoNoise(i, seed) * noiseLevel * Math.exp(-t * 270);
+    let s = impact;
+    s += Math.sin(2 * Math.PI * body * t) * bodyEnv;
+    s += Math.sin(2 * Math.PI * body * 1.82 * t + 0.2) * bodyEnv * 0.42;
+    s += Math.sin(2 * Math.PI * body * 2.65 * t + 0.8) * bodyEnv * 0.18;
+    s += Math.sin(2 * Math.PI * slap * t) * slapEnv * 0.38;
+    s += Math.sin(2 * Math.PI * slap * 1.55 * t + 0.4) * slapEnv * 0.16;
     samples[i] = s;
   }
-  return fadeOut(softAttack(normalize(samples), 0.2), 5);
+  return fadeOut(normalize(samples), 6);
+}
+
+function generateCajonHigh() {
+  return generateCajon({ duration: 0.050, body: 360, bodyDecay: 76, slap: 1750, slapDecay: 235, noiseLevel: 0.28, seed: 360 });
 }
 
 function generateCajonLow() {
-  const duration = 0.035;
-  const numSamples = Math.floor(SAMPLE_RATE * duration);
-  const samples = new Float64Array(numSamples);
-  for (let i = 0; i < numSamples; i++) {
-    const t = i / SAMPLE_RATE;
-    const bodyEnv = Math.exp(-t * 60);
-    const surfaceEnv = Math.exp(-t * 200);
-    let s = 0;
-    s += Math.sin(2 * Math.PI * 260 * t) * bodyEnv * 1.0;
-    s += Math.sin(2 * Math.PI * 520 * t) * bodyEnv * 0.35;
-    s += Math.sin(2 * Math.PI * 780 * t) * bodyEnv * 0.12;
-    s += Math.sin(2 * Math.PI * 1400 * t) * surfaceEnv * 0.28;
-    s += Math.sin(2 * Math.PI * 2500 * t) * surfaceEnv * 0.1;
-    samples[i] = s;
-  }
-  return fadeOut(softAttack(normalize(samples), 0.2), 5);
+  return generateCajon({ duration: 0.050, body: 230, bodyDecay: 62, slap: 1200, slapDecay: 200, noiseLevel: 0.22, seed: 230 });
 }
 
 function generateCajonStrong() {
-  const duration = 0.035;
-  const numSamples = Math.floor(SAMPLE_RATE * duration);
-  const samples = new Float64Array(numSamples);
-  for (let i = 0; i < numSamples; i++) {
-    const t = i / SAMPLE_RATE;
-    const bodyEnv = Math.exp(-t * 55);
-    const surfaceEnv = Math.exp(-t * 280);
-    let s = 0;
-    s += Math.sin(2 * Math.PI * 300 * t) * bodyEnv * 1.0;
-    s += Math.sin(2 * Math.PI * 600 * t) * bodyEnv * 0.5;
-    s += Math.sin(2 * Math.PI * 900 * t) * bodyEnv * 0.2;
-    s += Math.sin(2 * Math.PI * 2200 * t) * surfaceEnv * 0.45;
-    s += Math.sin(2 * Math.PI * 4000 * t) * surfaceEnv * 0.2;
-    samples[i] = s;
-  }
-  return fadeOut(softAttack(normalize(samples), 0.15), 5);
+  return generateCajon({ duration: 0.050, body: 285, bodyDecay: 55, slap: 2050, slapDecay: 275, noiseLevel: 0.48, seed: 285 });
 }
 
 // ─── Marimba ─────────────────────────────────────────────────────────────────
@@ -577,61 +559,32 @@ function generateMarimbaStrong() {
 }
 
 // ─── Stick ───────────────────────────────────────────────────────────────────
-// 드럼스틱 림 클릭: 스틱 측면끼리 부딪히는 소리, 1~2 kHz 중심, 건조하고 정확
-// 세 파일 모두 동일 길이: 20ms
+// 드럼스틱 림 클릭: 나무 막대끼리 부딪히는 날카로운 노이즈 어택 +
+// 1~3 kHz의 짧은 건조한 공명. 카우벨/클라베보다 짧고 덜 울린다.
 
-function generateStickHigh() {
-  const duration = 0.020;
+function generateStick({ duration, modeA, modeB, noiseLevel, decay, seed }) {
   const numSamples = Math.floor(SAMPLE_RATE * duration);
   const samples = new Float64Array(numSamples);
   for (let i = 0; i < numSamples; i++) {
     const t = i / SAMPLE_RATE;
-    const env = Math.exp(-t * 150);
-    let s = 0;
-    s += Math.sin(2 * Math.PI * 1600 * t) * 1.0;
-    s += Math.sin(2 * Math.PI * 2700 * t) * 0.55;
-    s += Math.sin(2 * Math.PI * 4100 * t) * 0.28;
-    s += Math.sin(2 * Math.PI * 900 * t) * 0.2;
-    s += Math.sin(2 * Math.PI * 5800 * t) * 0.12;
-    samples[i] = s * env;
+    const click = pseudoNoise(i, seed) * noiseLevel * Math.exp(-t * 760);
+    const wood = Math.sin(2 * Math.PI * modeA * t) * Math.exp(-t * decay);
+    const overtone = Math.sin(2 * Math.PI * modeB * t + 0.7) * 0.36 * Math.exp(-t * (decay * 1.35));
+    samples[i] = click + wood + overtone;
   }
-  return fadeOut(softAttack(normalize(samples), 0.15), 3);
+  return fadeOut(normalize(samples), 2);
+}
+
+function generateStickHigh() {
+  return generateStick({ duration: 0.017, modeA: 1750, modeB: 3100, noiseLevel: 0.55, decay: 250, seed: 1750 });
 }
 
 function generateStickLow() {
-  const duration = 0.020;
-  const numSamples = Math.floor(SAMPLE_RATE * duration);
-  const samples = new Float64Array(numSamples);
-  for (let i = 0; i < numSamples; i++) {
-    const t = i / SAMPLE_RATE;
-    const env = Math.exp(-t * 140);
-    let s = 0;
-    s += Math.sin(2 * Math.PI * 1100 * t) * 1.0;
-    s += Math.sin(2 * Math.PI * 1900 * t) * 0.5;
-    s += Math.sin(2 * Math.PI * 2900 * t) * 0.25;
-    s += Math.sin(2 * Math.PI * 650 * t) * 0.18;
-    s += Math.sin(2 * Math.PI * 4200 * t) * 0.1;
-    samples[i] = s * env;
-  }
-  return fadeOut(softAttack(normalize(samples), 0.15), 3);
+  return generateStick({ duration: 0.017, modeA: 1250, modeB: 2250, noiseLevel: 0.45, decay: 230, seed: 1250 });
 }
 
 function generateStickStrong() {
-  const duration = 0.020;
-  const numSamples = Math.floor(SAMPLE_RATE * duration);
-  const samples = new Float64Array(numSamples);
-  for (let i = 0; i < numSamples; i++) {
-    const t = i / SAMPLE_RATE;
-    const env = Math.exp(-t * 130);
-    let s = 0;
-    s += Math.sin(2 * Math.PI * 2000 * t) * 1.0;
-    s += Math.sin(2 * Math.PI * 3400 * t) * 0.6;
-    s += Math.sin(2 * Math.PI * 5100 * t) * 0.32;
-    s += Math.sin(2 * Math.PI * 1200 * t) * 0.22;
-    s += Math.sin(2 * Math.PI * 7000 * t) * 0.14;
-    samples[i] = s * env;
-  }
-  return fadeOut(softAttack(normalize(samples), 0.1), 3);
+  return generateStick({ duration: 0.017, modeA: 2150, modeB: 3650, noiseLevel: 0.72, decay: 220, seed: 2150 });
 }
 
 // ─── Rimshot / Triangle / Hihat ──────────────────────────────────────────────
@@ -797,6 +750,9 @@ writeWav(path.join(outDir, "click-strong.wav"), generateClassicStrong());
 writeWav(path.join(outDir, "woodblock-high.wav"), generateWoodblockHigh());
 writeWav(path.join(outDir, "woodblock-low.wav"), generateWoodblockLow());
 writeWav(path.join(outDir, "woodblock-strong.wav"), generateWoodblockStrong());
+writeWav(path.join(outDir, "cowbell-high.wav"), generateCowbellHigh());
+writeWav(path.join(outDir, "cowbell-low.wav"), generateCowbellLow());
+writeWav(path.join(outDir, "cowbell-strong.wav"), generateCowbellStrong());
 writeWav(path.join(outDir, "digital-high.wav"), generateDigitalHigh());
 writeWav(path.join(outDir, "digital-low.wav"), generateDigitalLow());
 writeWav(path.join(outDir, "digital-strong.wav"), generateDigitalStrong());
