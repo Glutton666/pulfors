@@ -2,12 +2,16 @@ import React, { useEffect, useRef } from "react";
 import {
   Animated,
   Easing,
+  Image,
   Platform,
   Pressable,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
 } from "react-native";
+import MaskedView from "@react-native-masked-view/masked-view";
+import { LinearGradient } from "expo-linear-gradient";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { detectDeviceLanguage } from "@/lib/i18n";
 
@@ -29,18 +33,32 @@ export interface AppPreparationScreenProps {
   testID?: string;
 }
 
-const LOGO_PULSE_MS = 900;
+const APP_ICON = require("../assets/images/icon.png");
+const SWEEP_DURATION_MS = 1400;
+const MIN_ICON_SIZE = 120;
+const MAX_ICON_SIZE = 240;
+const AnimatedLinearGradient = Animated.createAnimatedComponent(LinearGradient);
 
 const copy = {
   ko: {
-    status: "준비 중…",
+    stages: {
+      fonts: "폰트 준비 중",
+      icons: "아이콘 준비 중",
+      audio: "오디오 준비 중",
+      settings: "저장된 설정 불러오는 중",
+    },
     errorTitle: "준비 중 문제가 발생했습니다",
     errorBody: "다시 시도하거나 기본 설정으로 계속할 수 있습니다.",
     retry: "다시 시도",
     continue: "계속 진행",
   },
   en: {
-    status: "Getting ready…",
+    stages: {
+      fonts: "Preparing fonts",
+      icons: "Preparing icons",
+      audio: "Preparing audio",
+      settings: "Loading saved settings",
+    },
     errorTitle: "We couldn't finish preparing the app",
     errorBody: "Try again, or continue with the default settings.",
     retry: "Try again",
@@ -49,9 +67,9 @@ const copy = {
 } as const;
 
 /**
- * The first visible surface while app resources are being prepared. The normal
- * state stays intentionally quiet: the logo carries the animation and the
- * status line only confirms that preparation is still in progress.
+ * The first visible surface while app resources are being prepared. The icon
+ * stays centered while a short highlight sweeps through its actual silhouette.
+ * The bottom status reports the resource currently being prepared.
  */
 export function AppPreparationScreen({
   stage,
@@ -62,86 +80,95 @@ export function AppPreparationScreen({
   testID = "preparation-screen",
 }: AppPreparationScreenProps) {
   const reduceMotion = useReducedMotion();
-  const logoScale = useRef(new Animated.Value(1)).current;
-  const logoOpacity = useRef(new Animated.Value(1)).current;
+  const sweepPosition = useRef(new Animated.Value(-1)).current;
+  const { width, height } = useWindowDimensions();
   const labels = copy[language];
   const isError = stage === "error";
+  const iconSize = Math.max(
+    MIN_ICON_SIZE,
+    Math.min(MAX_ICON_SIZE, width * 0.56, height * 0.48),
+  );
+  const currentStatus = isError ? null : labels.stages[stage];
 
   useEffect(() => {
-    logoScale.stopAnimation();
-    logoOpacity.stopAnimation();
-    logoScale.setValue(1);
-    logoOpacity.setValue(1);
+    sweepPosition.stopAnimation();
+    sweepPosition.setValue(-1);
 
     if (isError || reduceMotion) return;
 
-    const useNativeDriver = Platform.OS !== "web";
     const animation = Animated.loop(
-      Animated.sequence([
-        Animated.parallel([
-          Animated.timing(logoScale, {
-            toValue: 1.045,
-            duration: LOGO_PULSE_MS / 2,
-            easing: Easing.out(Easing.quad),
-            useNativeDriver,
-          }),
-          Animated.timing(logoOpacity, {
-            toValue: 0.82,
-            duration: LOGO_PULSE_MS / 2,
-            easing: Easing.out(Easing.quad),
-            useNativeDriver,
-          }),
-        ]),
-        Animated.parallel([
-          Animated.timing(logoScale, {
-            toValue: 1,
-            duration: LOGO_PULSE_MS / 2,
-            easing: Easing.inOut(Easing.quad),
-            useNativeDriver,
-          }),
-          Animated.timing(logoOpacity, {
-            toValue: 1,
-            duration: LOGO_PULSE_MS / 2,
-            easing: Easing.inOut(Easing.quad),
-            useNativeDriver,
-          }),
-        ]),
-      ]),
+      Animated.timing(sweepPosition, {
+        toValue: 1,
+        duration: SWEEP_DURATION_MS,
+        easing: Easing.inOut(Easing.ease),
+        useNativeDriver: Platform.OS !== "web",
+      }),
     );
     animation.start();
 
     return () => {
       animation.stop();
-      logoScale.stopAnimation();
-      logoOpacity.stopAnimation();
+      sweepPosition.stopAnimation();
     };
-  }, [isError, logoOpacity, logoScale, reduceMotion]);
+  }, [isError, reduceMotion, sweepPosition]);
+
+  const sweepTranslateX = sweepPosition.interpolate({
+    inputRange: [-1, 1],
+    outputRange: [-iconSize * 2.2, iconSize],
+  });
 
   return (
     <View
       style={styles.screen}
       testID={testID}
       accessibilityRole={isError ? undefined : "progressbar"}
-      accessibilityLabel={isError ? labels.errorTitle : labels.status}
+      accessibilityLabel={isError ? labels.errorTitle : currentStatus ?? ""}
     >
       <View style={styles.content}>
-        <Animated.Text
-          testID={`${testID}-logo`}
-          accessibilityRole="image"
-          accessibilityLabel="PULPOR"
-          style={[
-            styles.brand,
-            {
-              opacity: logoOpacity,
-              transform: [{ scale: logoScale }],
-            },
-          ]}
+        <View
+          style={[styles.iconFrame, { width: iconSize, height: iconSize }]}
+          testID={`${testID}-icon`}
         >
-          PULPOR
-        </Animated.Text>
+          <Image
+            source={APP_ICON}
+            style={styles.icon}
+            accessibilityRole="image"
+            accessibilityLabel="PULPOR app icon"
+          />
+
+          {!isError && !reduceMotion && (
+            <MaskedView
+              pointerEvents="none"
+              style={StyleSheet.absoluteFillObject}
+              maskElement={<Image source={APP_ICON} style={styles.icon} />}
+            >
+              <View style={styles.sweepViewport}>
+                <AnimatedLinearGradient
+                  colors={[
+                    "rgba(255, 255, 255, 0)",
+                    "rgba(255, 236, 166, 0.12)",
+                    "rgba(255, 255, 255, 0.88)",
+                    "rgba(255, 236, 166, 0.12)",
+                    "rgba(255, 255, 255, 0)",
+                  ]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={[
+                    styles.sweep,
+                    {
+                      width: iconSize * 2.2,
+                      height: iconSize,
+                      transform: [{ translateX: sweepTranslateX }],
+                    },
+                  ]}
+                />
+              </View>
+            </MaskedView>
+          )}
+        </View>
 
         {isError ? (
-          <>
+          <View style={styles.errorContent}>
             <Text style={styles.errorTitle}>{labels.errorTitle}</Text>
             <Text style={styles.errorBody}>{labels.errorBody}</Text>
             {error ? <Text style={styles.errorDetail}>{error}</Text> : null}
@@ -167,11 +194,17 @@ export function AppPreparationScreen({
                 </Pressable>
               )}
             </View>
-          </>
+          </View>
         ) : (
-          <Text style={styles.status} testID={`${testID}-status`}>
-            {labels.status}
-          </Text>
+          <View
+            style={styles.statusArea}
+            pointerEvents="none"
+            accessibilityLiveRegion="polite"
+          >
+            <Text style={styles.status} testID={`${testID}-status`}>
+              {currentStatus}
+            </Text>
+          </View>
         )}
       </View>
     </View>
@@ -188,21 +221,44 @@ const styles = StyleSheet.create({
   },
   content: {
     alignItems: "center",
+    justifyContent: "center",
     width: "100%",
     maxWidth: 420,
   },
-  brand: {
-    color: "#D4A846",
-    fontSize: 34,
-    fontWeight: "700",
-    letterSpacing: 6,
-    textAlign: "center",
+  iconFrame: {
+    overflow: "hidden",
+    borderRadius: 24,
+  },
+  icon: {
+    ...StyleSheet.absoluteFillObject,
+    width: undefined,
+    height: undefined,
+  },
+  sweepViewport: {
+    ...StyleSheet.absoluteFillObject,
+    overflow: "hidden",
+  },
+  sweep: {
+    position: "absolute",
+    left: 0,
+    top: 0,
+  },
+  statusArea: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: Platform.OS === "ios" ? 34 : 24,
+    alignItems: "center",
+    paddingHorizontal: 24,
   },
   status: {
     color: "#8B949E",
-    fontSize: 14,
-    marginTop: 20,
+    fontSize: 13,
     textAlign: "center",
+  },
+  errorContent: {
+    alignItems: "center",
+    width: "100%",
   },
   errorTitle: {
     color: "#F0F6FC",
