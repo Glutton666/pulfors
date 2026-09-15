@@ -14,6 +14,7 @@
  *   - noteSampleSoundsRef, clickPCMCacheRef, webClickReadyRef
  *   - scheduleReRenderCallbackRef, applyAudioSettingsCallbackRef
  *   - onSettingsLoaded  — called at end of settings load for extra init
+ *   - onSettingsLoadError — called when startup settings cannot be read
  */
 
 import { useState, useRef, useEffect, useCallback } from "react";
@@ -83,6 +84,9 @@ export interface UseSettingsParams {
    * lives outside this hook (setIsLoaded, loadCustomSoundSets, PCM warmup, …).
    */
   onSettingsLoaded?: (settings: MetronomeSettings) => void;
+  onSettingsLoadError?: (error: unknown) => void;
+  /** Changes when the caller explicitly retries the startup load. */
+  reloadToken?: number;
 }
 
 export interface UseSettingsResult {
@@ -198,6 +202,8 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
     noteSampleSoundsRef, clickPCMCacheRef, webClickReadyRef, soundSetRef,
     scheduleReRenderCallbackRef, applyAudioSettingsCallbackRef, tonePositionRef, tonePositionsRef,
     onSettingsLoaded,
+    onSettingsLoadError,
+    reloadToken = 0,
   } = params;
 
   // ── Settings state ──────────────────────────────────────────────────────────
@@ -390,6 +396,7 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
   // ── Settings load (mount-once) ────────────────────────────────────────────────
 
   useEffect(() => {
+    settingsLoadGenerationRef.current += 1;
     const loadGeneration = settingsLoadGenerationRef.current;
     loadSettings().then((loadedSettings) => {
       if (loadGeneration !== settingsLoadGenerationRef.current) return;
@@ -495,9 +502,13 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
       // Delegate extra init (setIsLoaded, loadCustomSoundSets, PCM warmup, …)
       // to useMetronomeScreen — these are not settings concerns.
       onSettingsLoaded?.(settings);
+    }).catch((error: unknown) => {
+      if (loadGeneration !== settingsLoadGenerationRef.current) return;
+      onSettingsLoadError?.(error);
     });
+    // The retry token intentionally re-runs this otherwise mount-only load.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // mount-only: settings are loaded once on startup
+  }, [reloadToken]); // mount-once, plus explicit startup retries
 
   // Switching modes swaps only the mode-scoped controls. BPM, meter and
   // subdivision data intentionally stay in the editor/session state.

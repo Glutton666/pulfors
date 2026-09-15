@@ -357,6 +357,21 @@ export function useMetronomeScreen() {
     setDropTargetBeat(null);
   }, []);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [settingsLoadError, setSettingsLoadError] = useState<Error | null>(null);
+  const [settingsRetryToken, setSettingsRetryToken] = useState(0);
+  const settingsRetryTokenRef = useRef(0);
+  useEffect(() => {
+    settingsRetryTokenRef.current = settingsRetryToken;
+  }, [settingsRetryToken]);
+  const retrySettingsLoad = useCallback(() => {
+    setIsLoaded(false);
+    setSettingsLoadError(null);
+    setSettingsRetryToken((token) => token + 1);
+  }, []);
+  const continueWithoutSettings = useCallback(() => {
+    setSettingsLoadError(null);
+    setIsLoaded(true);
+  }, []);
   const [isPreparing, setIsPreparing] = useState(false);
   const isPreparingRef = useRef(false);
   useEffect(() => { isPreparingRef.current = isPreparing; }, [isPreparing]);
@@ -626,6 +641,10 @@ export function useMetronomeScreen() {
     tonePositionsRef,
     scheduleReRenderCallbackRef,
     applyAudioSettingsCallbackRef,
+    reloadToken: settingsRetryToken,
+    onSettingsLoadError: (error) => {
+      setSettingsLoadError(error instanceof Error ? error : new Error(String(error)));
+    },
     onSettingsLoaded: (settings) => {
       // `configureEngine` restores playback from this ref, while useSettings
       // restores the visible state separately. Keep the two snapshots aligned
@@ -637,12 +656,22 @@ export function useMetronomeScreen() {
       if (settings.showLandscapeImage !== undefined) setShowLandscapeImage(settings.showLandscapeImage);
       if (settings.landscapeContentType) setLandscapeContentType(settings.landscapeContentType);
       loadCustomSoundSets().then(setCustomSoundSets);
-      setIsLoaded(true);
+      setSettingsLoadError(null);
       // PCM warmup for the loaded sound-set — pre-populates clickPCMCacheRef via
       // getClickPCMs' own caching so the first Play doesn't pay asset-load +
       // tone-shaping cost inline inside startPreparedPlayback's 8s deadline.
-      // (A previous refactor dropped this entirely — 2026-09-14 review.)
-      getClickPCMs(settings.soundSet || "classic").catch(() => {});
+      // Keep the preparation surface up until this basic click path is ready.
+      const startupToken = settingsRetryToken;
+      getClickPCMs(settings.soundSet || "classic")
+        .then(() => {
+          if (settingsRetryTokenRef.current !== startupToken) return;
+          setSettingsLoadError(null);
+          setIsLoaded(true);
+        })
+        .catch((error: unknown) => {
+          if (settingsRetryTokenRef.current !== startupToken) return;
+          setSettingsLoadError(error instanceof Error ? error : new Error(String(error)));
+        });
     },
   });
 
@@ -3930,6 +3959,9 @@ export function useMetronomeScreen() {
     isLandscape,
     windowWidth,
     isLoaded,
+    settingsLoadError,
+    retrySettingsLoad,
+    continueWithoutSettings,
     // Refs
     rootViewRef,
     barAreaRef,

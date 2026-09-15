@@ -1,15 +1,25 @@
 import React from "react";
-import { View } from "react-native";
 import { useMetronomeScreen } from "@/hooks/useMetronomeScreen";
 import { MetronomeScreenUI } from "@/components/MetronomeScreenUI";
+import { AppPreparationScreen } from "@/components/AppPreparationScreen";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 export default function MetronomeScreen() {
   const screen = useMetronomeScreen();
+  const { language } = useLanguage();
 
-  if (!screen.isLoaded) {
+  if (screen.settingsLoadError) {
     return (
-      <View style={[screen.styles.screen, { backgroundColor: screen.C.background }]} />
+      <AppPreparationScreen
+        stage="error"
+        language={language}
+        onRetry={screen.retrySettingsLoad}
+        onContinue={screen.continueWithoutSettings}
+      />
     );
+  }
+  if (!screen.isLoaded) {
+    return <AppPreparationScreen stage="settings" language={language} />;
   }
 
   return <MetronomeScreenUI {...screen} />;

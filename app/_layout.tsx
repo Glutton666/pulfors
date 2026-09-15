@@ -42,6 +42,7 @@ import {
 } from "@expo-google-fonts/space-grotesk";
 
 import { Ionicons, Feather, MaterialCommunityIcons } from "@expo/vector-icons";
+import { AppPreparationScreen, type PreparationStage } from "@/components/AppPreparationScreen";
 
 // Reanimated Logger 설정 (한 번만 실행)
 configureReanimatedLogger({
@@ -53,6 +54,9 @@ SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
   const [appIsReady, setAppIsReady] = useState(false);
+  const [preparationStage, setPreparationStage] = useState<PreparationStage>("fonts");
+  const [preparationError, setPreparationError] = useState<string | null>(null);
+  const preparationRunRef = React.useRef(false);
 
   const [fontsLoaded, fontError] = useFonts({
     SpaceGrotesk_400Regular,
@@ -69,9 +73,10 @@ export default function RootLayout() {
         ...Feather.font,
         ...MaterialCommunityIcons.font,
       };
-      await Font.loadAsync(iconFonts); // ← Font import 추가 필요
+      await Font.loadAsync(iconFonts);
     } catch (e) {
       logger.warn("Icon font loading error:", e);
+      throw e;
     }
   }, []);
 
@@ -88,6 +93,7 @@ export default function RootLayout() {
       });
     } catch (e) {
       logger.warn("Audio configuration failed:", e);
+      throw e;
     }
   }, []);
 
@@ -157,16 +163,26 @@ export default function RootLayout() {
   // 앱 준비 완료 체크
   useEffect(() => {
     const prepareApp = async () => {
+      if (preparationRunRef.current) return;
+      preparationRunRef.current = true;
+      setPreparationError(null);
       try {
-        await Promise.all([
-          fontsLoaded ? Promise.resolve() : Promise.reject(),
-          loadIconFonts(),
-          configureAudio(),
-        ]);
+        setPreparationStage("fonts");
+        if (!fontsLoaded && !fontError) return;
+
+        // The native splash covers React until it is explicitly hidden. Hide it
+        // once the font decision is known so the in-app preparation surface can
+        // remain visible while icon fonts and audio finish loading.
+        await SplashScreen.hideAsync();
+        setPreparationStage("icons");
+        await loadIconFonts();
+        setPreparationStage("audio");
+        await configureAudio();
+        setAppIsReady(true);
       } catch (e) {
         logger.warn("App preparation error:", e);
+        setPreparationError(e instanceof Error ? e.message : String(e));
       } finally {
-        setAppIsReady(true);
         await SplashScreen.hideAsync();
       }
     };
@@ -177,7 +193,41 @@ export default function RootLayout() {
   }, [fontsLoaded, fontError, loadIconFonts, configureAudio]);
 
   if (!appIsReady) {
-    return null;
+    return (
+      <AppPreparationScreen
+        stage={preparationError ? "error" : preparationStage}
+        error={preparationError}
+        onRetry={
+          preparationError
+            ? () => {
+                preparationRunRef.current = false;
+                setPreparationError(null);
+                void (async () => {
+                  preparationRunRef.current = true;
+                  try {
+                    setPreparationStage("icons");
+                    await loadIconFonts();
+                    setPreparationStage("audio");
+                    await configureAudio();
+                    setAppIsReady(true);
+                  } catch (e) {
+                    logger.warn("App preparation retry failed:", e);
+                    setPreparationError(e instanceof Error ? e.message : String(e));
+                  }
+                })();
+              }
+            : undefined
+        }
+        onContinue={
+          preparationError
+            ? () => {
+                setPreparationError(null);
+                setAppIsReady(true);
+              }
+            : undefined
+        }
+      />
+    );
   }
 
   return (
