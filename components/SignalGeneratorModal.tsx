@@ -882,6 +882,9 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
   const analysisAudioUriRef = useRef<string | null>(null);
   const analysisAnalysisTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const analysisPlaybackTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const analysisPlaybackSubscriptionRef = useRef<{ remove: () => void } | null>(null);
+  const analysisPlaybackAnchorSecRef = useRef(0);
+  const analysisPlaybackStartedAtRef = useRef(0);
   const analysisLongPressRef = useRef(false);
   const analysisTimelineWidthRef = useRef(1);
   const micToggleDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -909,6 +912,12 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
       clearInterval(analysisPlaybackTimerRef.current);
       analysisPlaybackTimerRef.current = null;
     }
+    if (analysisPlaybackSubscriptionRef.current) {
+      analysisPlaybackSubscriptionRef.current.remove();
+      analysisPlaybackSubscriptionRef.current = null;
+    }
+    analysisPlaybackAnchorSecRef.current = 0;
+    analysisPlaybackStartedAtRef.current = 0;
     setAnalysisPlaying(false);
     if (analysisPlayerRef.current) {
       try { analysisPlayerRef.current.pause(); } catch {}
@@ -1007,6 +1016,10 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
       if (Platform.OS !== "web") { try { AudioRecord!.stop(); } catch {} }
       if (analysisAnalysisTimerRef.current) clearInterval(analysisAnalysisTimerRef.current);
       if (analysisPlaybackTimerRef.current) clearInterval(analysisPlaybackTimerRef.current);
+      if (analysisPlaybackSubscriptionRef.current) {
+        analysisPlaybackSubscriptionRef.current.remove();
+        analysisPlaybackSubscriptionRef.current = null;
+      }
       if (analysisRecorderRef.current && analysisRecorderRef.current.state !== "inactive") {
         try { analysisRecorderRef.current.stop(); } catch {}
       }
@@ -1183,24 +1196,56 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
     const player = analysisPlayerRef.current;
     if (!player) return;
     try {
-      if (analysisPositionSec >= Math.max(0, analysisDurationSec - 0.05)) {
-        await player.seekTo(0);
+      if (analysisPlaybackTimerRef.current) clearInterval(analysisPlaybackTimerRef.current);
+      if (analysisPlaybackSubscriptionRef.current) {
+        analysisPlaybackSubscriptionRef.current.remove();
+      }
+      const startPosition = analysisPositionSec >= Math.max(0, analysisDurationSec - 0.05)
+        ? 0
+        : Math.max(0, analysisPositionSec);
+      await player.seekTo(startPosition);
+      if (startPosition === 0 && analysisPositionSec >= Math.max(0, analysisDurationSec - 0.05)) {
         setAnalysisPositionSec(0);
       }
       player.play();
       setAnalysisPlaying(true);
-      if (analysisPlaybackTimerRef.current) clearInterval(analysisPlaybackTimerRef.current);
-      analysisPlaybackTimerRef.current = setInterval(() => {
-        const next = Number(player.currentTime) || 0;
-        setAnalysisPositionSec(next);
-        if (next >= analysisDurationSec - 0.05) {
-          if (analysisPlaybackTimerRef.current) {
-            clearInterval(analysisPlaybackTimerRef.current);
-            analysisPlaybackTimerRef.current = null;
-          }
-          setAnalysisPlaying(false);
+      analysisPlaybackAnchorSecRef.current = startPosition;
+      analysisPlaybackStartedAtRef.current = Date.now();
+      const finishPlayback = () => {
+        if (analysisPlaybackTimerRef.current) {
+          clearInterval(analysisPlaybackTimerRef.current);
+          analysisPlaybackTimerRef.current = null;
         }
-      }, 100);
+        if (analysisPlaybackSubscriptionRef.current) {
+          analysisPlaybackSubscriptionRef.current.remove();
+          analysisPlaybackSubscriptionRef.current = null;
+        }
+        try { player.pause(); } catch {}
+        setAnalysisPositionSec(analysisDurationSec);
+        setAnalysisPlaying(false);
+      };
+      analysisPlaybackSubscriptionRef.current = player.addListener("playbackStatusUpdate", (status) => {
+        const next = Number(status.currentTime);
+        if (Number.isFinite(next)) {
+          setAnalysisPositionSec(Math.min(analysisDurationSec, Math.max(0, next)));
+        }
+        if (status.didJustFinish || (Number.isFinite(next) && next >= analysisDurationSec - 0.05)) {
+          finishPlayback();
+        }
+      });
+      analysisPlaybackTimerRef.current = setInterval(() => {
+        const nativeTime = Number(player.currentTime);
+        const elapsedTime = analysisPlaybackAnchorSecRef.current
+          + (Date.now() - analysisPlaybackStartedAtRef.current) / 1000;
+        const next = Number.isFinite(nativeTime) && nativeTime > analysisPlaybackAnchorSecRef.current + 0.02
+          ? nativeTime
+          : elapsedTime;
+        if (next >= analysisDurationSec - 0.05) {
+          finishPlayback();
+          return;
+        }
+        setAnalysisPositionSec(Math.min(analysisDurationSec, Math.max(0, next)));
+      }, 50);
     } catch (error) {
       logger.warn("[SignalAnalysis] Replay failed:", error);
     }
@@ -1212,14 +1257,22 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
       clearInterval(analysisPlaybackTimerRef.current);
       analysisPlaybackTimerRef.current = null;
     }
+    if (analysisPlaybackSubscriptionRef.current) {
+      analysisPlaybackSubscriptionRef.current.remove();
+      analysisPlaybackSubscriptionRef.current = null;
+    }
     setAnalysisPlaying(false);
   }, []);
 
   const seekAnalysis = useCallback((seconds: number) => {
     const clamped = Math.max(0, Math.min(analysisDurationSec, seconds));
     setAnalysisPositionSec(clamped);
+    if (analysisPlaying) {
+      analysisPlaybackAnchorSecRef.current = clamped;
+      analysisPlaybackStartedAtRef.current = Date.now();
+    }
     void analysisPlayerRef.current?.seekTo(clamped);
-  }, [analysisDurationSec]);
+  }, [analysisDurationSec, analysisPlaying]);
 
   const timelinePanResponder = useMemo(() => PanResponder.create({
     onStartShouldSetPanResponder: () => true,
@@ -1681,6 +1734,14 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
     ) ?? buckets[buckets.length - 1];
   }, [analysisPositionSec, analysisSummary]);
   const analysisChartNotes = analysisSelectedBucket?.noteShares ?? [];
+  const analysisWaveformAmplitudes = useMemo(() => {
+    const buckets = analysisSummary?.buckets ?? [];
+    if (buckets.length === 0) return [];
+    const maxRms = Math.max(...buckets.map((bucket) => bucket.rms), 0.001);
+    return buckets.map((bucket) => bucket.rms > 0
+      ? Math.max(6, Math.min(88, Math.sqrt(bucket.rms / maxRms) * 88))
+      : 6);
+  }, [analysisSummary]);
   const analysisTimeLabel = (seconds: number) => {
     const safe = Math.max(0, seconds);
     return `${Math.floor(safe)}.${Math.floor((safe % 1) * 10)}s`;
@@ -1765,47 +1826,38 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
             {...timelinePanResponder.panHandlers}
             testID="signal-analysis-timeline"
           >
-            <View style={styles.analysisTimelineTrack}>
-              {(analysisSummary?.buckets ?? []).map((bucket) => {
-                const hasNotes = bucket.notes.length > 0;
-                const isActive = analysisDurationSec > 0
-                  && analysisPositionSec >= bucket.startMs / 1000
-                  && analysisPositionSec < bucket.endMs / 1000;
-                const intensity = bucket.rms > 0
-                  ? Math.min(1, Math.max(0.1, bucket.rms * 3.5))
-                  : 0.06;
+            <View style={styles.analysisWaveform}>
+              <View style={styles.analysisWaveformCenterLine} />
+              {analysisWaveformAmplitudes.map((amplitude, index) => {
+                const bucket = analysisSummary?.buckets[index];
+                const isActive = bucket
+                  ? analysisPositionSec >= bucket.startMs / 1000
+                    && analysisPositionSec < bucket.endMs / 1000
+                  : false;
                 return (
-                  <View
-                    key={bucket.startMs}
-                    style={styles.analysisTimelineColumn}
-                  >
+                  <View key={bucket?.startMs ?? index} style={styles.analysisWaveformColumn}>
                     <View
                       style={[
-                        styles.analysisTimelineBar,
-                        { height: `${Math.round(intensity * 100)}%` },
-                        !hasNotes && { backgroundColor: C.surfaceLight },
-                        isActive && { borderColor: C.white, borderWidth: 1 },
+                        styles.analysisWaveformHalf,
+                        {
+                          height: `${amplitude / 2}%`,
+                          bottom: "50%",
+                          backgroundColor: C.accent,
+                          opacity: isActive ? 1 : 0.62,
+                        },
                       ]}
-                    >
-                      {bucket.noteShares.slice(0, 3).map((note, index) => (
-                        <View
-                          key={note.note}
-                          style={[
-                            styles.analysisTimelineBarSegment,
-                            {
-                              flex: Math.max(0.08, note.share),
-                              backgroundColor: C.accent,
-                              opacity: index === 0 ? 1 : index === 1 ? 0.66 : 0.4,
-                            },
-                          ]}
-                        />
-                      ))}
-                    </View>
-                    {isActive && bucket.dominantNote ? (
-                      <Text style={styles.analysisTimelineNote} numberOfLines={1}>
-                        {bucket.dominantNote}
-                      </Text>
-                    ) : null}
+                    />
+                    <View
+                      style={[
+                        styles.analysisWaveformHalf,
+                        {
+                          height: `${amplitude / 2}%`,
+                          top: "50%",
+                          backgroundColor: C.accent,
+                          opacity: isActive ? 1 : 0.62,
+                        },
+                      ]}
+                    />
                   </View>
                 );
               })}
@@ -3008,52 +3060,52 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
     fontSize: 18,
   },
   analysisTimeline: {
-    height: 70,
+    height: 84,
     justifyContent: "center",
     position: "relative",
   },
-  analysisTimelineTrack: {
-    height: 70,
+  analysisWaveform: {
+    height: 84,
     flexDirection: "row",
-    alignItems: "flex-end",
+    alignItems: "stretch",
     gap: Spacing.xxs,
+    position: "relative",
     overflow: "hidden",
-    borderBottomWidth: 1,
-    borderBottomColor: C.border,
-    backgroundColor: C.border,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: C.border,
+    backgroundColor: C.surfaceLight,
   },
-  analysisTimelineColumn: {
+  analysisWaveformCenterLine: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    top: "50%",
+    height: 1,
+    backgroundColor: C.border,
+    zIndex: 1,
+  },
+  analysisWaveformColumn: {
     flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
     alignSelf: "stretch",
     minWidth: 2,
+    position: "relative",
   },
-  analysisTimelineBar: {
-    width: "100%",
-    minHeight: 4,
-    maxHeight: "88%",
-    flexDirection: "column-reverse",
-    overflow: "hidden",
-    borderRadius: Radius.xs,
-    backgroundColor: C.accent,
-  },
-  analysisTimelineBarSegment: {
-    minHeight: 2,
-  },
-  analysisTimelineNote: {
-    fontFamily: "SpaceGrotesk_600SemiBold",
-    fontSize: FontSize.micro,
-    color: C.white,
+  analysisWaveformHalf: {
     position: "absolute",
-    top: 0,
+    left: 0,
+    right: 0,
+    minHeight: 2,
+    borderRadius: Radius.xs,
   },
   analysisScrubber: {
     position: "absolute",
-    top: 6,
-    bottom: 6,
-    width: 2,
-    marginLeft: -1,
+    top: 2,
+    bottom: 2,
+    width: 3,
+    marginLeft: -1.5,
+    zIndex: 5,
+    borderRadius: Radius.xs,
   },
   analysisTimelineLabels: {
     flexDirection: "row",
