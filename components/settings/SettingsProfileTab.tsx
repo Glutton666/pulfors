@@ -5,6 +5,7 @@ import {
   Pressable,
   Platform,
   TextInput,
+  ScrollView,
   ActivityIndicator,
   Alert,
   Linking,
@@ -28,6 +29,7 @@ import {
 import { loadGoals, saveGoals, type Goal } from "@/lib/activity-log";
 import { make_styles } from "@/components/SettingsModal.styles";
 import { TUNING_DATA } from "@/lib/tuning-data";
+import { filterPrimaryInstrumentCategories } from "@/lib/primary-instrument-search";
 
 export interface SettingsProfileTabProps {
   visible: boolean;
@@ -68,12 +70,15 @@ export function SettingsProfileTab({
   const [addingRoom, setAddingRoom] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [webUrlCopied, setWebUrlCopied] = useState(false);
+  const [instrumentSearch, setInstrumentSearch] = useState("");
   const webUrlCopiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const filteredInstrumentCategories = filterPrimaryInstrumentCategories(instrumentSearch);
 
   useEffect(() => {
     if (visible) {
       setLocalUsername(username);
       setShowResetConfirm(false);
+      setInstrumentSearch("");
       loadPracticeRooms().then(setPracticeRooms);
     }
     return () => {
@@ -246,7 +251,38 @@ export function SettingsProfileTab({
         <Text style={[styles.offsetHint, { color: C.textSecondary }]}>
           {t("settings", "primaryInstrumentHint")}
         </Text>
-        <View style={{ gap: 8, marginTop: 10 }}>
+        <View style={{ position: "relative", marginTop: 10 }}>
+          <TextInput
+            value={instrumentSearch}
+            onChangeText={setInstrumentSearch}
+            placeholder={t("settings", "primaryInstrumentSearchPlaceholder")}
+            placeholderTextColor={C.textTertiary}
+            accessibilityLabel={t("settings", "primaryInstrumentSearchPlaceholder")}
+            returnKeyType="search"
+            clearButtonMode="while-editing"
+            style={[
+              styles.usernameInput,
+              {
+                borderColor: C.accentMuted,
+                paddingRight: instrumentSearch ? 42 : 12,
+              },
+            ]}
+            testID="primary-instrument-search"
+          />
+          {instrumentSearch.length > 0 && (
+            <Pressable
+              onPress={() => setInstrumentSearch("")}
+              accessibilityRole="button"
+              accessibilityLabel={t("settings", "primaryInstrumentClear")}
+              hitSlop={8}
+              style={{ position: "absolute", right: 12, top: 12 }}
+              testID="primary-instrument-search-clear"
+            >
+              <Ionicons name="close-circle" size={20} color={C.textSecondary} />
+            </Pressable>
+          )}
+        </View>
+        <View style={{ marginTop: 8 }}>
           <Pressable
             onPress={() => onPrimaryInstrumentChange(null)}
             accessibilityRole="radio"
@@ -269,39 +305,54 @@ export function SettingsProfileTab({
             </Text>
             {primaryInstrumentId === null && <Ionicons name="checkmark-circle" size={18} color={C.accent} />}
           </Pressable>
-          {TUNING_DATA.map((category) => (
-            <View key={category.id} style={{ gap: 6 }}>
-              <Text style={{ color: C.textSecondary, fontFamily: "Inter_600SemiBold", fontSize: 12 }}>
-                {category.name[language]}
+          <ScrollView
+            nestedScrollEnabled
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator
+            style={{ maxHeight: S.isTablet ? 320 : 230 }}
+            contentContainerStyle={{ gap: 8, paddingTop: 8, paddingBottom: 2 }}
+            testID="primary-instrument-results"
+          >
+            {filteredInstrumentCategories.length === 0 ? (
+              <Text style={{ color: C.textSecondary, fontFamily: "Inter_400Regular", fontSize: 13, paddingVertical: 12 }}>
+                {t("settings", "primaryInstrumentNoResults")}
               </Text>
-              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
-                {category.instruments.map((instrument) => {
-                  const selected = primaryInstrumentId === instrument.id;
-                  return (
-                    <Pressable
-                      key={instrument.id}
-                      onPress={() => onPrimaryInstrumentChange(instrument.id)}
-                      accessibilityRole="radio"
-                      accessibilityState={{ selected }}
-                      style={{
-                        borderWidth: 1,
-                        borderColor: selected ? C.accent : C.border,
-                        backgroundColor: selected ? C.accentDim : C.surfaceLight,
-                        borderRadius: 9,
-                        paddingHorizontal: 10,
-                        paddingVertical: 8,
-                      }}
-                      testID={`primary-instrument-${instrument.id}`}
-                    >
-                      <Text style={{ color: selected ? C.accent : C.text, fontFamily: "Inter_500Medium", fontSize: 13 }}>
-                        {instrument.name[language]}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            </View>
-          ))}
+            ) : (
+              filteredInstrumentCategories.map((category) => (
+                <View key={category.id} style={{ gap: 6 }}>
+                  <Text style={{ color: C.textSecondary, fontFamily: "Inter_600SemiBold", fontSize: 12 }}>
+                    {category.name[language]}
+                  </Text>
+                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+                    {category.instruments.map((instrument) => {
+                      const selected = primaryInstrumentId === instrument.id;
+                      return (
+                        <Pressable
+                          key={instrument.id}
+                          onPress={() => onPrimaryInstrumentChange(instrument.id)}
+                          accessibilityRole="radio"
+                          accessibilityState={{ selected }}
+                          style={{
+                            borderWidth: 1,
+                            borderColor: selected ? C.accent : C.border,
+                            backgroundColor: selected ? C.accentDim : C.surfaceLight,
+                            borderRadius: 9,
+                            paddingHorizontal: 10,
+                            paddingVertical: 8,
+                          }}
+                          testID={`primary-instrument-${instrument.id}`}
+                        >
+                          <Text style={{ color: selected ? C.accent : C.text, fontFamily: "Inter_500Medium", fontSize: 13 }}>
+                            {instrument.name[language]}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </View>
+              ))
+            )}
+          </ScrollView>
         </View>
       </View>
 

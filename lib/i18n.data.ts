@@ -203,6 +203,9 @@ export const translations = {
     primaryInstrument: { ko: "주 악기", en: "Primary instrument" },
     primaryInstrumentHint: { ko: "자주 연습하는 악기를 선택하세요. 다른 모드의 기본값은 변경되지 않습니다.", en: "Choose the instrument you practice most. This does not change defaults in other modes." },
     primaryInstrumentNone: { ko: "선택 안 함", en: "Not selected" },
+    primaryInstrumentSearchPlaceholder: { ko: "악기 또는 분류 검색", en: "Search instrument or category" },
+    primaryInstrumentClear: { ko: "악기 검색어 지우기", en: "Clear instrument search" },
+    primaryInstrumentNoResults: { ko: "검색 결과가 없습니다", en: "No instruments found" },
   },
   tripleOptions: {
     all: { ko: "전체", en: "All" },
