@@ -2420,7 +2420,10 @@ export function useMetronomeScreen() {
           : "beat",
     );
     await exitStageMode();
-  }, [exitStageMode]);
+    if (menuItemReturnRef.current) {
+      closeMenuItem();
+    }
+  }, [exitStageMode, closeMenuItem]);
   useEffect(() => {
     playbackModeRef.current = stageModeActive
       ? "stage"
@@ -3568,7 +3571,7 @@ export function useMetronomeScreen() {
   }, [currentMode, coreMode, stageModeActive, showMenu, showPracticeBook, handleExitNoteMode, handleBarModeChange, handleEnterNoteMode, enterStageModeForPlayback, exitStageModeForPlayback, activeModal, openExclusive, modeSlideX, modeSlideY, modeSlideOpacity, windowWidth]);
 
   // ── 상단 중앙 레이블 탭 → 다음 모드 순환 ──
-  const MODE_CYCLE: ModeSlot[] = ["beat", "bar", "note", "stage", "practice"];
+  const MODE_CYCLE: ModeSlot[] = ["beat", "bar", "note", "practice"];
   const cycleToNextMode = useCallback(() => {
     const idx = MODE_CYCLE.indexOf(currentMode as typeof MODE_CYCLE[number]);
     const nextMode = MODE_CYCLE[(idx + 1) % MODE_CYCLE.length];

@@ -13,7 +13,6 @@ export const MODE_DIAL_SLOTS: ModeSlot[] = [
   "beat",
   "bar",
   "note",
-  "stage",
   "practice",
   "menu",
 ];
@@ -87,7 +86,7 @@ export function shortestModeDialTarget(currentPosition: number, targetIndex: num
  *
  * "right" means the selected content enters from the right and settles left;
  * "left" is its mirror image. It is derived from the same shortest-path
- * target used by the dial, including the 5→0 and 0→5 wrap seams.
+ * target used by the dial, including the 4→0 and 0→4 wrap seams.
  */
 export function modeDialTransitionDirection(
   currentPosition: number,

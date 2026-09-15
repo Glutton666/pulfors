@@ -576,6 +576,11 @@ export function MetronomeScreenUI(props: Props) {
               });
             }}
             onWorkUp={() => openMenuItem(() => openExclusive("workUp"))}
+            onStage={() => {
+              openMenuItem(() => {
+                void switchToMode("stage", "right");
+              });
+            }}
             onScore={() => {
               openMenuItem(() => {
                 setActiveModal(null);

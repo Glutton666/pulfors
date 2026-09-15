@@ -85,32 +85,32 @@ describe("wrapModeDialPosition", () => {
   test("양수 범위 내 값은 그대로 반환", () => {
     assert.equal(wrapModeDialPosition(0), 0);
     assert.equal(wrapModeDialPosition(3), 3);
-    assert.equal(wrapModeDialPosition(5), 5);
+    assert.equal(wrapModeDialPosition(4), 4);
   });
 
-  test("실제 다이얼 슬롯 수는 6개이며 끝에서는 처음으로 랩핑", () => {
-    assert.equal(MODE_DIAL_SLOTS.length, 6);
-    assert.equal(wrapModeDialPosition(6), 0);
-    assert.equal(wrapModeDialPosition(12), 0);
+  test("실제 다이얼 슬롯 수는 5개이며 끝에서는 처음으로 랩핑", () => {
+    assert.equal(MODE_DIAL_SLOTS.length, 5);
+    assert.equal(wrapModeDialPosition(5), 0);
+    assert.equal(wrapModeDialPosition(10), 0);
   });
 
   test("음수 값 정상 랩핑", () => {
-    assert.equal(wrapModeDialPosition(-1), 5);
-    assert.equal(wrapModeDialPosition(-6), 0);
-    assert.equal(wrapModeDialPosition(-7), 5);
+    assert.equal(wrapModeDialPosition(-1), 4);
+    assert.equal(wrapModeDialPosition(-5), 0);
+    assert.equal(wrapModeDialPosition(-6), 4);
   });
 
   test("소수점 스크롤 값 유지", () => {
-    const v = wrapModeDialPosition(5.5);
-    assert.ok(v > 5 && v < 6, `expected 5<v<6, got ${v}`);
+    const v = wrapModeDialPosition(4.5);
+    assert.ok(v > 4 && v < 5, `expected 4<v<5, got ${v}`);
   });
 });
 
 describe("modeDialSessionForMode", () => {
   test("새로 열 때 현재 모드를 선택값과 스크롤 기준으로 함께 사용", () => {
     assert.deepEqual(modeDialSessionForMode("stage"), {
-      selectedIndex: MODE_DIAL_SLOTS.indexOf("stage"),
-      scrollPosition: MODE_DIAL_SLOTS.indexOf("stage"),
+      selectedIndex: 0,
+      scrollPosition: 0,
     });
   });
 
@@ -129,26 +129,26 @@ describe("snapModeDialPosition", () => {
   });
 
   test("경계 랩핑: 마지막 슬롯 뒤의 스냅은 첫 슬롯으로 돌아감", () => {
-    assert.equal(snapModeDialPosition(5.6), 0);
+    assert.equal(snapModeDialPosition(4.6), 0);
   });
 
   test("음수 스크롤 스냅", () => {
     assert.equal(snapModeDialPosition(-0.4), 0);
-    assert.equal(snapModeDialPosition(-0.6), 5);
+    assert.equal(snapModeDialPosition(-0.6), 4);
   });
 });
 
 describe("nearestModeDialSnapTarget", () => {
   test("마지막 슬롯에서 첫 슬롯으로 넘어갈 때 가까운 다음 회전 위치로 스냅", () => {
-    // 5.6 is logically slot 0, but the visual target must be 6 rather than
+    // 4.6 is logically slot 0, but the visual target must be 5 rather than
     // 0 so the spring finishes the short forward movement.
-    assert.equal(nearestModeDialSnapTarget(5.6), 6);
+    assert.equal(nearestModeDialSnapTarget(4.6), 5);
   });
 
   test("첫 슬롯에서 마지막 슬롯으로 넘어갈 때 역방향으로 짧게 스냅", () => {
-    // A negative drag from slot 0 is wrapped to 5.4. Slot 5 is the closest
+    // A negative drag from slot 0 is wrapped to 4.4. Slot 4 is the closest
     // visual target, rather than an unnecessary full turn to -1 or 11.
-    assert.equal(nearestModeDialSnapTarget(5.4), 5);
+    assert.equal(nearestModeDialSnapTarget(4.4), 4);
   });
 
   test("일반 슬롯은 기존의 정수 스냅 위치를 유지", () => {
@@ -166,25 +166,26 @@ describe("shortestModeDialTarget", () => {
   test("왼쪽에 표시된 3~5칸 대상은 역방향으로 이동", () => {
     // 3칸 떨어진 슬롯은 팬에서 왼쪽에 그려진다. 거리 동률일 때도
     // 항상 정방향으로 강제하지 않고 실제 버튼이 보이는 쪽을 따른다.
-    assert.equal(shortestModeDialTarget(0, 3), -3);
-    assert.equal(shortestModeDialTarget(0, 4), -2);
-    assert.equal(shortestModeDialTarget(0, 5), -1);
+    assert.equal(shortestModeDialTarget(0, 3), -2);
+    assert.equal(shortestModeDialTarget(0, 4), -1);
+    assert.equal(shortestModeDialTarget(0, 5), 0);
   });
 
   test("마지막 슬롯에서 첫 슬롯은 정방향 한 칸으로 이동", () => {
-    assert.equal(shortestModeDialTarget(5, 0), 6);
+    assert.equal(shortestModeDialTarget(4, 0), 5);
   });
 
   test("반대 방향에서도 최단 경로를 유지", () => {
-    assert.equal(shortestModeDialTarget(4, 0), 6);
-    // 2 → 5 is the exact half-turn and the target is rendered to the left.
-    assert.equal(shortestModeDialTarget(2, 5), -1);
+    assert.equal(shortestModeDialTarget(3, 0), 5);
+    // A target index outside the canonical range is wrapped before selecting
+    // the shortest visual path.
+    assert.equal(shortestModeDialTarget(2, 5), 0);
   });
 
   test("랩 경계 근처에서도 현재 보이는 위치에서 가장 가까운 등가 슬롯을 택한다", () => {
-    // Position 5.6 is visually close to the following cycle's slot 0.
-    // Snapping to 6 must not jump backward to the canonical index 0.
-    assert.equal(shortestModeDialTarget(5.6, 0), 6);
+    // Position 4.6 is visually close to the following cycle's slot 0.
+    // Snapping to 5 must not jump backward to the canonical index 0.
+    assert.equal(shortestModeDialTarget(4.6, 0), 5);
   });
 });
 
@@ -203,9 +204,9 @@ describe("모드 다이얼 방향 계약", () => {
     assert.equal(modeDialTransitionDirection(1, 0), "left");
   });
 
-  test("순환 경계에서도 5→0은 오른쪽, 0→5는 왼쪽으로 유지한다", () => {
-    assert.equal(modeDialTransitionDirection(5, 0), "right");
-    assert.equal(modeDialTransitionDirection(0, 5), "left");
+  test("순환 경계에서도 4→0은 오른쪽, 0→4는 왼쪽으로 유지한다", () => {
+    assert.equal(modeDialTransitionDirection(4, 0), "right");
+    assert.equal(modeDialTransitionDirection(0, 4), "left");
   });
 });
 

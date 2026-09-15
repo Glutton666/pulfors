@@ -18,6 +18,7 @@ interface MenuScreenProps {
   onSettings: () => void;
   onSignalGen: () => void;
   onWorkUp: () => void;
+  onStage: () => void;
   onScore: () => void;
   onPolygon: () => void;
 }
@@ -29,6 +30,7 @@ export function MenuScreen({
   onSettings,
   onSignalGen,
   onWorkUp,
+  onStage,
   onScore,
   onPolygon,
 }: MenuScreenProps) {
@@ -75,6 +77,12 @@ export function MenuScreen({
     onPress: () => void;
     testID?: string;
   }[] = [
+    {
+      icon: <Ionicons name="mic-outline" size={ICON_SIZE} color={C.accent} />,
+      label: t("stageMode", "title"),
+      onPress: onStage,
+      testID: "menu-stage",
+    },
     {
       icon: <Ionicons name="document-text-outline" size={ICON_SIZE} color={C.accent} />,
       label: t("polygon", "scoreMenuLabel"),
