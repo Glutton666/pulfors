@@ -662,16 +662,36 @@ export function useMetronomeScreen() {
       // tone-shaping cost inline inside startPreparedPlayback's 8s deadline.
       // Keep the preparation surface up until this basic click path is ready.
       const startupToken = settingsRetryToken;
-      getClickPCMs(settings.soundSet || "classic")
-        .then(() => {
-          if (settingsRetryTokenRef.current !== startupToken) return;
-          setSettingsLoadError(null);
-          setIsLoaded(true);
-        })
-        .catch((error: unknown) => {
-          if (settingsRetryTokenRef.current !== startupToken) return;
-          setSettingsLoadError(error instanceof Error ? error : new Error(String(error)));
+      void (async () => {
+        let lastError: unknown = null;
+        for (let attempt = 0; attempt < 3; attempt += 1) {
+          try {
+            await getClickPCMs(settings.soundSet || "classic");
+            if (settingsRetryTokenRef.current !== startupToken) return;
+            setSettingsLoadError(null);
+            setIsLoaded(true);
+            return;
+          } catch (error: unknown) {
+            lastError = error;
+            if (settingsRetryTokenRef.current !== startupToken) return;
+            if (attempt < 2) {
+              await new Promise<void>((resolve) => {
+                setTimeout(resolve, 150 * (attempt + 1));
+              });
+            }
+          }
+        }
+        if (settingsRetryTokenRef.current !== startupToken) return;
+        captureBreadcrumb({
+          category: "startup-audio",
+          message: "PCM warmup failed after retries",
+          level: "warning",
+          data: { error: String(lastError) },
         });
+        setSettingsLoadError(
+          lastError instanceof Error ? lastError : new Error(String(lastError)),
+        );
+      })();
     },
   });
 
