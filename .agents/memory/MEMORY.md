@@ -59,3 +59,4 @@
 - [RN Web ScrollView parent sizing](rn-web-scrollview-parent-sizing.md) — a bounded card is insufficient; the ScrollView's direct parent also needs flex:1/minHeight:0 or short screens cannot scroll.
 - [Deployment npm peer resolution](deployment-npm-peer-resolution.md) — publishing installs with npm even when yarn.lock is canonical; direct optional peers must still form a resolvable npm graph.
 - [Scheduled playback ownership](scheduled-playback-ownership.md) — preloaded starts need token ownership; modal unmount cleanup must use a latest-callback ref.
+- [Expo web static image URLs](expo-web-static-image-urls.md) — RN Image.resolveAssetSource is unavailable on web; use Expo asset metadata and Metro's unstable_path URL for CSS masks.

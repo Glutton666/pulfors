@@ -2,7 +2,6 @@ import React, { useEffect, useRef } from "react";
 import {
   Animated,
   Easing,
-  Image as NativeImage,
   Platform,
   Pressable,
   StyleSheet,
@@ -11,6 +10,7 @@ import {
   View,
 } from "react-native";
 import MaskedView from "@react-native-masked-view/masked-view";
+import { Asset } from "expo-asset";
 import { Image as ExpoImage } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
@@ -35,7 +35,27 @@ export interface AppPreparationScreenProps {
 }
 
 const APP_ICON = require("../assets/images/icon.png");
-const APP_ICON_URI = NativeImage.resolveAssetSource(APP_ICON)?.uri;
+
+function resolveWebAssetUrl(src: number): string {
+  const asset = Asset.fromModule(src);
+  if (asset.uri) return asset.uri;
+
+  const metadata = asset as typeof asset & {
+    httpServerLocation?: string;
+    name?: string;
+    type?: string;
+  };
+  if (!metadata.httpServerLocation || !metadata.name || !metadata.type) {
+    return "";
+  }
+
+  const relativePath = `${metadata.httpServerLocation.replace(/^\//, "")}/${metadata.name}.${metadata.type}`;
+  return `/assets?unstable_path=${encodeURIComponent(relativePath)}`;
+}
+
+const APP_ICON_URI = resolveWebAssetUrl(APP_ICON);
+const APP_ICON_SOURCE =
+  Platform.OS === "web" && APP_ICON_URI ? { uri: APP_ICON_URI } : APP_ICON;
 const SWEEP_DURATION_MS = 1400;
 const MIN_ICON_SIZE = 120;
 const MAX_ICON_SIZE = 240;
@@ -142,23 +162,25 @@ export function AppPreparationScreen({
     </View>
   );
   const sweepLayer =
-    Platform.OS === "web" && APP_ICON_URI ? (
-      <Animated.View
-        pointerEvents="none"
-        style={[
-          styles.webSweepMask,
-          {
-            maskImage: `url("${APP_ICON_URI}")`,
-            WebkitMaskImage: `url("${APP_ICON_URI}")`,
-            maskRepeat: "no-repeat",
-            WebkitMaskRepeat: "no-repeat",
-            maskSize: "100% 100%",
-            WebkitMaskSize: "100% 100%",
-          } as any,
-        ]}
-      >
-        {sweepContent}
-      </Animated.View>
+    Platform.OS === "web" ? (
+      APP_ICON_URI ? (
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            styles.webSweepMask,
+            {
+              maskImage: `url("${APP_ICON_URI}")`,
+              WebkitMaskImage: `url("${APP_ICON_URI}")`,
+              maskRepeat: "no-repeat",
+              WebkitMaskRepeat: "no-repeat",
+              maskSize: "100% 100%",
+              WebkitMaskSize: "100% 100%",
+            } as any,
+          ]}
+        >
+          {sweepContent}
+        </Animated.View>
+      ) : null
     ) : (
       <MaskedView
         pointerEvents="none"
@@ -182,7 +204,7 @@ export function AppPreparationScreen({
           testID={`${testID}-icon`}
         >
           <ExpoImage
-            source={APP_ICON}
+            source={APP_ICON_SOURCE}
             style={styles.icon}
             contentFit="cover"
             accessibilityRole="image"
