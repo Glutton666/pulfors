@@ -722,6 +722,7 @@ export const translations = {
     menuSettings: { ko: "설정", en: "Settings" },
      menuProfile: { ko: "프로필", en: "Profile" },
      menuAssistant: { ko: "음성 어시스턴트", en: "Voice Assistant" },
+     menuDrumKit: { ko: "드럼킷", en: "Drum Kit" },
     menuMore: { ko: "그 외...", en: "More..." },
     menuBack: { ko: "메뉴로 돌아가기", en: "Back to menu" },
     menuBackHint: { ko: "실험실 메뉴를 닫고 기본 메뉴로 돌아갑니다", en: "Close the lab menu and return to the main menu" },

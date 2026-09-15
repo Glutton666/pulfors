@@ -594,6 +594,7 @@ export function MetronomeScreenUI(props: Props) {
               openMenuItem(() => openExclusive("polygon"));
             }}
             onAssistant={() => openMenuItem(() => openExclusive("assistant"))}
+            onDrumKit={() => openMenuItem(() => openExclusive("drumKit"))}
           />
         </Animated.View>
       )}
@@ -617,7 +618,7 @@ export function MetronomeScreenUI(props: Props) {
 
       <DrumKitModal
         visible={showDrumKit}
-        onClose={() => setActiveModal(null)}
+        onClose={closeMenuItem}
       />
 
       <BpmDetectModal

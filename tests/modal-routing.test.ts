@@ -94,7 +94,7 @@ test("Android BackHandler가 모든 active modal 종료 경로를 가진다", ()
     showWorkUp: /closeMenuItem\(\)/,
     showFadeOut: /setActiveModal\(null\)/,
     showScheduledStart: /setActiveModal\(null\)/,
-    showDrumKit: /setActiveModal\(null\)/,
+    showDrumKit: /closeMenuItem\(\)/,
     showBpmDetect: /setActiveModal\(null\)/,
     showPolygon: /closeMenuItem\(\)/,
     showMenu: /setActiveModal\(null\)/,
@@ -139,7 +139,7 @@ test("menu return: 메뉴 화면의 각 항목 진입이 메뉴 복귀 상태를
     const body = src.slice(start, src.indexOf("}", start + callback.length + 8) + 1);
     assert.match(body, /openMenuItem\(/, `${callback} 진입 시 메뉴 복귀 상태를 기록하지 않는다`);
   }
-  for (const callback of ["onProfile", "onAssistant"]) {
+  for (const callback of ["onProfile", "onAssistant", "onDrumKit"]) {
     const start = src.indexOf(`${callback}={() =>`);
     assert.ok(start >= 0, `MenuScreen에 ${callback} 콜백이 없다`);
     const body = src.slice(start, src.indexOf("}", start + callback.length + 8) + 1);
@@ -410,7 +410,7 @@ test("source: MenuScreen — 연습장은 메인 메뉴에서 제거되고 실�
   assert.ok(!mainItems.includes("menuPracticeNote"), "연습장이 메인 메뉴에 남아 있다");
 });
 
-test("source: MenuScreen — 실험실에 악보·펄스 폴리곤을 묶는다", () => {
+test("source: MenuScreen — 실험실에 악보·펄스 폴리곤·드럼킷을 묶는다", () => {
   const src = readFileSync(join(process.cwd(), "components/MenuScreen.tsx"), "utf-8");
   const labStart = src.indexOf("const labItems");
   const itemsEnd = src.indexOf("const items =", labStart);
@@ -420,6 +420,7 @@ test("source: MenuScreen — 실험실에 악보·펄스 폴리곤을 묶는다"
   for (const [testID, handler] of [
     ['testID: "menu-score"', "onScore"],
     ['testID: "menu-polygon"', "onPolygon"],
+    ['testID: "menu-drum-kit"', "onDrumKit"],
   ]) {
     assert.ok(labItems.includes(testID), `실험실에 ${testID} 항목이 없다`);
     assert.ok(labItems.includes(`onPress: ${handler}`), `실험실 ${testID} 항목이 ${handler}를 호출하지 않는다`);
@@ -428,6 +429,19 @@ test("source: MenuScreen — 실험실에 악보·펄스 폴리곤을 묶는다"
   const removedHandler = ["on", "Stem", "Sep"].join("");
   assert.ok(!labItems.includes(removedItemId), "제거된 음원분리 메뉴 항목이 실험실에 남아 있다");
   assert.ok(!labItems.includes(removedHandler), "제거된 음원분리 핸들러가 실험실에 남아 있다");
+});
+
+test("source: MenuScreen — 드럼킷 메뉴 라벨과 모달 진입·닫기 흐름이 연결된다", () => {
+  const menu = readFileSync(join(process.cwd(), "components/MenuScreen.tsx"), "utf-8");
+  const ui = readFileSync(join(process.cwd(), "components/MetronomeScreenUI.tsx"), "utf-8");
+  const translations = readFileSync(join(process.cwd(), "lib/i18n.data.ts"), "utf-8");
+
+  assert.match(menu, /label: t\("main", "menuDrumKit"\)/);
+  assert.match(menu, /testID: "menu-drum-kit"/);
+  assert.match(menu, /onPress: onDrumKit/);
+  assert.match(translations, /menuDrumKit: \{ ko: ".+?", en: ".+?" \}/);
+  assert.match(ui, /onDrumKit=\{\(\) => openMenuItem\(\(\) => openExclusive\("drumKit"\)\)\}/);
+  assert.match(ui, /<DrumKitModal[\s\S]*?onClose=\{closeMenuItem\}/);
 });
 
 // ────────────────────────────────────────────────────────────────

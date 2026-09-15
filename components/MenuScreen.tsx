@@ -23,6 +23,7 @@ interface MenuScreenProps {
   onScore: () => void;
   onPolygon: () => void;
   onAssistant: () => void;
+  onDrumKit: () => void;
 }
 
 export function MenuScreen({
@@ -37,6 +38,7 @@ export function MenuScreen({
   onScore,
   onPolygon,
   onAssistant,
+  onDrumKit,
 }: MenuScreenProps) {
   const { colors: C } = useTheme();
   const { t } = useLanguage();
@@ -111,6 +113,12 @@ export function MenuScreen({
       onPress: onPolygon,
       testID: "menu-polygon",
     },
+    {
+      icon: <MaterialCommunityIcons name="music-note-outline" size={ICON_SIZE} color={C.accent} />,
+      label: t("main", "menuDrumKit"),
+      onPress: onDrumKit,
+      testID: "menu-drum-kit",
+    },
   ];
   const items = showLab ? labItems : mainItems;
 
@@ -174,6 +182,7 @@ export function MenuScreen({
               })}
               onPress={item.onPress}
               accessibilityRole="menuitem"
+              accessibilityLabel={item.label}
               testID={item.testID}
             >
               <View style={{ width: S.ms(28, 0.4), alignItems: "center" as const }}>

@@ -496,7 +496,7 @@ export function useMetronomeScreen() {
       if (showWorkUp) { closeMenuItem(); return true; }
       if (showFadeOut) { setActiveModal(null); return true; }
       if (showScheduledStart) { setActiveModal(null); return true; }
-      if (showDrumKit) { setActiveModal(null); return true; }
+      if (showDrumKit) { closeMenuItem(); return true; }
       if (showBpmDetect) { setActiveModal(null); return true; }
       if (showPolygon) { closeMenuItem(); return true; }
       if (showMenu) { clearMenuItemReturn(); setActiveModal(null); return true; }
