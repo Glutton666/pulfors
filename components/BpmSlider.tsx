@@ -275,8 +275,8 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo, onDenominatorCycle, is
           ]}
           testID="bpm-slider"
         >
-          <Animated.View style={[styles.flashOverlay, flashStyle, { backgroundColor: C.accent }]} />
-          <Animated.View style={[styles.glowLeft, leftGlowStyle]}>
+          <Animated.View pointerEvents="none" style={[styles.flashOverlay, flashStyle, { backgroundColor: C.accent }]} />
+          <Animated.View pointerEvents="none" style={[styles.glowLeft, leftGlowStyle]}>
             <LinearGradient
               colors={[C.accent, "transparent"]}
               start={{ x: 0, y: 0.5 }}
@@ -284,7 +284,7 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo, onDenominatorCycle, is
               style={StyleSheet.absoluteFill}
             />
           </Animated.View>
-          <Animated.View style={[styles.glowRight, rightGlowStyle]}>
+          <Animated.View pointerEvents="none" style={[styles.glowRight, rightGlowStyle]}>
             <LinearGradient
               colors={["transparent", C.accent]}
               start={{ x: 0, y: 0.5 }}

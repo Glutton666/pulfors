@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Platform, Pressable, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useTheme } from "@/contexts/ThemeContext";
@@ -91,7 +91,9 @@ export function ModeTutorialModal({
 
   return (
     <View
-      pointerEvents="box-none"
+      // RN Web does not consistently translate box-none to CSS pointer-events.
+      // Let the page controls receive touches and opt the card back in below.
+      pointerEvents={Platform.OS === "web" ? "none" : "box-none"}
       style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, zIndex: 10000 }}
       accessibilityViewIsModal
       testID="mode-tutorial"
@@ -101,7 +103,10 @@ export function ModeTutorialModal({
         style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.38)" }}
       />
       <View
-        pointerEvents="auto"
+        // The instruction card may overlap controls on short screens. Keep the
+        // card transparent to hit testing so the user can perform the action
+        // underneath; only the explicit skip control opts back in.
+        pointerEvents={Platform.OS === "web" ? "none" : "box-none"}
         style={{
           position: "absolute",
           left: 16,
@@ -151,6 +156,7 @@ export function ModeTutorialModal({
         <View style={{ flexDirection: "row", justifyContent: "flex-end", alignItems: "center", marginTop: 14, gap: 12 }}>
           <Pressable
             onPress={onSkip}
+            pointerEvents="auto"
             accessibilityRole="button"
             accessibilityLabel={translate("tutorial", "skip")}
             style={{ paddingHorizontal: 8, paddingVertical: 10 }}

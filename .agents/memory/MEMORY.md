@@ -62,3 +62,4 @@
 - [Expo web static image URLs](expo-web-static-image-urls.md) — RN Image.resolveAssetSource is unavailable on web; use Expo asset metadata and Metro's unstable_path URL for CSS masks.
 - [Microphone lifecycle test harness](microphone-lifecycle-test-harness.md) — compare Web Audio resource counts to a pre-test baseline; native component tests need RN FlatList and KeyboardAvoidingView stubs.
 - [Signal analysis session boundary](signal-analysis-session-boundary.md) — keep live single-note HPS tuning separate from temporary polyphonic timeline capture and replay.
+- [RN Web tutorial hit testing](rn-web-tutorial-hit-testing.md) — tutorial overlays must let underlying controls receive events; decorative BPM layers also need pointer-events disabled.
