@@ -76,6 +76,7 @@ import * as Haptics from "expo-haptics";
 import { useEasterEggGesture } from "@/hooks/useEasterEggGesture";
 import { usesSharedEasterEggGesture } from "@/lib/easter-egg-gesture";
 import { saveModeKeyBindings } from "@/lib/keyboard-bindings";
+import { MODE_TUTORIALS_ENABLED } from "@/lib/tutorial-config";
 
 type Props = ReturnType<typeof useMetronomeScreen>;
 
@@ -878,7 +879,7 @@ export function MetronomeScreenUI(props: Props) {
       )}
 
       <ModeTutorialModal
-        visible={tutorialMode !== null && !showOnboarding}
+        visible={MODE_TUTORIALS_ENABLED && tutorialMode !== null && !showOnboarding}
         mode={tutorialMode ?? "beat"}
         completedSteps={tutorialMode ? tutorialState[tutorialMode].completedSteps : []}
         lastAction={tutorialLastAction}

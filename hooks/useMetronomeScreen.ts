@@ -60,6 +60,7 @@ import {
   type BarRandomSession,
 } from "@/lib/bar-random-session";
 import { loadSettings, saveSettings, loadCustomSoundSets, saveCustomSoundSets, loadPracticeBook, savePracticeBook, createPracticeEntry, runStorageMigrations, clearAllAppStorage, loadTutorialState, saveTutorialState, resetTutorialState, TUTORIAL_CONTENT_VERSION, DEFAULT_TUTORIAL_STATE, type MetronomeSettings, type TutorialAction, type TutorialMode, type TutorialState } from "@/lib/storage";
+import { MODE_TUTORIALS_ENABLED } from "@/lib/tutorial-config";
 import { NEUTRAL, type TonePosition } from "@/lib/metronome-tone-dsp";
 import type { FlashMode, HapticMode, SoundSet, BuiltinSoundSet, CustomSoundSetConfig, CustomSoundSample, FadeOutSettings, PracticeEntry, MetronomeMode } from "@/lib/storage";
 import type { BarRepeat, LoopBlock } from "@/components/BeatIndicator";
@@ -403,6 +404,7 @@ export function useMetronomeScreen() {
   }, []);
 
   const openModeTutorial = useCallback((mode: TutorialMode, restart = false) => {
+    if (!MODE_TUTORIALS_ENABLED) return;
     if (restart) {
       const next: TutorialState = {
         ...tutorialStateRef.current,
