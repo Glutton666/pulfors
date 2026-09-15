@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from "react";
 import {
   Animated,
   Easing,
+  Image as NativeImage,
   Platform,
   Pressable,
   StyleSheet,
@@ -9,6 +10,7 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
+import MaskedView from "@react-native-masked-view/masked-view";
 import { Image as ExpoImage } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
@@ -33,6 +35,7 @@ export interface AppPreparationScreenProps {
 }
 
 const APP_ICON = require("../assets/images/icon.png");
+const APP_ICON_URI = NativeImage.resolveAssetSource(APP_ICON)?.uri;
 const SWEEP_DURATION_MS = 1400;
 const MIN_ICON_SIZE = 120;
 const MAX_ICON_SIZE = 240;
@@ -115,6 +118,56 @@ export function AppPreparationScreen({
     inputRange: [-1, 1],
     outputRange: [-iconSize * 2.2, iconSize],
   });
+  const sweepContent = (
+    <View style={styles.sweepViewport}>
+      <AnimatedLinearGradient
+        colors={[
+          "rgba(255, 255, 255, 0)",
+          "rgba(255, 236, 166, 0.12)",
+          "rgba(255, 255, 255, 0.88)",
+          "rgba(255, 236, 166, 0.12)",
+          "rgba(255, 255, 255, 0)",
+        ]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={[
+          styles.sweep,
+          {
+            width: iconSize * 2.2,
+            height: iconSize,
+            transform: [{ translateX: sweepTranslateX }],
+          },
+        ]}
+      />
+    </View>
+  );
+  const sweepLayer =
+    Platform.OS === "web" && APP_ICON_URI ? (
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          styles.webSweepMask,
+          {
+            maskImage: `url("${APP_ICON_URI}")`,
+            WebkitMaskImage: `url("${APP_ICON_URI}")`,
+            maskRepeat: "no-repeat",
+            WebkitMaskRepeat: "no-repeat",
+            maskSize: "100% 100%",
+            WebkitMaskSize: "100% 100%",
+          } as any,
+        ]}
+      >
+        {sweepContent}
+      </Animated.View>
+    ) : (
+      <MaskedView
+        pointerEvents="none"
+        style={StyleSheet.absoluteFillObject}
+        maskElement={<ExpoImage source={APP_ICON} style={styles.icon} />}
+      >
+        {sweepContent}
+      </MaskedView>
+    );
 
   return (
     <View
@@ -137,31 +190,8 @@ export function AppPreparationScreen({
           />
 
           {!isError && !reduceMotion && (
-            <View
-              pointerEvents="none"
-              style={StyleSheet.absoluteFillObject}
-            >
-              <View style={styles.sweepViewport}>
-                <AnimatedLinearGradient
-                  colors={[
-                    "rgba(255, 255, 255, 0)",
-                    "rgba(255, 236, 166, 0.12)",
-                    "rgba(255, 255, 255, 0.88)",
-                    "rgba(255, 236, 166, 0.12)",
-                    "rgba(255, 255, 255, 0)",
-                  ]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={[
-                    styles.sweep,
-                    {
-                      width: iconSize * 2.2,
-                      height: iconSize,
-                      transform: [{ translateX: sweepTranslateX }],
-                    },
-                  ]}
-                />
-              </View>
+            <View pointerEvents="none" style={StyleSheet.absoluteFillObject}>
+              {sweepLayer}
             </View>
           )}
         </View>
@@ -226,7 +256,6 @@ const styles = StyleSheet.create({
   },
   iconFrame: {
     overflow: "hidden",
-    borderRadius: 24,
   },
   icon: {
     ...StyleSheet.absoluteFillObject,
@@ -240,6 +269,10 @@ const styles = StyleSheet.create({
     position: "absolute",
     left: 0,
     top: 0,
+  },
+  webSweepMask: {
+    ...StyleSheet.absoluteFillObject,
+    overflow: "hidden",
   },
   statusArea: {
     position: "absolute",
