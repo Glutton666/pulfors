@@ -9,7 +9,7 @@ import type { SampleChannel, MetroChannel } from "./stereo-channel";
 const RENDER_SR = 44100;
 
 /** Built-in click source boost before the user-facing output volume is applied. */
-export const BUILTIN_CLICK_SOURCE_GAIN = 1.6;
+export const BUILTIN_CLICK_SOURCE_GAIN = 3.2;
 
 export function getClickRenderVolume(userVolume: number): number {
   const volume = Math.max(0, userVolume);
@@ -941,7 +941,7 @@ export function scheduleWebClickAt(
   const source = ctx.createBufferSource();
   source.buffer = buffer;
   const gainNode = ctx.createGain();
-  gainNode.gain.value = Math.max(0, Math.min(3, gain));
+  gainNode.gain.value = Math.max(0, Math.min(4, gain));
   source.connect(gainNode);
   const destination = ctx.destination;
   if (channel !== "both" && hasStereoPanner(ctx)) {
