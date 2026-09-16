@@ -331,10 +331,7 @@ export function usePracticeBookLoad({
       setNoteCurrentIndex(-1);
       setNoteIsPlaying(false);
       noteIsPlayingRef.current = false;
-      (async () => {
-        const book = await loadPracticeBook();
-        setNoteBarEntries(book.filter(isNoteSourceEntry));
-      })();
+      setNoteBarEntries([]);
       return;
     }
 

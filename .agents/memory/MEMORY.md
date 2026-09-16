@@ -64,3 +64,4 @@
 - [Signal analysis session boundary](signal-analysis-session-boundary.md) — keep live single-note HPS tuning separate from temporary polyphonic timeline capture and replay.
 - [RN Web tutorial hit testing](rn-web-tutorial-hit-testing.md) — tutorial overlays must let underlying controls receive events; decorative BPM layers also need pointer-events disabled.
 - [Mode keyboard override persistence](mode-keyboard-override-persistence.md) — store only per-mode differences from global bindings, or later global rebinding changes are silently shadowed.
+- [Photo cover crop bounds](photo-cover-crop-bounds.md) — normalized pan offsets must be clamped for each rendered frame aspect and zoom, not only when the crop is created.

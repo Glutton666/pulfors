@@ -7,7 +7,11 @@ import {
   FlatList,
   Image,
   useWindowDimensions,
+  type LayoutChangeEvent,
+  type StyleProp,
+  type ViewStyle,
 } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import { confirmDestructive } from "@/lib/confirm";
 import * as ImagePicker from "expo-image-picker";
 import { Ionicons } from "@expo/vector-icons";
@@ -23,6 +27,10 @@ import { HintBanner } from "@/components/HintTooltip";
 import { loadScore } from "@/lib/score-storage";
 import type { ScoreDocument } from "@/lib/score-types";
 import { ScoreRenderer } from "@/components/ScoreRenderer";
+import { ImageFramingModal, PracticeSourcePickerModal } from "@/components/NoteModeModals";
+import { reconcileNoteSources } from "@/lib/note-mode-sources";
+import { clampNoteImageCropToFrame } from "@/lib/note-image-crop";
+import type { NoteImageCrop } from "@/lib/storage";
 
 interface NoteModeViewProps {
   queue: PracticeEntry[];
@@ -45,7 +53,9 @@ interface NoteModeViewProps {
   onSave: () => Promise<boolean>;
   onReset: () => void;
   onExitNoteMode: () => void;
-  onQueueItemImageChange?: (index: number, imageUri: string | undefined) => void;
+  onQueueItemImageChange?: (index: number, imageUri: string | undefined, crop?: { scale: number; x: number; y: number }) => void;
+  onLoadPracticeSources?: () => Promise<PracticeEntry[]>;
+  onSourceSelectionChange?: (entries: PracticeEntry[]) => void;
   onOpenSettings?: () => void;
 }
 
@@ -165,6 +175,76 @@ function MiniScorePreview({
   );
 }
 
+function FramedPracticeImage({
+  uri,
+  crop,
+  style,
+}: {
+  uri: string;
+  crop?: NoteImageCrop;
+  style: StyleProp<ViewStyle>;
+}) {
+  const [frame, setFrame] = useState({ width: 0, height: 0 });
+  const [image, setImage] = useState({ width: 0, height: 0 });
+
+  useEffect(() => {
+    let active = true;
+    if (typeof Image.getSize !== "function") {
+      return () => { active = false; };
+    }
+    Image.getSize(
+      uri,
+      (width, height) => {
+        if (active) setImage({ width, height });
+      },
+      () => {
+        if (active) setImage({ width: 0, height: 0 });
+      },
+    );
+    return () => { active = false; };
+  }, [uri]);
+
+  const handleLayout = useCallback((event: LayoutChangeEvent) => {
+    const { width, height } = event.nativeEvent.layout;
+    setFrame((previous) =>
+      previous.width === width && previous.height === height
+        ? previous
+        : { width, height },
+    );
+  }, []);
+
+  const safeCrop = clampNoteImageCropToFrame(
+    crop ?? { scale: 1, x: 0, y: 0 },
+    image.width,
+    image.height,
+    frame.width,
+    frame.height,
+  );
+
+  return (
+    <View
+      pointerEvents="none"
+      onLayout={handleLayout}
+      style={[style, { overflow: "hidden" }]}
+    >
+      <Image
+        source={{ uri }}
+        resizeMode="cover"
+        style={[
+          StyleSheet.absoluteFillObject,
+          {
+            transform: [
+              { scale: safeCrop.scale },
+              { translateX: safeCrop.x * frame.width },
+              { translateY: safeCrop.y * frame.height },
+            ],
+          },
+        ]}
+      />
+    </View>
+  );
+}
+
 function QueueItem({
   entry,
   index,
@@ -176,6 +256,8 @@ function QueueItem({
   onMoveUp,
   onMoveDown,
   onImageChange,
+  onImageFrame,
+  imageCrop,
   currentMeasureIdx,
   previewUnit,
   phraseSize,
@@ -190,6 +272,8 @@ function QueueItem({
   onMoveUp: () => void;
   onMoveDown: () => void;
   onImageChange?: (imageUri: string | undefined) => void;
+  onImageFrame?: (imageUri: string | undefined, crop?: { scale: number; x: number; y: number }) => void;
+  imageCrop?: { scale: number; x: number; y: number };
   currentMeasureIdx?: number;
   previewUnit?: "measure" | "phrase";
   phraseSize?: number;
@@ -198,15 +282,18 @@ function QueueItem({
   const S = useScale();
   const styles = useMemo(() => make_styles(C, S), [C, S]);
   const { t } = useLanguage();
+  const [frameVisible, setFrameVisible] = useState(false);
+  const [pendingUri, setPendingUri] = useState<string | null>(entry.imageUri ?? null);
 
   const handlePickImage = useCallback(async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ["images"],
-      allowsEditing: true,
+      allowsEditing: false,
       quality: 0.7,
     });
     if (!result.canceled && result.assets?.[0]) {
-      onImageChange?.(result.assets[0].uri);
+       setPendingUri(result.assets[0].uri);
+       setFrameVisible(true);
     }
   }, [onImageChange]);
 
@@ -227,7 +314,7 @@ function QueueItem({
           <Text style={[styles.queueIndexText, isCurrent && { color: accentColor }]}>{index + 1}</Text>
         )}
       </View>
-      <Pressable onPress={entry.scoreId ? undefined : handlePickImage} style={styles.queueThumb}>
+      <Pressable onPress={entry.scoreId ? undefined : () => { if (entry.imageUri) { setPendingUri(entry.imageUri); setFrameVisible(true); } else void handlePickImage(); }} style={styles.queueThumb}>
         {entry.scoreId ? (
           <MiniScorePreview
             scoreId={entry.scoreId}
@@ -253,13 +340,14 @@ function QueueItem({
         </View>
       </View>
       {entry.imageUri && (
-        <Pressable onPress={() => onImageChange?.(undefined)} hitSlop={8} style={{ padding: Spacing.xxs }}>
+        <Pressable onPress={() => { setPendingUri(entry.imageUri ?? null); setFrameVisible(true); }} hitSlop={8} style={{ padding: Spacing.xxs }}>
           <Ionicons name="image" size={S.ms(14, 0.4)} color={accentColor} />
         </Pressable>
       )}
       <Pressable onPress={onRemove} hitSlop={8} style={styles.removeBtn}>
         <Ionicons name="close-circle" size={S.ms(18, 0.4)} color={C.textTertiary} />
       </Pressable>
+      {pendingUri && <ImageFramingModal visible={frameVisible} uri={pendingUri} crop={entry.imageCrop} onCancel={() => setFrameVisible(false)} onRemove={() => { setFrameVisible(false); setPendingUri(null); onImageFrame?.(undefined); if (!onImageFrame) onImageChange?.(undefined); }} onConfirm={(crop) => { setFrameVisible(false); if (onImageFrame) onImageFrame(pendingUri, crop); else onImageChange?.(pendingUri); }} />}
     </View>
   );
 }
@@ -333,6 +421,8 @@ export function NoteModeView({
   onReset,
   onExitNoteMode,
   onQueueItemImageChange,
+  onLoadPracticeSources,
+  onSourceSelectionChange,
   onOpenSettings,
 }: NoteModeViewProps) {
   const { colors: C } = useTheme();
@@ -353,7 +443,17 @@ export function NoteModeView({
   const [sourceCollapsed, setSourceCollapsed] = useState(false);
   const [previewUnit, setPreviewUnit] = useState<"measure" | "phrase">("measure");
   const [phraseSize, setPhraseSize] = useState(4);
+  const [sourcePickerVisible, setSourcePickerVisible] = useState(false);
+  const [practiceSources, setPracticeSources] = useState<PracticeEntry[]>(barEntries);
+  const [selectedSources, setSelectedSources] = useState<PracticeEntry[]>(barEntries);
   const hasScoreItems = queue.some((e) => !!e.scoreId);
+  useEffect(() => setPracticeSources(barEntries), [barEntries]);
+  const openSourcePicker = useCallback(async () => {
+    const loaded = onLoadPracticeSources ? await onLoadPracticeSources() : barEntries;
+    setPracticeSources(loaded);
+    setSelectedSources(reconcileNoteSources(barEntries, loaded));
+    setSourcePickerVisible(true);
+  }, [barEntries, onLoadPracticeSources]);
 
   useEffect(() => {
     if (isPlaying) setSourceCollapsed(true);
@@ -476,15 +576,15 @@ export function NoteModeView({
         <View style={[styles.container, { flexDirection: "row" as const }]}>
           {/* 가로모드: 사진이 있으면 전체 배경으로 */}
           {hasImgL && (
-            <Image
-              source={{ uri: currentEntry!.imageUri }}
+            <FramedPracticeImage
+              uri={currentEntry!.imageUri!}
+              crop={currentEntry?.imageCrop}
               style={StyleSheet.absoluteFillObject}
-              resizeMode="cover"
             />
           )}
           <View style={styles.landscapePlayingLeft}>
             {!hasImgL && (
-              <View style={styles.playingImageArea}>
+              <View style={[styles.playingImageArea, { flex: 0, height: S.ms(140, 0.35) }]}>
                 <View style={styles.playingImagePlaceholder}>
                   <Ionicons name="musical-notes" size={S.ms(36, 0.4)} color={C.textTertiary} />
                   <Text style={[styles.playingImagePlaceholderText, { fontSize: S.ms(14, 0.3) }]}>{currentEntry?.label}</Text>
@@ -540,16 +640,20 @@ export function NoteModeView({
       <View style={styles.container}>
         {/* 사진 전체 화면 배경 */}
         {hasImg && (
-          <Image
-            source={{ uri: currentEntry!.imageUri }}
+          <FramedPracticeImage
+            uri={currentEntry!.imageUri!}
+            crop={currentEntry?.imageCrop}
             style={StyleSheet.absoluteFillObject}
-            resizeMode="cover"
           />
         )}
 
-        {/* 상단 스크림 — 헤더 가독성 */}
+        {/* 가장자리만 부드럽게 어둡혀 사진을 가리지 않고 정보를 읽을 수 있게 한다. */}
         {hasImg && (
-          <View style={styles.imgScrimTop} pointerEvents="none" />
+          <LinearGradient
+            colors={["rgba(4,7,11,0.58)", "rgba(4,7,11,0)"]}
+            style={styles.imgScrimTop}
+            pointerEvents="none"
+          />
         )}
 
         <View style={styles.header}>
@@ -564,19 +668,26 @@ export function NoteModeView({
 
         {/* 이미지 없을 때만 플레이스홀더 표시 */}
         {!hasImg && (
-          <View style={styles.playingImageArea}>
-            <View style={styles.playingImagePlaceholder}>
+          <View style={styles.noPhotoStage}>
+            <View style={styles.noPhotoCard}>
+              <View style={[styles.noPhotoIcon, { backgroundColor: C.accent + "18" }]}>
+                <Ionicons name="musical-notes" size={S.ms(24, 0.4)} color={C.accent} />
+              </View>
+              <Text style={styles.playingImagePlaceholderText} numberOfLines={2}>{currentEntry?.label}</Text>
+              <Text style={styles.nowPlayingBpm}>{currentEntry?.bpm} BPM</Text>
               {renderBeatProgress()}
-              <Text style={styles.playingImagePlaceholderText}>{currentEntry?.label}</Text>
             </View>
           </View>
         )}
 
         <View style={{ flex: 1 }} />
 
-        {/* 하단 스크림 — 스트립/버튼 가독성 */}
         {hasImg && (
-          <View style={styles.imgScrimBottom} pointerEvents="none" />
+          <LinearGradient
+            colors={["rgba(4,7,11,0)", "rgba(4,7,11,0.64)"]}
+            style={styles.imgScrimBottom}
+            pointerEvents="none"
+          />
         )}
 
         <View style={styles.playingStripContainer}>
@@ -691,6 +802,8 @@ export function NoteModeView({
                 onMoveUp={() => onReorderQueue(index, index - 1)}
                 onMoveDown={() => onReorderQueue(index, index + 1)}
                 onImageChange={(uri) => onQueueItemImageChange?.(index, uri)}
+                onImageFrame={(uri, crop) => onQueueItemImageChange?.(index, uri, crop)}
+                imageCrop={item.imageCrop}
                 currentMeasureIdx={isPlaying && index === currentIndex ? playingBarIdx : undefined}
                 previewUnit={previewUnit}
                 phraseSize={phraseSize}
@@ -706,6 +819,7 @@ export function NoteModeView({
 
   const renderSourceSection = () => (
     <>
+      <View style={styles.sourceSectionTop}>
       <Pressable
         style={[styles.sectionHeader, isLandscape && { marginBottom: Spacing.xxs }]}
         onPress={() => setSourceCollapsed(prev => !prev)}
@@ -717,20 +831,31 @@ export function NoteModeView({
             color={C.textSecondary}
           />
           <Text style={[styles.sectionTitle, { color: C.text }]}>{t("noteMode", "source")}</Text>
-          {sourceCollapsed && barEntries.length > 0 && (
+          {barEntries.length > 0 && (
             <Text style={[styles.sectionCount, { color: C.textTertiary }]}>{barEntries.length}</Text>
           )}
         </View>
       </Pressable>
+      <Pressable onPress={openSourcePicker} style={[styles.loadSourcesButton, { borderColor: C.accent }]} accessibilityRole="button">
+        <Ionicons name="library-outline" size={S.ms(15, 0.4)} color={C.accent} />
+        <Text style={{ color: C.accent, fontWeight: "700" }}>{t("noteMode", "loadSources")}</Text>
+      </Pressable>
+      </View>
       {!sourceCollapsed && (
         <View style={[styles.sourceContainer, isLandscape && { flex: 1 }]} testID="note-queue-source">
           {barEntries.length === 0 ? (
-            <View style={styles.emptySource}>
-              <Text style={styles.emptySourceText}>{t("noteMode", "noBarEntries")}</Text>
-            </View>
+            <Pressable onPress={openSourcePicker} style={[styles.sourceInvite, { borderColor: C.border, backgroundColor: C.surfaceLight }]}>
+              <View style={[styles.sourceInviteIcon, { backgroundColor: C.accent + "18" }]}>
+                <Ionicons name="library-outline" size={S.ms(20, 0.4)} color={C.accent} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: C.text, fontWeight: "700" }}>{t("noteMode", "loadSources")}</Text>
+                <Text style={{ color: C.textTertiary, fontSize: S.ms(11, 0.3), marginTop: 3 }}>{t("noteMode", "sourceInviteHint")}</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={C.accent} />
+            </Pressable>
           ) : (
             <FlatList
-              key="src-list-ls"
               data={barEntries}
               keyExtractor={(item) => `source-${item.id}`}
               renderItem={({ item }) => (
@@ -743,11 +868,21 @@ export function NoteModeView({
                 />
               )}
               showsVerticalScrollIndicator={false}
-              scrollEnabled={barEntries.length > 0}
             />
           )}
         </View>
       )}
+      <PracticeSourcePickerModal
+        visible={sourcePickerVisible}
+        entries={practiceSources}
+        selected={selectedSources}
+        onCancel={() => setSourcePickerVisible(false)}
+        onConfirm={(entries) => {
+          setSelectedSources(entries);
+          setSourcePickerVisible(false);
+          onSourceSelectionChange?.(entries);
+        }}
+      />
     </>
   );
 
@@ -1174,8 +1309,7 @@ const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    height: 90,
-    backgroundColor: "rgba(0,0,0,0.55)",
+    height: 72,
     zIndex: 1,
   },
   imgScrimBottom: {
@@ -1183,8 +1317,7 @@ const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    height: 180,
-    backgroundColor: "rgba(0,0,0,0.55)",
+    height: 132,
     zIndex: 1,
   },
   playingImageArea: {
@@ -1206,6 +1339,32 @@ const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 12,
+  },
+  noPhotoStage: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: S.ms(12, 0.3),
+  },
+  noPhotoCard: {
+    width: "100%",
+    maxWidth: S.ms(360, 0.25),
+    alignItems: "center",
+    justifyContent: "center",
+    gap: S.ms(8, 0.3),
+    paddingHorizontal: S.ms(18, 0.3),
+    paddingVertical: S.ms(20, 0.3),
+    borderRadius: S.ms(18, 0.3),
+    backgroundColor: C.surface,
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  noPhotoIcon: {
+    width: S.ms(44, 0.4),
+    height: S.ms(44, 0.4),
+    borderRadius: S.ms(14, 0.3),
+    alignItems: "center",
+    justifyContent: "center",
   },
   playingImagePlaceholderText: {
     fontFamily: "SpaceGrotesk_600SemiBold",
@@ -1281,6 +1440,35 @@ const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
   sourceContainer: {
     flex: 1,
     minHeight: S.ms(80, 0.3),
+  },
+  sourceSectionTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  loadSourcesButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: S.ms(5, 0.3),
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: S.ms(9, 0.3),
+    paddingVertical: S.ms(6, 0.3),
+  },
+  sourceInvite: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: S.ms(10, 0.3),
+    borderWidth: 1,
+    borderRadius: 15,
+    padding: S.ms(12, 0.3),
+  },
+  sourceInviteIcon: {
+    width: S.ms(38, 0.4),
+    height: S.ms(38, 0.4),
+    borderRadius: S.ms(12, 0.3),
+    alignItems: "center",
+    justifyContent: "center",
   },
   emptySource: {
     alignItems: "center",

@@ -4,6 +4,7 @@ import type { PracticeEntry } from "../storage";
 import type { ScoreDocument } from "../score-types";
 import { logger } from "../logger";
 import { normalizeSampleChannel, type SampleChannel } from "../stereo-channel";
+import { normalizeNoteImageCrop } from "../note-image-crop";
 
 export const ALL_KEYS = [
   "metronome_settings",
@@ -362,6 +363,9 @@ export function sanitizePracticeEntry(raw: unknown, depth = 0): PracticeEntry | 
     noteSampleChannels: sanitizeNoteSampleChannelMap(entry.noteSampleChannels),
     noteSampleVolumes: sanitizeNoteSampleVolumeMap(entry.noteSampleVolumes),
     imageUri: sanitizeImageUri(entry.imageUri),
+    imageCrop: sanitizeImageUri(entry.imageUri)
+      ? normalizeNoteImageCrop(entry.imageCrop)
+      : undefined,
     noteQueueEntries: queueEntries,
     noteQueueEntryIds: queueEntryIds,
   };

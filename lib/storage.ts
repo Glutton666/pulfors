@@ -641,6 +641,12 @@ export interface LoopBlockEntry {
   ownSubdivisions?: Record<string, BeatType[]>;
 }
 
+export interface NoteImageCrop {
+  scale: number;
+  x: number;
+  y: number;
+}
+
 export interface PracticeEntry {
   id: string;
   label: string;
@@ -673,6 +679,8 @@ export interface PracticeEntry {
   notePlayMode?: "once" | "loop" | "random";
   noteQueueEntries?: PracticeEntry[];
   imageUri?: string;
+  /** Normalized framing used by Note mode's practice image. */
+  imageCrop?: NoteImageCrop;
   scoreId?: string;
 }
 

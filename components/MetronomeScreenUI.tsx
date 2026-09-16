@@ -155,6 +155,7 @@ export function MetronomeScreenUI(props: Props) {
     handleNoteAddToQueue, handleNoteRemoveFromQueue, handleNoteReorderQueue, handleNoteInsertNext,
     handleNoteTogglePlay, handleNoteManualNext, handleNoteManualNextImmediate,
     handleNoteSave, handleNoteReset, handleNoteQueueItemImageChange,
+    handleNoteLoadPracticeSources, handleNoteSourceSelectionChange,
     noteSamples, noteSampleNames, noteSampleSources, noteSampleChannels, noteSampleVolumes, noteSampleSpeeds, noteSampleMetroChannels,
     recorderTarget, setRecorderTarget, recorderKeyboardActionsRef,
     handleNoteRecordRequest, handleNoteRecordSave, handleNoteRecordDelete, handleNoteRecordSuggestBpm,
@@ -1108,6 +1109,8 @@ export function MetronomeScreenUI(props: Props) {
             onReset={handleNoteReset}
             onExitNoteMode={handleExitNoteMode}
             onQueueItemImageChange={handleNoteQueueItemImageChange}
+            onLoadPracticeSources={handleNoteLoadPracticeSources}
+            onSourceSelectionChange={handleNoteSourceSelectionChange}
             onOpenSettings={() => openScopedSettings("note")}
           />
         ) : (

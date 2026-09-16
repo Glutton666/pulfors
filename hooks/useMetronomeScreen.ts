@@ -41,6 +41,8 @@ import { safePlay, safePlayAndConfirm, notifyAudioPoolFallback, detectPoolCutoff
 import { registerMetronomeBridge, notifyUserMetronomeToggle } from "@/lib/audio-session";
 import { captureBreadcrumb } from "@/lib/error-tracking";
 import { sanitizeDeepLinkEntry } from "@/lib/deep-link-import";
+import { normalizeNoteImageCrop } from "@/lib/note-image-crop";
+import { isNoteSourceEntry } from "@/lib/note-mode-sources";
 import * as Haptics from "expo-haptics";
 import * as Crypto from "expo-crypto";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -3796,13 +3798,6 @@ export function useMetronomeScreen() {
 
   useEffect(() => { noteAdvanceQueueRef.current = noteAdvanceQueue; }, [noteAdvanceQueue]);
 
-  /** Returns true for entries that should appear as note-mode sources:
-   *  bar entries, beat entries, and score entries. */
-  const isNoteSourceEntry = (e: PracticeEntry) =>
-    (e.mode || "bar") === "bar" ||
-    e.mode === "score" ||
-    e.mode === "beat";
-
   const handleEnterNoteMode = useCallback(async (
     isCurrentTransition?: () => boolean,
     transitionToken?: number,
@@ -3825,9 +3820,8 @@ export function useMetronomeScreen() {
       }
     }
     completePracticeSessionRef.current("manual");
-    const book = await loadPracticeBook();
     if (!modeTransitionMayApply(isCurrentTransition)) return;
-    setNoteBarEntries(book.filter(isNoteSourceEntry));
+    setNoteBarEntries([]);
     if (transitionToken !== undefined) {
       modeTransitionWriteTokenRef.current = transitionToken;
     }
@@ -3839,6 +3833,20 @@ export function useMetronomeScreen() {
     setNoteIsPlaying(false);
     setNoteCurrentIndex(-1);
   }, [cancelPlaybackAttempt, stopMetronome]);
+
+  const handleNoteLoadPracticeSources = useCallback(async () => {
+    const book = await loadPracticeBook();
+    return book.filter(isNoteSourceEntry);
+  }, []);
+
+  const handleNoteSourceSelectionChange = useCallback((entries: PracticeEntry[]) => {
+    const seen = new Set<string>();
+    setNoteBarEntries(entries.filter((entry) => {
+      if (!isNoteSourceEntry(entry) || seen.has(entry.id)) return false;
+      seen.add(entry.id);
+      return true;
+    }));
+  }, []);
 
   const handleExitNoteMode = useCallback(() => {
     noteEntryTransitionEpochRef.current += 1;
@@ -4102,11 +4110,15 @@ export function useMetronomeScreen() {
     }
   }, []);
 
-  const handleNoteQueueItemImageChange = useCallback((index: number, imageUri: string | undefined) => {
+  const handleNoteQueueItemImageChange = useCallback((index: number, imageUri: string | undefined, imageCrop?: { scale: number; x: number; y: number }) => {
     setNoteQueue(prev => {
       const updated = [...prev];
       if (updated[index]) {
-        updated[index] = { ...updated[index], imageUri };
+        updated[index] = {
+          ...updated[index],
+          imageUri,
+          imageCrop: imageUri ? normalizeNoteImageCrop(imageCrop) : undefined,
+        };
       }
       noteQueueRef.current = updated;
       return updated;
@@ -4685,6 +4697,8 @@ export function useMetronomeScreen() {
     handleNoteSave,
     handleNoteReset,
     handleNoteQueueItemImageChange,
+    handleNoteLoadPracticeSources,
+    handleNoteSourceSelectionChange,
     // Note samples / recorder
     noteSamples,
     noteSampleNames,

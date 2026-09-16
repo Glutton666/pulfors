@@ -1,15 +1,20 @@
 /** @jest-environment jsdom */
 import React from "react";
-import { render } from "@testing-library/react";
+import { act, fireEvent, render } from "@testing-library/react";
+import { Image } from "react-native";
 import type { PracticeEntry } from "@/lib/storage";
 
 let mockDimensions = { width: 390, height: 844, scale: 1, fontScale: 1 };
 
 jest.mock("react-native", () => {
+  const React = require("react");
   const actual = jest.requireActual("react-native");
   return {
     ...actual,
     useWindowDimensions: () => mockDimensions,
+    ScrollView: actual.ScrollView ?? actual.View,
+    Modal: actual.Modal ?? (({ visible, children }: any) =>
+      visible ? React.createElement(actual.View, null, children) : null),
   };
 });
 
@@ -20,6 +25,15 @@ jest.mock("@expo/vector-icons", () => ({
 jest.mock("expo-image-picker", () => ({
   launchImageLibraryAsync: jest.fn(),
 }));
+
+jest.mock("expo-linear-gradient", () => {
+  const React = require("react");
+  const { View } = require("react-native");
+  return {
+    LinearGradient: ({ children, ...props }: any) =>
+      React.createElement(View, props, children),
+  };
+});
 
 jest.mock("@/components/ScoreRenderer", () => ({
   ScoreRenderer: () => null,
@@ -62,6 +76,7 @@ jest.mock("@/lib/scale", () => ({
 }));
 
 import { NoteModeView } from "@/components/NoteModeView";
+import { ImageFramingModal } from "@/components/NoteModeModals";
 
 const entry: PracticeEntry = {
   id: "entry-1",
@@ -148,5 +163,35 @@ describe("Note mode beat progress", () => {
     expect(getByTestId("note-beat-progress")).toBeTruthy();
     expect(getByTestId("note-current-beat").textContent).toBe("1");
     mockDimensions = { width: 390, height: 844, scale: 1, fontScale: 1 };
+  });
+});
+
+describe("Note image framing lifecycle", () => {
+  it("preserves an existing crop while image dimensions resolve asynchronously", () => {
+    let resolveSize: ((width: number, height: number) => void) | undefined;
+    (Image as any).getSize = jest.fn((
+      _uri: string,
+      onSuccess: (width: number, height: number) => void,
+    ) => {
+      resolveSize = onSuccess;
+    });
+    const onConfirm = jest.fn();
+    const crop = { scale: 1, x: 0.4, y: 0 };
+    const { getByText } = render(
+      <ImageFramingModal
+        visible
+        uri="file:///panorama.jpg"
+        crop={crop}
+        onCancel={jest.fn()}
+        onConfirm={onConfirm}
+      />,
+    );
+
+    act(() => {
+      resolveSize?.(1000, 500);
+    });
+    fireEvent.click(getByText("applyFrame").closest("button")!);
+
+    expect(onConfirm).toHaveBeenCalledWith(crop);
   });
 });
