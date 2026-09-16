@@ -26,15 +26,15 @@ function makeBridge(initial = false) {
   };
 }
 
-test("acquire pauses metronome and release resumes it", async () => {
+test("acquire configures a recording session without pausing metronome", async () => {
   _resetAudioSessionForTests();
   const { state, bridge } = makeBridge(true);
   registerMetronomeBridge(bridge);
   await acquireAudioSession("rec", "recording");
-  assert.equal(state.pauseCount, 1, "should pause once");
-  assert.equal(state.running, false);
+  assert.equal(state.pauseCount, 0, "recording session should keep monitoring playback running");
+  assert.equal(state.running, true);
   await releaseAudioSession("rec");
-  assert.equal(state.resumeCount, 1, "should resume after release");
+  assert.equal(state.resumeCount, 0, "release should not resume output it never paused");
   assert.equal(state.running, true);
 });
 
@@ -48,17 +48,19 @@ test("playback mode does not pause metronome", async () => {
   assert.equal(state.resumeCount, 0);
 });
 
-test("only resumes after last caller releases", async () => {
+test("multiple audio-session callers are tracked until the last release", async () => {
   _resetAudioSessionForTests();
   const { state, bridge } = makeBridge(true);
   registerMetronomeBridge(bridge);
   await acquireAudioSession("a", "recording");
   await acquireAudioSession("b", "mic");
-  assert.equal(state.pauseCount, 1, "pause exactly once across multiple acquires");
+  assert.equal(state.pauseCount, 0, "session acquisition does not pause monitoring");
+  assert.equal(_audioSessionDebugState().activeCallers.length, 2);
   await releaseAudioSession("a");
-  assert.equal(state.resumeCount, 0, "still has b active, no resume");
+  assert.equal(state.resumeCount, 0, "releasing one caller must not affect playback");
   await releaseAudioSession("b");
-  assert.equal(state.resumeCount, 1);
+  assert.equal(state.resumeCount, 0, "final release must not resume output it never paused");
+  assert.equal(state.running, true);
 });
 
 test("does not pause when metronome already stopped", async () => {
@@ -82,7 +84,7 @@ test("withAudioSession releases on error", async () => {
   }, /boom/);
   const dbg = _audioSessionDebugState();
   assert.equal(dbg.activeCallers.length, 0, "caller cleared even on error");
-  assert.equal(state.resumeCount, 1, "metronome resumed after error");
+  assert.equal(state.resumeCount, 0, "session cleanup must not resume output it never paused");
 });
 
 test("release of unknown caller still restores state when empty", async () => {
@@ -94,16 +96,13 @@ test("release of unknown caller still restores state when empty", async () => {
   assert.equal(state.resumeCount, 0);
 });
 
-test("does not auto-resume if user manually started metronome inside modal", async () => {
+test("session release preserves playback when the user keeps it running", async () => {
   _resetAudioSessionForTests();
   const { state, bridge } = makeBridge(true);
   registerMetronomeBridge(bridge);
   await acquireAudioSession("rec", "recording");
-  assert.equal(state.pauseCount, 1);
-  // 사용자가 모달 안에서 다시 재생을 켰다가 직접 멈췄다고 가정.
-  state.running = true;
+  assert.equal(state.pauseCount, 0);
   await releaseAudioSession("rec");
-  // 사용자가 켠 상태이므로 우리가 다시 toggle해서는 안 된다.
   assert.equal(state.resumeCount, 0);
   assert.equal(state.running, true);
 });
@@ -119,52 +118,34 @@ test("withAudioSession with sync throw still releases", async () => {
   }, /sync fail/);
   const dbg = _audioSessionDebugState();
   assert.equal(dbg.activeCallers.length, 0);
-  assert.equal(state.resumeCount, 1);
+  assert.equal(state.resumeCount, 0);
 });
 
-test("user restarts metronome inside modal then stops manually before release", async () => {
-  // 모달 열림 → acquire(=pause) → 사용자가 모달 안에서 메트로놈을 다시 켰다가
-  // 직접 끔. notifyUserMetronomeToggle로 사용자 의도를 신호하면 release 시점에
-  // 자동 resume을 건너뛴다.
+test("user toggle intent is tracked while an audio session is active", async () => {
   _resetAudioSessionForTests();
   const { state, bridge } = makeBridge(true);
   registerMetronomeBridge(bridge);
   await acquireAudioSession("rec", "recording");
-  assert.equal(state.running, false, "paused by acquire");
-  // 사용자가 모달 안에서 직접 메트로놈을 켰다가 다시 끈 시나리오.
   notifyUserMetronomeToggle();
-  state.running = true; state.resumeCount++;
-  notifyUserMetronomeToggle();
-  state.running = false; state.pauseCount++;
-  const resumeBefore = state.resumeCount;
   await releaseAudioSession("rec");
-  assert.equal(state.resumeCount, resumeBefore, "should not auto-resume because user stopped manually");
-  assert.equal(state.running, false);
+  assert.equal(state.pauseCount, 0);
+  assert.equal(state.resumeCount, 0);
+  assert.equal(state.running, true);
 });
 
-test("integration: bridge pause/resume via app-style toggle does not mark user toggle", async () => {
-  // app/index.tsx의 togglePlayPause 경로를 모사: bridge.pause/resume가
-  // togglePlayPauseRef를 호출하고 그 핸들러는 notifyUserMetronomeToggle을 부른다.
-  // audio-session이 자체적으로 bridge.pause를 호출했을 때 사용자 토글로 오인하지
-  // 않아야 release 시점에 자동 resume이 일어난다.
+test("audio-session acquisition does not invoke the app toggle bridge", async () => {
   _resetAudioSessionForTests();
   const state = { running: true, pauseCount: 0, resumeCount: 0 };
-  const userToggle = () => {
-    notifyUserMetronomeToggle();
-    if (state.running) { state.running = false; state.pauseCount++; }
-    else { state.running = true; state.resumeCount++; }
-  };
   registerMetronomeBridge({
     isRunning: () => state.running,
-    pause: () => { if (state.running) userToggle(); },
-    resume: () => { if (!state.running) userToggle(); },
+    pause: () => { state.running = false; state.pauseCount++; },
+    resume: () => { state.running = true; state.resumeCount++; },
   });
   await acquireAudioSession("rec", "recording");
-  assert.equal(state.running, false, "bridge pause invoked through user-toggle path");
-  assert.equal(state.pauseCount, 1);
   await releaseAudioSession("rec");
-  assert.equal(state.running, true, "auto-resume must fire even though bridge path ran user toggle");
-  assert.equal(state.resumeCount, 1);
+  assert.equal(state.running, true);
+  assert.equal(state.pauseCount, 0);
+  assert.equal(state.resumeCount, 0);
 });
 
 test("close modal immediately after acquire leaves no leaked caller", async () => {
@@ -177,8 +158,8 @@ test("close modal immediately after acquire leaves no leaked caller", async () =
   const rel = releaseAudioSession("raceModal");
   await Promise.all([acq, rel]);
   assert.equal(_audioSessionDebugState().activeCallers.length, 0);
-  // 한 번이라도 pause/resume이 일어난 경우 짝이 맞아야 한다.
-  assert.equal(state.pauseCount, state.resumeCount, "pause/resume counts balanced");
+  assert.equal(state.pauseCount, 0);
+  assert.equal(state.resumeCount, 0);
 });
 
 test("note recorder: start failure after prepare releases session", async () => {
@@ -189,11 +170,11 @@ test("note recorder: start failure after prepare releases session", async () => 
   registerMetronomeBridge(bridge);
   // prepare 단계에서 acquire 성공.
   await acquireAudioSession("noteRecorderModal", "recording");
-  assert.equal(state.pauseCount, 1);
+  assert.equal(state.pauseCount, 0);
   // record() 실패 → catch에서 release 호출 (NoteRecorderModal.startRecording 패턴).
   await releaseAudioSession("noteRecorderModal");
   assert.equal(_audioSessionDebugState().activeCallers.length, 0);
-  assert.equal(state.resumeCount, 1, "metronome must resume after start failure");
+  assert.equal(state.resumeCount, 0, "session cleanup must not resume output it never paused");
 });
 
 test("signal generator: native mic → android webview fallback transition", async () => {
@@ -204,14 +185,14 @@ test("signal generator: native mic → android webview fallback transition", asy
   const { state, bridge } = makeBridge(true);
   registerMetronomeBridge(bridge);
   await acquireAudioSession("signalGenMicMobile", "mic");
-  assert.equal(state.pauseCount, 1, "first acquire pauses metronome once");
+  assert.equal(state.pauseCount, 0, "first acquire keeps metronome monitoring");
   // 폴백: 새 caller acquire가 release보다 먼저 일어난다 (overlap).
   await acquireAudioSession("signalGenMicAndroid", "mic");
-  assert.equal(state.pauseCount, 1, "no extra pause while still active");
+  assert.equal(state.pauseCount, 0, "no pause while callers overlap");
   await releaseAudioSession("signalGenMicMobile");
   assert.equal(state.resumeCount, 0, "must not resume while android caller still active");
   await releaseAudioSession("signalGenMicAndroid");
-  assert.equal(state.resumeCount, 1, "resume only after final caller releases");
+  assert.equal(state.resumeCount, 0, "final release does not resume output it never paused");
   assert.equal(_audioSessionDebugState().activeCallers.length, 0);
 });
 
@@ -223,7 +204,7 @@ test("notifyUserMetronomeToggle outside session is a no-op", async () => {
   notifyUserMetronomeToggle();
   await acquireAudioSession("rec", "recording");
   await releaseAudioSession("rec");
-  assert.equal(state.resumeCount, 1, "auto-resume normally when no user toggle inside session");
+  assert.equal(state.resumeCount, 0, "session release does not auto-resume output it never paused");
 });
 
 test("manual acquire/release pairs in modal failure path", async () => {
@@ -234,7 +215,7 @@ test("manual acquire/release pairs in modal failure path", async () => {
   await acquireAudioSession("recFail", "recording");
   // prepareToRecord 실패 시뮬레이션 (catch 경로에서 release 호출).
   await releaseAudioSession("recFail");
-  assert.equal(state.resumeCount, 1, "auto-resume after failure recovery");
+  assert.equal(state.resumeCount, 0, "failure cleanup does not resume output it never paused");
   assert.equal(_audioSessionDebugState().activeCallers.length, 0);
 });
 
@@ -245,7 +226,7 @@ test("double release does not double-resume", async () => {
   await acquireAudioSession("x", "recording");
   await releaseAudioSession("x");
   await releaseAudioSession("x");
-  assert.equal(state.resumeCount, 1);
+  assert.equal(state.resumeCount, 0);
 });
 
 test("interruption begin pauses metronome and end resumes it", async () => {
@@ -313,10 +294,10 @@ test("interruption while modal is active: modal release does not resume mid-inte
   const { state, bridge } = makeBridge(true);
   registerMetronomeBridge(bridge);
   await acquireAudioSession("rec", "recording");
-  assert.equal(state.pauseCount, 1, "modal pauses metronome");
+  assert.equal(state.pauseCount, 0, "modal acquisition keeps monitoring playback running");
   // 모달 사용 중에 전화가 옴.
   notifyInterruptionBegin();
-  // 이미 멈춰있으므로 추가 pause는 없다.
+  // 인터럽션이 실제로 재생 중인 메트로놈을 멈춘다.
   assert.equal(state.pauseCount, 1);
   // 사용자가 모달을 닫음 (전화 통화는 진행 중).
   await releaseAudioSession("rec");
@@ -419,9 +400,9 @@ test("autoResumeAfterInterruption=false does not affect modal session release", 
   registerMetronomeBridge(bridge);
   setAutoResumeAfterInterruption(false);
   await acquireAudioSession("rec", "recording");
-  assert.equal(state.pauseCount, 1);
+  assert.equal(state.pauseCount, 0);
   await releaseAudioSession("rec");
-  assert.equal(state.resumeCount, 1, "modal release still auto-resumes regardless of interruption setting");
+  assert.equal(state.resumeCount, 0, "modal release does not resume output it never paused");
   assert.equal(state.running, true);
 });
 

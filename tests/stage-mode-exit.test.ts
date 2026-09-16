@@ -211,11 +211,11 @@ describe("경로 A: 상단 '무대 모드' 텍스트가 onOpenDial에 연결됨"
     );
   });
 
-  test("ModeSwitcherDial이 onSelectMode={switchToMode}으로 연결됨", () => {
+  test("ModeSwitcherDial이 tutorialSwitchToMode를 통해 switchToMode로 연결됨", () => {
     const src = fs.readFileSync("components/MetronomeScreenUI.tsx", "utf8");
     assert.ok(
-      src.includes("onSelectMode={switchToMode}"),
-      "ModeSwitcherDial must receive switchToMode as its onSelectMode handler",
+      src.includes("onSelectMode={tutorialSwitchToMode}"),
+      "ModeSwitcherDial must receive the tutorial wrapper around switchToMode as its onSelectMode handler",
     );
   });
 

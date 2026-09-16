@@ -61,6 +61,9 @@ jest.mock("@/lib/audio-renderer", () => ({
     state: "running",
     resume: jest.fn().mockResolvedValue(undefined),
   })),
+  getRealtimeClickGain: (volume: number) => Math.max(0, Math.min(1, volume)) * 3.2,
+  getClickRenderVolume: (volume: number) => 3.2 * Math.max(1, Math.max(0, volume)),
+  getClickOutputVolume: (volume: number) => Math.max(0, Math.min(1, volume)),
   clearWebClickBuffers: jest.fn(),
 }));
 
@@ -215,7 +218,7 @@ describe("pre-rendered playback reliability", () => {
       sampleChannels,
     }));
     expect(mockRenderMeasure.mock.calls[0][0].samplePCMs.has("0-0")).toBe(true);
-    expect(player?.volume).toBe(1);
+    expect(player?.volume).toBe(0.35);
   });
 
   it("does not restore an old decoded sample into cache after the URI changes", async () => {
@@ -973,7 +976,7 @@ describe("pre-rendered playback reliability", () => {
       expect.any(Float32Array),
       undefined,
       "both",
-      1,
+      0.35,
     );
   });
 
