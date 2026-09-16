@@ -24,6 +24,7 @@ import {
   deletePracticeRoom,
   renamePracticeRoom,
   isLabPracticeRoomName,
+  loadLabUnlocked,
   requestLocationPermission,
   type PracticeRoom,
 } from "@/lib/practice-room";
@@ -77,16 +78,22 @@ export function SettingsProfileTab({
   const filteredInstrumentCategories = filterPrimaryInstrumentCategories(instrumentSearch);
 
   useEffect(() => {
+    let active = true;
     if (visible) {
       setLocalUsername(username);
       setShowResetConfirm(false);
       setInstrumentSearch("");
-      loadPracticeRooms().then(setPracticeRooms);
+      void Promise.all([loadPracticeRooms(), loadLabUnlocked()]).then(([rooms, labIsUnlocked]) => {
+        if (!active) return;
+        setPracticeRooms(rooms);
+        if (labIsUnlocked) onLabUnlocked?.();
+      });
     }
     return () => {
+      active = false;
       if (webUrlCopiedTimerRef.current) clearTimeout(webUrlCopiedTimerRef.current);
     };
-  }, [visible, username]);
+  }, [onLabUnlocked, visible, username]);
 
   const handleAddRoom = useCallback(async () => {
     if (!newRoomName.trim()) return;

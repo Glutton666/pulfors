@@ -76,6 +76,7 @@ test("loadPracticeRooms: 손상 JSON → []", async () => {
 test("isLabPracticeRoomName: 공백과 영문 대소문자를 무시한다", () => {
   assert.equal(isLabPracticeRoomName(" lab "), true);
   assert.equal(isLabPracticeRoomName("LAB"), true);
+  assert.equal(isLabPracticeRoomName("Ｌａｂ"), true);
   assert.equal(isLabPracticeRoomName("laboratory"), false);
 });
 

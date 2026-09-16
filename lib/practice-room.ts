@@ -17,7 +17,7 @@ export interface PracticeRoom {
 }
 
 export function isLabPracticeRoomName(name: string): boolean {
-  return name.trim().toLocaleLowerCase() === "lab";
+  return name.normalize("NFKC").trim().toLowerCase() === "lab";
 }
 
 async function persistLabUnlock(): Promise<void> {

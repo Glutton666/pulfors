@@ -140,6 +140,7 @@ jest.mock("expo-clipboard", () => ({
 
 jest.mock("@/lib/practice-room", () => ({
   loadPracticeRooms: jest.fn(async () => []),
+  loadLabUnlocked: jest.fn(async () => false),
   addPracticeRoom: jest.fn(async () => null),
   deletePracticeRoom: jest.fn(async () => undefined),
   renamePracticeRoom: jest.fn(async () => undefined),
