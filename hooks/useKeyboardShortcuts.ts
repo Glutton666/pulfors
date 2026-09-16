@@ -4,8 +4,10 @@ import {
   matchesBinding,
   isEditableTarget,
   nativeKeyToCode,
+  nativeKeyImpliesShift,
   type KeyBindingsMap,
   type NormalizedKeyEvent,
+  type RecorderKeyboardActions,
 } from "@/lib/keyboard-bindings";
 import type { MetronomeEngine, BeatType } from "@/lib/metronome-engine";
 import type { StopwatchTimerHandle } from "@/components/StopwatchTimer";
@@ -19,6 +21,22 @@ export interface UseKeyboardShortcutsResult {
   handleNativeKeyDown: (nativeEvent: { key: string; shiftKey?: boolean; ctrlKey?: boolean; altKey?: boolean; metaKey?: boolean }) => void;
   /** 네이티브 뷰의 onKeyUp 이벤트에 연결할 핸들러 */
   handleNativeKeyUp: (nativeEvent: { key: string }) => void;
+}
+
+export type BarSymbolShortcut = "repeat" | "jump_from" | "jump_to" | "volta" | "end";
+
+export interface BarKeyboardActions {
+  selectAdjacent: (direction: -1 | 1) => void;
+  completeBlock: (firstBeat: number, secondBeat: number) => void;
+  applySymbol: (symbol: BarSymbolShortcut) => void;
+  copy: () => void;
+  paste: () => void;
+  toggleRepeatMode: () => void;
+  getRepeatMode: () => "count" | "duration";
+  setRepeatValue: (value: number) => void;
+  addLayer: () => void;
+  quickSave: () => void;
+  openAudio: () => void;
 }
 
 interface UseKeyboardShortcutsParams {
@@ -49,6 +67,9 @@ interface UseKeyboardShortcutsParams {
   applyCurrentBeatSubdivisionRef: React.MutableRefObject<() => boolean>;
   appendBarSubdivisionRef: React.MutableRefObject<(type: BeatType) => boolean>;
   removeBarSubdivisionRef: React.MutableRefObject<() => boolean>;
+  barKeyboardActionsRef: React.MutableRefObject<BarKeyboardActions>;
+  noteNextRef: React.MutableRefObject<() => void>;
+  recorderKeyboardActionsRef: React.MutableRefObject<RecorderKeyboardActions | null>;
   // Stable setters from useState (identity stable across renders)
   setNoteMode: (v: boolean) => void;
   setBarStartBeat: React.Dispatch<React.SetStateAction<number | null>>;
@@ -81,6 +102,7 @@ export function useKeyboardShortcuts(params: UseKeyboardShortcutsParams): UseKey
     showKbShortcutsRef, showNativeKbHintRef, engineRef,
     togglePlayPauseRef, setNoteMode, handleBarModeChangeRef, setShowKbShortcuts, setShowNativeKbHint,
     handleAddBarRef, applyCurrentBeatSubdivisionRef, appendBarSubdivisionRef, removeBarSubdivisionRef,
+    barKeyboardActionsRef, noteNextRef, recorderKeyboardActionsRef,
     setBarStartBeat, setActiveModal, setBarLoopMode, setBlockPlayMode, setBeatsPerMeasure, setBeatTypes,
     setBeatSubdivisions, setSubdivisionPattern, persistSettings,
   } = params;
@@ -93,6 +115,9 @@ export function useKeyboardShortcuts(params: UseKeyboardShortcutsParams): UseKey
     const repeatTimerRef = { current: null as ReturnType<typeof setInterval> | null };
     const heldKeyRef = { current: "" };
     const repeatCountRef = { current: 0 };
+    let barDurationDigits = "";
+    let pendingBlockStart: number | null = null;
+    let previousBarMode = barModeRef.current;
 
     const clearRepeat = () => {
       if (repeatTimerRef.current) { clearInterval(repeatTimerRef.current); repeatTimerRef.current = null; }
@@ -124,15 +149,42 @@ export function useKeyboardShortcuts(params: UseKeyboardShortcutsParams): UseKey
     const kb = () => keyBindingsRef.current;
 
     const handleKeyDown = (e: NormalizedKeyEvent) => {
+      const recorderKeyboard = recorderKeyboardActionsRef.current;
+      if (recorderKeyboard?.isActive() && e.code === "Escape") {
+        e.preventDefault();
+        recorderKeyboard.cancel();
+        return;
+      }
       if (isEditableTarget(e)) return;
 
       const b = kb();
       const inNoteMode = noteModeRef.current;
       const inBarMode = barModeRef.current;
       const modalOpen = anyModalOpenRef.current;
+      if (previousBarMode !== inBarMode) {
+        barDurationDigits = "";
+        pendingBlockStart = null;
+        previousBarMode = inBarMode;
+      }
+
+      if (modalOpen && recorderKeyboard?.isActive()) {
+        if (e.code === "ArrowLeft" || e.code === "ArrowRight") {
+          e.preventDefault();
+          recorderKeyboard.moveSelection(e.code === "ArrowLeft" ? -1 : 1);
+        } else if (e.code === "Enter") {
+          e.preventDefault();
+          recorderKeyboard.confirm();
+        } else if (e.code === "Escape") {
+          e.preventDefault();
+          recorderKeyboard.cancel();
+        }
+        return;
+      }
 
       // Escape — priority: note mode → bar mode → shortcut modal → native hint → other modals
       if (matchesBinding(e, b.escape)) {
+        barDurationDigits = "";
+        pendingBlockStart = null;
         if (inNoteMode) { e.preventDefault(); setNoteMode(false); return; }
         if (inBarMode) {
           e.preventDefault();
@@ -158,18 +210,125 @@ export function useKeyboardShortcuts(params: UseKeyboardShortcutsParams): UseKey
         return;
       }
 
-      // Note mode: only Space passes through
-      if (inNoteMode) return;
+      // Note mode: Space and next-queue are the only active shortcuts.
+      if (inNoteMode) {
+        if (matchesBinding(e, b.noteNext)) {
+          e.preventDefault();
+          noteNextRef.current();
+        }
+        return;
+      }
+
+      const playing = engineRef.current?.getIsRunning() ?? false;
+      if (inBarMode && !playing) {
+        if (matchesBinding(e, b.barPrevious) || matchesBinding(e, b.barNext)) {
+          e.preventDefault();
+          barKeyboardActionsRef.current.selectAdjacent(
+            matchesBinding(e, b.barPrevious) ? -1 : 1,
+          );
+          barDurationDigits = "";
+          return;
+        }
+
+        if (matchesBinding(e, b.barBlock)) {
+          e.preventDefault();
+          const selected = barStartBeatRef.current;
+          if (selected === null) return;
+          if (pendingBlockStart === null) {
+            pendingBlockStart = selected;
+          } else if (pendingBlockStart !== selected) {
+            barKeyboardActionsRef.current.completeBlock(pendingBlockStart, selected);
+            pendingBlockStart = null;
+          }
+          return;
+        }
+
+        const symbolShortcuts: Array<{
+          binding: typeof b.barRepeat;
+          symbol: BarSymbolShortcut;
+        }> = [
+          { binding: b.barRepeat, symbol: "repeat" },
+          { binding: b.barJumpFrom, symbol: "jump_from" },
+          { binding: b.barJumpTo, symbol: "jump_to" },
+          { binding: b.barVolta, symbol: "volta" },
+          { binding: b.barEnd, symbol: "end" },
+        ];
+        for (const { binding, symbol } of symbolShortcuts) {
+          if (matchesBinding(e, binding)) {
+            e.preventDefault();
+            barKeyboardActionsRef.current.applySymbol(symbol);
+            return;
+          }
+        }
+
+        if (matchesBinding(e, b.barCopy)) {
+          e.preventDefault();
+          barKeyboardActionsRef.current.copy();
+          return;
+        }
+        if (matchesBinding(e, b.barPaste)) {
+          e.preventDefault();
+          barKeyboardActionsRef.current.paste();
+          barDurationDigits = "";
+          return;
+        }
+        if (matchesBinding(e, b.barRepeatMode)) {
+          e.preventDefault();
+          barKeyboardActionsRef.current.toggleRepeatMode();
+          barDurationDigits = "";
+          return;
+        }
+        if (matchesBinding(e, b.barAddLayer)) {
+          e.preventDefault();
+          barKeyboardActionsRef.current.addLayer();
+          return;
+        }
+        if (matchesBinding(e, b.barQuickSave)) {
+          e.preventDefault();
+          barKeyboardActionsRef.current.quickSave();
+          return;
+        }
+        if (matchesBinding(e, b.barOpenAudio)) {
+          e.preventDefault();
+          barKeyboardActionsRef.current.openAudio();
+          return;
+        }
+
+        if (
+          /^Digit[0-9]$/.test(e.code) &&
+          e.shiftKey &&
+          !e.ctrlKey &&
+          !e.altKey &&
+          !e.metaKey
+        ) {
+          e.preventDefault();
+          const digit = Number(e.code.slice(5));
+          if (barKeyboardActionsRef.current.getRepeatMode() === "count") {
+            barKeyboardActionsRef.current.setRepeatValue(digit);
+            barDurationDigits = "";
+          } else {
+            barDurationDigits = `${barDurationDigits}${digit}`.slice(-4);
+            if (barDurationDigits.length === 4) {
+              const minutes = Number(barDurationDigits.slice(0, 2));
+              const seconds = Number(barDurationDigits.slice(2));
+              if (seconds < 60) {
+                const totalSeconds = minutes * 60 + seconds;
+                if (totalSeconds >= 1 && totalSeconds <= 59 * 60 + 59) {
+                  barKeyboardActionsRef.current.setRepeatValue(totalSeconds);
+                }
+              }
+              barDurationDigits = "";
+            }
+          }
+          return;
+        }
+      }
 
       // Shift+Enter — apply the current subdivision pattern to the last beat
       // in beat mode. In bar mode Enter has a separate edit/add meaning below.
       if (
         !inBarMode &&
-        e.code === b.tapTempo.code &&
-        e.shiftKey &&
-        !e.ctrlKey &&
-        !e.altKey &&
-        !e.metaKey
+        matchesBinding(e, b.applySubdivision)
       ) {
         e.preventDefault();
         applyCurrentBeatSubdivisionRef.current();
@@ -178,7 +337,7 @@ export function useKeyboardShortcuts(params: UseKeyboardShortcutsParams): UseKey
 
       // Enter — add a new bar when no bar is selected, or finish editing the
       // selected bar. Keep timer input confirmation ahead of this mode action.
-      if (inBarMode && matchesBinding(e, b.tapTempo)) {
+      if (inBarMode && matchesBinding(e, b.barConfirm)) {
         const swRef = stopwatchTimerRef.current || stopwatchTimerLandscapeRef.current;
         if (swRef?.isTimerInputActive()) {
           e.preventDefault();
@@ -190,8 +349,11 @@ export function useKeyboardShortcuts(params: UseKeyboardShortcutsParams): UseKey
         if (barStartBeatRef.current === null) {
           handleAddBarRef.current();
         } else {
+          barStartBeatRef.current = null;
           setBarStartBeat(null);
         }
+        barDurationDigits = "";
+        pendingBlockStart = null;
         return;
       }
 
@@ -262,7 +424,7 @@ export function useKeyboardShortcuts(params: UseKeyboardShortcutsParams): UseKey
       }
 
       // Tab — menu toggle
-      if (matchesBinding(e, b.toggleMenu)) {
+      if (!inBarMode && matchesBinding(e, b.toggleMenu)) {
         e.preventDefault();
         setActiveModal((prev) => (prev === "menu" ? null : "menu"));
         return;
@@ -302,8 +464,7 @@ export function useKeyboardShortcuts(params: UseKeyboardShortcutsParams): UseKey
         return;
       }
 
-      // S/A/N/M — add beat (beat mode only, not while playing)
-      const playing = engineRef.current?.getIsRunning() ?? false;
+      // S/A/N/M — add subdivisions in bar mode, beats in beat mode
       if (!playing && inBarMode) {
         const barSubdivisionShortcuts: { binding: typeof b.addBeatStrong; type: BeatType }[] = [
           { binding: b.addBeatStrong, type: "strong" },
@@ -320,13 +481,7 @@ export function useKeyboardShortcuts(params: UseKeyboardShortcutsParams): UseKey
         }
 
         // Backspace — remove the selected bar's final subdivision cell.
-        if (
-          e.code === "Backspace" &&
-          !e.shiftKey &&
-          !e.ctrlKey &&
-          !e.altKey &&
-          !e.metaKey
-        ) {
+        if (matchesBinding(e, b.barRemoveSubdivision)) {
           e.preventDefault();
           removeBarSubdivisionRef.current();
           return;
@@ -516,7 +671,7 @@ export function useKeyboardShortcuts(params: UseKeyboardShortcutsParams): UseKey
     const e: NormalizedKeyEvent = {
       code: nativeKeyToCode(nativeEvent.key),
       key: nativeEvent.key,
-      shiftKey: nativeEvent.shiftKey ?? false,
+      shiftKey: nativeEvent.shiftKey ?? nativeKeyImpliesShift(nativeEvent.key),
       ctrlKey: nativeEvent.ctrlKey ?? false,
       altKey: nativeEvent.altKey ?? false,
       metaKey: nativeEvent.metaKey ?? false,

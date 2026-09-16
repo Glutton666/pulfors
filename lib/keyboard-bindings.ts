@@ -25,7 +25,25 @@ export type KeyAction =
   | "showShortcuts"
   | "escape"
   | "loopToggle"
-  | "blockPlayModeNext";
+  | "blockPlayModeNext"
+  | "applySubdivision"
+  | "barPrevious"
+  | "barNext"
+  | "barBlock"
+  | "barRepeat"
+  | "barJumpFrom"
+  | "barJumpTo"
+  | "barVolta"
+  | "barEnd"
+  | "barCopy"
+  | "barPaste"
+  | "barRepeatMode"
+  | "barAddLayer"
+  | "barQuickSave"
+  | "barOpenAudio"
+  | "barRemoveSubdivision"
+  | "barConfirm"
+  | "noteNext";
 
 export interface KeyBinding {
   code: string;
@@ -63,11 +81,47 @@ export const DEFAULT_BINDINGS: KeyBindingsMap = {
   escape:           { code: "Escape",    label: "Esc" },
   loopToggle:       { code: "KeyL",      label: "L" },
   blockPlayModeNext:{ code: "KeyG",      label: "G" },
+  applySubdivision: { code: "Enter", shift: true, label: "Shift+Enter" },
+  barPrevious:      { code: "Minus",      label: "-" },
+  barNext:          { code: "Equal",      label: "=" },
+  barBlock:         { code: "BracketLeft", label: "[" },
+  barRepeat:        { code: "KeyR",       label: "R" },
+  barJumpFrom:      { code: "KeyJ",       label: "J" },
+  barJumpTo:        { code: "KeyK",       label: "K" },
+  barVolta:         { code: "KeyC",       label: "C" },
+  barEnd:           { code: "KeyE",       label: "E" },
+  barCopy:          { code: "KeyC", ctrl: true, label: "Ctrl+C" },
+  barPaste:         { code: "KeyV", ctrl: true, label: "Ctrl+V" },
+  barRepeatMode:    { code: "Tab",        label: "Tab" },
+  barAddLayer:      { code: "Slash",      label: "/" },
+  barQuickSave:     { code: "KeyS", ctrl: true, label: "Ctrl+S" },
+  barOpenAudio:     { code: "KeyO",       label: "O" },
+  barRemoveSubdivision: { code: "Backspace", label: "Backspace" },
+  barConfirm:       { code: "Enter",      label: "Enter" },
+  noteNext:         { code: "Enter",      label: "Enter" },
 };
 
 const STORAGE_KEY = "metronome_keyboard_bindings_v1";
 const MODE_STORAGE_KEY = "metronome_keyboard_bindings_by_mode_v1";
 export type KeyboardMode = "beat" | "bar" | "note" | "stage";
+export const MODE_KEY_ACTIONS: Record<KeyboardMode, readonly KeyAction[]> = {
+  beat: [
+    "playPause", "tapTempo", "bpmUp", "bpmDown", "bpmLeft", "bpmRight",
+    "addBeatNormal", "addBeatAccent", "addBeatStrong", "addBeatMute",
+    "removeBeat", "cycleBeatTypes", "addSubNormal", "addSubAccent",
+    "addSubStrong", "addSubMute", "removeSub", "applySubdivision",
+  ],
+  bar: [
+    "playPause", "bpmUp", "bpmDown", "bpmLeft", "bpmRight",
+    "addBeatNormal", "addBeatAccent", "addBeatStrong", "addBeatMute",
+    "loopToggle", "blockPlayModeNext", "barPrevious", "barNext", "barBlock",
+    "barRepeat", "barJumpFrom", "barJumpTo", "barVolta", "barEnd",
+    "barCopy", "barPaste", "barRepeatMode", "barAddLayer", "barQuickSave",
+    "barOpenAudio", "barRemoveSubdivision", "barConfirm",
+  ],
+  note: ["playPause", "noteNext"],
+  stage: [],
+};
 
 export async function loadKeyBindings(): Promise<KeyBindingsMap> {
   try {
@@ -107,8 +161,15 @@ export async function loadModeKeyBindings(mode: KeyboardMode): Promise<KeyBindin
 export async function saveModeKeyBindings(mode: KeyboardMode, bindings: KeyBindingsMap): Promise<void> {
   try {
     const raw = await AsyncStorage.getItem(MODE_STORAGE_KEY);
-    const saved = raw ? JSON.parse(raw) as Partial<Record<KeyboardMode, KeyBindingsMap>> : {};
-    saved[mode] = bindings;
+    const saved = raw
+      ? JSON.parse(raw) as Partial<Record<KeyboardMode, Partial<KeyBindingsMap>>>
+      : {};
+    const legacy = await loadKeyBindings();
+    saved[mode] = Object.fromEntries(
+      MODE_KEY_ACTIONS[mode]
+        .filter((action) => !isConflicting(bindings[action], legacy[action]))
+        .map((action) => [action, bindings[action]]),
+    ) as Partial<KeyBindingsMap>;
     await AsyncStorage.setItem(MODE_STORAGE_KEY, JSON.stringify(saved));
   } catch {}
 }
@@ -128,6 +189,13 @@ export interface NormalizedKeyEvent {
   preventDefault(): void;
   /** Web: EventTarget | null. Native: null. Typed as unknown so both KeyboardEvent and plain objects satisfy this interface. */
   readonly target?: unknown;
+}
+
+export interface RecorderKeyboardActions {
+  isActive: () => boolean;
+  moveSelection: (direction: -1 | 1) => void;
+  confirm: () => void;
+  cancel: () => void;
 }
 
 /**
@@ -170,6 +238,11 @@ export function nativeKeyToCode(key: string): string {
     "Enter": "Enter", "Escape": "Escape", "Tab": "Tab",
     "Backspace": "Backspace", "Delete": "Delete",
     "?": "Slash", "/": "Slash", "`": "Backquote",
+    "-": "Minus", "_": "Minus", "=": "Equal", "+": "Equal",
+    "[": "BracketLeft", "{": "BracketLeft",
+    "!": "Digit1", "@": "Digit2", "#": "Digit3", "$": "Digit4",
+    "%": "Digit5", "^": "Digit6", "&": "Digit7", "*": "Digit8",
+    "(": "Digit9", ")": "Digit0",
   };
   if (key in map) return map[key];
   if (key.length === 1) {
@@ -177,6 +250,10 @@ export function nativeKeyToCode(key: string): string {
     if (/[a-zA-Z]/.test(key)) return `Key${key.toUpperCase()}`;
   }
   return key;
+}
+
+export function nativeKeyImpliesShift(key: string): boolean {
+  return /[?~_+{}|:<>!@#$%^&*()]/.test(key);
 }
 
 /**
@@ -191,11 +268,58 @@ export function applyRebinding(
   newBinding: KeyBinding
 ): { updated: KeyBindingsMap; conflict: KeyAction | null } {
   for (const [act, binding] of Object.entries(current) as [KeyAction, KeyBinding][]) {
-    if (act !== action && isConflicting(binding, newBinding)) {
+    if (
+      act !== action &&
+      isConflicting(binding, newBinding) &&
+      !areModeExclusiveActions(act, action)
+    ) {
       return { updated: current, conflict: act };
     }
   }
   return { updated: { ...current, [action]: newBinding }, conflict: null };
+}
+
+const BEAT_ONLY_ACTIONS = new Set<KeyAction>([
+  "tapTempo",
+  "toggleMenu",
+  "removeBeat",
+  "addSubNormal",
+  "addSubAccent",
+  "addSubStrong",
+  "addSubMute",
+  "removeSub",
+  "cycleBeatTypes",
+  "applySubdivision",
+]);
+
+const BAR_ONLY_ACTIONS = new Set<KeyAction>([
+  "loopToggle",
+  "blockPlayModeNext",
+  "barPrevious",
+  "barNext",
+  "barBlock",
+  "barRepeat",
+  "barJumpFrom",
+  "barJumpTo",
+  "barVolta",
+  "barEnd",
+  "barCopy",
+  "barPaste",
+  "barRepeatMode",
+  "barAddLayer",
+  "barQuickSave",
+  "barOpenAudio",
+  "barRemoveSubdivision",
+  "barConfirm",
+]);
+
+const NOTE_ONLY_ACTIONS = new Set<KeyAction>(["noteNext"]);
+
+function areModeExclusiveActions(a: KeyAction, b: KeyAction): boolean {
+  const groups = [BEAT_ONLY_ACTIONS, BAR_ONLY_ACTIONS, NOTE_ONLY_ACTIONS];
+  const aGroup = groups.findIndex((group) => group.has(a));
+  const bGroup = groups.findIndex((group) => group.has(b));
+  return aGroup >= 0 && bGroup >= 0 && aGroup !== bGroup;
 }
 
 /** Side-effect callbacks injected into executeRebind for testability. */
@@ -292,5 +416,8 @@ function codeToDisplay(code: string): string {
   if (code === "Backquote") return "`";
   if (code === "Backspace") return "Backspace";
   if (code === "Delete") return "Del";
+  if (code === "Minus") return "-";
+  if (code === "Equal") return "=";
+  if (code === "BracketLeft") return "[";
   return code;
 }

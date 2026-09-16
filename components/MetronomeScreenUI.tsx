@@ -156,7 +156,7 @@ export function MetronomeScreenUI(props: Props) {
     handleNoteTogglePlay, handleNoteManualNext, handleNoteManualNextImmediate,
     handleNoteSave, handleNoteReset, handleNoteQueueItemImageChange,
     noteSamples, noteSampleNames, noteSampleSources, noteSampleChannels, noteSampleVolumes, noteSampleSpeeds, noteSampleMetroChannels,
-    recorderTarget, setRecorderTarget,
+    recorderTarget, setRecorderTarget, recorderKeyboardActionsRef,
     handleNoteRecordRequest, handleNoteRecordSave, handleNoteRecordDelete, handleNoteRecordSuggestBpm,
     scoreMode, setScoreMode, scoreEditorDoc, setScoreEditorDoc, scorePracticeBookRef,
     handleLinkedEntryChange,
@@ -788,6 +788,7 @@ export function MetronomeScreenUI(props: Props) {
         bpm={bpm}
         beatsPerMeasure={beatsPerMeasure}
         soundSet={soundSet.startsWith("custom") ? "classic" : soundSet as any}
+        keyboardActionsRef={recorderKeyboardActionsRef}
       />
       )}
 

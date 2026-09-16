@@ -16,6 +16,7 @@ import type { TranslationFn } from "@/lib/i18n";
 import type { SettingsScope } from "@/components/SettingsModal";
 import {
   DEFAULT_BINDINGS,
+  MODE_KEY_ACTIONS,
   buildLabel,
   executeRebind,
   executeRebindReset,
@@ -85,6 +86,7 @@ const KB_SECTIONS: { titleKey: KbSectionKey; rows: { action: KeyAction; labelKey
       { action: "addBeatMute",    labelKey: "actionAddMute" },
       { action: "removeBeat",     labelKey: "actionRemoveBeat" },
       { action: "cycleBeatTypes", labelKey: "actionCycleBeat" },
+      { action: "applySubdivision", labelKey: "actionApplySubdivision" },
     ],
   },
   {
@@ -102,6 +104,28 @@ const KB_SECTIONS: { titleKey: KbSectionKey; rows: { action: KeyAction; labelKey
     rows: [
       { action: "loopToggle",        labelKey: "actionLoopToggle" },
       { action: "blockPlayModeNext", labelKey: "actionBlockPlayNext" },
+      { action: "barPrevious", labelKey: "actionBarPrevious" },
+      { action: "barNext", labelKey: "actionBarNext" },
+      { action: "barBlock", labelKey: "actionBarBlock" },
+      { action: "barRepeat", labelKey: "actionBarRepeat" },
+      { action: "barJumpFrom", labelKey: "actionBarJumpFrom" },
+      { action: "barJumpTo", labelKey: "actionBarJumpTo" },
+      { action: "barVolta", labelKey: "actionBarVolta" },
+      { action: "barEnd", labelKey: "actionBarEnd" },
+      { action: "barCopy", labelKey: "actionBarCopy" },
+      { action: "barPaste", labelKey: "actionBarPaste" },
+      { action: "barRepeatMode", labelKey: "actionBarRepeatMode" },
+      { action: "barAddLayer", labelKey: "actionBarAddLayer" },
+      { action: "barQuickSave", labelKey: "actionBarQuickSave" },
+      { action: "barOpenAudio", labelKey: "actionBarOpenAudio" },
+      { action: "barRemoveSubdivision", labelKey: "actionBarRemoveSubdivision" },
+      { action: "barConfirm", labelKey: "actionBarConfirm" },
+    ],
+  },
+  {
+    titleKey: "sectionNote",
+    rows: [
+      { action: "noteNext", labelKey: "actionNoteNext" },
     ],
   },
 ];
@@ -114,11 +138,11 @@ interface SettingsKeyboardTabProps {
 
 const SCOPE_ACTIONS: Record<SettingsScope, readonly KeyAction[]> = {
   global: Object.keys(DEFAULT_BINDINGS) as KeyAction[],
-  beat: ["playPause", "tapTempo", "bpmUp", "bpmDown", "bpmLeft", "bpmRight", "addBeatNormal", "addBeatAccent", "addBeatStrong", "addBeatMute", "removeBeat", "cycleBeatTypes", "addSubNormal", "addSubAccent", "addSubStrong", "addSubMute", "removeSub"],
-  bar: ["playPause", "tapTempo", "bpmUp", "bpmDown", "bpmLeft", "bpmRight", "loopToggle", "blockPlayModeNext"],
-  note: ["playPause"],
+  beat: MODE_KEY_ACTIONS.beat,
+  bar: MODE_KEY_ACTIONS.bar,
+  note: MODE_KEY_ACTIONS.note,
   // Stage owns its working digit-to-setlist mappings in StageModeOverlay.
-  stage: [],
+  stage: MODE_KEY_ACTIONS.stage,
 };
 
 export function SettingsKeyboardTab({

@@ -48,6 +48,7 @@ const SECTIONS: { titleKey: KbSectionKey; rows: ShortcutRow[] }[] = [
       { action: "addBeatMute",    labelKey: "actionAddMute" },
       { action: "removeBeat",     labelKey: "actionRemoveBeat" },
       { action: "cycleBeatTypes", labelKey: "actionCycleBeat" },
+      { action: "applySubdivision", labelKey: "actionApplySubdivision" },
     ],
   },
   {
@@ -65,6 +66,28 @@ const SECTIONS: { titleKey: KbSectionKey; rows: ShortcutRow[] }[] = [
     rows: [
       { action: "loopToggle",        labelKey: "actionLoopToggle" },
       { action: "blockPlayModeNext", labelKey: "actionBlockPlayNext" },
+      { action: "barPrevious", labelKey: "actionBarPrevious" },
+      { action: "barNext", labelKey: "actionBarNext" },
+      { action: "barBlock", labelKey: "actionBarBlock" },
+      { action: "barRepeat", labelKey: "actionBarRepeat" },
+      { action: "barJumpFrom", labelKey: "actionBarJumpFrom" },
+      { action: "barJumpTo", labelKey: "actionBarJumpTo" },
+      { action: "barVolta", labelKey: "actionBarVolta" },
+      { action: "barEnd", labelKey: "actionBarEnd" },
+      { action: "barCopy", labelKey: "actionBarCopy" },
+      { action: "barPaste", labelKey: "actionBarPaste" },
+      { action: "barRepeatMode", labelKey: "actionBarRepeatMode" },
+      { action: "barAddLayer", labelKey: "actionBarAddLayer" },
+      { action: "barQuickSave", labelKey: "actionBarQuickSave" },
+      { action: "barOpenAudio", labelKey: "actionBarOpenAudio" },
+      { action: "barRemoveSubdivision", labelKey: "actionBarRemoveSubdivision" },
+      { action: "barConfirm", labelKey: "actionBarConfirm" },
+    ],
+  },
+  {
+    titleKey: "sectionNote",
+    rows: [
+      { action: "noteNext", labelKey: "actionNoteNext" },
     ],
   },
 ];

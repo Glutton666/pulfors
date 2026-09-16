@@ -1,6 +1,6 @@
 import type { BeatType } from "@/lib/metronome-engine";
 import type { BarRepeat, LoopBlock } from "@/components/BeatIndicator";
-import type { NoteSampleMap, NoteSampleNameMap, NoteSampleSourceMap, NoteSampleChannelMap, NoteSampleVolumeMap, NoteSampleSpeedMap } from "@/lib/note-samples";
+import type { NoteSampleMap, NoteSampleNameMap, NoteSampleSourceMap, NoteSampleChannelMap, NoteSampleVolumeMap, NoteSampleSpeedMap, NoteSampleMetroChannelMap } from "@/lib/note-samples";
 import { defaultBeatTypes } from "./meter-helpers";
 
 export interface DialConfig {
@@ -33,6 +33,7 @@ export interface BarConfig {
   noteSampleChannels: NoteSampleChannelMap;
   noteSampleVolumes?: NoteSampleVolumeMap;
   noteSampleSpeeds?: NoteSampleSpeedMap;
+  noteSampleMetroChannels?: NoteSampleMetroChannelMap;
   barLoopMode: "loop" | "once";
   blockPlayMode: "sequential" | "loop" | "random";
   hasBeenConfigured: boolean;
@@ -93,6 +94,7 @@ export function createInitialBarConfig(beats = 4): BarConfig {
     noteSampleChannels: {},
     noteSampleVolumes: {},
     noteSampleSpeeds: {},
+    noteSampleMetroChannels: {},
     barLoopMode: "once",
     blockPlayMode: "loop",
     hasBeenConfigured: false,

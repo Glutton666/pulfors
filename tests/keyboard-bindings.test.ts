@@ -8,6 +8,12 @@ import {
   buildLabel,
   loadKeyBindings,
   isEditableTarget,
+  nativeKeyToCode,
+  nativeKeyImpliesShift,
+  applyRebinding,
+  loadModeKeyBindings,
+  saveKeyBindings,
+  saveModeKeyBindings,
   type KeyBinding,
 } from "../lib/keyboard-bindings";
 
@@ -150,6 +156,10 @@ test("DEFAULT_BINDINGS: 모든 KeyAction 키가 존재함", () => {
     "addSubNormal", "addSubAccent", "addSubStrong", "addSubMute", "removeSub",
     "cycleBeatTypes", "toggleMenu", "toggleStopwatch", "toggleTimer",
     "openPracticeBook", "showShortcuts", "escape", "loopToggle", "blockPlayModeNext",
+    "applySubdivision", "barPrevious", "barNext", "barBlock", "barRepeat",
+    "barJumpFrom", "barJumpTo", "barVolta", "barEnd", "barCopy", "barPaste",
+    "barRepeatMode", "barAddLayer", "barQuickSave", "barOpenAudio",
+    "barRemoveSubdivision", "barConfirm", "noteNext",
   ];
   for (const key of required) {
     assert.ok(key in DEFAULT_BINDINGS, `누락된 DEFAULT_BINDINGS 키: ${key}`);
@@ -163,6 +173,51 @@ test("DEFAULT_BINDINGS: 비트/서브디비전 쌍 shift 분리", () => {
   assert.ok(!DEFAULT_BINDINGS.addBeatStrong.shift);
   assert.ok(DEFAULT_BINDINGS.addSubStrong.shift);
   assert.equal(DEFAULT_BINDINGS.addBeatStrong.code, DEFAULT_BINDINGS.addSubStrong.code);
+});
+
+test("nativeKeyToCode: 바 기호와 Shift 숫자 문자를 표준 code로 변환", () => {
+  assert.equal(nativeKeyToCode("-"), "Minus");
+  assert.equal(nativeKeyToCode("="), "Equal");
+  assert.equal(nativeKeyToCode("["), "BracketLeft");
+  assert.equal(nativeKeyToCode("&"), "Digit7");
+  assert.equal(nativeKeyToCode(")"), "Digit0");
+  assert.equal(nativeKeyImpliesShift("&"), true);
+  assert.equal(nativeKeyImpliesShift("_"), true);
+  assert.equal(nativeKeyImpliesShift("-"), false);
+});
+
+test("applyRebinding: 서로 다른 모드의 Enter 기본값은 충돌하지 않음", () => {
+  const result = applyRebinding(DEFAULT_BINDINGS, "noteNext", {
+    code: "Enter",
+    label: "Enter",
+  });
+  assert.equal(result.conflict, null);
+});
+
+test("mode bindings: changed bar actions do not freeze inherited global keys", async () => {
+  await AsyncStorage.removeItem("metronome_keyboard_bindings_v1");
+  await AsyncStorage.removeItem("metronome_keyboard_bindings_by_mode_v1");
+
+  const firstGlobal = {
+    ...DEFAULT_BINDINGS,
+    playPause: { code: "KeyQ", label: "Q" },
+  };
+  await saveKeyBindings(firstGlobal);
+  await saveModeKeyBindings("bar", {
+    ...firstGlobal,
+    barNext: { code: "KeyX", label: "X" },
+  });
+
+  await saveKeyBindings({
+    ...DEFAULT_BINDINGS,
+    playPause: { code: "KeyY", label: "Y" },
+  });
+  const loaded = await loadModeKeyBindings("bar");
+  assert.deepEqual(loaded.playPause, { code: "KeyY", label: "Y" });
+  assert.deepEqual(loaded.barNext, { code: "KeyX", label: "X" });
+
+  await AsyncStorage.removeItem("metronome_keyboard_bindings_v1");
+  await AsyncStorage.removeItem("metronome_keyboard_bindings_by_mode_v1");
 });
 
 // isEditableTarget

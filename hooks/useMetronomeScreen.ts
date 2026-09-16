@@ -1,7 +1,11 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useLandscapePanel } from "@/hooks/useLandscapePanel";
 import { useNotificationBridge } from "@/hooks/useNotificationBridge";
-import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
+import {
+  useKeyboardShortcuts,
+  type BarKeyboardActions,
+  type BarSymbolShortcut,
+} from "@/hooks/useKeyboardShortcuts";
 import { useAudioPipeline } from "@/hooks/useAudioPipeline";
 import { useSettings } from "@/hooks/useSettings";
 import {
@@ -121,6 +125,7 @@ import {
   stageExitRevealMode,
 } from "@/lib/mode-dial-logic";
 import type { ScoreDocument } from "@/lib/score-types";
+import { nextJumpPairId } from "@/components/bar-mode/BarModeTypes";
 import type { OnboardingResult } from "@/components/OnboardingModal";
 import {
   resolvePlaybackContext,
@@ -156,6 +161,7 @@ import {
   isEditableTarget,
   DEFAULT_BINDINGS,
   type KeyBindingsMap,
+  type RecorderKeyboardActions,
 } from "@/lib/keyboard-bindings";
 
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
@@ -938,6 +944,8 @@ export function useMetronomeScreen() {
     handleCopyBar,
     handleInsertBarAfter,
     handleReorderBar,
+    copyBarToClipboard,
+    pasteBarFromClipboard,
   } = useBarMode({
     engineRef,
     barModeRef,
@@ -1505,6 +1513,9 @@ export function useMetronomeScreen() {
     const updatedMetroChannels = await setNoteSampleMetroChannel(recorderTarget.beat, metronomeChannel, noteSampleMetroChannelsRef.current);
     setNoteSampleMetroChannels(updatedMetroChannels);
     noteSampleMetroChannelsRef.current = updatedMetroChannels;
+    if (barModeRef.current) {
+      barConfigRef.current.noteSampleMetroChannels = { ...updatedMetroChannels };
+    }
     await preloadNoteSampleSounds(updated, true);
     scheduleReRender();
     setRecorderTarget(null);
@@ -1554,6 +1565,9 @@ export function useMetronomeScreen() {
       const updatedMetroChannels = await removeNoteSampleMetroChannel(recorderTarget.beat, noteSampleMetroChannelsRef.current);
       setNoteSampleMetroChannels(updatedMetroChannels);
       noteSampleMetroChannelsRef.current = updatedMetroChannels;
+      if (barModeRef.current) {
+        barConfigRef.current.noteSampleMetroChannels = { ...updatedMetroChannels };
+      }
     }
     if (noteSampleSoundsRef.current[key]) {
       try { noteSampleSoundsRef.current[key].release(); } catch {}
@@ -1865,6 +1879,7 @@ export function useMetronomeScreen() {
         noteSampleNames: {},
         noteSampleSources: {},
         noteSampleChannels: {},
+        noteSampleMetroChannels: {},
         barLoopMode: "once",
         blockPlayMode: "loop",
         hasBeenConfigured: false,
@@ -2665,11 +2680,167 @@ export function useMetronomeScreen() {
 
   // Keyboard actions are registered once, so mode-specific callbacks travel
   // through refs and always see the latest bar selection and subdivision state.
+  const barKeyboardDraftRepeatRef = useRef<BarRepeat>({
+    type: "count",
+    value: 1,
+  });
   const handleAddBarKeyboardRef = useRef<() => void>(() => {});
-  handleAddBarKeyboardRef.current = handleAddBar;
+  handleAddBarKeyboardRef.current = () => {
+    handleAddBar({
+      ...barKeyboardDraftRepeatRef.current,
+      layers: barKeyboardDraftRepeatRef.current.layers?.map((layer) => ({
+        ...layer,
+        subdivisions: layer.subdivisions ? [...layer.subdivisions] : undefined,
+      })),
+    });
+    barKeyboardDraftRepeatRef.current = { type: "count", value: 1 };
+  };
   const applyCurrentBeatSubdivisionRef = useRef<() => boolean>(() => false);
   const appendBarSubdivisionRef = useRef<(type: BeatType) => boolean>(() => false);
   const removeBarSubdivisionRef = useRef<() => boolean>(() => false);
+  const noteNextRef = useRef<() => void>(() => {});
+  const recorderKeyboardActionsRef = useRef<RecorderKeyboardActions | null>(null);
+  const barKeyboardActionsRef = useRef<BarKeyboardActions>({
+    selectAdjacent: () => {},
+    completeBlock: () => {},
+    applySymbol: () => {},
+    copy: () => {},
+    paste: () => {},
+    toggleRepeatMode: () => {},
+    getRepeatMode: () => "count",
+    setRepeatValue: () => {},
+    addLayer: () => {},
+    quickSave: () => {},
+    openAudio: () => {},
+  });
+
+  const getKeyboardTargetRepeat = () => {
+    const selected = barStartBeatRef.current;
+    return selected === null
+      ? barKeyboardDraftRepeatRef.current
+      : (barRepeats[selected] ?? { type: "count" as const, value: 1 });
+  };
+  const setKeyboardTargetRepeat = (repeat: BarRepeat) => {
+    const selected = barStartBeatRef.current;
+    if (selected === null) {
+      barKeyboardDraftRepeatRef.current = repeat;
+    } else {
+      handleBarRepeatChange(selected, repeat);
+    }
+  };
+  const setKeyboardSelectedBar = (beat: number | null) => {
+    barStartBeatRef.current = beat;
+    setBarStartBeat(beat);
+  };
+
+  barKeyboardActionsRef.current = {
+    selectAdjacent: (direction) => {
+      const count = beatsPerMeasureRef.current;
+      if (count <= 0) return;
+      const selected = barStartBeatRef.current;
+      const next = selected === null
+        ? (direction < 0 ? count - 1 : 0)
+        : Math.max(0, Math.min(count - 1, selected + direction));
+      setKeyboardSelectedBar(next);
+    },
+    completeBlock: (firstBeat, secondBeat) => {
+      const startBeat = Math.min(firstBeat, secondBeat);
+      const endBeat = Math.max(firstBeat, secondBeat);
+      const crosses = loopBlocks.some((block) => {
+        if (block.layerOf !== undefined) return false;
+        const fullyNested = (
+          (startBeat <= block.startBeat && endBeat >= block.endBeat) ||
+          (block.startBeat <= startBeat && block.endBeat >= endBeat)
+        );
+        const disjoint = endBeat < block.startBeat || startBeat > block.endBeat;
+        return !disjoint && !fullyNested;
+      });
+      if (!crosses) {
+        handleLoopBlocksChange([
+          ...loopBlocks,
+          { startBeat, endBeat, type: "count", value: 2 },
+        ]);
+      }
+    },
+    applySymbol: (symbol: BarSymbolShortcut) => {
+      const selected = barStartBeatRef.current;
+      if (selected === null) return;
+      const existing = barRepeats[selected] ?? { type: "count" as const, value: 1 };
+      if (symbol === "repeat") {
+        handleBarRepeatChange(selected, {
+          ...existing,
+          type: "count",
+          value: existing.type === "count" ? Math.max(2, existing.value) : 2,
+        });
+        return;
+      }
+      if (symbol === "jump_from" || symbol === "jump_to") {
+        const fromField = symbol === "jump_from";
+        const ownField = fromField ? "jumpFromId" : "jumpToId";
+        const matchingField = fromField ? "jumpToId" : "jumpFromId";
+        const repeats = Object.values(barRepeats);
+        const unmatched = Object.entries(barRepeats)
+          .filter(([, repeat]) => repeat[matchingField] !== undefined)
+          .filter(([, repeat]) =>
+            !repeats.some((candidate) => candidate[ownField] === repeat[matchingField]))
+          .sort(([left], [right]) =>
+            fromField ? Number(left) - Number(right) : Number(right) - Number(left))[0];
+        const pairId = unmatched?.[1][matchingField] ?? nextJumpPairId(barRepeats);
+        handleBarRepeatChange(selected, { ...existing, [ownField]: pairId });
+        return;
+      }
+      if (symbol === "volta") {
+        handleBarRepeatChange(selected, {
+          ...existing,
+          voltaMax: existing.voltaMax ?? 2,
+        });
+        return;
+      }
+      handleBarRepeatChange(selected, { ...existing, isEnd: !existing.isEnd });
+    },
+    copy: () => {
+      const selected = barStartBeatRef.current;
+      if (selected !== null) copyBarToClipboard(selected);
+    },
+    paste: () => {
+      const inserted = pasteBarFromClipboard(barStartBeatRef.current);
+      if (inserted !== null) setKeyboardSelectedBar(inserted);
+    },
+    toggleRepeatMode: () => {
+      const existing = getKeyboardTargetRepeat();
+      setKeyboardTargetRepeat({
+        ...existing,
+        type: existing.type === "count" ? "duration" : "count",
+        value: existing.type === "count" ? 30 : 1,
+      });
+    },
+    getRepeatMode: () => getKeyboardTargetRepeat().type,
+    setRepeatValue: (value) => {
+      const existing = getKeyboardTargetRepeat();
+      const nextValue = existing.type === "count"
+        ? Math.max(1, Math.min(99, Math.round(value)))
+        : Math.max(1, Math.min(59 * 60 + 59, Math.round(value)));
+      setKeyboardTargetRepeat({ ...existing, value: nextValue });
+    },
+    addLayer: () => {
+      const existing = getKeyboardTargetRepeat();
+      const layers = existing.layers ?? [];
+      if (layers.length >= 6) return;
+      setKeyboardTargetRepeat({
+        ...existing,
+        layers: [...layers, { beatType: "normal" }],
+      });
+    },
+    quickSave: () => {
+      void handleBarQuickSave();
+    },
+    openAudio: () => {
+      const selected = barStartBeatRef.current;
+      const targetBeat = selected ?? beatsPerMeasureRef.current;
+      if (selected === null && targetBeat >= 16) return;
+      handleNoteRecordRequest(targetBeat, 0);
+    },
+  };
 
   // handleNativeKeyDown / handleNativeKeyUp — useKeyboardShortcuts 내부에서 생성돼 반환된다.
   const { handleNativeKeyDown, handleNativeKeyUp } = useKeyboardShortcuts({
@@ -2683,6 +2854,9 @@ export function useMetronomeScreen() {
     applyCurrentBeatSubdivisionRef,
     appendBarSubdivisionRef,
     removeBarSubdivisionRef,
+    barKeyboardActionsRef,
+    noteNextRef,
+    recorderKeyboardActionsRef,
     setBarStartBeat,
     setActiveModal, setBarLoopMode, setBlockPlayMode, setBeatsPerMeasure, setBeatTypes,
     setBeatSubdivisions, setSubdivisionPattern, persistSettings,
@@ -3421,7 +3595,7 @@ export function useMetronomeScreen() {
   // handleReorderBar / handleBarReset → useBarMode
   // applyEntryToEngine / handleLinkedEntryChange / handleLoadPracticeEntry → usePracticeBookLoad
 
-  const noteStartPlayingEntry = useCallback(async (index: number) => {
+  const noteStartPlayingEntry = useCallback(async (index: number, shouldPlay = true) => {
     const q = noteQueueRef.current;
     if (index < 0 || index >= q.length) return;
     const entry = q[index];
@@ -3500,6 +3674,15 @@ export function useMetronomeScreen() {
       hasBeenConfigured: true,
     };
 
+    if (!shouldPlay) {
+      noteIsPlayingRef.current = false;
+      isPlayingRef.current = false;
+      setNoteIsPlaying(false);
+      setIsPlaying(false);
+      markAudioStopped();
+      return;
+    }
+
     if (Platform.OS === "web") {
       if (webRenderedLoopRef.current) {
         webRenderedLoopRef.current.stop();
@@ -3565,6 +3748,8 @@ export function useMetronomeScreen() {
     if (nextIndex >= 0) {
       noteStartPlayingEntry(nextIndex);
     } else {
+      noteIsPlayingRef.current = false;
+      isPlayingRef.current = false;
       setNoteIsPlaying(false);
       setIsPlaying(false);
       resetPlaybackVisuals();
@@ -3944,6 +4129,46 @@ export function useMetronomeScreen() {
     clearSamplePlayStates();
     noteAdvanceQueueRef.current();
   }, []);
+
+  const handleNoteKeyboardNext = useCallback(() => {
+    const q = noteQueueRef.current;
+    if (q.length === 0) return;
+    if (noteIsPlayingRef.current) {
+      const engine = engineRef.current;
+      if (!engine) return;
+      engine.stop();
+      stopRenderedAudio();
+      clearSamplePlayStates();
+      noteAdvanceQueueRef.current();
+      return;
+    }
+
+    const current = noteCurrentIndexRef.current;
+    const mode = notePlayModeRef.current;
+    let nextIndex = -1;
+    if (mode === "once") {
+      nextIndex = current < 0 ? 0 : (current + 1 < q.length ? current + 1 : -1);
+    } else if (mode === "loop") {
+      nextIndex = current < 0 ? 0 : (current + 1) % q.length;
+    } else {
+      let indices = noteShuffledIndicesRef.current;
+      let position = noteShuffledPosRef.current + 1;
+      if (current < 0 || indices.length !== q.length || position >= indices.length) {
+        indices = createShuffledIndices(q.length);
+        noteShuffledIndicesRef.current = indices;
+        position = 0;
+      }
+      noteShuffledPosRef.current = position;
+      nextIndex = indices[position] ?? -1;
+    }
+    if (nextIndex >= 0) {
+      void noteStartPlayingEntry(nextIndex, false);
+    }
+  }, [createShuffledIndices, noteStartPlayingEntry]);
+
+  useEffect(() => {
+    noteNextRef.current = handleNoteKeyboardNext;
+  }, [handleNoteKeyboardNext]);
 
   const handleNoteSave = useCallback(async (): Promise<boolean> => {
     const q = noteQueueRef.current;
@@ -4420,6 +4645,7 @@ export function useMetronomeScreen() {
     noteSampleSpeeds,
     noteSampleMetroChannels,
     recorderTarget,
+    recorderKeyboardActionsRef,
     setRecorderTarget,
     handleNoteRecordRequest,
     handleNoteRecordSave,

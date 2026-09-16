@@ -69,6 +69,103 @@ type SamplePlayState = Record<
   { playing: boolean; endTimer: ReturnType<typeof setTimeout> | null }
 >;
 
+interface BarClipboardSnapshot {
+  beatType: BeatType;
+  subdivisions: BeatType[];
+  repeat: BarRepeat | null;
+  samples: NoteSampleMap;
+  names: NoteSampleNameMap;
+  sources: NoteSampleSourceMap;
+  channels: NoteSampleChannelMap;
+  volumes: NoteSampleVolumeMap;
+  speeds: NoteSampleSpeedMap;
+  metroChannels: NoteSampleMetroChannelMap;
+}
+
+function cloneBarRepeat(repeat: BarRepeat | undefined): BarRepeat | null {
+  if (!repeat) return null;
+  return {
+    ...repeat,
+    layers: repeat.layers?.map((layer) => ({
+      ...layer,
+      subdivisions: layer.subdivisions ? [...layer.subdivisions] : undefined,
+    })),
+  };
+}
+
+function copyBarSampleEntries<T>(
+  map: Record<string, T>,
+  beatIndex: number,
+): Record<string, T> {
+  const prefix = `${beatIndex}-`;
+  const result: Record<string, T> = {};
+  for (const [key, value] of Object.entries(map)) {
+    if (key.startsWith(prefix)) result[key.slice(prefix.length)] = value;
+  }
+  return result;
+}
+
+function insertBarSampleEntries<T>(
+  map: Record<string, T>,
+  insertAt: number,
+  snapshot: Record<string, T>,
+): Record<string, T> {
+  const result: Record<string, T> = {};
+  for (const [key, value] of Object.entries(map)) {
+    const dashIndex = key.indexOf("-");
+    const beatPart = dashIndex === -1 ? key : key.slice(0, dashIndex);
+    const beat = Number(beatPart);
+    if (!Number.isFinite(beat)) continue;
+    const nextBeat = beat >= insertAt ? beat + 1 : beat;
+    const suffix = dashIndex === -1 ? "" : key.slice(dashIndex);
+    result[`${nextBeat}${suffix}`] = value;
+  }
+  for (const [suffix, value] of Object.entries(snapshot)) {
+    result[`${insertAt}-${suffix}`] = value;
+  }
+  return result;
+}
+
+function insertBarMetroChannels(
+  map: NoteSampleMetroChannelMap,
+  insertAt: number,
+  snapshot: NoteSampleMetroChannelMap,
+): NoteSampleMetroChannelMap {
+  const result: NoteSampleMetroChannelMap = {};
+  for (const [key, value] of Object.entries(map)) {
+    const beat = Number(key);
+    if (!Number.isFinite(beat)) continue;
+    result[String(beat >= insertAt ? beat + 1 : beat)] = value;
+  }
+  if (snapshot["0"] !== undefined) result[String(insertAt)] = snapshot["0"];
+  return result;
+}
+
+function shiftLoopBlocksForInsertion(blocks: LoopBlock[], insertAt: number): LoopBlock[] {
+  const shift = (beat: number) => (beat >= insertAt ? beat + 1 : beat);
+  return blocks.map((block) => ({
+    ...block,
+    startBeat: shift(block.startBeat),
+    endBeat: shift(block.endBeat),
+    ownBeatTypes: block.ownBeatTypes
+      ? Object.fromEntries(
+          Object.entries(block.ownBeatTypes).map(([key, value]) => [
+            shift(Number(key)),
+            value,
+          ]),
+        )
+      : undefined,
+    ownSubdivisions: block.ownSubdivisions
+      ? Object.fromEntries(
+          Object.entries(block.ownSubdivisions).map(([key, value]) => [
+            String(shift(Number(key))),
+            [...value],
+          ]),
+        )
+      : undefined,
+  }));
+}
+
 function syncEngineBarBpmOverrides(
   engine: MetronomeEngine | null,
   repeats: Record<number, BarRepeat>,
@@ -211,6 +308,10 @@ export interface UseBarModeResult {
   handleBarReset: () => void;
   handleBarQuickSave: () => Promise<boolean>;
   handleAddBar: (draftRepeat?: BarRepeat) => void;
+  /** Copies a single bar into the in-memory keyboard clipboard. */
+  copyBarToClipboard: (beatIndex: number) => boolean;
+  /** Inserts the keyboard clipboard after the supplied bar, or appends when null. */
+  pasteBarFromClipboard: (afterBeatIndex: number | null) => number | null;
   handleDeleteBar: (beatIndex: number) => void;
   handleCopyBar: (beatIndex: number) => void;
   handleInsertBarAfter: (beatIndex: number) => void;
@@ -239,6 +340,7 @@ export function useBarMode(p: UseBarModeParams): UseBarModeResult {
   const [blockPlayMode, setBlockPlayModeState] = useState<
     "sequential" | "loop" | "random"
   >("loop");
+  const barClipboardRef = useRef<BarClipboardSnapshot | null>(null);
 
   // ── Stable mirror refs ─────────────────────────────────────────────────────
   const barStartBeatRef = useRef<number | null>(barStartBeat);
@@ -351,8 +453,8 @@ export function useBarMode(p: UseBarModeParams): UseBarModeResult {
           p.noteSampleVolumesRef.current = { ...(savedBarConfig.noteSampleVolumes || {}) };
           p.setNoteSampleSpeeds({ ...(savedBarConfig.noteSampleSpeeds || {}) });
           p.noteSampleSpeedsRef.current = { ...(savedBarConfig.noteSampleSpeeds || {}) };
-          p.setNoteSampleMetroChannels({});
-          p.noteSampleMetroChannelsRef.current = {};
+          p.setNoteSampleMetroChannels({ ...(savedBarConfig.noteSampleMetroChannels ?? {}) });
+          p.noteSampleMetroChannelsRef.current = { ...(savedBarConfig.noteSampleMetroChannels ?? {}) };
 
           engine.setBeatsPerMeasure(savedBarConfig.beatsPerMeasure);
           engine.setBeatTypes([...savedBarConfig.beatTypes]);
@@ -655,6 +757,197 @@ export function useBarMode(p: UseBarModeParams): UseBarModeResult {
   );
 
   // ─────────────────────────────────────────────────────────────────────────
+  // Keyboard clipboard
+  // ─────────────────────────────────────────────────────────────────────────
+
+  const copyBarToClipboard = useCallback(
+    (beatIndex: number): boolean => {
+      if (p.isPlayingRef.current || beatIndex < 0 || beatIndex >= p.beatsPerMeasure) {
+        return false;
+      }
+      const repeat = cloneBarRepeat(barRepeats[beatIndex]);
+      barClipboardRef.current = {
+        beatType: p.beatTypes[beatIndex] ?? "normal",
+        subdivisions: [...(p.beatSubdivisions[String(beatIndex)] ?? [])],
+        repeat,
+        samples: copyBarSampleEntries(p.noteSamplesRef.current, beatIndex),
+        names: copyBarSampleEntries(p.noteSampleNamesRef.current, beatIndex),
+        sources: copyBarSampleEntries(p.noteSampleSourcesRef.current, beatIndex),
+        channels: copyBarSampleEntries(p.noteSampleChannelsRef.current, beatIndex),
+        volumes: copyBarSampleEntries(p.noteSampleVolumesRef.current, beatIndex),
+        speeds: copyBarSampleEntries(p.noteSampleSpeedsRef.current, beatIndex),
+        metroChannels: p.noteSampleMetroChannelsRef.current[String(beatIndex)] !== undefined
+          ? { "0": p.noteSampleMetroChannelsRef.current[String(beatIndex)] }
+          : {},
+      };
+      return true;
+    },
+    [
+      barRepeats,
+      p.beatsPerMeasure,
+      p.beatSubdivisions,
+      p.beatTypes,
+      p.noteSampleChannelsRef,
+      p.noteSampleMetroChannelsRef,
+      p.noteSampleNamesRef,
+      p.noteSampleSourcesRef,
+      p.noteSampleSpeedsRef,
+      p.noteSampleVolumesRef,
+      p.noteSamplesRef,
+    ],
+  );
+
+  const pasteBarFromClipboard = useCallback(
+    (afterBeatIndex: number | null): number | null => {
+      const snapshot = barClipboardRef.current;
+      if (
+        p.isPlayingRef.current ||
+        snapshot === null ||
+        p.beatsPerMeasure >= 16 ||
+        (afterBeatIndex !== null &&
+          (afterBeatIndex < 0 || afterBeatIndex >= p.beatsPerMeasure))
+      ) {
+        return null;
+      }
+
+      const insertAt = afterBeatIndex === null
+        ? p.beatsPerMeasure
+        : afterBeatIndex + 1;
+      const newBeats = p.beatsPerMeasure + 1;
+      const newTypes = [
+        ...p.beatTypes.slice(0, insertAt),
+        snapshot.beatType,
+        ...p.beatTypes.slice(insertAt),
+      ];
+      const newSubs: Record<string, BeatType[]> = {};
+      for (const [key, value] of Object.entries(p.beatSubdivisions)) {
+        const beat = Number(key);
+        if (!Number.isFinite(beat)) continue;
+        newSubs[String(beat >= insertAt ? beat + 1 : beat)] = [...value];
+      }
+      if (snapshot.subdivisions.length > 0) {
+        newSubs[String(insertAt)] = [...snapshot.subdivisions];
+      }
+
+      const newRepeats: Record<number, BarRepeat> = {};
+      for (const [key, value] of Object.entries(barRepeats)) {
+        const beat = Number(key);
+        if (!Number.isFinite(beat)) continue;
+        newRepeats[beat >= insertAt ? beat + 1 : beat] = cloneBarRepeat(value)!;
+      }
+      if (snapshot.repeat) {
+        newRepeats[insertAt] = cloneBarRepeat(snapshot.repeat)!;
+      }
+
+      const newBlocks = shiftLoopBlocksForInsertion(loopBlocks, insertAt);
+      const newSamples = insertBarSampleEntries(
+        p.noteSamplesRef.current,
+        insertAt,
+        snapshot.samples,
+      );
+      const newNames = insertBarSampleEntries(
+        p.noteSampleNamesRef.current,
+        insertAt,
+        snapshot.names,
+      );
+      const newSources = insertBarSampleEntries(
+        p.noteSampleSourcesRef.current,
+        insertAt,
+        snapshot.sources,
+      );
+      const newChannels = insertBarSampleEntries(
+        p.noteSampleChannelsRef.current,
+        insertAt,
+        snapshot.channels,
+      );
+      const newVolumes = insertBarSampleEntries(
+        p.noteSampleVolumesRef.current,
+        insertAt,
+        snapshot.volumes,
+      );
+      const newSpeeds = insertBarSampleEntries(
+        p.noteSampleSpeedsRef.current,
+        insertAt,
+        snapshot.speeds,
+      );
+      const newMetroChannels = insertBarMetroChannels(
+        p.noteSampleMetroChannelsRef.current,
+        insertAt,
+        snapshot.metroChannels,
+      );
+
+      p.setBeatsPerMeasure(newBeats);
+      p.setBeatTypes(newTypes);
+      p.setBeatSubdivisions(newSubs);
+      setBarRepeats(newRepeats);
+      setLoopBlocks(newBlocks);
+      p.setNoteSamples(newSamples);
+      p.noteSamplesRef.current = newSamples;
+      p.setNoteSampleNames(newNames);
+      p.noteSampleNamesRef.current = newNames;
+      p.setNoteSampleSources(newSources);
+      p.noteSampleSourcesRef.current = newSources;
+      p.setNoteSampleChannels(newChannels);
+      p.noteSampleChannelsRef.current = newChannels;
+      p.setNoteSampleVolumes(newVolumes);
+      p.noteSampleVolumesRef.current = newVolumes;
+      p.setNoteSampleSpeeds(newSpeeds);
+      p.noteSampleSpeedsRef.current = newSpeeds;
+      p.setNoteSampleMetroChannels(newMetroChannels);
+      p.noteSampleMetroChannelsRef.current = newMetroChannels;
+
+      const config = barConfigRef.current;
+      config.beatsPerMeasure = newBeats;
+      config.beatTypes = [...newTypes];
+      config.beatSubdivisions = { ...newSubs };
+      config.barRepeats = { ...newRepeats };
+      config.loopBlocks = [...newBlocks];
+      config.noteSamples = { ...newSamples };
+      config.noteSampleNames = { ...newNames };
+      config.noteSampleSources = { ...newSources };
+      config.noteSampleChannels = { ...newChannels };
+      config.noteSampleVolumes = { ...newVolumes };
+      config.noteSampleSpeeds = { ...newSpeeds };
+      config.noteSampleMetroChannels = { ...newMetroChannels };
+
+      const engine = p.engineRef.current;
+      engine?.setBeatsPerMeasure(newBeats);
+      engine?.setBeatTypes(newTypes);
+      engine?.setAllBeatSubdivisions(newSubs);
+      engine?.setAllBarRepeats(newRepeats);
+      engine?.setLoopBlocks(newBlocks);
+      syncEngineBarBpmOverrides(engine, newRepeats, p.beatDenominatorRef.current);
+      p.preloadNoteSampleSounds(newSamples);
+      void saveNoteSamples(newSamples);
+      void saveNoteSampleNames(newNames);
+      void saveNoteSampleSources(newSources);
+      void saveNoteSampleChannels(newChannels);
+      void saveNoteSampleVolumes(newVolumes);
+      void saveNoteSampleSpeeds(newSpeeds);
+      void saveNoteSampleMetroChannels(newMetroChannels);
+      p.scheduleReRender();
+      return insertAt;
+    },
+    [
+      barRepeats,
+      loopBlocks,
+      p.beatSubdivisions,
+      p.beatTypes,
+      p.beatsPerMeasure,
+      p.engineRef,
+      p.noteSampleChannelsRef,
+      p.noteSampleMetroChannelsRef,
+      p.noteSampleNamesRef,
+      p.noteSampleSourcesRef,
+      p.noteSampleSpeedsRef,
+      p.noteSampleVolumesRef,
+      p.noteSamplesRef,
+      p.preloadNoteSampleSounds,
+      p.scheduleReRender,
+    ],
+  );
+
+  // ─────────────────────────────────────────────────────────────────────────
   // handleCopyBar
   // ─────────────────────────────────────────────────────────────────────────
 
@@ -917,6 +1210,13 @@ export function useBarMode(p: UseBarModeParams): UseBarModeResult {
       barConfigRef.current.beatSubdivisions = newSubs;
       barConfigRef.current.barRepeats = newRepeats;
       barConfigRef.current.loopBlocks = newBlocks;
+      barConfigRef.current.noteSamples = { ...newNoteSamples };
+      barConfigRef.current.noteSampleNames = { ...newNoteSampleNames };
+      barConfigRef.current.noteSampleSources = { ...newNoteSampleSources };
+      barConfigRef.current.noteSampleChannels = { ...newNoteSampleChannels };
+      barConfigRef.current.noteSampleVolumes = { ...newNoteSampleVolumes };
+      barConfigRef.current.noteSampleSpeeds = { ...newNoteSampleSpeeds };
+      barConfigRef.current.noteSampleMetroChannels = { ...newNoteSampleMetroChannels };
       if (Platform.OS !== "web")
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     },
@@ -1032,6 +1332,8 @@ export function useBarMode(p: UseBarModeParams): UseBarModeResult {
     p.noteSampleVolumesRef.current = {};
     p.setNoteSampleSpeeds({});
     p.noteSampleSpeedsRef.current = {};
+    p.setNoteSampleMetroChannels({});
+    p.noteSampleMetroChannelsRef.current = {};
     for (const [, st] of Object.entries(p.samplePlayStateRef.current)) {
       if (st.endTimer) clearTimeout(st.endTimer);
     }
@@ -1052,6 +1354,7 @@ export function useBarMode(p: UseBarModeParams): UseBarModeResult {
     saveNoteSampleChannels({});
     saveNoteSampleVolumes({});
     saveNoteSampleSpeeds({});
+    saveNoteSampleMetroChannels({});
     barConfigRef.current = {
       beatsPerMeasure: beats,
       beatTypes: [...newTypes],
@@ -1066,6 +1369,7 @@ export function useBarMode(p: UseBarModeParams): UseBarModeResult {
       noteSampleChannels: {},
       noteSampleVolumes: {},
       noteSampleSpeeds: {},
+      noteSampleMetroChannels: {},
       barLoopMode: "once",
       blockPlayMode: "loop",
       hasBeenConfigured: true,
@@ -1109,6 +1413,8 @@ export function useBarMode(p: UseBarModeParams): UseBarModeResult {
     handleBarReset,
     handleBarQuickSave,
     handleAddBar,
+    copyBarToClipboard,
+    pasteBarFromClipboard,
     handleDeleteBar,
     handleCopyBar,
     handleInsertBarAfter,

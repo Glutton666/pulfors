@@ -49,6 +49,7 @@ import { captureBreadcrumb } from "@/lib/error-tracking";
 import { decodeSampleFile, getRenderSampleRate } from "@/lib/audio-renderer";
 import { adjustBpmCandidatesForPlaybackSpeed, detectBpmCandidatesOnDevice } from "@/lib/onset-bpm-detect";
 import { motionDuration, useReducedMotion } from "@/hooks/useReducedMotion";
+import type { RecorderKeyboardActions } from "@/lib/keyboard-bindings";
 
 type Phase = "idle" | "countdown" | "recording" | "trimming" | "loading";
 
@@ -69,6 +70,7 @@ interface NoteRecorderModalProps {
   beatsPerMeasure?: number;
   soundSet?: BuiltinSoundSet;
   onSuggestBpm?: (bpm: number) => void;
+  keyboardActionsRef?: React.MutableRefObject<RecorderKeyboardActions | null>;
 }
 
 const MAX_RECORD_SECONDS = 10;
@@ -119,6 +121,7 @@ export function NoteRecorderModal({
   beatsPerMeasure = 4,
   soundSet = "classic",
   onSuggestBpm,
+  keyboardActionsRef,
 }: NoteRecorderModalProps) {
   const { colors: C } = useTheme();
   const styles = make_styles(C);
@@ -131,6 +134,7 @@ export function NoteRecorderModal({
   const [recordDuration, setRecordDuration] = useState(0);
   const [recordedUri, setRecordedUri] = useState<string | null>(null);
   const [sampleName, setSampleName] = useState("");
+  const [keyboardSourceIndex, setKeyboardSourceIndex] = useState<0 | 1>(0);
   const sourceTypeRef = useRef<SampleSource>("recording");
   const [channel, setChannel] = useState<SampleChannel>(existingChannel);
   const [metronomeChannel, setMetronomeChannel] = useState<MetroChannel>(existingMetronomeChannel ?? "both");
@@ -143,6 +147,7 @@ export function NoteRecorderModal({
       setMetronomeChannel(existingMetronomeChannel ?? "both");
       setSampleGain(Math.max(0, Math.min(1, existingVolume)));
       setSampleSpeed(Math.max(0.5, Math.min(2, existingSpeed)));
+      setKeyboardSourceIndex(0);
     }
   }, [visible, existingChannel, existingMetronomeChannel, existingVolume, existingSpeed]);
 
@@ -780,6 +785,40 @@ export function NoteRecorderModal({
     onClose();
   }, [cleanup, onClose]);
 
+  useEffect(() => {
+    if (!keyboardActionsRef) return;
+    keyboardActionsRef.current = {
+      isActive: () => visible,
+      moveSelection: (direction) => {
+        setKeyboardSourceIndex((current) => (direction < 0
+          ? (current === 0 ? 1 : 0)
+          : (current === 1 ? 0 : 1)));
+      },
+      confirm: () => {
+        if (!visible || phase !== "idle") return;
+        if (keyboardSourceIndex === 0) {
+          void startCountdown();
+        } else {
+          void handleImportFile();
+        }
+      },
+      cancel: () => {
+        void handleClose();
+      },
+    };
+    return () => {
+      keyboardActionsRef.current = null;
+    };
+  }, [
+    handleClose,
+    handleImportFile,
+    keyboardActionsRef,
+    keyboardSourceIndex,
+    phase,
+    startCountdown,
+    visible,
+  ]);
+
   const countAnimStyle = useAnimatedStyle(() => ({
     transform: [{ scale: countScale.value }],
     opacity: countOpacity.value,
@@ -896,18 +935,32 @@ export function NoteRecorderModal({
             <View style={styles.content}>
               <View style={styles.sourceRow}>
                 <Pressable
-                  style={[styles.sourceButton, { backgroundColor: C.accent }]}
+                  style={[
+                    styles.sourceButton,
+                    {
+                      backgroundColor: keyboardSourceIndex === 0 ? C.accent : C.surfaceLight,
+                      borderColor: keyboardSourceIndex === 0 ? C.accent : C.border,
+                      borderWidth: 1,
+                    },
+                  ]}
                   onPress={startCountdown}
                 >
-                  <Ionicons name="mic" size={24} color={onAccentColor(C.accent)} />
-                  <Text style={[styles.sourceButtonText, { color: onAccentColor(C.accent) }]}>{t("noteRecorder", "record")}</Text>
+                  <Ionicons name="mic" size={24} color={keyboardSourceIndex === 0 ? onAccentColor(C.accent) : C.text} />
+                  <Text style={[styles.sourceButtonText, { color: keyboardSourceIndex === 0 ? onAccentColor(C.accent) : C.text }]}>{t("noteRecorder", "record")}</Text>
                 </Pressable>
                 <Pressable
-                  style={[styles.sourceButton, { backgroundColor: C.surfaceLight }]}
+                  style={[
+                    styles.sourceButton,
+                    {
+                      backgroundColor: keyboardSourceIndex === 1 ? C.accent : C.surfaceLight,
+                      borderColor: keyboardSourceIndex === 1 ? C.accent : C.border,
+                      borderWidth: 1,
+                    },
+                  ]}
                   onPress={handleImportFile}
                 >
-                  <Ionicons name="musical-notes" size={24} color={C.text} />
-                  <Text style={[styles.sourceButtonText, { color: C.text }]}>{t("noteRecorder", "import")}</Text>
+                  <Ionicons name="musical-notes" size={24} color={keyboardSourceIndex === 1 ? onAccentColor(C.accent) : C.text} />
+                  <Text style={[styles.sourceButtonText, { color: keyboardSourceIndex === 1 ? onAccentColor(C.accent) : C.text }]}>{t("noteRecorder", "import")}</Text>
                 </Pressable>
               </View>
               {hasExisting && (

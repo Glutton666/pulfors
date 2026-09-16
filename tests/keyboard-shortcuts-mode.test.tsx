@@ -2,11 +2,19 @@
 
 import { act, renderHook } from "@testing-library/react";
 import { Platform } from "react-native";
-import { DEFAULT_BINDINGS, type KeyBindingsMap } from "@/lib/keyboard-bindings";
-import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
+import {
+  DEFAULT_BINDINGS,
+  type KeyBindingsMap,
+  type RecorderKeyboardActions,
+} from "@/lib/keyboard-bindings";
+import {
+  useKeyboardShortcuts,
+  type BarKeyboardActions,
+} from "@/hooks/useKeyboardShortcuts";
 
 type TestState = {
   barMode: { current: boolean };
+  noteMode: { current: boolean };
   barStartBeat: { current: number | null };
   engine: { current: { getIsRunning: () => boolean } | null };
   addBar: jest.Mock;
@@ -15,11 +23,15 @@ type TestState = {
   removeBarSubdivision: jest.Mock;
   setBarStartBeat: jest.Mock;
   tapTempo: jest.Mock;
+  noteNext: jest.Mock;
+  modalOpen: { current: boolean };
+  recorderKeyboard: { current: RecorderKeyboardActions | null };
 };
 
 function makeTestState(): TestState {
   return {
     barMode: { current: true },
+    noteMode: { current: false },
     barStartBeat: { current: 2 },
     engine: { current: { getIsRunning: () => false } },
     addBar: jest.fn(),
@@ -28,16 +40,31 @@ function makeTestState(): TestState {
     removeBarSubdivision: jest.fn(),
     setBarStartBeat: jest.fn(),
     tapTempo: jest.fn(),
+    noteNext: jest.fn(),
+    modalOpen: { current: false },
+    recorderKeyboard: { current: null },
   };
 }
 
 function renderShortcuts(state: TestState) {
   const keyBindingsRef = { current: DEFAULT_BINDINGS as KeyBindingsMap };
-  const noteModeRef = { current: false };
   const noopRef = { current: jest.fn() };
   const stateSetter = jest.fn();
+  const barKeyboardActions: BarKeyboardActions = {
+    selectAdjacent: jest.fn(),
+    completeBlock: jest.fn(),
+    applySymbol: jest.fn(),
+    copy: jest.fn(),
+    paste: jest.fn(),
+    toggleRepeatMode: jest.fn(),
+    getRepeatMode: jest.fn(() => "count"),
+    setRepeatValue: jest.fn(),
+    addLayer: jest.fn(),
+    quickSave: jest.fn(),
+    openAudio: jest.fn(),
+  };
 
-  return renderHook(() =>
+  const hook = renderHook(() =>
     useKeyboardShortcuts({
       keyBindingsRef,
       bpmRef: { current: 120 },
@@ -48,14 +75,14 @@ function renderShortcuts(state: TestState) {
       updateTimeSignatureRef: noopRef,
       barModeRef: state.barMode,
       barStartBeatRef: state.barStartBeat,
-      noteModeRef,
+      noteModeRef: state.noteMode,
       stopwatchTimerRef: { current: null },
       stopwatchTimerLandscapeRef: { current: null },
       subdivisionPatternRef: { current: ["normal"] },
       beatTypesRef: { current: ["strong", "normal", "normal", "normal"] },
       dialConfigRef: { current: {} as never },
       handleNoteTogglePlayRef: { current: null },
-      anyModalOpenRef: { current: false },
+      anyModalOpenRef: state.modalOpen,
       showKbShortcutsRef: { current: false },
       showNativeKbHintRef: { current: false },
       engineRef: state.engine as never,
@@ -65,6 +92,9 @@ function renderShortcuts(state: TestState) {
       applyCurrentBeatSubdivisionRef: { current: state.applyBeatSubdivision },
       appendBarSubdivisionRef: { current: state.appendBarSubdivision },
       removeBarSubdivisionRef: { current: state.removeBarSubdivision },
+      barKeyboardActionsRef: { current: barKeyboardActions },
+      noteNextRef: { current: state.noteNext },
+      recorderKeyboardActionsRef: state.recorderKeyboard,
       setNoteMode: stateSetter,
       setBarStartBeat: state.setBarStartBeat,
       setShowKbShortcuts: stateSetter,
@@ -84,6 +114,7 @@ function renderShortcuts(state: TestState) {
       } as never,
     }),
   );
+  return { ...hook, barKeyboardActions };
 }
 
 function press(code: string, init: KeyboardEventInit = {}) {
@@ -163,6 +194,121 @@ describe("mode-specific keyboard shortcuts", () => {
     expect(state.applyBeatSubdivision).toHaveBeenCalledTimes(1);
     expect(state.tapTempo).not.toHaveBeenCalled();
 
+    unmount();
+  });
+
+  it("selects adjacent bars with minus and equal", () => {
+    const state = makeTestState();
+    const { unmount, barKeyboardActions } = renderShortcuts(state);
+
+    press("Minus", { key: "-" });
+    press("Equal", { key: "=" });
+
+    expect(barKeyboardActions.selectAdjacent).toHaveBeenNthCalledWith(1, -1);
+    expect(barKeyboardActions.selectAdjacent).toHaveBeenNthCalledWith(2, 1);
+    unmount();
+  });
+
+  it("routes block and symbol keys to the selected bar", () => {
+    const state = makeTestState();
+    const { unmount, barKeyboardActions } = renderShortcuts(state);
+
+    press("BracketLeft", { key: "[" });
+    state.barStartBeat.current = 4;
+    press("BracketLeft", { key: "[" });
+    expect(barKeyboardActions.completeBlock).toHaveBeenCalledWith(2, 4);
+
+    const symbols = [
+      ["KeyR", "repeat"],
+      ["KeyJ", "jump_from"],
+      ["KeyK", "jump_to"],
+      ["KeyC", "volta"],
+      ["KeyE", "end"],
+    ] as const;
+    for (const [code, symbol] of symbols) {
+      press(code);
+      expect(barKeyboardActions.applySymbol).toHaveBeenCalledWith(symbol);
+    }
+    unmount();
+  });
+
+  it("routes clipboard, layer, save, and audio shortcuts without colliding with S/C", () => {
+    const state = makeTestState();
+    const { unmount, barKeyboardActions } = renderShortcuts(state);
+
+    press("KeyC", { ctrlKey: true });
+    press("KeyV", { ctrlKey: true });
+    press("Slash", { key: "/" });
+    press("KeyS", { ctrlKey: true });
+    press("KeyO");
+
+    expect(barKeyboardActions.copy).toHaveBeenCalledTimes(1);
+    expect(barKeyboardActions.paste).toHaveBeenCalledTimes(1);
+    expect(barKeyboardActions.addLayer).toHaveBeenCalledTimes(1);
+    expect(barKeyboardActions.quickSave).toHaveBeenCalledTimes(1);
+    expect(barKeyboardActions.openAudio).toHaveBeenCalledTimes(1);
+    expect(state.appendBarSubdivision).not.toHaveBeenCalled();
+    unmount();
+  });
+
+  it("uses Tab and Shift+digits for count and four-digit MMSS input", () => {
+    const state = makeTestState();
+    const { unmount, barKeyboardActions } = renderShortcuts(state);
+
+    press("Tab");
+    expect(barKeyboardActions.toggleRepeatMode).toHaveBeenCalledTimes(1);
+
+    press("Digit7", { key: "&", shiftKey: true });
+    expect(barKeyboardActions.setRepeatValue).toHaveBeenLastCalledWith(7);
+
+    (barKeyboardActions.getRepeatMode as jest.Mock).mockReturnValue("duration");
+    (barKeyboardActions.setRepeatValue as jest.Mock).mockClear();
+    for (const digit of ["0", "1", "3", "0"]) {
+      press(`Digit${digit}`, { key: digit, shiftKey: true });
+    }
+    expect(barKeyboardActions.setRepeatValue).toHaveBeenCalledWith(90);
+
+    for (const digit of ["0", "1", "6", "0"]) {
+      press(`Digit${digit}`, { key: digit, shiftKey: true });
+    }
+    expect(barKeyboardActions.setRepeatValue).toHaveBeenCalledTimes(1);
+    unmount();
+  });
+
+  it("advances the note queue with Enter instead of tapping tempo", () => {
+    const state = makeTestState();
+    state.barMode.current = false;
+    state.noteMode.current = true;
+    const { unmount } = renderShortcuts(state);
+
+    press("Enter");
+    expect(state.noteNext).toHaveBeenCalledTimes(1);
+    expect(state.tapTempo).not.toHaveBeenCalled();
+    unmount();
+  });
+
+  it("keeps recorder-modal keys ahead of bar-mode shortcuts in every phase", () => {
+    const state = makeTestState();
+    const cancel = jest.fn();
+    const confirm = jest.fn();
+    const moveSelection = jest.fn();
+    state.modalOpen.current = true;
+    state.recorderKeyboard.current = {
+      isActive: () => true,
+      moveSelection,
+      confirm,
+      cancel,
+    };
+    const { unmount, barKeyboardActions } = renderShortcuts(state);
+
+    press("ArrowLeft");
+    press("Enter");
+    press("Escape");
+
+    expect(moveSelection).toHaveBeenCalledWith(-1);
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(cancel).toHaveBeenCalledTimes(1);
+    expect(barKeyboardActions.selectAdjacent).not.toHaveBeenCalled();
     unmount();
   });
 });

@@ -68,6 +68,7 @@ jest.mock("@/lib/note-samples", () => ({
   saveNoteSampleChannels: jest.fn(),
   saveNoteSampleVolumes: jest.fn(),
   saveNoteSampleSpeeds: jest.fn(),
+  saveNoteSampleMetroChannels: jest.fn(),
 }));
 
 jest.mock("@/lib/sample-cache", () => ({
