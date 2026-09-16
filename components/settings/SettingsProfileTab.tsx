@@ -71,6 +71,7 @@ export function SettingsProfileTab({
   const [showAddRoom, setShowAddRoom] = useState(false);
   const [newRoomName, setNewRoomName] = useState("");
   const [addingRoom, setAddingRoom] = useState(false);
+  const [showLabUnlockedNotice, setShowLabUnlockedNotice] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [webUrlCopied, setWebUrlCopied] = useState(false);
   const [instrumentSearch, setInstrumentSearch] = useState("");
@@ -83,6 +84,7 @@ export function SettingsProfileTab({
       setLocalUsername(username);
       setShowResetConfirm(false);
       setInstrumentSearch("");
+      setShowLabUnlockedNotice(false);
       void Promise.all([loadPracticeRooms(), loadLabUnlocked()]).then(([rooms, labIsUnlocked]) => {
         if (!active) return;
         setPracticeRooms(rooms);
@@ -104,10 +106,20 @@ export function SettingsProfileTab({
       Alert.alert(t("settings", "permissionNeeded"), t("settings", "permissionLocationMsg"));
       return;
     }
+    const wasLabUnlocked = await loadLabUnlocked();
     const room = await addPracticeRoom(newRoomName.trim());
     if (room) {
       setPracticeRooms((prev) => [...prev, room]);
-      if (isLabPracticeRoomName(room.name)) onLabUnlocked?.();
+      if (isLabPracticeRoomName(room.name)) {
+        onLabUnlocked?.();
+        if (!wasLabUnlocked) {
+          if (Platform.OS === "web") {
+            setShowLabUnlockedNotice(true);
+          } else {
+            Alert.alert(t("settings", "labUnlockedTitle"), t("settings", "labUnlockedMessage"));
+          }
+        }
+      }
       setNewRoomName("");
       setShowAddRoom(false);
     } else {
@@ -373,6 +385,28 @@ export function SettingsProfileTab({
           <Ionicons name="location" size={S.ms(18, 0.4)} color={C.accent} />
           <Text style={[styles.sectionLabel, { color: C.text }]}>{t("settings", "practiceRoom")}</Text>
         </View>
+
+        {showLabUnlockedNotice && (
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 8,
+              marginTop: 8,
+              marginBottom: 4,
+              padding: 10,
+              borderRadius: 9,
+              borderWidth: 1,
+              borderColor: C.accent,
+              backgroundColor: C.accentDim,
+            }}
+          >
+            <Ionicons name="flask-outline" size={S.ms(17, 0.4)} color={C.accent} />
+            <Text style={{ flex: 1, color: C.accent, fontFamily: "Inter_600SemiBold", fontSize: 13 }}>
+              {t("settings", "labUnlockedMessage")}
+            </Text>
+          </View>
+        )}
 
         {roomTrackingActive && trackingRoomName && (
           <View style={[styles.trackingBanner, { borderColor: C.success }]}>

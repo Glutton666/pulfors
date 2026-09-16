@@ -64,6 +64,8 @@ jest.mock("@/contexts/LanguageContext", () => ({
         primaryInstrumentSearchPlaceholder: { en: "Search instruments", ko: "악기 검색" },
         primaryInstrumentNone: { en: "None", ko: "없음" },
         noRooms: { en: "No practice rooms", ko: "연습실이 없습니다" },
+        labUnlockedTitle: { en: "Lab Unlocked", ko: "실험실 해금" },
+        labUnlockedMessage: { en: "The Lab menu is now unlocked.", ko: "실험실 메뉴가 해금되었습니다." },
       };
       return settings[key]?.[mockLanguage] ?? key;
     },

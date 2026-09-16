@@ -143,6 +143,8 @@ export const translations = {
     nickname: { ko: "닉네임", en: "Nickname" },
     nicknamePlaceholder: { ko: "이름을 입력하세요", en: "Enter your name" },
     practiceRoom: { ko: "연습실", en: "Practice Room" },
+    labUnlockedTitle: { ko: "실험실 해금", en: "Lab Unlocked" },
+    labUnlockedMessage: { ko: "실험실 메뉴가 해금되었습니다.", en: "The Lab menu is now unlocked." },
     trackingAt: { ko: "에서 추적 중", en: " tracking" },
     trackingStop: { ko: "중지", en: "Stop" },
     noRooms: { ko: "등록된 연습실이 없습니다", en: "No practice rooms registered" },
