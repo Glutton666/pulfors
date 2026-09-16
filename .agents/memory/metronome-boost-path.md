@@ -7,7 +7,7 @@ Keep the realtime click path restricted to neutral tone at volume values up to u
 
 **Why:** Native Expo player volume is capped at unity, while separate web and native gain/compressor paths produced inconsistent output. Applying shaping and boost in shared PCM rendering gives both platforms the same result and preserves a transparent 100% path.
 
-**How to apply:** When changing playback routing, volume handling, sound-set caches, or runtime rerenders, fail closed if required rendering fails. Treat aborts from superseded renders as normal, not fatal.
+**How to apply:** When changing playback routing, volume handling, sound-set caches, or runtime rerenders, fail closed if required rendering fails. Treat aborts from superseded renders as normal, not fatal. Keep the active rendered player's output gain synced immediately for ordinary (≤100%) volume changes; values above unity still require a boosted PCM rerender.
 
 Limiter transfer must remain continuous where peaks first cross the ceiling. Use immediate linked gain reduction with a short release; switching from whole-buffer bypass to a separate soft-knee curve at the ceiling causes a large audible jump.
 

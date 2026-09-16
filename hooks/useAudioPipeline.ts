@@ -19,6 +19,9 @@ import {
   finishAbortableRender,
   isRenderAborted,
   renderMeasureAbortable,
+  getClickOutputVolume,
+  getClickRenderVolume,
+  getRealtimeClickGain,
 } from "@/lib/audio-renderer";
 import {
   syncStereoArtifact,
@@ -280,10 +283,10 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
   // Object.values() returns []. We use setPoolsVolume() which walks the internal
   // cache directly and also records the value for pools created lazily afterward.
   useEffect(() => {
-    setPoolsVolume(volume);
-    webRenderedLoopRef.current?.setVolume?.(1);
+    setPoolsVolume(getRealtimeClickGain(volume));
+    webRenderedLoopRef.current?.setVolume?.(getClickOutputVolume(volume));
     if (renderedPlayerRef.current) {
-      renderedPlayerRef.current.volume = 1;
+      renderedPlayerRef.current.volume = getClickOutputVolume(volume);
     }
   }, [volume, setPoolsVolume]);
 
@@ -383,7 +386,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
     }
     const generation = outputStateRef.current.snapshot().generation;
     const startupEpoch = audioStartupEpochRef.current;
-    const source = scheduleWebClickAt(role, channel, volumeRef.current, atAudioTime);
+    const source = scheduleWebClickAt(role, channel, getRealtimeClickGain(volumeRef.current), atAudioTime);
     if (!source) return false;
     realtimeSourcesRef.current.add(source);
     source.onEnded?.(() => {
@@ -580,7 +583,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
         measureDurationMs: scheduleInfo.durationMs,
         clickPCMs,
         samplePCMs,
-        clickVolume: Math.max(0, volumeRef.current),
+        clickVolume: getClickRenderVolume(volumeRef.current),
         sampleVolume: samplePCMs.size > 0 ? sampleVolumeRef.current : 0,
         sampleVolumes: noteSampleVolumesRef.current,
         sampleSpeeds: noteSampleSpeedsRef.current,
@@ -615,7 +618,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
       // pre-rendered 루프로 전환되는 순간 항상 최대 볼륨으로 재생됐다
       // (2026-08-25 확인). per-tick 풀 플레이어(setPoolsVolume)와 동일하게
       // 실제 볼륨을 반영한다.
-      player.volume = 1;
+      player.volume = getClickOutputVolume(volumeRef.current);
       outputStateRef.current.transition("prerender");
       return { status: "ready", player };
     } catch (e) {
@@ -680,6 +683,11 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
   }, [clearRealtimeWebAudio, engineRef, releaseAudioPlayer, releasePendingRenderedPlayer, renderGenerationRef]);
 
   const scheduleReRender = useCallback(() => {
+    const outputVolume = getClickOutputVolume(volumeRef.current);
+    webRenderedLoopRef.current?.setVolume?.(outputVolume);
+    if (renderedPlayerRef.current) {
+      renderedPlayerRef.current.volume = outputVolume;
+    }
     renderGenerationRef.current += 1;
     abortActiveRender(renderGenerationRef);
     engineRef.current?.setPendingMeasureStartAction(null);
@@ -721,7 +729,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
             measureDurationMs: scheduleInfo.durationMs,
             clickPCMs,
             samplePCMs,
-            clickVolume: Math.max(0, volumeRef.current),
+            clickVolume: getClickRenderVolume(volumeRef.current),
             sampleVolume: samplePCMs.size > 0 ? sampleVolumeRef.current : 0,
             sampleVolumes: noteSampleVolumesRef.current,
             sampleSpeeds: noteSampleSpeedsRef.current,
@@ -742,7 +750,13 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
               && Math.abs(previousDuration - nextDuration) < 0.001;
             const boundary = phaseCompatible ? previous?.getNextBoundaryTime?.() : undefined;
             outputStateRef.current.transition("transitioning");
-            const loop = playWebRenderedLoop(pcm, undefined, "both", 1, boundary);
+            const loop = playWebRenderedLoop(
+              pcm,
+              undefined,
+              "both",
+              getClickOutputVolume(volumeRef.current),
+              boundary,
+            );
             if (previous) {
               try { previous.stop(boundary); } catch {}
             }

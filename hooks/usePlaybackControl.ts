@@ -9,6 +9,8 @@ import {
   getWebAudioContext,
   playWebRenderedLoop,
   renderMeasureAbortable,
+  getClickOutputVolume,
+  getClickRenderVolume,
   beginAbortableRender,
   abortActiveRender,
   finishAbortableRender,
@@ -250,7 +252,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
         measureDurationMs: scheduleInfo.durationMs,
         clickPCMs,
         samplePCMs,
-        clickVolume: Math.max(0, p.volumeRef.current),
+        clickVolume: getClickRenderVolume(p.volumeRef.current),
         sampleVolume: samplePCMs.size > 0 ? p.sampleVolumeRef.current : 0,
         sampleVolumes: p.noteSampleVolumesRef.current,
         sampleSpeeds: p.noteSampleSpeedsRef.current,
@@ -287,7 +289,13 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
         const startAtAudioTime = startAtPerformanceTime !== undefined && context
           ? context.currentTime + Math.max(0, startAtPerformanceTime - now) / 1000
           : undefined;
-        p.activateWebRenderedLoop(playWebRenderedLoop(pcm, undefined, "both", 1, startAtAudioTime));
+        p.activateWebRenderedLoop(playWebRenderedLoop(
+          pcm,
+          undefined,
+          "both",
+          getClickOutputVolume(p.volumeRef.current),
+          startAtAudioTime,
+        ));
         engine.setPreRenderedAudio(true);
       }
     } catch (error) {
