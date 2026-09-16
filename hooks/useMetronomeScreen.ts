@@ -155,7 +155,7 @@ import {
   installAudioPlayInterruptHandler,
   previewClickOnWeb,
 } from "@/lib/audio-renderer";
-import { syncStereoArtifact, releaseStereoArtifact, releaseAll as releaseAllStereoArtifacts } from "@/lib/sample-cache";
+import { syncStereoArtifact } from "@/lib/sample-cache";
 import type { ClickPCMs, SamplePCMEntry, TickInfo, DecodedSample } from "@/lib/audio-renderer";
 import type { ActivityLog, Goal } from "@/lib/activity-log";
 import {
@@ -870,9 +870,10 @@ export function useMetronomeScreen() {
     isAudioStartupEpochCurrent, recordAudioActivity, waitForFirstAudioActivity,
     armAudioWatchdogRef, clearAudioWatchdogRef,
     samplePlayStateRef,
-    buildRenderedPlayer, buildRenderedPlayerDetailed, scheduleReRender, stopRenderedAudio,
+    buildRenderedPlayer, buildRenderedPlayerDetailed, scheduleReRender, stopRenderedAudio, stopPlaybackAudio,
     getClickPCMs, getSamplePCMs, getLayerClickPCMsForSchedule,
     invalidateSamplePCMCache, preloadNoteSampleSounds, cancelNoteSamplePreload, clearSamplePlayStates,
+    queueNoteSamplePlayback, releaseNoteSampleResource, releaseNoteSampleResources,
     armAudioWatchdog, clearAudioWatchdog,
     scheduleRealtimeWebClick, clearRealtimeWebAudio,
   } = useAudioPipeline({
@@ -1391,44 +1392,6 @@ export function useMetronomeScreen() {
       return result;
     };
 
-    const playSampleAsync = (key: string, player: any) => {
-      if (samplePlayStateRef.current[key]?.endTimer) {
-        clearTimeout(samplePlayStateRef.current[key].endTimer!);
-      }
-
-      const { startMs, durationMs } = parseSampleTiming(key);
-      samplePlayStateRef.current[key] = { playing: true, endTimer: null };
-
-      const startSec = startMs / 1000;
-      if (Platform.OS === "web") {
-        try { player.seekTo(startSec); } catch {}
-        setTimeout(() => safePlay(player, "preview.web.startMs"), 10);
-      } else {
-        try { player.pause(); } catch {}
-        Promise.resolve(player.seekTo(startSec)).then(() => {
-          safePlay(player, "preview.native.startMs");
-        }).catch(() => {});
-      }
-
-      const effectiveDur = durationMs > 0
-        ? durationMs
-        : player.duration > 0
-          ? (player.duration - startSec) * 1000
-          : 0;
-      if (effectiveDur > 0) {
-        const timer = setTimeout(() => {
-          try { player.pause(); } catch {}
-          if (samplePlayStateRef.current[key]) {
-            samplePlayStateRef.current[key].playing = false;
-            samplePlayStateRef.current[key].endTimer = null;
-          }
-        }, effectiveDur / (noteSampleSpeedsRef.current[key] ?? 1));
-        if (samplePlayStateRef.current[key]) {
-          samplePlayStateRef.current[key].endTimer = timer;
-        }
-      }
-    };
-
     engine.setCustomSampleCallback((beat: number, subBeat: number) => {
       if (fadeOutMutedRef.current) return false;
       if (!barModeRef.current) return false;
@@ -1441,8 +1404,8 @@ export function useMetronomeScreen() {
         player.volume = Math.max(0, Math.min(1, sampleVolumeRef.current * (noteSampleVolumesRef.current[key] ?? 1)));
         player.playbackRate = noteSampleSpeedsRef.current[key] ?? 1;
         player.shouldCorrectPitch = false;
-        setTimeout(() => playSampleAsync(key, player), 0);
-        return true;
+        const { startMs, durationMs } = parseSampleTiming(key);
+        return queueNoteSamplePlayback(key, player, startMs, durationMs);
       }
       return false;
     });
@@ -1468,10 +1431,6 @@ export function useMetronomeScreen() {
     });
     return () => {
       engine.cleanup();
-      if (renderedPlayerRef.current) {
-        try { renderedPlayerRef.current.release(); } catch {}
-        renderedPlayerRef.current = null;
-      }
       dismissNotification();
     };
   }, []);
@@ -1573,14 +1532,10 @@ export function useMetronomeScreen() {
         barConfigRef.current.noteSampleMetroChannels = { ...updatedMetroChannels };
       }
     }
-    if (noteSampleSoundsRef.current[key]) {
-      try { noteSampleSoundsRef.current[key].release(); } catch {}
-      delete noteSampleSoundsRef.current[key];
-    }
-    await releaseStereoArtifact(key);
+    await releaseNoteSampleResource(key);
     scheduleReRender();
     setRecorderTarget(null);
-  }, [recorderTarget, invalidateSamplePCMCache, scheduleReRender]);
+  }, [recorderTarget, invalidateSamplePCMCache, releaseNoteSampleResource, scheduleReRender]);
 
   // flashModeRef は useSettings から返される
 
@@ -1726,24 +1681,12 @@ export function useMetronomeScreen() {
     });
 
     engine.setOnScheduleRebuild(() => {
-      if (renderedPlayerRef.current) {
-        try {
-          renderedPlayerRef.current.pause();
-          renderedPlayerRef.current.release();
-        } catch {}
-        renderedPlayerRef.current = null;
-      }
-      engine.setPendingMeasureStartAction(null);
+      stopRenderedAudio();
       if (Platform.OS === "web") {
         // A random pass or failed/replaced schedule must not leave the previous
         // PCM loop owning output. Hand audio to the look-ahead fallback now;
         // the debounced render can reclaim ownership at a later boundary.
-        try { webRenderedLoopRef.current?.stop(); } catch {}
-        webRenderedLoopRef.current = null;
-        engine.setPreRenderedAudio(false);
         scheduleReRenderCallbackRef.current();
-      } else {
-        engine.setPreRenderedAudio(false);
       }
     });
 
@@ -1828,10 +1771,14 @@ export function useMetronomeScreen() {
       // to the UI after the engine has already been reset.
       invalidateSettingsLoad();
       cancelSettingsPersistence();
+      stopPlaybackAudio();
+      releaseNoteSampleResources(true);
+      preparingCancelledRef.current = true;
+      setIsPreparing(false);
+      isPreparingRef.current = false;
+      setIsPlaying(false);
+      isPlayingRef.current = false;
       const engine = engineRef.current;
-      if (engine?.getIsRunning()) {
-        engine.stop();
-      }
       practiceSessionRef.current = null;
       practiceStartRef.current = null;
       discardRoomTracking();
@@ -1951,7 +1898,14 @@ export function useMetronomeScreen() {
     } catch (e) {
       captureBreadcrumb({ category: "reset", message: "Reset failed", level: "error", data: { error: String(e) } });
     }
-  }, [setThemeColor, discardRoomTracking, invalidateSettingsLoad, cancelSettingsPersistence]);
+  }, [
+    cancelSettingsPersistence,
+    discardRoomTracking,
+    invalidateSettingsLoad,
+    releaseNoteSampleResources,
+    setThemeColor,
+    stopPlaybackAudio,
+  ]);
 
   // updateBpm → useSettings 소유
 
@@ -1989,8 +1943,7 @@ export function useMetronomeScreen() {
         restoreEasterEggEngine(actual);
         // 이스터에그 발동 전 재생 중이 아니었으면 엔진 정지
         if (!easterEggWasPlayingRef.current) {
-          engineRef.current?.stop();
-          stopRenderedAudio();
+          stopPlaybackAudio();
           setIsPlaying(false);
           isPlayingRef.current = false;
           resetPlaybackVisuals();
@@ -2006,7 +1959,7 @@ export function useMetronomeScreen() {
       setEasterEggShakeCount(c => c + 1);
       setEasterEggHintDirection(guess < actual ? "up" : "down");
     }
-  }, [stopRenderedAudio, resetPlaybackVisuals, setEasterEggHintDirection, restoreEasterEggEngine, setEasterEggApplyBpm]);
+  }, [stopPlaybackAudio, resetPlaybackVisuals, setEasterEggHintDirection, restoreEasterEggEngine, setEasterEggApplyBpm]);
 
   const handleEasterEggGiveUp = useCallback((stopEngine = false) => {
     const actual = easterEggActualBpmRef.current;
@@ -2016,9 +1969,7 @@ export function useMetronomeScreen() {
     setEasterEggRevealBpm(actual);
     if (stopEngine) {
       completePracticeSessionRef.current("manual");
-      engineRef.current?.stop();
-      stopRenderedAudio();
-      clearSamplePlayStates();
+      stopPlaybackAudio();
       setIsPlaying(false);
       isPlayingRef.current = false;
       setIsPreparing(false);
@@ -2028,8 +1979,7 @@ export function useMetronomeScreen() {
       restoreEasterEggEngine(actual);
       // 이스터에그 발동 전 재생 중이 아니었으면 엔진 정지
       if (!easterEggWasPlayingRef.current) {
-        engineRef.current?.stop();
-        stopRenderedAudio();
+        stopPlaybackAudio();
         setIsPlaying(false);
         isPlayingRef.current = false;
         resetPlaybackVisuals();
@@ -2040,7 +1990,7 @@ export function useMetronomeScreen() {
       setEasterEggHintDirection(null);
       setEasterEggApplyBpm(false);
     }, 2000);
-  }, [stopRenderedAudio, clearSamplePlayStates, resetPlaybackVisuals, setEasterEggHintDirection, restoreEasterEggEngine, setEasterEggApplyBpm]);
+  }, [stopPlaybackAudio, resetPlaybackVisuals, setEasterEggHintDirection, restoreEasterEggEngine, setEasterEggApplyBpm]);
 
   const handleEasterEggGiveUpRef = useRef(handleEasterEggGiveUp);
   useEffect(() => { handleEasterEggGiveUpRef.current = handleEasterEggGiveUp; }, [handleEasterEggGiveUp]);
@@ -2173,6 +2123,7 @@ export function useMetronomeScreen() {
     blockPlayModeRef,
     beatDenominatorRef,
     stopRenderedAudio,
+    stopPlaybackAudio,
     clearSamplePlayStates,
     resetPlaybackVisuals,
     flushPlaybackVisuals: () => flushPendingPlaybackVisualsRef.current(),
@@ -2894,8 +2845,7 @@ export function useMetronomeScreen() {
     // ① 기존 재생/준비 중단 — startMetronome 우회하여 직접 제어
     preparingCancelledRef.current = true;
     completePracticeSessionRef.current("manual");
-    if (engine.getIsRunning()) engine.stop();
-    stopRenderedAudio();
+    stopPlaybackAudio();
     setIsPreparing(false);
     isPreparingRef.current = false;
     setIsPlaying(false);
@@ -2958,7 +2908,7 @@ export function useMetronomeScreen() {
     engine.start();
     markAudioPlaying();
     armAudioWatchdogRef.current();
-  }, [stopRenderedAudio, resetPlaybackVisuals, clearSamplePlayStates, setEasterEggApplyBpm]);
+  }, [stopPlaybackAudio, resetPlaybackVisuals, clearSamplePlayStates, setEasterEggApplyBpm]);
 
   useEffect(() => {
     const engine = engineRef.current;
@@ -3007,10 +2957,7 @@ export function useMetronomeScreen() {
           setFadeOutPhase(null);
           setFadeOutMeasureInPhase(0);
           setTimeout(() => {
-            const eng = engineRef.current;
-            if (eng) eng.stop();
-            stopRenderedAudio();
-            clearSamplePlayStates();
+            stopPlaybackAudio();
             setIsPreparing(false);
             setIsPlaying(false);
             resetPlaybackVisuals();
@@ -3138,21 +3085,7 @@ export function useMetronomeScreen() {
           }, 0);
           return;
         }
-        if (webRenderedLoopRef.current) {
-          webRenderedLoopRef.current.stop();
-          webRenderedLoopRef.current = null;
-        }
-        if (renderedPlayerRef.current) {
-          try { renderedPlayerRef.current.pause(); renderedPlayerRef.current.release(); } catch {}
-          renderedPlayerRef.current = null;
-        }
-        for (const [k, st] of Object.entries(samplePlayStateRef.current)) {
-          if (st.endTimer) clearTimeout(st.endTimer);
-        }
-        samplePlayStateRef.current = {};
-        for (const snd of Object.values(noteSampleSoundsRef.current)) {
-          try { snd.pause(); } catch {}
-        }
+        stopPlaybackAudio();
         setIsPreparing(false);
         setIsPlaying(false);
         resetPlaybackVisuals();
@@ -3172,9 +3105,7 @@ export function useMetronomeScreen() {
     const engine = engineRef.current;
     if (!engine) return;
     if (timerStopModeRef.current === "immediate") {
-      engine.stop();
-      stopRenderedAudio();
-      clearSamplePlayStates();
+      stopPlaybackAudio();
       setIsPreparing(false);
       setIsPlaying(false);
       resetPlaybackVisuals();
@@ -3654,11 +3585,7 @@ export function useMetronomeScreen() {
       if (Object.keys(entrySamples).length > 0) {
         await preloadNoteSampleSounds(entrySamples, true);
       } else {
-        for (const s of Object.values(noteSampleSoundsRef.current)) {
-          try { s.release(); } catch {}
-        }
-        noteSampleSoundsRef.current = {};
-        void releaseAllStereoArtifacts();
+        releaseNoteSampleResources(true);
       }
     } catch (error) {
       if (transitionEpoch === noteEntryTransitionEpochRef.current) {
@@ -3763,7 +3690,7 @@ export function useMetronomeScreen() {
         });
       }
     }
-  }, [cancelNoteSamplePreload, cancelPlaybackAttempt, getSamplePCMs, preloadNoteSampleSounds, startConfiguredPlayback]);
+  }, [cancelNoteSamplePreload, cancelPlaybackAttempt, getSamplePCMs, preloadNoteSampleSounds, releaseNoteSampleResources, startConfiguredPlayback]);
 
   const createShuffledIndices = useCallback((length: number) => createShuffledIndicesPure(length), []);
 
@@ -3839,10 +3766,7 @@ export function useMetronomeScreen() {
       if (isPlayingRef.current) {
         stopMetronome();
       } else {
-        engine.stop();
-        clearAudioWatchdogRef.current();
-        stopRenderedAudio();
-        clearSamplePlayStates();
+        stopPlaybackAudio();
         setIsPreparing(false);
         setIsPlaying(false);
         resetPlaybackVisuals();
@@ -3889,10 +3813,7 @@ export function useMetronomeScreen() {
       if (isPlayingRef.current) {
         stopMetronome();
       } else {
-        engine.stop();
-        clearAudioWatchdogRef.current();
-        stopRenderedAudio();
-        clearSamplePlayStates();
+        stopPlaybackAudio();
         setIsPlaying(false);
         markAudioStopped();
       }
@@ -4189,10 +4110,7 @@ export function useMetronomeScreen() {
       } else if (isPlayingRef.current) {
         void togglePlayPause();
       } else if (engine) {
-        engine.stop();
-        clearAudioWatchdogRef.current();
-        stopRenderedAudio();
-        clearSamplePlayStates();
+        stopPlaybackAudio();
         markAudioStopped();
       }
       setIsPlaying(false);
@@ -4223,9 +4141,7 @@ export function useMetronomeScreen() {
   const handleNoteManualNextImmediate = useCallback(() => {
     const engine = engineRef.current;
     if (!engine || !noteIsPlayingRef.current) return;
-    engine.stop();
-    stopRenderedAudio();
-    clearSamplePlayStates();
+    stopPlaybackAudio();
     noteAdvanceQueueRef.current();
   }, []);
 
@@ -4235,9 +4151,7 @@ export function useMetronomeScreen() {
     if (noteIsPlayingRef.current) {
       const engine = engineRef.current;
       if (!engine) return;
-      engine.stop();
-      stopRenderedAudio();
-      clearSamplePlayStates();
+      stopPlaybackAudio();
       noteAdvanceQueueRef.current();
       return;
     }

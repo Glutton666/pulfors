@@ -29,6 +29,7 @@ const mockPlayWebRenderedLoop = jest.fn(
 const mockDecodeSampleFile = jest.fn(async (_uri: string) => new Float32Array([0.8, 0.4, 0.2]));
 const mockCreateAudioPlayer = jest.fn((_source: unknown) => ({ ...mockPlayer }));
 const mockApplyDialConfigToEngine = jest.fn();
+const mockScheduleWebClickAt = jest.fn((..._args: unknown[]) => null as any);
 
 jest.mock("expo-audio", () => ({
   createAudioPlayer: (source: unknown) => mockCreateAudioPlayer(source),
@@ -47,7 +48,7 @@ jest.mock("@/lib/audio-renderer", () => ({
   abortActiveRender: jest.fn(),
   finishAbortableRender: jest.fn(),
   isRenderAborted: jest.fn((error: unknown) => (error as Error)?.message === "RENDER_ABORTED"),
-  scheduleWebClickAt: jest.fn(() => null),
+  scheduleWebClickAt: (...args: unknown[]) => mockScheduleWebClickAt(...args),
   applySoftClip: jest.fn(),
   saveRenderedWav: jest.fn(async () => "file:///rendered.wav"),
   ensureWebClickBuffers: jest.fn(async () => true),
@@ -59,6 +60,7 @@ jest.mock("@/lib/audio-renderer", () => ({
   ) => mockPlayWebRenderedLoop(pcm, onEnded, channel, volume),
   getWebAudioContext: jest.fn(() => ({
     state: "running",
+    currentTime: 0,
     resume: jest.fn().mockResolvedValue(undefined),
   })),
   getRealtimeClickGain: (volume: number) => Math.max(0, Math.min(1, volume)) * 3.2,
@@ -771,6 +773,34 @@ describe("pre-rendered playback reliability", () => {
     expect(params.isPlayingRef.current).toBe(false);
   });
 
+  it("cannot resume a pending native startup after playback control unmounts", async () => {
+    (Platform as unknown as { OS: string }).OS = "android";
+    const engine = makeEngine();
+    const params = makePlaybackParams(engine, { ...mockPlayer });
+    let resolveFocus!: () => void;
+    params.notifyUserToggle.mockReturnValue(
+      new Promise<void>((resolve) => { resolveFocus = resolve; }),
+    );
+    const { result, unmount } = renderHook(() => usePlaybackControl(params as any));
+
+    let pendingStart!: Promise<boolean | void>;
+    act(() => {
+      pendingStart = result.current.togglePlayPause();
+    });
+    await act(async () => { await Promise.resolve(); });
+    unmount();
+    resolveFocus();
+    let started: boolean | void = true;
+    await act(async () => {
+      started = await pendingStart;
+    });
+
+    expect(started).toBe(false);
+    expect(engine.start).not.toHaveBeenCalled();
+    expect(params.setIsPlaying).not.toHaveBeenCalledWith(true);
+    expect(params.showPlayingNotification).not.toHaveBeenCalled();
+  });
+
   it("releases configured Note playback ownership when the queue finishes", async () => {
     const engine = makeEngine();
     const player = { ...mockPlayer };
@@ -924,6 +954,281 @@ describe("pre-rendered playback reliability", () => {
     expect(releaseStereoArtifact).toHaveBeenCalledWith("0-0");
     expect(params.showRecoveryToast).not.toHaveBeenCalled();
     jest.useRealTimers();
+  });
+
+  it("complete playback stop clears rendered, sampled, realtime, watchdog, and blob ownership", () => {
+    jest.useFakeTimers();
+    (Platform as unknown as { OS: string }).OS = "web";
+    const engine = makeEngine();
+    engine.start();
+    const renderedPlayer = { ...mockPlayer, pause: jest.fn(), release: jest.fn() };
+    const notePlayer = { ...mockPlayer, pause: jest.fn(), release: jest.fn(), seekTo: jest.fn() };
+    const renderedLoop = { stop: jest.fn(), isRunning: () => true };
+    const realtimeSource = { cancel: jest.fn(), onEnded: jest.fn() };
+    mockScheduleWebClickAt.mockReturnValueOnce(realtimeSource);
+    const revokeObjectURL = jest.fn();
+    const originalRevokeObjectURL = URL.revokeObjectURL;
+    Object.defineProperty(URL, "revokeObjectURL", {
+      configurable: true,
+      value: revokeObjectURL,
+    });
+    const params = {
+      engineRef: { current: engine },
+      soundSet: "classic",
+      soundSetRef: { current: "classic" },
+      customSoundSetsRef: { current: {} },
+      layerSoundSetsRef: { current: {} },
+      noteSamplesRef: { current: sampleMap },
+      noteSampleChannelsRef: { current: {} },
+      noteSampleVolumesRef: { current: {} },
+      noteSampleSpeedsRef: { current: {} },
+      barModeRef: { current: false },
+      barMetronomeChannelRef: { current: "both" },
+      noteSampleMetroChannelsRef: { current: {} },
+      volume: 0.35,
+      volumeRef: { current: 0.35 },
+      sampleVolumeRef: { current: 0.7 },
+      clickPCMCacheRef: { current: { classic: clickPCMs } },
+      webClickReadyRef: { current: true },
+      noteSampleSoundsRef: { current: { "0-0": notePlayer } },
+      renderGenerationRef: { current: 0 },
+      isPlayingRef: { current: true },
+      bpmRef: { current: 120 },
+      t: (key: string) => key,
+      showRecoveryToast: jest.fn(),
+      persistAudioSettingsCallbackRef: { current: jest.fn() },
+    } as any;
+    const { result, unmount } = renderHook(() => useAudioPipeline(params));
+    result.current.renderedPlayerRef.current = renderedPlayer as any;
+    result.current.webRenderedLoopRef.current = renderedLoop as any;
+    result.current.renderedUrlRef.current = "blob:https://example.test/rendered";
+    result.current.samplePlayStateRef.current = {
+      "0-0": { playing: true, endTimer: setTimeout(jest.fn(), 1000) },
+    };
+    act(() => result.current.armAudioWatchdog());
+    expect(result.current.scheduleRealtimeWebClick("strong", "both", performance.now())).toBe(true);
+    act(() => result.current.scheduleReRender());
+
+    act(() => result.current.stopPlaybackAudio());
+    engine.start();
+    act(() => { jest.advanceTimersByTime(5000); });
+
+    expect(renderedLoop.stop).toHaveBeenCalledTimes(1);
+    expect(renderedPlayer.pause).toHaveBeenCalledTimes(1);
+    expect(renderedPlayer.release).toHaveBeenCalledTimes(1);
+    expect(notePlayer.pause).toHaveBeenCalledTimes(1);
+    expect(notePlayer.release).not.toHaveBeenCalled();
+    expect(result.current.samplePlayStateRef.current).toEqual({});
+    expect(realtimeSource.cancel).toHaveBeenCalledTimes(1);
+    expect(revokeObjectURL).toHaveBeenCalledWith("blob:https://example.test/rendered");
+    expect(params.showRecoveryToast).not.toHaveBeenCalled();
+    expect(mockRenderMeasure).not.toHaveBeenCalled();
+
+    unmount();
+    Object.defineProperty(URL, "revokeObjectURL", {
+      configurable: true,
+      value: originalRevokeObjectURL,
+    });
+    jest.useRealTimers();
+  });
+
+  it("complete stop cancels a Note sample queued for the next timer turn", async () => {
+    jest.useFakeTimers();
+    (Platform as unknown as { OS: string }).OS = "ios";
+    const engine = makeEngine();
+    const player = {
+      ...mockPlayer,
+      play: jest.fn(),
+      pause: jest.fn(),
+      release: jest.fn(),
+      seekTo: jest.fn().mockResolvedValue(undefined),
+      duration: 1,
+    };
+    const params = makePipelineParams(engine, { "0-0": player });
+    const { result, unmount } = renderHook(() => useAudioPipeline(params as any));
+
+    expect(result.current.queueNoteSamplePlayback("0-0", player as any, 0, 500)).toBe(true);
+    act(() => result.current.stopPlaybackAudio());
+    const seekCallsAfterStop = player.seekTo.mock.calls.length;
+    await act(async () => {
+      jest.runOnlyPendingTimers();
+      await Promise.resolve();
+    });
+
+    expect(player.seekTo).toHaveBeenCalledTimes(seekCallsAfterStop);
+    expect(player.play).not.toHaveBeenCalled();
+    unmount();
+    jest.useRealTimers();
+  });
+
+  it("complete stop prevents Note sample play after a native seek resolves", async () => {
+    jest.useFakeTimers();
+    (Platform as unknown as { OS: string }).OS = "ios";
+    const engine = makeEngine();
+    let resolveSeek!: () => void;
+    const seekPromise = new Promise<void>((resolve) => { resolveSeek = resolve; });
+    const player = {
+      ...mockPlayer,
+      play: jest.fn(),
+      pause: jest.fn(),
+      release: jest.fn(),
+      seekTo: jest.fn(() => seekPromise),
+      duration: 1,
+    };
+    const params = makePipelineParams(engine, { "0-0": player });
+    const { result, unmount } = renderHook(() => useAudioPipeline(params as any));
+
+    result.current.queueNoteSamplePlayback("0-0", player as any, 0, 500);
+    act(() => { jest.advanceTimersByTime(0); });
+    expect(player.seekTo).toHaveBeenCalled();
+    act(() => result.current.stopPlaybackAudio());
+    await act(async () => {
+      resolveSeek();
+      await seekPromise;
+      await Promise.resolve();
+    });
+
+    expect(player.play).not.toHaveBeenCalled();
+    unmount();
+    jest.useRealTimers();
+  });
+
+  it("releases an individual Note sample through pipeline ownership exactly once", async () => {
+    jest.useFakeTimers();
+    const engine = makeEngine();
+    const notePlayer = { ...mockPlayer, pause: jest.fn(), release: jest.fn() };
+    let resolveArtifact!: (value: { uri: string; changed: boolean }) => void;
+    (syncStereoArtifact as jest.Mock).mockImplementationOnce(
+      () => new Promise((resolve) => { resolveArtifact = resolve; }),
+    );
+    const params = {
+      engineRef: { current: engine },
+      soundSet: "classic",
+      soundSetRef: { current: "classic" },
+      customSoundSetsRef: { current: {} },
+      layerSoundSetsRef: { current: {} },
+      noteSamplesRef: { current: sampleMap },
+      noteSampleChannelsRef: { current: {} },
+      noteSampleVolumesRef: { current: {} },
+      noteSampleSpeedsRef: { current: {} },
+      barModeRef: { current: false },
+      barMetronomeChannelRef: { current: "both" },
+      noteSampleMetroChannelsRef: { current: {} },
+      volume: 0.35,
+      volumeRef: { current: 0.35 },
+      sampleVolumeRef: { current: 0.7 },
+      clickPCMCacheRef: { current: { classic: clickPCMs } },
+      webClickReadyRef: { current: false },
+      noteSampleSoundsRef: { current: { "0-0": notePlayer } },
+      renderGenerationRef: { current: 0 },
+      isPlayingRef: { current: false },
+      bpmRef: { current: 120 },
+      t: (key: string) => key,
+      showRecoveryToast: jest.fn(),
+      persistAudioSettingsCallbackRef: { current: jest.fn() },
+    } as any;
+    const { result, unmount } = renderHook(() => useAudioPipeline(params));
+    result.current.samplePlayStateRef.current = {
+      "0-0": { playing: true, endTimer: setTimeout(jest.fn(), 1000) },
+    };
+    let pendingPreload!: Promise<void>;
+    act(() => {
+      pendingPreload = result.current.preloadNoteSampleSounds(sampleMap);
+    });
+    await act(async () => { await Promise.resolve(); });
+
+    await act(async () => {
+      await result.current.releaseNoteSampleResource("0-0");
+    });
+    await act(async () => {
+      resolveArtifact({ uri: "file:///stereo.wav", changed: true });
+      await pendingPreload;
+    });
+
+    expect(notePlayer.pause).toHaveBeenCalledTimes(1);
+    expect(notePlayer.release).toHaveBeenCalledTimes(1);
+    expect(params.noteSampleSoundsRef.current).toEqual({});
+    expect(result.current.samplePlayStateRef.current).toEqual({});
+    expect(releaseStereoArtifact).toHaveBeenCalledWith("0-0");
+    expect(releaseStereoArtifactIfCurrent).toHaveBeenCalledWith("0-0", "file:///stereo.wav");
+    expect(mockCreateAudioPlayer).not.toHaveBeenCalled();
+
+    unmount();
+    expect(notePlayer.release).toHaveBeenCalledTimes(1);
+    jest.useRealTimers();
+  });
+
+  it("deleting one Note sample preserves another sample's end timer and next playback", async () => {
+    jest.useFakeTimers();
+    (Platform as unknown as { OS: string }).OS = "ios";
+    const engine = makeEngine();
+    const deletedPlayer = {
+      ...mockPlayer,
+      play: jest.fn(),
+      pause: jest.fn(),
+      release: jest.fn(),
+      seekTo: jest.fn().mockResolvedValue(undefined),
+      duration: 1,
+    };
+    const retainedPlayer = {
+      ...mockPlayer,
+      play: jest.fn(),
+      pause: jest.fn(),
+      release: jest.fn(),
+      seekTo: jest.fn().mockResolvedValue(undefined),
+      duration: 1,
+    };
+    const params = makePipelineParams(engine, {
+      "0-0": deletedPlayer,
+      "1-0": retainedPlayer,
+    });
+    const { result, unmount } = renderHook(() => useAudioPipeline(params as any));
+
+    result.current.queueNoteSamplePlayback("1-0", retainedPlayer as any, 0, 100);
+    await act(async () => {
+      jest.advanceTimersByTime(0);
+      await Promise.resolve();
+    });
+    expect(retainedPlayer.play).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      await result.current.releaseNoteSampleResource("0-0");
+    });
+    await act(async () => {
+      jest.advanceTimersByTime(100);
+      await Promise.resolve();
+    });
+
+    expect(result.current.samplePlayStateRef.current["1-0"]?.playing).toBe(false);
+    expect(retainedPlayer.pause).toHaveBeenCalledTimes(2);
+    expect(retainedPlayer.release).not.toHaveBeenCalled();
+
+    result.current.queueNoteSamplePlayback("1-0", retainedPlayer as any, 0, 100);
+    await act(async () => {
+      jest.advanceTimersByTime(0);
+      await Promise.resolve();
+    });
+    expect(retainedPlayer.play).toHaveBeenCalledTimes(2);
+
+    unmount();
+    jest.useRealTimers();
+  });
+
+  it("full app reset stops and releases audio ownership before clearing persisted state", () => {
+    const source = require("node:fs").readFileSync("hooks/useMetronomeScreen.ts", "utf8") as string;
+    const resetStart = source.indexOf("const handleResetApp = useCallback");
+    const resetEnd = source.indexOf("\\n  const ", resetStart + 1);
+    const resetBody = source.slice(resetStart, resetEnd);
+
+    expect(resetBody).toContain("stopPlaybackAudio();");
+    expect(resetBody).toContain("releaseNoteSampleResources(true);");
+    expect(resetBody).toContain("isPreparingRef.current = false;");
+    expect(resetBody).toContain("isPlayingRef.current = false;");
+    expect(resetBody.indexOf("stopPlaybackAudio();"))
+      .toBeLessThan(resetBody.indexOf("await clearAllAppStorage();"));
+    expect(resetBody.indexOf("releaseNoteSampleResources(true);"))
+      .toBeLessThan(resetBody.indexOf("noteSamplesRef.current = {};"));
+    expect(resetBody).not.toMatch(/engine\\?\\.getIsRunning\\(\\)[\\s\\S]*engine\\.stop\\(\\)/);
   });
 
   it("releases only the owning artifact when overlapping preloads finish after unmount", async () => {
@@ -1566,6 +1871,20 @@ describe("pre-rendered playback reliability", () => {
 function makePlaybackParams(engine: ReturnType<typeof makeEngine>, player: typeof mockPlayer | null) {
   const webRenderedLoopRef = { current: null as any };
   const renderedPlayerRef = { current: null as any };
+  const stopRenderedAudio = jest.fn(() => {
+    renderedPlayerRef.current = null;
+    webRenderedLoopRef.current = null;
+  });
+  const clearSamplePlayStates = jest.fn();
+  const invalidateAudioStartupProbe = jest.fn();
+  const clearAudioWatchdog = jest.fn();
+  const stopPlaybackAudio = jest.fn(() => {
+    invalidateAudioStartupProbe();
+    clearAudioWatchdog();
+    engine.stop();
+    stopRenderedAudio();
+    clearSamplePlayStates();
+  });
   return {
     engineRef: { current: engine },
     isPlaying: false,
@@ -1595,22 +1914,20 @@ function makePlaybackParams(engine: ReturnType<typeof makeEngine>, player: typeo
     barLoopModeRef: { current: "loop" },
     blockPlayModeRef: { current: "sequential" },
     beatDenominatorRef: { current: 4 },
-    stopRenderedAudio: jest.fn(() => {
-      renderedPlayerRef.current = null;
-      webRenderedLoopRef.current = null;
-    }),
-    clearSamplePlayStates: jest.fn(),
+    stopRenderedAudio,
+    stopPlaybackAudio,
+    clearSamplePlayStates,
     resetPlaybackVisuals: jest.fn(),
     flushPlaybackVisuals: jest.fn(),
     renderedPlayerRef,
     webRenderedLoopRef,
     activateWebRenderedLoop: jest.fn((loop) => { webRenderedLoopRef.current = loop; }),
     beginAudioStartupProbe: jest.fn(() => 1),
-    invalidateAudioStartupProbe: jest.fn(),
+    invalidateAudioStartupProbe,
     waitForFirstAudioActivity: jest.fn(async (_epoch: number) => true),
     renderGenerationRef: { current: 0 },
     buildRenderedPlayer: jest.fn(async () => player),
-    clearAudioWatchdogRef: { current: jest.fn() },
+    clearAudioWatchdogRef: { current: clearAudioWatchdog },
     armAudioWatchdogRef: { current: jest.fn() },
     soundSetRef: { current: "classic" },
     volumeRef: { current: 0.35 },
@@ -1640,5 +1957,37 @@ function makePlaybackParams(engine: ReturnType<typeof makeEngine>, player: typeo
     addPracticeLog: jest.fn(),
     checkCompletedGoals: jest.fn(),
     capturePlaybackError: jest.fn(),
+  };
+}
+
+function makePipelineParams(
+  engine: ReturnType<typeof makeEngine>,
+  noteSampleSounds: Record<string, any> = {},
+) {
+  return {
+    engineRef: { current: engine },
+    soundSet: "classic",
+    soundSetRef: { current: "classic" },
+    customSoundSetsRef: { current: {} },
+    layerSoundSetsRef: { current: {} },
+    noteSamplesRef: { current: sampleMap },
+    noteSampleChannelsRef: { current: {} },
+    noteSampleVolumesRef: { current: {} },
+    noteSampleSpeedsRef: { current: {} },
+    barModeRef: { current: true },
+    barMetronomeChannelRef: { current: "both" },
+    noteSampleMetroChannelsRef: { current: {} },
+    volume: 0.35,
+    volumeRef: { current: 0.35 },
+    sampleVolumeRef: { current: 0.7 },
+    clickPCMCacheRef: { current: { classic: clickPCMs } },
+    webClickReadyRef: { current: true },
+    noteSampleSoundsRef: { current: noteSampleSounds },
+    renderGenerationRef: { current: 0 },
+    isPlayingRef: { current: true },
+    bpmRef: { current: 120 },
+    t: (key: string) => key,
+    showRecoveryToast: jest.fn(),
+    persistAudioSettingsCallbackRef: { current: jest.fn() },
   };
 }

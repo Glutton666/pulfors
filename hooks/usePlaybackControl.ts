@@ -69,6 +69,7 @@ export interface UsePlaybackControlParams {
   beatDenominatorRef: Ref<2 | 4 | 8>;
   seamlessNextEntryRef?: Ref<PracticeEntry | null>;
   stopRenderedAudio: () => void;
+  stopPlaybackAudio: () => void;
   clearSamplePlayStates: () => void;
   resetPlaybackVisuals: () => void;
   flushPlaybackVisuals: () => void;
@@ -133,6 +134,16 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
   const renderGenerationRef = p.renderGenerationRef;
   const startAttemptRef = useRef(0);
   const scheduledStartTokenRef = useRef<symbol | null>(null);
+
+  useEffect(() => () => {
+    // A focus/buffer/scheduled-start await may resolve after the owning screen
+    // has unmounted. Invalidate the attempt before any continuation can start
+    // the engine or publish React/audio lifecycle state.
+    scheduledStartTokenRef.current = null;
+    startAttemptRef.current += 1;
+    p.preparingCancelledRef.current = true;
+    p.invalidateAudioStartupProbe();
+  }, [p.invalidateAudioStartupProbe, p.preparingCancelledRef]);
 
   const startOrResumePracticeSession = useCallback(() => {
     if (!p.loggingEnabled) return;
@@ -311,14 +322,8 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
     if (!p.isPlayingRef.current && !p.isPreparingRef.current) return;
     scheduledStartTokenRef.current = null;
     startAttemptRef.current += 1;
-    renderGenerationRef.current += 1;
-    abortActiveRender(renderGenerationRef);
     p.preparingCancelledRef.current = true;
-    p.invalidateAudioStartupProbe();
-    p.clearAudioWatchdogRef.current();
-    p.engineRef.current?.stop();
-    p.stopRenderedAudio();
-    p.clearSamplePlayStates();
+    p.stopPlaybackAudio();
     p.setIsPreparing(false);
     p.isPreparingRef.current = false;
     p.setIsPlaying(false);
@@ -328,7 +333,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
     markAudioStopped();
     completePracticeSession(endReason);
     p.onPlaybackStopped?.();
-  }, [completePracticeSession, p, renderGenerationRef]);
+  }, [completePracticeSession, p]);
 
   const cancelPlaybackAttempt = useCallback((
     notifyFailure = false,
@@ -336,14 +341,8 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
   ) => {
     scheduledStartTokenRef.current = null;
     startAttemptRef.current += 1;
-    renderGenerationRef.current += 1;
-    abortActiveRender(renderGenerationRef);
     p.preparingCancelledRef.current = true;
-    p.invalidateAudioStartupProbe();
-    p.clearAudioWatchdogRef.current();
-    p.engineRef.current?.stop();
-    p.stopRenderedAudio();
-    p.clearSamplePlayStates();
+    p.stopPlaybackAudio();
     p.setIsPreparing(false);
     p.isPreparingRef.current = false;
     p.setIsPlaying(false);
@@ -353,7 +352,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
     if (!preserveLifecycle) markAudioStopped();
     if (notifyFailure) p.showPlaybackStartFailure();
     p.onPlaybackStopped?.();
-  }, [p, renderGenerationRef]);
+  }, [p]);
 
   const startPreparedPlayback = useCallback(async (
     engine: MetronomeEngine,
@@ -622,14 +621,9 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
       scheduledStartTokenRef.current = null;
       p.notifyUserToggle();
       startAttemptRef.current += 1;
-      renderGenerationRef.current += 1;
-      p.invalidateAudioStartupProbe();
       const playback = p.getPlaybackContext();
       seamlessRef.current = null;
-      p.clearAudioWatchdogRef.current();
-      engine.stop();
-      p.stopRenderedAudio();
-      p.clearSamplePlayStates();
+      p.stopPlaybackAudio();
       p.setIsPreparing(false);
       p.isPreparingRef.current = false;
       p.setIsPlaying(false);
@@ -647,7 +641,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
     const androidProbeReady = p.notifyUserToggle();
     const startBeat = p.barModeRef.current ? p.barStartBeatRef.current : undefined;
     return startPreparedPlayback(engine, startBeat ?? undefined, androidProbeReady);
-  }, [cancelPlaybackAttempt, p, pausePracticeSession, renderGenerationRef, seamlessRef, startPreparedPlayback]);
+  }, [cancelPlaybackAttempt, p, pausePracticeSession, seamlessRef, startPreparedPlayback]);
 
   const togglePlayPauseRef = useRef(togglePlayPause);
   useEffect(() => { togglePlayPauseRef.current = togglePlayPause; }, [togglePlayPause]);
@@ -682,13 +676,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
     if (p.isPlayingRef.current) {
       const playback = p.getPlaybackContext();
       startAttemptRef.current += 1;
-      renderGenerationRef.current += 1;
-      abortActiveRender(renderGenerationRef);
-      p.invalidateAudioStartupProbe();
-      p.clearAudioWatchdogRef.current();
-      engine.stop();
-      p.stopRenderedAudio();
-      p.clearSamplePlayStates();
+      p.stopPlaybackAudio();
       p.setIsPreparing(false);
       p.isPreparingRef.current = false;
       p.setIsPlaying(false);
@@ -718,7 +706,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
         scheduledStartTokenRef.current = null;
       }
     }
-  }, [cancelPlaybackAttempt, p, pausePracticeSession, renderGenerationRef, startPreparedPlayback]);
+  }, [cancelPlaybackAttempt, p, pausePracticeSession, startPreparedPlayback]);
 
   const cancelScheduledMetronome = useCallback(() => {
     if (!scheduledStartTokenRef.current) return;
@@ -728,18 +716,15 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
 
   const retryAudioRecovery = useCallback(async () => {
     if (p.isPreparingRef.current) return;
-    renderGenerationRef.current += 1;
     markAudioRecovering("watchdog");
     p.practiceSessionRef.current?.interrupt();
-    p.engineRef.current?.stop();
-    p.stopRenderedAudio();
-    p.clearSamplePlayStates();
+    p.stopPlaybackAudio();
     p.setIsPlaying(false);
     p.isPlayingRef.current = false;
     p.setIsPreparing(false);
     p.isPreparingRef.current = false;
     await startMetronome();
-  }, [p, renderGenerationRef, startMetronome]);
+  }, [p, startMetronome]);
 
   return {
     togglePlayPause,

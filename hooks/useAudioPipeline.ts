@@ -172,6 +172,7 @@ export interface UseAudioPipelineResult {
   >;
   scheduleReRender: () => void;
   stopRenderedAudio: () => void;
+  stopPlaybackAudio: () => void;
   getClickPCMs: (set: SoundSet, signal?: AbortSignal) => Promise<ClickPCMs>;
   getSamplePCMs: (samples: NoteSampleMap, signal?: AbortSignal) => Promise<Map<string, SamplePCMEntry>>;
   getLayerClickPCMsForSchedule: (ticks: TickInfo[], signal?: AbortSignal) => Promise<Map<string, ClickPCMs>>;
@@ -179,6 +180,14 @@ export interface UseAudioPipelineResult {
   preloadNoteSampleSounds: (samples: NoteSampleMap, keepExisting?: boolean) => Promise<void>;
   cancelNoteSamplePreload: () => void;
   clearSamplePlayStates: () => void;
+  queueNoteSamplePlayback: (
+    key: string,
+    player: ExpoAudioPlayer,
+    startMs: number,
+    durationMs: number,
+  ) => boolean;
+  releaseNoteSampleResource: (key: string) => Promise<void>;
+  releaseNoteSampleResources: (playbackAlreadyStopped?: boolean) => void;
   armAudioWatchdog: () => void;
   clearAudioWatchdog: () => void;
   scheduleRealtimeWebClick: (
@@ -321,6 +330,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
   const reRenderTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const realtimeSourcesRef = useRef(new Set<import("@/lib/audio-renderer").ScheduledWebAudio>());
   const samplePlayStateRef = useRef<Record<string, { playing: boolean; endTimer: ReturnType<typeof setTimeout> | null }>>({});
+  const samplePlaybackEpochRef = useRef(0);
   const armTimeRef = useRef<number | null>(null);
   const showRecoveryToastRef = useRef(showRecoveryToast);
   useEffect(() => { showRecoveryToastRef.current = showRecoveryToast; }, [showRecoveryToast]);
@@ -993,6 +1003,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
   }, []);
 
   const clearSamplePlayStates = useCallback(() => {
+    samplePlaybackEpochRef.current += 1;
     for (const [, state] of Object.entries(samplePlayStateRef.current)) {
       if (state.endTimer) clearTimeout(state.endTimer);
     }
@@ -1010,8 +1021,60 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
     }
   }, [noteSampleSoundsRef, noteSamplesRef]);
 
-  const cleanupNoteSampleResources = useCallback(() => {
-    clearSamplePlayStates();
+  const queueNoteSamplePlayback = useCallback((
+    key: string,
+    player: ExpoAudioPlayer,
+    startMs: number,
+    durationMs: number,
+  ): boolean => {
+    const playbackEpoch = samplePlaybackEpochRef.current;
+    const stillOwnsPlayback = () =>
+      mountedRef.current &&
+      playbackEpoch === samplePlaybackEpochRef.current &&
+      noteSampleSoundsRef.current[key] === player;
+
+    setTimeout(() => {
+      if (!stillOwnsPlayback()) return;
+      const previousState = samplePlayStateRef.current[key];
+      if (previousState?.endTimer) clearTimeout(previousState.endTimer);
+      samplePlayStateRef.current[key] = { playing: true, endTimer: null };
+
+      const startSec = startMs / 1000;
+      if (Platform.OS === "web") {
+        try { player.seekTo(startSec); } catch {}
+        setTimeout(() => {
+          if (stillOwnsPlayback()) safePlay(player, "preview.web.startMs");
+        }, 10);
+      } else {
+        try { player.pause(); } catch {}
+        Promise.resolve(player.seekTo(startSec)).then(() => {
+          if (stillOwnsPlayback()) safePlay(player, "preview.native.startMs");
+        }).catch(() => {});
+      }
+
+      const effectiveDuration = durationMs > 0
+        ? durationMs
+        : player.duration > 0
+          ? (player.duration - startSec) * 1000
+          : 0;
+      if (effectiveDuration <= 0) return;
+      const timer = setTimeout(() => {
+        if (!stillOwnsPlayback()) return;
+        try { player.pause(); } catch {}
+        const state = samplePlayStateRef.current[key];
+        if (state) {
+          state.playing = false;
+          state.endTimer = null;
+        }
+      }, effectiveDuration / (noteSampleSpeedsRef.current[key] ?? 1));
+      const state = samplePlayStateRef.current[key];
+      if (state) state.endTimer = timer;
+    }, 0);
+    return true;
+  }, [noteSampleSoundsRef, noteSampleSpeedsRef]);
+
+  const cleanupNoteSampleResources = useCallback((playbackAlreadyStopped = false) => {
+    if (!playbackAlreadyStopped) clearSamplePlayStates();
     const players = noteSampleSoundsRef.current;
     noteSampleSoundsRef.current = {};
     for (const player of Object.values(players)) releaseAudioPlayer(player, false);
@@ -1026,6 +1089,28 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
     for (const key of artifactKeys) void releaseStereoArtifact(key);
   }, [clearSamplePlayStates, noteSampleSoundsRef, noteSamplesRef, releaseAudioPlayer]);
 
+  const releaseNoteSampleResources = useCallback((playbackAlreadyStopped = false) => {
+    cancelNoteSamplePreload();
+    cleanupNoteSampleResources(playbackAlreadyStopped);
+    samplePreloadKeysRef.current.clear();
+  }, [cancelNoteSamplePreload, cleanupNoteSampleResources]);
+
+  const releaseNoteSampleResource = useCallback(async (key: string) => {
+    // Keep the previous key owner token until its pending preload observes the
+    // cancelled generation, so it can release an artifact that finishes late.
+    cancelNoteSamplePreload();
+    const state = samplePlayStateRef.current[key];
+    if (state?.endTimer) clearTimeout(state.endTimer);
+    delete samplePlayStateRef.current[key];
+    const player = noteSampleSoundsRef.current[key];
+    if (player) {
+      delete noteSampleSoundsRef.current[key];
+      releaseAudioPlayer(player);
+    }
+    samplePreloadKeysRef.current.delete(key);
+    await releaseStereoArtifact(key);
+  }, [cancelNoteSamplePreload, noteSampleSoundsRef, releaseAudioPlayer]);
+
   // ── Playback-recovery watchdog ───────────────────────────────────────────────
   const clearAudioWatchdog = useCallback(() => {
     if (audioWatchdogTimerRef.current) {
@@ -1033,6 +1118,28 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
       audioWatchdogTimerRef.current = null;
     }
   }, []);
+
+  const stopPlaybackAudio = useCallback(() => {
+    // One ownership boundary for every complete playback stop. Render/sample
+    // producers are invalidated before active outputs and timers are released.
+    cancelNoteSamplePreload();
+    invalidateAudioStartupProbe();
+    clearAudioWatchdog();
+    if (reRenderTimerRef.current) {
+      clearTimeout(reRenderTimerRef.current);
+      reRenderTimerRef.current = null;
+    }
+    engineRef.current?.stop();
+    stopRenderedAudio();
+    clearSamplePlayStates();
+  }, [
+    cancelNoteSamplePreload,
+    clearAudioWatchdog,
+    clearSamplePlayStates,
+    engineRef,
+    invalidateAudioStartupProbe,
+    stopRenderedAudio,
+  ]);
 
   const armAudioWatchdog = useCallback(() => {
     if (!mountedRef.current) return;
@@ -1138,27 +1245,16 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
     // Invalidate every producer before releasing anything. This prevents a
     // render/preload continuation from publishing a resource after unmount.
     mountedRef.current = false;
-    renderGenerationRef.current += 1;
     samplePCMCacheGenerationRef.current += 1;
-    abortActiveRender(renderGenerationRef);
-    invalidateAudioStartupProbe();
-    clearAudioWatchdog();
-    if (reRenderTimerRef.current) {
-      clearTimeout(reRenderTimerRef.current);
-      reRenderTimerRef.current = null;
-    }
-    stopRenderedAudio();
-    cleanupNoteSampleResources();
+    stopPlaybackAudio();
+    cleanupNoteSampleResources(true);
     samplePCMCacheRef.current.clear();
     samplePCMUriRef.current.clear();
     samplePCMByUriRef.current.clear();
     samplePreloadKeysRef.current.clear();
   }, [
     cleanupNoteSampleResources,
-    clearAudioWatchdog,
-    invalidateAudioStartupProbe,
-    renderGenerationRef,
-    stopRenderedAudio,
+    stopPlaybackAudio,
   ]);
 
   useEffect(() => {
@@ -1204,6 +1300,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
     buildRenderedPlayerDetailed,
     scheduleReRender,
     stopRenderedAudio,
+    stopPlaybackAudio,
     getClickPCMs,
     getSamplePCMs,
     getLayerClickPCMsForSchedule,
@@ -1211,6 +1308,9 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
     preloadNoteSampleSounds,
     cancelNoteSamplePreload,
     clearSamplePlayStates,
+    queueNoteSamplePlayback,
+    releaseNoteSampleResource,
+    releaseNoteSampleResources,
     armAudioWatchdog,
     clearAudioWatchdog,
     scheduleRealtimeWebClick,
