@@ -305,7 +305,9 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
     }
   }, [p, renderGenerationRef]);
 
-  const stopMetronome = useCallback(() => {
+  const stopMetronome = useCallback((
+    endReason: NonNullable<PracticeSessionData["endReason"]> = "manual",
+  ) => {
     if (!p.isPlayingRef.current && !p.isPreparingRef.current) return;
     scheduledStartTokenRef.current = null;
     startAttemptRef.current += 1;
@@ -324,7 +326,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
     p.notifyVoicePlayState(false);
     p.resetPlaybackVisuals();
     markAudioStopped();
-    completePracticeSession("manual");
+    completePracticeSession(endReason);
     p.onPlaybackStopped?.();
   }, [completePracticeSession, p, renderGenerationRef]);
 
@@ -358,6 +360,10 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
     startBeat: number | undefined,
     androidProbeReady?: Promise<unknown>,
     startAtPerformanceTime?: number,
+    options: {
+      configureEngine?: boolean;
+      stopAfterMeasure?: boolean;
+    } = {},
   ): Promise<boolean> => {
     const attempt = ++startAttemptRef.current;
     const startupEpoch = p.beginAudioStartupProbe();
@@ -406,7 +412,9 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
     setPlaying(false);
     p.preparingCancelledRef.current = false;
     p.stopRenderedAudio();
-    configureEngine(engine);
+    if (options.configureEngine !== false) {
+      configureEngine(engine);
+    }
 
     let localNativePlayer: AudioPlayer | null = null;
     let nativePlayerPublished = false;
@@ -577,7 +585,10 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
       const playback = p.getPlaybackContext({ activeBarIndex: startBeat ?? 0 });
       p.showPlayingNotification(playback.bpm, playback.modeLabel, p.languageRef.current);
       startOrResumePracticeSession();
-      if (p.barModeRef.current && p.barLoopModeRef.current === "once") {
+      if (
+        options.stopAfterMeasure ||
+        (p.barModeRef.current && p.barLoopModeRef.current === "once")
+      ) {
         engine.requestStopAfterMeasure();
       }
       return true;
@@ -646,6 +657,24 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
     if (!engine || p.isPlayingRef.current || p.isPreparingRef.current) return;
     await startPreparedPlayback(engine, undefined);
   }, [p, startPreparedPlayback]);
+
+  /**
+   * Starts an engine schedule that the caller already configured. Note queue
+   * entries can contain Beat or Bar schedules while the screen itself remains
+   * in Note mode, so running configureEngine() here would overwrite the entry
+   * with the ordinary Beat-mode dial configuration.
+   */
+  const startConfiguredPlayback = useCallback(async (stopAfterMeasure = false) => {
+    const engine = p.engineRef.current;
+    if (!engine) return false;
+    return startPreparedPlayback(
+      engine,
+      undefined,
+      undefined,
+      undefined,
+      { configureEngine: false, stopAfterMeasure },
+    );
+  }, [p.engineRef, startPreparedPlayback]);
 
   const startScheduledMetronome = useCallback(async (startAtPerformanceTime: number) => {
     const engine = p.engineRef.current;
@@ -716,6 +745,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
     togglePlayPause,
     togglePlayPauseRef,
     startMetronome,
+    startConfiguredPlayback,
     startScheduledMetronome,
     cancelScheduledMetronome,
     stopMetronome,

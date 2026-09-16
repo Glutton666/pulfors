@@ -159,6 +159,7 @@ function makeEngine() {
     setAllBarBpmOverrides: jest.fn(),
     setPreRenderedAudio: jest.fn(),
     setPendingMeasureStartAction: jest.fn(),
+    requestStopAfterMeasure: jest.fn(),
   };
 }
 
@@ -483,6 +484,168 @@ describe("pre-rendered playback reliability", () => {
     expect(params.showPlayingNotification).toHaveBeenCalledTimes(1);
   });
 
+  it("starts a preconfigured Note queue schedule without replacing it with Beat settings", async () => {
+    const engine = makeEngine();
+    const player = { ...mockPlayer, volume: 0.35 };
+    const params = makePlaybackParams(engine, player);
+    params.getPlaybackContext.mockReturnValue({
+      bpm: 120,
+      modeLabel: "Note",
+      activityMode: "note",
+      bpmSource: "global",
+    });
+    const { result } = renderHook(() => usePlaybackControl(params as any));
+
+    let started = false;
+    await act(async () => {
+      started = await result.current.startConfiguredPlayback(true);
+    });
+
+    expect(started).toBe(true);
+    expect(mockApplyDialConfigToEngine).not.toHaveBeenCalled();
+    expect(engine.buildScheduleOnly).not.toHaveBeenCalled();
+    expect(params.stopRenderedAudio).toHaveBeenCalledTimes(1);
+    expect(params.stopRenderedAudio.mock.invocationCallOrder[0])
+      .toBeLessThan(player.play.mock.invocationCallOrder[0]);
+    expect(engine.requestStopAfterMeasure).toHaveBeenCalledTimes(1);
+    expect(params.showPlayingNotification).toHaveBeenCalledWith(120, "Note", "en");
+  });
+
+  it("releases a stale Note queue player when a newer entry starts preparing", async () => {
+    const engine = makeEngine();
+    const stalePlayer = {
+      ...mockPlayer,
+      play: jest.fn(),
+      pause: jest.fn(),
+      release: jest.fn(),
+    };
+    const currentPlayer = {
+      ...mockPlayer,
+      play: jest.fn(),
+      pause: jest.fn(),
+      release: jest.fn(),
+    };
+    let resolveStale!: (player: typeof stalePlayer) => void;
+    const params = makePlaybackParams(engine, null);
+    params.buildRenderedPlayer
+      .mockImplementationOnce(() => new Promise((resolve) => { resolveStale = resolve; }))
+      .mockResolvedValueOnce(currentPlayer);
+    const { result } = renderHook(() => usePlaybackControl(params as any));
+
+    let staleStart!: Promise<boolean>;
+    act(() => {
+      staleStart = result.current.startConfiguredPlayback(true);
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    let currentStart!: Promise<boolean>;
+    act(() => {
+      currentStart = result.current.startConfiguredPlayback(true);
+    });
+    await act(async () => {
+      await currentStart;
+      resolveStale(stalePlayer);
+      await staleStart;
+    });
+
+    expect(currentPlayer.play).toHaveBeenCalledTimes(1);
+    expect(stalePlayer.play).not.toHaveBeenCalled();
+    expect(stalePlayer.pause).toHaveBeenCalledTimes(1);
+    expect(stalePlayer.release).toHaveBeenCalledTimes(1);
+  });
+
+  it("cannot finish a configured Note queue start after the screen cancels preparation", async () => {
+    const engine = makeEngine();
+    const player = {
+      ...mockPlayer,
+      play: jest.fn(),
+      pause: jest.fn(),
+      release: jest.fn(),
+    };
+    let resolvePlayer!: (value: typeof mockPlayer) => void;
+    const params = makePlaybackParams(engine, null);
+    params.buildRenderedPlayer.mockImplementationOnce(
+      () => new Promise((resolve) => { resolvePlayer = resolve; }),
+    );
+    const { result } = renderHook(() => usePlaybackControl(params as any));
+
+    let pendingStart!: Promise<boolean>;
+    act(() => {
+      pendingStart = result.current.startConfiguredPlayback(true);
+    });
+    await act(async () => {
+      await Promise.resolve();
+      result.current.cancelPlaybackAttempt(false);
+    });
+    resolvePlayer(player);
+    let started = true;
+    await act(async () => {
+      started = await pendingStart;
+    });
+
+    expect(started).toBe(false);
+    expect(player.play).not.toHaveBeenCalled();
+    expect(player.pause).toHaveBeenCalledTimes(1);
+    expect(player.release).toHaveBeenCalledTimes(1);
+    expect(engine.start).not.toHaveBeenCalled();
+    expect(params.isPreparingRef.current).toBe(false);
+    expect(params.isPlayingRef.current).toBe(false);
+  });
+
+  it("releases configured Note playback ownership when the queue finishes", async () => {
+    const engine = makeEngine();
+    const player = { ...mockPlayer };
+    const session = {
+      resume: jest.fn(),
+      updateBpm: jest.fn(),
+      complete: jest.fn((..._args: any[]) => ({ duration: 0 })),
+    };
+    const params = makePlaybackParams(engine, player);
+    params.loggingEnabled = true;
+    (params.practiceSessionRef as any).current = session;
+    const { result } = renderHook(() => usePlaybackControl(params as any));
+
+    await act(async () => {
+      await result.current.startConfiguredPlayback(true);
+    });
+    act(() => {
+      result.current.stopMetronome("measure_complete");
+    });
+
+    expect(params.clearAudioWatchdogRef.current).toHaveBeenCalled();
+    expect(params.stopRenderedAudio).toHaveBeenCalledTimes(2);
+    expect(params.notifyVoicePlayState).toHaveBeenLastCalledWith(false);
+    expect(params.isPlayingRef.current).toBe(false);
+    expect(params.isPreparingRef.current).toBe(false);
+    expect(params.practiceSessionRef.current).toBeNull();
+    expect(session.complete.mock.calls[0][1]).toBe("measure_complete");
+  });
+
+  it("pauses the active practice session when configured Note playback is paused", async () => {
+    const engine = makeEngine();
+    const player = { ...mockPlayer };
+    const session = {
+      resume: jest.fn(),
+      updateBpm: jest.fn(),
+      pause: jest.fn(),
+    };
+    const params = makePlaybackParams(engine, player);
+    (params.practiceSessionRef as any).current = session;
+    const { result } = renderHook(() => usePlaybackControl(params as any));
+
+    await act(async () => {
+      await result.current.startConfiguredPlayback(true);
+      await result.current.togglePlayPause();
+    });
+
+    expect(session.pause).toHaveBeenCalledTimes(1);
+    expect(params.notifyVoicePlayState).toHaveBeenLastCalledWith(false);
+    expect(params.clearAudioWatchdogRef.current).toHaveBeenCalled();
+    expect(params.isPlayingRef.current).toBe(false);
+  });
+
   it("releases a native player built after startup was cancelled before publication", async () => {
     const engine = makeEngine();
     const player = {
@@ -646,6 +809,56 @@ describe("pre-rendered playback reliability", () => {
     expect(releaseStereoArtifactIfCurrent).not.toHaveBeenCalledWith(
       "0-0",
       "file:///old-stereo.wav",
+    );
+  });
+
+  it("cancels an in-flight Note sample preload before it can publish a player", async () => {
+    let resolveArtifact!: (result: { uri: string; changed: boolean }) => void;
+    (syncStereoArtifact as jest.Mock).mockImplementationOnce(
+      () => new Promise((resolve) => { resolveArtifact = resolve; }),
+    );
+    const engine = makeEngine();
+    const params = {
+      engineRef: { current: engine },
+      soundSet: "classic",
+      soundSetRef: { current: "classic" },
+      customSoundSetsRef: { current: {} },
+      layerSoundSetsRef: { current: {} },
+      noteSamplesRef: { current: sampleMap },
+      noteSampleChannelsRef: { current: sampleChannels },
+      noteSampleVolumesRef: { current: {} },
+      noteSampleSpeedsRef: { current: {} },
+      barModeRef: { current: false },
+      barMetronomeChannelRef: { current: "both" },
+      noteSampleMetroChannelsRef: { current: {} },
+      volume: 0.35,
+      volumeRef: { current: 0.35 },
+      sampleVolumeRef: { current: 0.7 },
+      clickPCMCacheRef: { current: { classic: clickPCMs } },
+      webClickReadyRef: { current: false },
+      noteSampleSoundsRef: { current: {} },
+      renderGenerationRef: { current: 0 },
+      isPlayingRef: { current: false },
+      bpmRef: { current: 120 },
+      t: (key: string) => key,
+      showRecoveryToast: jest.fn(),
+      persistAudioSettingsCallbackRef: { current: jest.fn() },
+    } as any;
+    const { result } = renderHook(() => useAudioPipeline(params));
+
+    const preload = result.current.preloadNoteSampleSounds({
+      "0-0": "file:///delayed.wav",
+    });
+    await act(async () => { await Promise.resolve(); });
+    act(() => result.current.cancelNoteSamplePreload());
+    resolveArtifact({ uri: "file:///delayed-stereo.wav", changed: true });
+    await act(async () => { await preload; });
+
+    expect(params.noteSampleSoundsRef.current).toEqual({});
+    expect(mockCreateAudioPlayer).not.toHaveBeenCalled();
+    expect(releaseStereoArtifactIfCurrent).toHaveBeenCalledWith(
+      "0-0",
+      "file:///delayed-stereo.wav",
     );
   });
 

@@ -90,6 +90,7 @@ import { usePlaybackControl } from "@/hooks/usePlaybackControl";
 import { useAudioLifecycle } from "@/hooks/useAudioLifecycle";
 import {
   getAudioLifecycleSnapshot,
+  markAudioPreparing,
   markAudioPlaying,
   markAudioStopped,
 } from "@/lib/audio-lifecycle";
@@ -349,6 +350,7 @@ export function useMetronomeScreen() {
   // 악보-마디 프리셋 전환: 연습장 캐시 + 버전 카운터 → usePracticeBookLoad 소유
   const [noteBarEntries, setNoteBarEntries] = useState<PracticeEntry[]>([]);
   const noteAdvanceQueueRef = useRef<() => void>(() => {});
+  const noteEntryTransitionEpochRef = useRef(0);
   const noteShuffledIndicesRef = useRef<number[]>([]);
   const noteShuffledPosRef = useRef(0);
 
@@ -868,7 +870,7 @@ export function useMetronomeScreen() {
     samplePlayStateRef,
     buildRenderedPlayer, buildRenderedPlayerDetailed, scheduleReRender, stopRenderedAudio,
     getClickPCMs, getSamplePCMs, getLayerClickPCMsForSchedule,
-    invalidateSamplePCMCache, preloadNoteSampleSounds, clearSamplePlayStates,
+    invalidateSamplePCMCache, preloadNoteSampleSounds, cancelNoteSamplePreload, clearSamplePlayStates,
     armAudioWatchdog, clearAudioWatchdog,
     scheduleRealtimeWebClick, clearRealtimeWebAudio,
   } = useAudioPipeline({
@@ -2135,6 +2137,7 @@ export function useMetronomeScreen() {
     togglePlayPause,
     togglePlayPauseRef,
     startMetronome,
+    startConfiguredPlayback,
     startScheduledMetronome,
     cancelScheduledMetronome,
     stopMetronome,
@@ -3119,10 +3122,18 @@ export function useMetronomeScreen() {
         }
         // ── 일반 정지 ─────────────────────────────────────────────────
         if (noteModeRef.current && noteIsPlayingRef.current) {
-          const lastBeatMs = Math.round(60000 / (bpmRef.current || 120));
+          // A rendered player loops independently from the engine. Leaving it
+          // alive during the old one-beat queue delay replayed the first click
+          // of the finished entry and could overlap the next entry's realtime
+          // or rendered output, making every queue cycle a different volume.
+          clearAudioWatchdogRef.current();
+          stopRenderedAudio();
+          clearSamplePlayStates();
+          const completedEntryEpoch = noteEntryTransitionEpochRef.current;
           setTimeout(() => {
+            if (completedEntryEpoch !== noteEntryTransitionEpochRef.current) return;
             noteAdvanceQueueRef.current();
-          }, lastBeatMs);
+          }, 0);
           return;
         }
         if (webRenderedLoopRef.current) {
@@ -3598,15 +3609,20 @@ export function useMetronomeScreen() {
   const noteStartPlayingEntry = useCallback(async (index: number, shouldPlay = true) => {
     const q = noteQueueRef.current;
     if (index < 0 || index >= q.length) return;
+    const transitionEpoch = ++noteEntryTransitionEpochRef.current;
     const entry = q[index];
     const engine = engineRef.current;
     if (!engine) return;
 
-    const wasRunning = engine.getIsRunning();
-    if (wasRunning) {
-      engine.stop();
-      clearSamplePlayStates();
-    }
+    // Queue entries used to stop only the scheduler. Native rendered players
+    // and future WebAudio reservations could therefore survive into the next
+    // entry and play alongside its clicks. Use the same complete ownership
+    // teardown as ordinary playback before applying the next schedule.
+    // Invalidate sample preload ownership even when the replacement entry has
+    // no samples; otherwise a delayed sampled entry could publish its player
+    // after the sample-free replacement has already taken over.
+    cancelNoteSamplePreload();
+    cancelPlaybackAttempt(false);
 
     setNoteCurrentIndex(index);
     noteCurrentIndexRef.current = index;
@@ -3617,20 +3633,46 @@ export function useMetronomeScreen() {
     const entrySamples = entry.noteSamples || {};
     const entryNames = entry.noteSampleNames || {};
     const entrySources = entry.noteSampleSources || {};
-    if (Object.keys(entrySamples).length > 0) {
-      preloadNoteSampleSounds(entrySamples, true);
-    } else {
-      for (const s of Object.values(noteSampleSoundsRef.current)) {
-        try { s.release(); } catch {}
-      }
-      noteSampleSoundsRef.current = {};
-      void releaseAllStereoArtifacts();
-    }
     noteSamplesRef.current = { ...entrySamples };
     noteSampleNamesRef.current = { ...entryNames };
     noteSampleSourcesRef.current = { ...entrySources };
     noteSampleVolumesRef.current = { ...(entry.noteSampleVolumes || {}) };
     noteSampleSpeedsRef.current = { ...(entry.noteSampleSpeeds || {}) };
+    noteSampleChannelsRef.current = { ...(entry.noteSampleChannels || {}) };
+    if (shouldPlay) {
+      // Sample preparation is part of the playback attempt. Publishing this
+      // mode-specific ref and preparing state before awaiting the preload lets
+      // a second toggle, reset, removal, or mode exit cancel the whole attempt.
+      noteIsPlayingRef.current = true;
+      isPreparingRef.current = true;
+      setIsPreparing(true);
+      markAudioPreparing();
+    }
+    try {
+      if (Object.keys(entrySamples).length > 0) {
+        await preloadNoteSampleSounds(entrySamples, true);
+      } else {
+        for (const s of Object.values(noteSampleSoundsRef.current)) {
+          try { s.release(); } catch {}
+        }
+        noteSampleSoundsRef.current = {};
+        void releaseAllStereoArtifacts();
+      }
+    } catch (error) {
+      if (transitionEpoch === noteEntryTransitionEpochRef.current) {
+        captureBreadcrumb({
+          category: "sample.preload",
+          message: "Note queue preload failed",
+          level: "warning",
+          data: { error: String(error) },
+        });
+        cancelPlaybackAttempt(false);
+        noteIsPlayingRef.current = false;
+        setNoteIsPlaying(false);
+      }
+      return;
+    }
+    if (transitionEpoch !== noteEntryTransitionEpochRef.current) return;
 
     const { barRepeats: mgRepeats2, loopBlocks: mgBlocks2 } = migrateLayerBlocks((entry.loopBlocks || []) as LoopBlock[], { ...entry.barRepeats });
     setBpm(entry.bpm);
@@ -3649,7 +3691,6 @@ export function useMetronomeScreen() {
     setNoteSampleVolumes({ ...(entry.noteSampleVolumes || {}) });
     setNoteSampleSpeeds({ ...(entry.noteSampleSpeeds || {}) });
     setNoteSampleChannels({ ...(entry.noteSampleChannels || {}) });
-    noteSampleChannelsRef.current = { ...(entry.noteSampleChannels || {}) };
 
     applyEntryToEngineCore(engine, entry, beatDenominatorRef.current);
     engine.buildScheduleOnly();
@@ -3683,43 +3724,44 @@ export function useMetronomeScreen() {
       return;
     }
 
-    if (Platform.OS === "web") {
-      if (webRenderedLoopRef.current) {
-        webRenderedLoopRef.current.stop();
-        webRenderedLoopRef.current = null;
-      }
-      const ctx = getWebAudioContext();
-      if (ctx && ctx.state === "suspended") {
-        ctx.resume().catch(() => {});
-      }
-      const src = soundSets[soundSetRef.current as keyof typeof soundSets] || soundSets.classic;
-      await ensureWebClickBuffers(src as any);
-      webClickReadyRef.current = true;
-      engine.setPreRenderedAudio(false);
-    }
-
-    // The engine can emit beat 0 synchronously from start(). Update refs first
-    // so the RAF visual batcher does not discard the first note-mode beat.
-    isPlayingRef.current = true;
-    noteIsPlayingRef.current = true;
-    setIsPlaying(true);
-    setNoteIsPlaying(true);
-    engine.start();
-    markAudioPlaying();
-    engine.requestStopAfterMeasure();
-    const playback = getPlaybackContext({ mode: "note", bpm: entry.bpm });
-    showPlayingNotification(playback.bpm, playback.modeLabel, languageRef.current);
-  }, [preloadNoteSampleSounds]);
+    // The engine can emit beat 0 synchronously inside the shared startup path.
+    // The Note-specific ref was set before sample preparation so its measure
+    // counter accepts that beat; visible playing state still waits for audio.
+    const started = await startConfiguredPlayback(true);
+    if (transitionEpoch !== noteEntryTransitionEpochRef.current) return;
+    noteIsPlayingRef.current = started;
+    setNoteIsPlaying(started);
+  }, [cancelNoteSamplePreload, cancelPlaybackAttempt, preloadNoteSampleSounds, startConfiguredPlayback]);
 
   const createShuffledIndices = useCallback((length: number) => createShuffledIndicesPure(length), []);
 
+  const finishNoteQueuePlayback = useCallback((
+    endReason: "manual" | "measure_complete" = "measure_complete",
+  ) => {
+    noteEntryTransitionEpochRef.current += 1;
+    cancelNoteSamplePreload();
+    if (isPlayingRef.current || isPreparingRef.current) {
+      stopMetronome(endReason);
+    } else {
+      cancelPlaybackAttempt(false);
+      completePracticeSessionRef.current(endReason);
+    }
+    noteIsPlayingRef.current = false;
+    isPlayingRef.current = false;
+    setNoteIsPlaying(false);
+    setIsPlaying(false);
+    resetPlaybackVisuals();
+    const playback = getPlaybackContext({ mode: "note" });
+    showPausedNotification(playback.bpm, playback.modeLabel, languageRef.current);
+  }, [cancelNoteSamplePreload, cancelPlaybackAttempt, stopMetronome]);
+
   const noteAdvanceQueue = useCallback(() => {
+    if (!noteIsPlayingRef.current) return;
     const q = noteQueueRef.current;
     const mode = notePlayModeRef.current;
     const ci = noteCurrentIndexRef.current;
-
     if (q.length === 0) {
-      setNoteIsPlaying(false);
+      finishNoteQueuePlayback("measure_complete");
       return;
     }
 
@@ -3746,17 +3788,11 @@ export function useMetronomeScreen() {
     }
 
     if (nextIndex >= 0) {
-      noteStartPlayingEntry(nextIndex);
+      void noteStartPlayingEntry(nextIndex);
     } else {
-      noteIsPlayingRef.current = false;
-      isPlayingRef.current = false;
-      setNoteIsPlaying(false);
-      setIsPlaying(false);
-      resetPlaybackVisuals();
-      const playback = getPlaybackContext({ mode: "note" });
-      showPausedNotification(playback.bpm, playback.modeLabel, languageRef.current);
+      finishNoteQueuePlayback("measure_complete");
     }
-  }, [noteStartPlayingEntry, createShuffledIndices]);
+  }, [noteStartPlayingEntry, createShuffledIndices, finishNoteQueuePlayback]);
 
   useEffect(() => { noteAdvanceQueueRef.current = noteAdvanceQueue; }, [noteAdvanceQueue]);
 
@@ -3772,13 +3808,21 @@ export function useMetronomeScreen() {
     transitionToken?: number,
   ) => {
     const engine = engineRef.current;
-    if (engine && isPlaying) {
-      engine.stop();
-      stopRenderedAudio();
-      clearSamplePlayStates();
-      setIsPreparing(false);
-      setIsPlaying(false);
-      resetPlaybackVisuals();
+    if (isPreparingRef.current) {
+      cancelPlaybackAttempt(false);
+    } else if (engine && (isPlayingRef.current || engine.getIsRunning())) {
+      if (isPlayingRef.current) {
+        stopMetronome();
+      } else {
+        engine.stop();
+        clearAudioWatchdogRef.current();
+        stopRenderedAudio();
+        clearSamplePlayStates();
+        setIsPreparing(false);
+        setIsPlaying(false);
+        resetPlaybackVisuals();
+        markAudioStopped();
+      }
     }
     completePracticeSessionRef.current("manual");
     const book = await loadPracticeBook();
@@ -3794,15 +3838,26 @@ export function useMetronomeScreen() {
     }
     setNoteIsPlaying(false);
     setNoteCurrentIndex(-1);
-  }, [isPlaying]);
+  }, [cancelPlaybackAttempt, stopMetronome]);
 
   const handleExitNoteMode = useCallback(() => {
+    noteEntryTransitionEpochRef.current += 1;
+    cancelNoteSamplePreload();
+    noteIsPlayingRef.current = false;
     const engine = engineRef.current;
-    if (engine && isPlaying) {
-      engine.stop();
-      stopRenderedAudio();
-      clearSamplePlayStates();
-      setIsPlaying(false);
+    if (isPreparingRef.current) {
+      cancelPlaybackAttempt(false);
+    } else if (engine && (isPlayingRef.current || engine.getIsRunning())) {
+      if (isPlayingRef.current) {
+        stopMetronome();
+      } else {
+        engine.stop();
+        clearAudioWatchdogRef.current();
+        stopRenderedAudio();
+        clearSamplePlayStates();
+        setIsPlaying(false);
+        markAudioStopped();
+      }
     }
     completePracticeSessionRef.current("manual");
     resetPlaybackVisuals();
@@ -3813,7 +3868,7 @@ export function useMetronomeScreen() {
     setNoteQueue([]);
     noteQueueRef.current = [];
     setNoteBarEntries([]);
-  }, [isPlaying]);
+  }, [cancelNoteSamplePreload, cancelPlaybackAttempt, stopMetronome]);
 
   // ── 연습장 로드 훅 ──────────────────────────────────────────────────────────
   const {
@@ -4019,20 +4074,16 @@ export function useMetronomeScreen() {
     if (curIdx === index && wasPlaying) {
       const nextIdx = curIdx < updated.length ? curIdx : 0;
       if (updated.length > 0) {
-        noteStartPlayingEntry(nextIdx);
+        void noteStartPlayingEntry(nextIdx);
       } else {
-        const engine = engineRef.current;
-        if (engine && engine.getIsRunning()) { engine.stop(); stopRenderedAudio(); clearSamplePlayStates(); }
-        setNoteIsPlaying(false);
-        noteIsPlayingRef.current = false;
-        setIsPlaying(false);
+        finishNoteQueuePlayback("manual");
         setNoteCurrentIndex(-1);
-        resetPlaybackVisuals();
+        noteCurrentIndexRef.current = -1;
       }
     } else if (curIdx > index) {
       setNoteCurrentIndex(curIdx - 1);
     }
-  }, [noteStartPlayingEntry]);
+  }, [finishNoteQueuePlayback, noteStartPlayingEntry]);
 
   const handleNoteReorderQueue = useCallback((fromIndex: number, toIndex: number) => {
     if (toIndex < 0 || toIndex >= noteQueueRef.current.length) return;
@@ -4087,18 +4138,24 @@ export function useMetronomeScreen() {
 
   const handleNoteTogglePlay = useCallback(() => {
     if (noteIsPlayingRef.current) {
+      noteEntryTransitionEpochRef.current += 1;
+      cancelNoteSamplePreload();
       noteIsPlayingRef.current = false;
       const engine = engineRef.current;
-      if (engine) {
+      if (isPreparingRef.current) {
+        cancelPlaybackAttempt(false);
+      } else if (isPlayingRef.current) {
+        void togglePlayPause();
+      } else if (engine) {
         engine.stop();
+        clearAudioWatchdogRef.current();
         stopRenderedAudio();
         clearSamplePlayStates();
+        markAudioStopped();
       }
       setIsPlaying(false);
       setNoteIsPlaying(false);
       resetPlaybackVisuals();
-      const playback = getPlaybackContext({ mode: "note" });
-      showPausedNotification(playback.bpm, playback.modeLabel, languageRef.current);
     } else {
       const q = noteQueueRef.current;
       if (q.length === 0) return;
@@ -4109,9 +4166,9 @@ export function useMetronomeScreen() {
         noteShuffledPosRef.current = 0;
         startIndex = indices[0];
       }
-      noteStartPlayingEntry(startIndex);
+      void noteStartPlayingEntry(startIndex);
     }
-  }, [noteStartPlayingEntry, createShuffledIndices]);
+  }, [cancelNoteSamplePreload, cancelPlaybackAttempt, noteStartPlayingEntry, createShuffledIndices, togglePlayPause]);
 
   useEffect(() => { handleNoteTogglePlayRef.current = handleNoteTogglePlay; }, [handleNoteTogglePlay]);
 
@@ -4201,20 +4258,12 @@ export function useMetronomeScreen() {
   }, [username, t]);
 
   const handleNoteReset = useCallback(() => {
-    noteIsPlayingRef.current = false;
-    const engine = engineRef.current;
-    if (engine && engine.getIsRunning()) {
-      engine.stop();
-      stopRenderedAudio();
-      clearSamplePlayStates();
-    }
+    finishNoteQueuePlayback("manual");
     setNoteQueue([]);
     noteQueueRef.current = [];
     setNoteCurrentIndex(-1);
-    setNoteIsPlaying(false);
-    setIsPlaying(false);
-    resetPlaybackVisuals();
-  }, [resetPlaybackVisuals]);
+    noteCurrentIndexRef.current = -1;
+  }, [finishNoteQueuePlayback]);
 
   useEffect(() => {
     if (loopBlocks.length === 0) return;

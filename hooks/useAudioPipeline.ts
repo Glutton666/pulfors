@@ -175,6 +175,7 @@ export interface UseAudioPipelineResult {
   getLayerClickPCMsForSchedule: (ticks: TickInfo[], signal?: AbortSignal) => Promise<Map<string, ClickPCMs>>;
   invalidateSamplePCMCache: (key?: string) => void;
   preloadNoteSampleSounds: (samples: NoteSampleMap, keepExisting?: boolean) => Promise<void>;
+  cancelNoteSamplePreload: () => void;
   clearSamplePlayStates: () => void;
   armAudioWatchdog: () => void;
   clearAudioWatchdog: () => void;
@@ -942,6 +943,10 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
     sampleVolumeRef,
   ]);
 
+  const cancelNoteSamplePreload = useCallback(() => {
+    samplePreloadGenerationRef.current += 1;
+  }, []);
+
   const clearSamplePlayStates = useCallback(() => {
     for (const [, state] of Object.entries(samplePlayStateRef.current)) {
       if (state.endTimer) clearTimeout(state.endTimer);
@@ -1157,6 +1162,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
     getLayerClickPCMsForSchedule,
     invalidateSamplePCMCache,
     preloadNoteSampleSounds,
+    cancelNoteSamplePreload,
     clearSamplePlayStates,
     armAudioWatchdog,
     clearAudioWatchdog,
