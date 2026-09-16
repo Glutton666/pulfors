@@ -451,7 +451,7 @@ test("source: lab 해금 상태가 프로필 생성 콜백과 메뉴에 연결�
 
   assert.match(ui, /labUnlocked=\{labUnlocked\}/);
   assert.match(ui, /onLabUnlocked=\{unlockLab\}/);
-  assert.match(profile, /if \(isLabPracticeRoomName\(room\.name\)\) onLabUnlocked\?\.\(\);/);
+  assert.match(profile, /if \(isLabPracticeRoomName\(room\.name\)\) \{[\s\S]*?onLabUnlocked\?\.\(\);/);
 });
 
 // ────────────────────────────────────────────────────────────────
