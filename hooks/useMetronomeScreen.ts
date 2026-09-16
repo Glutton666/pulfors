@@ -2663,14 +2663,27 @@ export function useMetronomeScreen() {
     }
   }, []);
 
+  // Keyboard actions are registered once, so mode-specific callbacks travel
+  // through refs and always see the latest bar selection and subdivision state.
+  const handleAddBarKeyboardRef = useRef<() => void>(() => {});
+  handleAddBarKeyboardRef.current = handleAddBar;
+  const applyCurrentBeatSubdivisionRef = useRef<() => boolean>(() => false);
+  const appendBarSubdivisionRef = useRef<(type: BeatType) => boolean>(() => false);
+  const removeBarSubdivisionRef = useRef<() => boolean>(() => false);
+
   // handleNativeKeyDown / handleNativeKeyUp — useKeyboardShortcuts 내부에서 생성돼 반환된다.
   const { handleNativeKeyDown, handleNativeKeyUp } = useKeyboardShortcuts({
     keyBindingsRef, bpmRef, barBpmRef, updateBpmRef, handleBarBpmChangeRef,
     beatsPerMeasureRef, updateTimeSignatureRef,
-    barModeRef, noteModeRef, stopwatchTimerRef, stopwatchTimerLandscapeRef,
+    barModeRef, barStartBeatRef, noteModeRef, stopwatchTimerRef, stopwatchTimerLandscapeRef,
     subdivisionPatternRef, beatTypesRef, dialConfigRef, handleNoteTogglePlayRef, anyModalOpenRef,
     showKbShortcutsRef, showNativeKbHintRef, engineRef,
     togglePlayPauseRef, setNoteMode, handleBarModeChangeRef, setShowKbShortcuts, setShowNativeKbHint,
+    handleAddBarRef: handleAddBarKeyboardRef,
+    applyCurrentBeatSubdivisionRef,
+    appendBarSubdivisionRef,
+    removeBarSubdivisionRef,
+    setBarStartBeat,
     setActiveModal, setBarLoopMode, setBlockPlayMode, setBeatsPerMeasure, setBeatTypes,
     setBeatSubdivisions, setSubdivisionPattern, persistSettings,
   });
@@ -3087,6 +3100,41 @@ export function useMetronomeScreen() {
     },
     [persistSettings]
   );
+
+  applyCurrentBeatSubdivisionRef.current = () => {
+    if (isPlayingRef.current || barModeRef.current) return false;
+    const target = beatsPerMeasureRef.current - 1;
+    const pattern = subdivisionPatternRef.current;
+    if (target < 0 || pattern.length === 0) return false;
+    handleBeatSubdivisionChange(target, [...pattern]);
+    return true;
+  };
+
+  appendBarSubdivisionRef.current = (type: BeatType) => {
+    if (isPlayingRef.current || !barModeRef.current) return false;
+    const target = barStartBeatRef.current;
+    if (target === null) return false;
+    const existing = barConfigRef.current.beatSubdivisions[String(target)];
+    const basePattern = existing?.length
+      ? existing
+      : [barConfigRef.current.beatTypes[target] ?? "normal"];
+    if (basePattern.length >= 9) return false;
+    handlePatternChange([...basePattern, type]);
+    return true;
+  };
+
+  removeBarSubdivisionRef.current = () => {
+    if (isPlayingRef.current || !barModeRef.current) return false;
+    const target = barStartBeatRef.current;
+    if (target === null) return false;
+    const existing = barConfigRef.current.beatSubdivisions[String(target)];
+    const basePattern = existing?.length
+      ? existing
+      : [barConfigRef.current.beatTypes[target] ?? "normal"];
+    if (basePattern.length <= 1) return false;
+    handlePatternChange(basePattern.slice(0, -1));
+    return true;
+  };
 
   // 바 선택(barStartBeat) 변경 시, 드로어의 서브디비전 패턴을 그 마디에 저장된
   // 패턴(beatSubdivisions[beatIndex])으로 동기화. 없으면 beatTypes[beatIndex] 기반

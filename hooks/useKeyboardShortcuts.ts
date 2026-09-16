@@ -31,6 +31,7 @@ interface UseKeyboardShortcutsParams {
   beatsPerMeasureRef: React.MutableRefObject<number>;
   updateTimeSignatureRef: React.MutableRefObject<(beats: number) => void>;
   barModeRef: React.MutableRefObject<boolean>;
+  barStartBeatRef: React.MutableRefObject<number | null>;
   noteModeRef: React.MutableRefObject<boolean>;
   stopwatchTimerRef: React.MutableRefObject<StopwatchTimerHandle | null>;
   stopwatchTimerLandscapeRef: React.MutableRefObject<StopwatchTimerHandle | null>;
@@ -44,8 +45,13 @@ interface UseKeyboardShortcutsParams {
   engineRef: React.MutableRefObject<MetronomeEngine | null>;
   togglePlayPauseRef: React.MutableRefObject<() => void>;
   handleBarModeChangeRef: React.MutableRefObject<(toBarMode: boolean) => void>;
+  handleAddBarRef: React.MutableRefObject<() => void>;
+  applyCurrentBeatSubdivisionRef: React.MutableRefObject<() => boolean>;
+  appendBarSubdivisionRef: React.MutableRefObject<(type: BeatType) => boolean>;
+  removeBarSubdivisionRef: React.MutableRefObject<() => boolean>;
   // Stable setters from useState (identity stable across renders)
   setNoteMode: (v: boolean) => void;
+  setBarStartBeat: React.Dispatch<React.SetStateAction<number | null>>;
   setShowKbShortcuts: React.Dispatch<React.SetStateAction<boolean>>;
   setShowNativeKbHint: React.Dispatch<React.SetStateAction<boolean>>;
   setActiveModal: React.Dispatch<React.SetStateAction<ActiveModal>>;
@@ -70,11 +76,12 @@ export function useKeyboardShortcuts(params: UseKeyboardShortcutsParams): UseKey
   const {
     keyBindingsRef, bpmRef, barBpmRef, updateBpmRef, handleBarBpmChangeRef,
     beatsPerMeasureRef, updateTimeSignatureRef,
-    barModeRef, noteModeRef, stopwatchTimerRef, stopwatchTimerLandscapeRef,
+    barModeRef, barStartBeatRef, noteModeRef, stopwatchTimerRef, stopwatchTimerLandscapeRef,
     subdivisionPatternRef, beatTypesRef, dialConfigRef, handleNoteTogglePlayRef, anyModalOpenRef,
     showKbShortcutsRef, showNativeKbHintRef, engineRef,
     togglePlayPauseRef, setNoteMode, handleBarModeChangeRef, setShowKbShortcuts, setShowNativeKbHint,
-    setActiveModal, setBarLoopMode, setBlockPlayMode, setBeatsPerMeasure, setBeatTypes,
+    handleAddBarRef, applyCurrentBeatSubdivisionRef, appendBarSubdivisionRef, removeBarSubdivisionRef,
+    setBarStartBeat, setActiveModal, setBarLoopMode, setBlockPlayMode, setBeatsPerMeasure, setBeatTypes,
     setBeatSubdivisions, setSubdivisionPattern, persistSettings,
   } = params;
 
@@ -153,6 +160,40 @@ export function useKeyboardShortcuts(params: UseKeyboardShortcutsParams): UseKey
 
       // Note mode: only Space passes through
       if (inNoteMode) return;
+
+      // Shift+Enter — apply the current subdivision pattern to the last beat
+      // in beat mode. In bar mode Enter has a separate edit/add meaning below.
+      if (
+        !inBarMode &&
+        e.code === b.tapTempo.code &&
+        e.shiftKey &&
+        !e.ctrlKey &&
+        !e.altKey &&
+        !e.metaKey
+      ) {
+        e.preventDefault();
+        applyCurrentBeatSubdivisionRef.current();
+        return;
+      }
+
+      // Enter — add a new bar when no bar is selected, or finish editing the
+      // selected bar. Keep timer input confirmation ahead of this mode action.
+      if (inBarMode && matchesBinding(e, b.tapTempo)) {
+        const swRef = stopwatchTimerRef.current || stopwatchTimerLandscapeRef.current;
+        if (swRef?.isTimerInputActive()) {
+          e.preventDefault();
+          swRef.handleEnterKey();
+          return;
+        }
+        e.preventDefault();
+        if (engineRef.current?.getIsRunning()) return;
+        if (barStartBeatRef.current === null) {
+          handleAddBarRef.current();
+        } else {
+          setBarStartBeat(null);
+        }
+        return;
+      }
 
       // Enter — confirm timer input if active, otherwise tap tempo
       if (matchesBinding(e, b.tapTempo)) {
@@ -263,6 +304,35 @@ export function useKeyboardShortcuts(params: UseKeyboardShortcutsParams): UseKey
 
       // S/A/N/M — add beat (beat mode only, not while playing)
       const playing = engineRef.current?.getIsRunning() ?? false;
+      if (!playing && inBarMode) {
+        const barSubdivisionShortcuts: { binding: typeof b.addBeatStrong; type: BeatType }[] = [
+          { binding: b.addBeatStrong, type: "strong" },
+          { binding: b.addBeatAccent, type: "accent" },
+          { binding: b.addBeatNormal, type: "normal" },
+          { binding: b.addBeatMute, type: "mute" },
+        ];
+        for (const { binding, type } of barSubdivisionShortcuts) {
+          if (matchesBinding(e, binding)) {
+            e.preventDefault();
+            appendBarSubdivisionRef.current(type);
+            return;
+          }
+        }
+
+        // Backspace — remove the selected bar's final subdivision cell.
+        if (
+          e.code === "Backspace" &&
+          !e.shiftKey &&
+          !e.ctrlKey &&
+          !e.altKey &&
+          !e.metaKey
+        ) {
+          e.preventDefault();
+          removeBarSubdivisionRef.current();
+          return;
+        }
+      }
+
       if (!playing && !barModeRef.current && !noteModeRef.current) {
         const addBeatShortcuts: { binding: typeof b.addBeatStrong; type: BeatType }[] = [
           { binding: b.addBeatStrong, type: "strong" },
