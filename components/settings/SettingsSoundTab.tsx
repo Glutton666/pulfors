@@ -505,14 +505,14 @@ export function SettingsSoundTab({
            tonePosition={tonePosition ?? { x: 0, y: 0 }}
            onTonePositionChange={handleTonePositionChange}
            labels={{
-             title: t("settings", "tonePadTitle" as Parameters<typeof t>[1]),
+              title: t("settings", "soundFaderTitle" as Parameters<typeof t>[1]),
              attack: t("settings", "toneAttack" as Parameters<typeof t>[1]),
              high: t("settings", "toneHigh" as Parameters<typeof t>[1]),
              resonance: t("settings", "toneResonance" as Parameters<typeof t>[1]),
              low: t("settings", "toneLow" as Parameters<typeof t>[1]),
              neutral: t("settings", "toneNeutral" as Parameters<typeof t>[1]),
              reset: t("settings", "toneReset" as Parameters<typeof t>[1]),
-             accessibilityLabel: t("settings", "tonePadAccessibility" as Parameters<typeof t>[1]),
+              accessibilityLabel: t("settings", "soundFaderAccessibility" as Parameters<typeof t>[1]),
            }}
          />
        </View>

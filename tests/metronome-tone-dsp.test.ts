@@ -17,18 +17,48 @@ test("sanitizeTonePosition clamps coordinates and treats non-finite values as ne
   assert.deepEqual(sanitizeTonePosition(undefined), NEUTRAL);
 });
 
-test("corner weights are bilinear and sum to one", () => {
+test("sound-fader directions map to cardinal weights and sum to one", () => {
   assert.deepEqual(mapTonePositionToWeights({ x: -1, y: -1 }), {
-    attack: 1,
-    high: 0,
+    attack: 0.5,
+    high: 0.5,
     resonance: 0,
     low: 0,
   });
   assert.deepEqual(mapTonePositionToWeights({ x: 1, y: 1 }), {
     attack: 0,
     high: 0,
+    resonance: 0.5,
+    low: 0.5,
+  });
+  assert.deepEqual(mapTonePositionToWeights({ x: -1, y: 0 }), {
+    attack: 1,
+    high: 0,
+    resonance: 0,
+    low: 0,
+  });
+  assert.deepEqual(mapTonePositionToWeights({ x: 0, y: -1 }), {
+    attack: 0,
+    high: 1,
+    resonance: 0,
+    low: 0,
+  });
+  assert.deepEqual(mapTonePositionToWeights({ x: 1, y: 0 }), {
+    attack: 0,
+    high: 0,
+    resonance: 1,
+    low: 0,
+  });
+  assert.deepEqual(mapTonePositionToWeights({ x: 0, y: 1 }), {
+    attack: 0,
+    high: 0,
     resonance: 0,
     low: 1,
+  });
+  assert.deepEqual(mapTonePositionToWeights({ x: 0.25, y: -0.75 }), {
+    attack: 0,
+    high: 0.75,
+    resonance: 0.25,
+    low: 0,
   });
   const middle = mapTonePositionToWeights({ x: 0, y: 0 });
   assert.deepEqual(middle, { attack: 0.25, high: 0.25, resonance: 0.25, low: 0.25 });
@@ -91,7 +121,7 @@ test("effect intensity has a neutral dead-zone and grows smoothly to the edge", 
   assert.equal(edge, 1);
 });
 
-test("four corners produce strongly distinct acoustic signatures", () => {
+test("four cardinal directions produce strongly distinct acoustic signatures", () => {
   const sampleRate = 44_100;
   const source = new Float32Array(Math.round(sampleRate * 0.012));
   for (let i = 0; i < source.length; i++) {
@@ -103,10 +133,10 @@ test("four corners produce strongly distinct acoustic signatures", () => {
   }
   const corner = (x: number, y: number) =>
     processClickPCM(source, { x, y }, sampleRate) as Float32Array;
-  const attack = corner(-1, -1);
-  const high = corner(1, -1);
-  const resonance = corner(-1, 1);
-  const low = corner(1, 1);
+  const attack = corner(-1, 0);
+  const high = corner(0, -1);
+  const resonance = corner(1, 0);
+  const low = corner(0, 1);
   const energy = (pcm: Float32Array, start = 0, end = pcm.length) =>
     Array.from(pcm.subarray(start, end)).reduce((sum, value) => sum + value * value, 0);
   const roughness = (pcm: Float32Array) => {
@@ -150,7 +180,7 @@ function decodePcm16Wav(path: string): Float32Array {
   throw new Error(`No PCM data chunk in ${path}`);
 }
 
-test("every bundled metronome click remains finite, audible, limited, and corner-distinct", () => {
+test("every bundled metronome click remains finite, audible, limited, and direction-distinct", () => {
   const soundDir = join(process.cwd(), "assets", "sounds");
   const sets = new Set(["click", "woodblock", "cowbell", "digital", "jamblock", "sine", "blip", "clave", "cajon", "marimba", "stick"]);
   const files = readdirSync(soundDir).filter((name) => name.endsWith(".wav") && sets.has(name.split("-")[0]));
@@ -159,10 +189,10 @@ test("every bundled metronome click remains finite, audible, limited, and corner
   for (const filename of files) {
     const source = decodePcm16Wav(join(soundDir, filename));
     const outputs = [
-      processClickPCM(source, { x: -1, y: -1 }) as Float32Array,
-      processClickPCM(source, { x: 1, y: -1 }) as Float32Array,
-      processClickPCM(source, { x: -1, y: 1 }) as Float32Array,
-      processClickPCM(source, { x: 1, y: 1 }) as Float32Array,
+      processClickPCM(source, { x: -1, y: 0 }) as Float32Array,
+      processClickPCM(source, { x: 0, y: -1 }) as Float32Array,
+      processClickPCM(source, { x: 1, y: 0 }) as Float32Array,
+      processClickPCM(source, { x: 0, y: 1 }) as Float32Array,
     ];
     for (const output of outputs) {
       assert.ok(Array.from(output).every(Number.isFinite), `${filename} contains non-finite output`);
@@ -177,7 +207,7 @@ test("every bundled metronome click remains finite, audible, limited, and corner
           difference += Math.abs(outputs[a][i] - outputs[b][i]);
           magnitude += Math.max(Math.abs(outputs[a][i]), Math.abs(outputs[b][i]));
         }
-        assert.ok(difference / Math.max(1e-9, magnitude) > 0.08, `${filename} corners ${a}/${b} are too similar`);
+        assert.ok(difference / Math.max(1e-9, magnitude) > 0.08, `${filename} directions ${a}/${b} are too similar`);
       }
     }
   }

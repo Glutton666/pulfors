@@ -7,9 +7,9 @@
  */
 
 export interface TonePosition {
-  /** Horizontal position, where -1 and +1 are the left and right corners. */
+  /** Horizontal position, where -1 is attack and +1 is resonance. */
   x: number;
-  /** Vertical position, where -1 and +1 are the top and bottom corners. */
+  /** Vertical position, where -1 is high and +1 is low. */
   y: number;
 }
 
@@ -66,24 +66,33 @@ export function sanitizeTonePosition(position?: Partial<TonePosition> | null): T
 }
 
 /**
- * Bilinearly interpolates the four pad corners:
+ * Maps the sound-fader axes:
  *
- *   (-1,-1) attack       (+1,-1) high
- *   (-1,+1) resonance    (+1,+1) low
+ *              high (-y)
+ *                 |
+ *   attack (-x) --+-- resonance (+x)
+ *                 |
+ *              low (+y)
  *
- * Weights are non-negative and sum to one (up to floating point rounding).
- * Processing treats NEUTRAL specially, so its otherwise ordinary .25/.25/.25
- * / .25 interpolation does not add coloration.
+ * Each active axis contributes in proportion to its distance from the centre.
+ * This keeps pure directions focused on one sound and blends both axes on
+ * diagonal positions. Processing treats NEUTRAL specially, so the fallback
+ * centre weights do not add coloration.
  */
 export function mapTonePositionToWeights(position?: TonePosition | null): ToneWeights {
   const p = sanitizeTonePosition(position);
-  const tx = (p.x + 1) * 0.5;
-  const ty = (p.y + 1) * 0.5;
+  const horizontalDistance = Math.abs(p.x);
+  const verticalDistance = Math.abs(p.y);
+  const totalDistance = horizontalDistance + verticalDistance;
+  if (totalDistance === 0) {
+    return { attack: 0.25, high: 0.25, resonance: 0.25, low: 0.25 };
+  }
+
   return {
-    attack: (1 - tx) * (1 - ty),
-    high: tx * (1 - ty),
-    resonance: (1 - tx) * ty,
-    low: tx * ty,
+    attack: Math.max(0, -p.x) / totalDistance,
+    high: Math.max(0, -p.y) / totalDistance,
+    resonance: Math.max(0, p.x) / totalDistance,
+    low: Math.max(0, p.y) / totalDistance,
   };
 }
 

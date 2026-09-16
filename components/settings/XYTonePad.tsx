@@ -172,7 +172,7 @@ export function XYTonePad({
           { name: "increment", label: labels.low },
           { name: "decrement", label: labels.high },
           { name: "moveLeft", label: labels.attack },
-          { name: "moveRight", label: labels.high },
+          { name: "moveRight", label: labels.resonance },
         ]}
         onAccessibilityAction={(event) => {
           if (event.nativeEvent.actionName === "increment") adjustForAccessibility(1);
@@ -181,24 +181,20 @@ export function XYTonePad({
           if (event.nativeEvent.actionName === "moveRight") emitPosition(x + 0.1, y);
         }}
       >
-        <View pointerEvents="none" style={[styles.quadrant, styles.topLeft, { backgroundColor: C.accentDim }]} />
-        <View pointerEvents="none" style={[styles.quadrant, styles.topRight, { backgroundColor: C.overlay08 }]} />
-        <View pointerEvents="none" style={[styles.quadrant, styles.bottomLeft, { backgroundColor: C.overlay08 }]} />
-        <View pointerEvents="none" style={[styles.quadrant, styles.bottomRight, { backgroundColor: C.accentDim }]} />
         <View pointerEvents="none" style={[styles.verticalGuide, { backgroundColor: C.border }]} />
         <View pointerEvents="none" style={[styles.horizontalGuide, { backgroundColor: C.border }]} />
 
-        <Text testID="xy-tone-pad-attack" pointerEvents="none" style={[styles.cornerLabel, styles.topLeftLabel, { color: C.textSecondary }]}>
-          {labels.attack}
-        </Text>
-        <Text testID="xy-tone-pad-high" pointerEvents="none" style={[styles.cornerLabel, styles.topRightLabel, { color: C.textSecondary }]}>
+        <Text testID="xy-tone-pad-high" pointerEvents="none" style={[styles.directionLabel, styles.topLabel, { color: C.textSecondary }]}>
           {labels.high}
         </Text>
-        <Text testID="xy-tone-pad-resonance" pointerEvents="none" style={[styles.cornerLabel, styles.bottomLeftLabel, { color: C.textSecondary }]}>
-          {labels.resonance}
-        </Text>
-        <Text testID="xy-tone-pad-low" pointerEvents="none" style={[styles.cornerLabel, styles.bottomRightLabel, { color: C.textSecondary }]}>
+        <Text testID="xy-tone-pad-low" pointerEvents="none" style={[styles.directionLabel, styles.bottomLabel, { color: C.textSecondary }]}>
           {labels.low}
+        </Text>
+        <Text testID="xy-tone-pad-attack" pointerEvents="none" style={[styles.directionLabel, styles.leftLabel, { color: C.textSecondary }]}>
+          {labels.attack}
+        </Text>
+        <Text testID="xy-tone-pad-resonance" pointerEvents="none" style={[styles.directionLabel, styles.rightLabel, { color: C.textSecondary }]}>
+          {labels.resonance}
         </Text>
         <Text testID="xy-tone-pad-neutral" pointerEvents="none" style={[styles.centerLabel, { color: C.textTertiary }]}>
           {labels.neutral}
@@ -253,15 +249,6 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: Radius.md,
   },
-  quadrant: {
-    position: "absolute",
-    width: "50%",
-    height: "50%",
-  },
-  topLeft: { left: 0, top: 0 },
-  topRight: { right: 0, top: 0 },
-  bottomLeft: { left: 0, bottom: 0 },
-  bottomRight: { right: 0, bottom: 0 },
   verticalGuide: {
     position: "absolute",
     width: StyleSheet.hairlineWidth,
@@ -276,16 +263,16 @@ const styles = StyleSheet.create({
     right: 0,
     top: "50%",
   },
-  cornerLabel: {
+  directionLabel: {
     position: "absolute",
     fontFamily: "SpaceGrotesk_600SemiBold",
     fontSize: FontSize.caption,
     opacity: 0.9,
   },
-  topLeftLabel: { left: Spacing.sm, top: Spacing.sm },
-  topRightLabel: { right: Spacing.sm, top: Spacing.sm },
-  bottomLeftLabel: { left: Spacing.sm, bottom: Spacing.sm },
-  bottomRightLabel: { right: Spacing.sm, bottom: Spacing.sm },
+  topLabel: { left: 0, right: 0, top: Spacing.sm, textAlign: "center" },
+  bottomLabel: { left: 0, right: 0, bottom: Spacing.sm, textAlign: "center" },
+  leftLabel: { left: Spacing.sm, top: "50%", transform: [{ translateY: -8 }] },
+  rightLabel: { right: Spacing.sm, top: "50%", transform: [{ translateY: -8 }] },
   centerLabel: {
     position: "absolute",
     alignSelf: "center",
