@@ -117,7 +117,10 @@ jest.mock("@/lib/index.helpers", () => ({
   isSafeNoteSampleUri: jest.fn(() => true),
 }));
 
-import { useAudioPipeline } from "../hooks/useAudioPipeline";
+import {
+  NOTE_SAMPLE_PCM_CACHE_LIMIT,
+  useAudioPipeline,
+} from "../hooks/useAudioPipeline";
 import { usePlaybackControl } from "../hooks/usePlaybackControl";
 
 const clickPCMs = {
@@ -307,6 +310,53 @@ describe("pre-rendered playback reliability", () => {
 
     expect(mockDecodeSampleFile).toHaveBeenCalledTimes(1);
     expect(mockDecodeSampleFile).toHaveBeenCalledWith("file:///next.wav");
+  });
+
+  it("bounds queue-warmed PCM entries while keeping the current and next samples hot", async () => {
+    const engine = makeEngine();
+    const noteSamplesRef = { current: { "0-0": "file:///current.wav" } };
+    const params = {
+      engineRef: { current: engine },
+      soundSet: "classic",
+      soundSetRef: { current: "classic" },
+      customSoundSetsRef: { current: {} },
+      layerSoundSetsRef: { current: {} },
+      noteSamplesRef,
+      noteSampleChannelsRef: { current: {} },
+      noteSampleVolumesRef: { current: {} },
+      noteSampleSpeedsRef: { current: {} },
+      barModeRef: { current: false },
+      barMetronomeChannelRef: { current: "both" },
+      noteSampleMetroChannelsRef: { current: {} },
+      volume: 0.35,
+      volumeRef: { current: 0.35 },
+      sampleVolumeRef: { current: 0.7 },
+      clickPCMCacheRef: { current: { classic: clickPCMs } },
+      webClickReadyRef: { current: false },
+      noteSampleSoundsRef: { current: {} },
+      renderGenerationRef: { current: 0 },
+      isPlayingRef: { current: false },
+      bpmRef: { current: 120 },
+      t: (key: string) => key,
+      showRecoveryToast: jest.fn(),
+      persistAudioSettingsCallbackRef: { current: jest.fn() },
+    } as any;
+    const { result } = renderHook(() => useAudioPipeline(params));
+
+    await result.current.getSamplePCMs(noteSamplesRef.current);
+    for (let index = 0; index < NOTE_SAMPLE_PCM_CACHE_LIMIT; index += 1) {
+      await result.current.getSamplePCMs({ "0-0": `file:///queued-${index}.wav` });
+    }
+    await result.current.getSamplePCMs(noteSamplesRef.current);
+    await result.current.getSamplePCMs({ "0-0": "file:///next.wav" });
+    const decodeCountAfterWarmup = mockDecodeSampleFile.mock.calls.length;
+
+    await result.current.getSamplePCMs(noteSamplesRef.current);
+    await result.current.getSamplePCMs({ "0-0": "file:///next.wav" });
+    expect(mockDecodeSampleFile).toHaveBeenCalledTimes(decodeCountAfterWarmup);
+
+    await result.current.getSamplePCMs({ "0-0": "file:///queued-0.wav" });
+    expect(mockDecodeSampleFile).toHaveBeenCalledTimes(decodeCountAfterWarmup + 1);
   });
 
   it("does not publish a queue warm-up that finishes after cache invalidation", async () => {

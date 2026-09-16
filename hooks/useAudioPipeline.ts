@@ -69,6 +69,8 @@ export type PersistAudioSettingsFn = (s: Partial<{
   autoResumeAfterInterruption: boolean;
 }>) => void;
 
+export const NOTE_SAMPLE_PCM_CACHE_LIMIT = 8;
+
 export interface UseAudioPipelineParams {
   engineRef: React.MutableRefObject<MetronomeEngine | null>;
   /** Reactive: triggers click-buffer preload when sound set changes. */
@@ -450,6 +452,24 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
     return { pcm: trimmed, trimStartSamples: decoded.trimStartSamples, trimLenSamples: Math.min(decoded.trimLenSamples, maxSamples) };
   }, []);
 
+  const touchSamplePCMByUri = useCallback((uri: string, entry: SamplePCMEntry) => {
+    const uriCache = samplePCMByUriRef.current;
+    uriCache.delete(uri);
+    uriCache.set(uri, entry);
+
+    while (uriCache.size > NOTE_SAMPLE_PCM_CACHE_LIMIT) {
+      const oldestUri = uriCache.keys().next().value as string | undefined;
+      if (!oldestUri) break;
+      uriCache.delete(oldestUri);
+      for (const [key, cachedUri] of samplePCMUriRef.current) {
+        if (cachedUri === oldestUri) {
+          samplePCMUriRef.current.delete(key);
+          samplePCMCacheRef.current.delete(key);
+        }
+      }
+    }
+  }, []);
+
   const getClickPCMs = useCallback(async (set: SoundSet, signal?: AbortSignal): Promise<ClickPCMs> => {
     if (clickPCMCacheRef.current[set]) return clickPCMCacheRef.current[set];
     const shape = (pcm: Float32Array) =>
@@ -503,11 +523,13 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
     await Promise.all(entries.map(async ([key, uri]) => {
       const cached = samplePCMCacheRef.current.get(key);
       if (cached && samplePCMUriRef.current.get(key) === uri) {
+        touchSamplePCMByUri(uri, cached);
         map.set(key, cached);
         return;
       }
       const cachedByUri = samplePCMByUriRef.current.get(uri);
       if (cachedByUri) {
+        touchSamplePCMByUri(uri, cachedByUri);
         map.set(key, cachedByUri);
         if (noteSamplesRef.current[key] === uri) {
           samplePCMCacheRef.current.set(key, cachedByUri);
@@ -525,7 +547,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
           const { trimStartMs, trimDurationMs } = parseTrimInfo(uri);
           const entry: SamplePCMEntry = { pcm, trimStartMs, trimDurationMs };
           map.set(key, entry);
-          samplePCMByUriRef.current.set(uri, entry);
+          touchSamplePCMByUri(uri, entry);
           if (noteSamplesRef.current[key] === uri) {
             samplePCMCacheRef.current.set(key, entry);
             samplePCMUriRef.current.set(key, uri);
@@ -537,7 +559,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
       }
     }));
     return map;
-  }, [noteSamplesRef]);
+  }, [noteSamplesRef, touchSamplePCMByUri]);
 
   const getLayerClickPCMsForSchedule = useCallback(async (ticks: TickInfo[], signal?: AbortSignal): Promise<Map<string, ClickPCMs>> => {
     const soundSetByName = new Set<string>();
