@@ -301,6 +301,10 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
   const samplePreloadOwnerRef = useRef(new Map<string, number>());
   const samplePCMCacheRef = useRef<Map<string, SamplePCMEntry>>(new Map());
   const samplePCMUriRef = useRef<Map<string, string>>(new Map());
+  // URI ownership is independent from beat-cell keys. Note queue look-ahead
+  // can safely warm this cache without replacing the current entry's key map.
+  const samplePCMByUriRef = useRef<Map<string, SamplePCMEntry>>(new Map());
+  const samplePCMCacheGenerationRef = useRef(0);
   const renderedUrlRef = useRef<string | null>(null);
   const webRenderedLoopRef = useRef<WebRenderedLoop | null>(null);
   const outputStateRef = useRef(new AudioOutputStateMachine());
@@ -495,18 +499,33 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
     const map = new Map<string, SamplePCMEntry>();
     const entries = Object.entries(samples);
     if (entries.length === 0) return map;
+    const cacheGeneration = samplePCMCacheGenerationRef.current;
     await Promise.all(entries.map(async ([key, uri]) => {
       const cached = samplePCMCacheRef.current.get(key);
       if (cached && samplePCMUriRef.current.get(key) === uri) {
         map.set(key, cached);
         return;
       }
+      const cachedByUri = samplePCMByUriRef.current.get(uri);
+      if (cachedByUri) {
+        map.set(key, cachedByUri);
+        if (noteSamplesRef.current[key] === uri) {
+          samplePCMCacheRef.current.set(key, cachedByUri);
+          samplePCMUriRef.current.set(key, uri);
+        }
+        return;
+      }
       try {
         const pcm = await decodeSampleFile(uri, signal);
-        if (pcm) {
+        if (
+          pcm &&
+          mountedRef.current &&
+          cacheGeneration === samplePCMCacheGenerationRef.current
+        ) {
           const { trimStartMs, trimDurationMs } = parseTrimInfo(uri);
           const entry: SamplePCMEntry = { pcm, trimStartMs, trimDurationMs };
           map.set(key, entry);
+          samplePCMByUriRef.current.set(uri, entry);
           if (noteSamplesRef.current[key] === uri) {
             samplePCMCacheRef.current.set(key, entry);
             samplePCMUriRef.current.set(key, uri);
@@ -836,12 +855,16 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
 
   const invalidateSamplePCMCache = useCallback((key?: string) => {
     renderGenerationRef.current += 1;
+    samplePCMCacheGenerationRef.current += 1;
     if (key) {
+      const uri = samplePCMUriRef.current.get(key);
       samplePCMCacheRef.current.delete(key);
       samplePCMUriRef.current.delete(key);
+      if (uri) samplePCMByUriRef.current.delete(uri);
     } else {
       samplePCMCacheRef.current.clear();
       samplePCMUriRef.current.clear();
+      samplePCMByUriRef.current.clear();
     }
   }, [renderGenerationRef]);
 
@@ -1094,6 +1117,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
     // render/preload continuation from publishing a resource after unmount.
     mountedRef.current = false;
     renderGenerationRef.current += 1;
+    samplePCMCacheGenerationRef.current += 1;
     abortActiveRender(renderGenerationRef);
     invalidateAudioStartupProbe();
     clearAudioWatchdog();
@@ -1105,6 +1129,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
     cleanupNoteSampleResources();
     samplePCMCacheRef.current.clear();
     samplePCMUriRef.current.clear();
+    samplePCMByUriRef.current.clear();
     samplePreloadKeysRef.current.clear();
   }, [
     cleanupNoteSampleResources,

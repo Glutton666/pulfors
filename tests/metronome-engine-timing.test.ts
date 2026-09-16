@@ -15,6 +15,9 @@ type EngineInternals = {
   rolloverToNextMeasure: () => void;
   fireTick: (tick: unknown) => void;
   fillRealtimeAudioLookAhead: (now: number) => void;
+  loop: () => void;
+  isRunning: boolean;
+  scheduleIndex: number;
   schedule: { time: number; beat: number; subBeat: number; type: string; isMainBeat: boolean; layerIndex: number; blockIndex: number; barRepeatIteration: number; barRepeatTotal: number; repeatIteration: number; blockRepeatTotal: number; jumpIteration: number; jumpTotal: number; jumpSourceBlockIndex: number; layerBeat: number }[];
 };
 
@@ -170,6 +173,35 @@ test("measure rollover preserves audio-clock sources reserved for the final beat
     );
     engine.stop();
     assert.ok(clears > beforeRollover, "an explicit stop still cancels pending sources");
+  });
+});
+
+test("stopAfterMeasure completes at the true measure boundary, not the last tick onset", () => {
+  withFakeNow(1000, (advance) => {
+    const engine = new MetronomeEngine();
+    engine.setBpm(120);
+    engine.setBeatsPerMeasure(4);
+    engine.setBeatTypes(["accent", "normal", "normal", "normal"]);
+    engine.buildScheduleOnly();
+    let completed = 0;
+    engine.setOnMeasureComplete(() => { completed += 1; });
+    engine.start();
+    engine.requestStopAfterMeasure();
+
+    const internals = engine as unknown as EngineInternals;
+    const lastTick = internals.schedule.at(-1)!;
+    internals.scheduleIndex = internals.schedule.length - 1;
+    advance(lastTick.time);
+    internals.loop();
+
+    assert.equal(completed, 0, "the final tick onset is not the measure boundary");
+    assert.equal(internals.isRunning, true, "the engine remains alive for the final beat");
+
+    advance(engine.getMeasureDurationMs() - lastTick.time);
+    internals.loop();
+
+    assert.equal(completed, 1, "completion fires exactly at the full measure duration");
+    assert.equal(internals.isRunning, false);
   });
 });
 

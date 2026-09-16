@@ -1205,6 +1205,17 @@ export class MetronomeEngine {
     this.scheduleIndex = 0;
   }
 
+  private shouldStopAtMeasureBoundary() {
+    return this.stopAfterMeasure ||
+      (this.blockPlayMode === "sequential" && this.loopBlocks.length > 0);
+  }
+
+  private finishMeasureBoundaryStop() {
+    this.stopAfterMeasure = false;
+    this.stop();
+    this.onMeasureComplete?.();
+  }
+
   private getElapsed(): number {
     return performance.now() - this.measureStartTime;
   }
@@ -1260,6 +1271,19 @@ export class MetronomeEngine {
     const elapsed = now - this.measureStartTime;
     this.fillRealtimeAudioLookAhead(now);
 
+    // The last scheduled tick is an onset, not the end of the measure. A
+    // finite playback must keep the scheduler alive until the true boundary
+    // so the final beat retains its full duration before the completion
+    // callback starts the next Note queue entry.
+    if (
+      this.scheduleIndex >= this.schedule.length &&
+      this.shouldStopAtMeasureBoundary() &&
+      elapsed + 1 >= this.measureDurationMs
+    ) {
+      this.finishMeasureBoundaryStop();
+      return;
+    }
+
     while (this.isRunning && this.scheduleIndex < this.schedule.length) {
       const tick = this.schedule[this.scheduleIndex];
       if (tick.time > elapsed + 1) break;
@@ -1275,11 +1299,9 @@ export class MetronomeEngine {
       }
 
       if (this.scheduleIndex >= this.schedule.length) {
-        if (this.stopAfterMeasure || (this.blockPlayMode === "sequential" && this.loopBlocks.length > 0)) {
-          this.stopAfterMeasure = false;
-          this.stop();
-          this.onMeasureComplete?.();
-          return;
+        if (this.shouldStopAtMeasureBoundary()) {
+          // scheduleNext() will wake the loop at the actual measure boundary.
+          break;
         }
         this.rolloverToNextMeasure();
         break;
@@ -1316,7 +1338,14 @@ export class MetronomeEngine {
 
   private scheduleNext() {
     const nextTick = this.schedule[this.scheduleIndex];
-    if (!nextTick) return;
+    if (!nextTick) {
+      if (this.shouldStopAtMeasureBoundary()) {
+        const boundaryAt = this.measureStartTime + this.measureDurationMs;
+        const wait = Math.max(0, boundaryAt - performance.now());
+        this.timerId = setTimeout(this.loop, wait);
+      }
+      return;
+    }
     const nextAbsolute = this.measureStartTime + nextTick.time;
     const wait = nextAbsolute - performance.now();
 

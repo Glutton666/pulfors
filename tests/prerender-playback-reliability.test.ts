@@ -270,6 +270,133 @@ describe("pre-rendered playback reliability", () => {
     expect(mockDecodeSampleFile).toHaveBeenCalledTimes(2);
   });
 
+  it("reuses a queue-warmed sample by URI when that sample becomes current", async () => {
+    const engine = makeEngine();
+    const noteSamplesRef = { current: { "0-0": "file:///current.wav" } };
+    const params = {
+      engineRef: { current: engine },
+      soundSet: "classic",
+      soundSetRef: { current: "classic" },
+      customSoundSetsRef: { current: {} },
+      layerSoundSetsRef: { current: {} },
+      noteSamplesRef,
+      noteSampleChannelsRef: { current: {} },
+      noteSampleVolumesRef: { current: {} },
+      noteSampleSpeedsRef: { current: {} },
+      barModeRef: { current: false },
+      barMetronomeChannelRef: { current: "both" },
+      noteSampleMetroChannelsRef: { current: {} },
+      volume: 0.35,
+      volumeRef: { current: 0.35 },
+      sampleVolumeRef: { current: 0.7 },
+      clickPCMCacheRef: { current: { classic: clickPCMs } },
+      webClickReadyRef: { current: false },
+      noteSampleSoundsRef: { current: {} },
+      renderGenerationRef: { current: 0 },
+      isPlayingRef: { current: false },
+      bpmRef: { current: 120 },
+      t: (key: string) => key,
+      showRecoveryToast: jest.fn(),
+      persistAudioSettingsCallbackRef: { current: jest.fn() },
+    } as any;
+    const { result } = renderHook(() => useAudioPipeline(params));
+
+    await result.current.getSamplePCMs({ "0-0": "file:///next.wav" });
+    noteSamplesRef.current = { "0-0": "file:///next.wav" };
+    await result.current.getSamplePCMs(noteSamplesRef.current);
+
+    expect(mockDecodeSampleFile).toHaveBeenCalledTimes(1);
+    expect(mockDecodeSampleFile).toHaveBeenCalledWith("file:///next.wav");
+  });
+
+  it("does not publish a queue warm-up that finishes after cache invalidation", async () => {
+    const engine = makeEngine();
+    const noteSamplesRef = { current: { "0-0": "file:///next.wav" } };
+    let resolveDecode!: (pcm: Float32Array<ArrayBuffer>) => void;
+    mockDecodeSampleFile.mockImplementationOnce(
+      () => new Promise<Float32Array<ArrayBuffer>>((resolve) => { resolveDecode = resolve; }),
+    );
+    mockDecodeSampleFile.mockResolvedValueOnce(new Float32Array([0.6]));
+    const params = {
+      engineRef: { current: engine },
+      soundSet: "classic",
+      soundSetRef: { current: "classic" },
+      customSoundSetsRef: { current: {} },
+      layerSoundSetsRef: { current: {} },
+      noteSamplesRef,
+      noteSampleChannelsRef: { current: {} },
+      noteSampleVolumesRef: { current: {} },
+      noteSampleSpeedsRef: { current: {} },
+      barModeRef: { current: false },
+      barMetronomeChannelRef: { current: "both" },
+      noteSampleMetroChannelsRef: { current: {} },
+      volume: 0.35,
+      volumeRef: { current: 0.35 },
+      sampleVolumeRef: { current: 0.7 },
+      clickPCMCacheRef: { current: { classic: clickPCMs } },
+      webClickReadyRef: { current: false },
+      noteSampleSoundsRef: { current: {} },
+      renderGenerationRef: { current: 0 },
+      isPlayingRef: { current: false },
+      bpmRef: { current: 120 },
+      t: (key: string) => key,
+      showRecoveryToast: jest.fn(),
+      persistAudioSettingsCallbackRef: { current: jest.fn() },
+    } as any;
+    const { result } = renderHook(() => useAudioPipeline(params));
+
+    const staleWarmup = result.current.getSamplePCMs(noteSamplesRef.current);
+    result.current.invalidateSamplePCMCache();
+    resolveDecode(new Float32Array([0.1]));
+    await staleWarmup;
+    await result.current.getSamplePCMs(noteSamplesRef.current);
+
+    expect(mockDecodeSampleFile).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not publish a decoded sample after the audio pipeline unmounts", async () => {
+    const engine = makeEngine();
+    const noteSamplesRef = { current: { "0-0": "file:///late.wav" } };
+    let resolveDecode!: (pcm: Float32Array<ArrayBuffer>) => void;
+    mockDecodeSampleFile.mockImplementationOnce(
+      () => new Promise<Float32Array<ArrayBuffer>>((resolve) => { resolveDecode = resolve; }),
+    );
+    const params = {
+      engineRef: { current: engine },
+      soundSet: "classic",
+      soundSetRef: { current: "classic" },
+      customSoundSetsRef: { current: {} },
+      layerSoundSetsRef: { current: {} },
+      noteSamplesRef,
+      noteSampleChannelsRef: { current: {} },
+      noteSampleVolumesRef: { current: {} },
+      noteSampleSpeedsRef: { current: {} },
+      barModeRef: { current: false },
+      barMetronomeChannelRef: { current: "both" },
+      noteSampleMetroChannelsRef: { current: {} },
+      volume: 0.35,
+      volumeRef: { current: 0.35 },
+      sampleVolumeRef: { current: 0.7 },
+      clickPCMCacheRef: { current: { classic: clickPCMs } },
+      webClickReadyRef: { current: false },
+      noteSampleSoundsRef: { current: {} },
+      renderGenerationRef: { current: 0 },
+      isPlayingRef: { current: false },
+      bpmRef: { current: 120 },
+      t: (key: string) => key,
+      showRecoveryToast: jest.fn(),
+      persistAudioSettingsCallbackRef: { current: jest.fn() },
+    } as any;
+    const { result, unmount } = renderHook(() => useAudioPipeline(params));
+
+    const staleWarmup = result.current.getSamplePCMs(noteSamplesRef.current);
+    unmount();
+    resolveDecode(new Float32Array([0.1]));
+    await staleWarmup;
+
+    expect(result.current.samplePCMCacheRef.current.size).toBe(0);
+  });
+
   it("releases a native player whose pending boundary handoff is superseded", async () => {
     jest.useFakeTimers();
     const engine = makeEngine();

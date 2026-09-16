@@ -3733,7 +3733,37 @@ export function useMetronomeScreen() {
     if (transitionEpoch !== noteEntryTransitionEpochRef.current) return;
     noteIsPlayingRef.current = started;
     setNoteIsPlaying(started);
-  }, [cancelNoteSamplePreload, cancelPlaybackAttempt, preloadNoteSampleSounds, startConfiguredPlayback]);
+    if (started) {
+      // Warm the next known queue entry while the current rendered output owns
+      // playback. URI-keyed PCM caching avoids mutating the current beat-cell
+      // sample map and removes decode work from the boundary handoff.
+      const mode = notePlayModeRef.current;
+      let nextIndex = -1;
+      if (mode === "once") {
+        if (index + 1 < q.length) nextIndex = index + 1;
+      } else if (mode === "loop") {
+        if (q.length > 0) nextIndex = (index + 1) % q.length;
+      } else {
+        const nextPos = noteShuffledPosRef.current + 1;
+        const indices = noteShuffledIndicesRef.current;
+        if (nextPos < indices.length && indices[nextPos] < q.length) {
+          nextIndex = indices[nextPos];
+        }
+      }
+      const nextEntry = nextIndex >= 0 ? q[nextIndex] : undefined;
+      if (nextEntry && Object.keys(nextEntry.noteSamples || {}).length > 0) {
+        void getSamplePCMs(nextEntry.noteSamples || {}).catch((error) => {
+          if (transitionEpoch !== noteEntryTransitionEpochRef.current) return;
+          captureBreadcrumb({
+            category: "sample.preload",
+            message: "Next Note queue PCM warm-up failed",
+            level: "warning",
+            data: { error: String(error) },
+          });
+        });
+      }
+    }
+  }, [cancelNoteSamplePreload, cancelPlaybackAttempt, getSamplePCMs, preloadNoteSampleSounds, startConfiguredPlayback]);
 
   const createShuffledIndices = useCallback((length: number) => createShuffledIndicesPure(length), []);
 

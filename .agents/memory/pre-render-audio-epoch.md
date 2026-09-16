@@ -20,3 +20,9 @@ Realtime Web Audio fallback reservations share the same ownership boundary. A sc
 **Why:** Future Web Audio sources survive JS timer stalls, but they can also outlive the schedule that created them and double-play against a replacement loop unless cancellation and output generation advance together.
 
 **How to apply:** Reserve only a short audio-clock window, deduplicate ticks inside that window, clear reservations on every timeline ownership transition, and keep result-discard guards for platforms whose decode/render work cannot observe abort signals.
+
+Queue look-ahead may cache decoded samples by source URI so the next entry can reuse them without replacing the current entry's beat-cell mapping. This URI cache needs its own invalidation generation, checked after every async decode before either URI or key caches are updated.
+
+**Why:** Clearing a cache does not cancel an already-running decode; without a generation check, that stale producer can repopulate the cache after explicit invalidation or screen teardown.
+
+**How to apply:** Increment the PCM-cache generation before invalidation and unmount cleanup, and publish decoded results only when the screen is still mounted and the captured generation remains current.
