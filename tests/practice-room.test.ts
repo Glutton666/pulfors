@@ -5,6 +5,8 @@ import {
   savePracticeRooms,
   deletePracticeRoom,
   renamePracticeRoom,
+  loadLabUnlocked,
+  isLabPracticeRoomName,
   findNearbyRoom,
   type PracticeRoom,
 } from "../lib/practice-room";
@@ -69,6 +71,28 @@ test("savePracticeRooms/loadPracticeRooms: 라운드트립", async () => {
 test("loadPracticeRooms: 손상 JSON → []", async () => {
   await AsyncStorage.setItem("metronome_practice_rooms", "}}}");
   assert.deepEqual(await loadPracticeRooms(), []);
+});
+
+test("isLabPracticeRoomName: 공백과 영문 대소문자를 무시한다", () => {
+  assert.equal(isLabPracticeRoomName(" lab "), true);
+  assert.equal(isLabPracticeRoomName("LAB"), true);
+  assert.equal(isLabPracticeRoomName("laboratory"), false);
+});
+
+test("loadLabUnlocked: 저장된 해금 상태를 유지한다", async () => {
+  await AsyncStorage.setItem("metronome_lab_unlocked", "true");
+  assert.equal(await loadLabUnlocked(), true);
+});
+
+test("loadLabUnlocked: 기존 lab 연습실을 발견하면 영구 해금한다", async () => {
+  await savePracticeRooms([r("lab-room", 0, 0, " Lab ")]);
+  assert.equal(await loadLabUnlocked(), true);
+  assert.equal(await AsyncStorage.getItem("metronome_lab_unlocked"), "true");
+});
+
+test("loadLabUnlocked: lab이 없으면 잠금 상태를 유지한다", async () => {
+  await savePracticeRooms([r("room", 0, 0, "studio")]);
+  assert.equal(await loadLabUnlocked(), false);
 });
 
 test("deletePracticeRoom: id 일치만 삭제", async () => {

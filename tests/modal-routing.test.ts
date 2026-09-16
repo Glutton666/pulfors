@@ -398,14 +398,15 @@ test("rapid-tap: menu → signalGen → tuningGuide — 연속 전환에서 동�
 // 4. 소스 구조 테스트 — 실험실 메뉴 구성 검증
 // ────────────────────────────────────────────────────────────────
 
-test("source: MenuScreen — 연습장은 메인 메뉴에서 제거되고 실험실 진입점이 있다", () => {
+test("source: MenuScreen — 연습장은 메인 메뉴에서 제거되고 해금된 경우에만 실험실 진입점이 있다", () => {
   const src = readFileSync(join(process.cwd(), "components/MenuScreen.tsx"), "utf-8");
   const mainStart = src.indexOf("const mainItems");
   const labStart = src.indexOf("const labItems");
   assert.ok(mainStart >= 0 && labStart > mainStart, "메인 메뉴와 실험실 항목 목록을 찾을 수 없다");
   const mainItems = src.slice(mainStart, labStart);
 
-  assert.ok(mainItems.includes('label: t("main", "menuLab")'), "메인 메뉴에 실험실 진입점이 없다");
+  assert.ok(mainItems.includes("labUnlocked"), "실험실 메뉴 해금 조건이 없다");
+  assert.ok(mainItems.includes('label: t("main", "menuLab")'), "해금된 메인 메뉴에 실험실 진입점이 없다");
   assert.ok(mainItems.includes('testID: "menu-lab"'), "실험실 메뉴 항목에 testID가 없다");
   assert.ok(!mainItems.includes("menuPracticeNote"), "연습장이 메인 메뉴에 남아 있다");
 });
@@ -442,6 +443,15 @@ test("source: MenuScreen — 드럼킷 메뉴 라벨과 모달 진입·닫기 �
   assert.match(translations, /menuDrumKit: \{ ko: ".+?", en: ".+?" \}/);
   assert.match(ui, /onDrumKit=\{\(\) => openMenuItem\(\(\) => openExclusive\("drumKit"\)\)\}/);
   assert.match(ui, /<DrumKitModal[\s\S]*?onClose=\{closeMenuItem\}/);
+});
+
+test("source: lab 해금 상태가 프로필 생성 콜백과 메뉴에 연결된다", () => {
+  const ui = readFileSync(join(process.cwd(), "components/MetronomeScreenUI.tsx"), "utf-8");
+  const profile = readFileSync(join(process.cwd(), "components/settings/SettingsProfileTab.tsx"), "utf-8");
+
+  assert.match(ui, /labUnlocked=\{labUnlocked\}/);
+  assert.match(ui, /onLabUnlocked=\{unlockLab\}/);
+  assert.match(profile, /if \(isLabPracticeRoomName\(room\.name\)\) onLabUnlocked\?\.\(\);/);
 });
 
 // ────────────────────────────────────────────────────────────────

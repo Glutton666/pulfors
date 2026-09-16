@@ -106,6 +106,7 @@ import { useBeatQuickSave } from "@/hooks/useBeatQuickSave";
 import { usePracticeBookLoad } from "@/hooks/usePracticeBookLoad";
 import { useGoalPopups } from "@/hooks/useGoalPopups";
 import { usePracticeRoomTracking } from "@/hooks/usePracticeRoomTracking";
+import { loadLabUnlocked } from "@/lib/practice-room";
 import { useStageMode } from "@/hooks/useStageMode";
 import { useBeatTypeControls } from "@/hooks/useBeatTypeControls";
 import { applySwitchToMode, type ModeSwitchState, type ModeSwitchCallbacks } from "@/lib/stage-mode-logic";
@@ -515,6 +516,17 @@ export function useMetronomeScreen() {
   // 단일 활성 모달 보장(태스크 #70)을 위해 두 모달의 동시 visible=true를 금지한다.
   const reopenSignalGenAfterTuningGuideRef = useRef(false);
   const [loggingEnabled, setLoggingEnabled] = useState(false);
+  const [labUnlocked, setLabUnlocked] = useState(false);
+  const unlockLab = useCallback(() => setLabUnlocked(true), []);
+  useEffect(() => {
+    let mounted = true;
+    void loadLabUnlocked().then((unlocked) => {
+      if (mounted) setLabUnlocked(unlocked);
+    });
+    return () => {
+      mounted = false;
+    };
+  }, []);
   const practiceStartRef = useRef<number | null>(null);
   const practiceSessionRef = useRef<PracticeSessionTracker | null>(null);
   const featureStartRef = useRef<{ name: string; start: number } | null>(null);
@@ -4253,6 +4265,8 @@ export function useMetronomeScreen() {
     trackingRoomName,
     startRoomTracking,
     stopRoomTracking,
+    labUnlocked,
+    unlockLab,
     handleResetApp,
     handleOnboardingComplete,
     keyBindings,

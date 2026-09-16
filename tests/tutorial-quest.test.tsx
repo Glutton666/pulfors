@@ -143,6 +143,7 @@ jest.mock("@/lib/practice-room", () => ({
   addPracticeRoom: jest.fn(async () => null),
   deletePracticeRoom: jest.fn(async () => undefined),
   renamePracticeRoom: jest.fn(async () => undefined),
+  isLabPracticeRoomName: jest.fn((name: string) => name.trim().toLowerCase() === "lab"),
   requestLocationPermission: jest.fn(async () => false),
 }));
 

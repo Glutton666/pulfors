@@ -24,6 +24,7 @@ interface MenuScreenProps {
   onPolygon: () => void;
   onAssistant: () => void;
   onDrumKit: () => void;
+  labUnlocked?: boolean;
 }
 
 export function MenuScreen({
@@ -39,6 +40,7 @@ export function MenuScreen({
   onPolygon,
   onAssistant,
   onDrumKit,
+  labUnlocked = false,
 }: MenuScreenProps) {
   const { colors: C } = useTheme();
   const { t } = useLanguage();
@@ -75,12 +77,12 @@ export function MenuScreen({
       label: t("main", "menuWorkUp"),
       onPress: onWorkUp,
     },
-    {
+    ...(labUnlocked ? [{
       icon: <Ionicons name="flask-outline" size={ICON_SIZE} color={C.accent} />,
       label: t("main", "menuLab"),
       onPress: () => setShowLab(true),
       testID: "menu-lab",
-    },
+    }] : []),
   ];
 
   const labItems: {

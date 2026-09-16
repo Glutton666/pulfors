@@ -23,6 +23,7 @@ import {
   addPracticeRoom,
   deletePracticeRoom,
   renamePracticeRoom,
+  isLabPracticeRoomName,
   requestLocationPermission,
   type PracticeRoom,
 } from "@/lib/practice-room";
@@ -42,6 +43,7 @@ export interface SettingsProfileTabProps {
   onStopRoomTracking: () => void;
   onResetApp?: () => void;
   onShowOnboarding?: () => void;
+  onLabUnlocked?: () => void;
 }
 
 export function SettingsProfileTab({
@@ -56,6 +58,7 @@ export function SettingsProfileTab({
   onStopRoomTracking,
   onResetApp,
   onShowOnboarding,
+  onLabUnlocked,
 }: SettingsProfileTabProps) {
   const { colors: C } = useTheme();
   const S = useScale();
@@ -97,13 +100,14 @@ export function SettingsProfileTab({
     const room = await addPracticeRoom(newRoomName.trim());
     if (room) {
       setPracticeRooms((prev) => [...prev, room]);
+      if (isLabPracticeRoomName(room.name)) onLabUnlocked?.();
       setNewRoomName("");
       setShowAddRoom(false);
     } else {
       Alert.alert(t("settings", "error"), t("settings", "locationError"));
     }
     setAddingRoom(false);
-  }, [newRoomName, t]);
+  }, [newRoomName, onLabUnlocked, t]);
 
   const showRestoreResult = useCallback(async () => {
     const { importBackup } = await import("@/lib/backup");

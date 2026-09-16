@@ -109,6 +109,7 @@ export function MetronomeScreenUI(props: Props) {
     markMenuItemReturn, clearMenuItemReturn, closeMenuItem, closeScoreMode,
      showSettings, showProfile, showAssistant, showMenu, showSignalGen, showTuningGuide, showPracticeBook,
     showWorkUp, showOnboarding, showDrumKit, showScheduledStart,
+     labUnlocked, unlockLab,
     showFadeOut, showBpmDetect, showPolygon,
     tutorialState, tutorialMode, tutorialLastAction,
     recordTutorialAction, completeTutorialStep, finishModeTutorial, skipModeTutorial,
@@ -618,6 +619,7 @@ export function MetronomeScreenUI(props: Props) {
             }}
             onAssistant={() => openMenuItem(() => openExclusive("assistant"))}
             onDrumKit={() => openMenuItem(() => openExclusive("drumKit"))}
+            labUnlocked={labUnlocked}
           />
         </Animated.View>
       )}
@@ -635,6 +637,7 @@ export function MetronomeScreenUI(props: Props) {
         onStopRoomTracking={stopRoomTracking}
         onResetApp={handleResetApp}
         onShowOnboarding={() => openExclusive("onboarding")}
+        onLabUnlocked={unlockLab}
       />
 
       <AssistantModal visible={showAssistant} onClose={closeMenuItem} />

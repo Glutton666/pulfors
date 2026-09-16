@@ -5,6 +5,7 @@ import { Platform } from "react-native";
 import { logger } from "./logger";
 
 const PRACTICE_ROOMS_KEY = "metronome_practice_rooms";
+const LAB_UNLOCKED_KEY = "metronome_lab_unlocked";
 const PROXIMITY_RADIUS_METERS = 20;
 
 export interface PracticeRoom {
@@ -13,6 +14,31 @@ export interface PracticeRoom {
   latitude: number;
   longitude: number;
   createdAt: number;
+}
+
+export function isLabPracticeRoomName(name: string): boolean {
+  return name.trim().toLocaleLowerCase() === "lab";
+}
+
+async function persistLabUnlock(): Promise<void> {
+  try {
+    await AsyncStorage.setItem(LAB_UNLOCKED_KEY, "true");
+  } catch (e) {
+    logger.warn("Failed to save lab unlock state:", e);
+  }
+}
+
+export async function loadLabUnlocked(): Promise<boolean> {
+  try {
+    if ((await AsyncStorage.getItem(LAB_UNLOCKED_KEY)) === "true") return true;
+  } catch (e) {
+    logger.warn("Failed to load lab unlock state:", e);
+  }
+
+  const rooms = await loadPracticeRooms();
+  const hasLabRoom = rooms.some((room) => isLabPracticeRoomName(room.name));
+  if (hasLabRoom) await persistLabUnlock();
+  return hasLabRoom;
 }
 
 export async function loadPracticeRooms(): Promise<PracticeRoom[]> {
@@ -49,6 +75,7 @@ export async function addPracticeRoom(name: string): Promise<PracticeRoom | null
     const rooms = await loadPracticeRooms();
     rooms.push(room);
     await savePracticeRooms(rooms);
+    if (isLabPracticeRoomName(name)) await persistLabUnlock();
     return room;
   } catch (e) {
     logger.warn("Failed to add practice room:", e);
