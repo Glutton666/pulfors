@@ -86,8 +86,6 @@ interface SettingsModalProps {
   randomBarConfig: BarRandomConfig;
   onRandomBarConfigChange: (config: BarRandomConfig) => void;
   onShowOnboarding?: () => void;
-  onShowTutorial?: () => void;
-  onResetTutorials?: () => void;
   onEnterNoteMode?: () => void;
   keyBindings?: import("@/lib/keyboard-bindings").KeyBindingsMap;
   onKeyBindingsChange?: (kb: import("@/lib/keyboard-bindings").KeyBindingsMap) => void;
@@ -154,8 +152,6 @@ export function SettingsModal({
   randomBarConfig,
   onRandomBarConfigChange,
   onShowOnboarding,
-  onShowTutorial,
-  onResetTutorials,
   keyBindings: keyBindingsProp,
   onKeyBindingsChange,
   stageSettings,
@@ -234,36 +230,6 @@ export function SettingsModal({
     { key: "sound", icon: "musical-notes-outline", label: t("settings", "soundTab") },
     ...(Platform.OS === "web" && scope !== "stage" ? [{ key: "keyboard" as SettingsTab, icon: "keypad-outline", label: t("keyboard", "tabLabel") }] : []),
   ];
-
-  const renderTutorialControls = () => {
-    if (!onShowTutorial || scope === "stage") return null;
-    return (
-      <View style={{ marginTop: 18, paddingTop: 14, borderTopWidth: 1, borderTopColor: C.border, gap: 8 }}>
-        <Text style={{ color: C.textSecondary, fontSize: 12, fontWeight: "600" }}>
-          {t("settings", "showTutorialAgainHint")}
-        </Text>
-        <View style={{ flexDirection: "row", gap: 8 }}>
-          <Pressable
-            onPress={onShowTutorial}
-            accessibilityRole="button"
-            style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, borderWidth: 1, borderColor: C.accent, borderRadius: 8, paddingVertical: 9 }}
-          >
-            <Ionicons name="sparkles-outline" size={15} color={C.accent} />
-            <Text style={{ color: C.accent, fontSize: 12, fontWeight: "600" }}>{t("settings", "showTutorialAgain")}</Text>
-          </Pressable>
-          {onResetTutorials && (
-            <Pressable
-              onPress={onResetTutorials}
-              accessibilityRole="button"
-              style={{ flex: 1, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: C.border, borderRadius: 8, paddingVertical: 9 }}
-            >
-              <Text style={{ color: C.textSecondary, fontSize: 12 }}>{t("settings", "resetTutorials")}</Text>
-            </Pressable>
-          )}
-        </View>
-      </View>
-    );
-  };
 
   const renderTabContent = () => {
     switch (activeTab) {
@@ -403,7 +369,6 @@ export function SettingsModal({
                 >
                   <Animated.View style={{ opacity: tabFadeAnim, transform: [{ translateY: tabSlideAnim }] }}>
                     {renderTabContent()}
-                    {renderTutorialControls()}
                   </Animated.View>
                 </ScrollView>
               </View>
@@ -437,7 +402,6 @@ export function SettingsModal({
                 <View style={[styles.divider, { backgroundColor: C.border }]} />
                 <Animated.View style={{ opacity: tabFadeAnim, transform: [{ translateX: tabSlideAnim }] }}>
                   {renderTabContent()}
-                  {renderTutorialControls()}
                 </Animated.View>
               </>
             )}

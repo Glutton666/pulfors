@@ -42,8 +42,6 @@ export interface SettingsProfileTabProps {
   onStopRoomTracking: () => void;
   onResetApp?: () => void;
   onShowOnboarding?: () => void;
-  onShowTutorial?: () => void;
-  onResetTutorials?: () => void;
 }
 
 export function SettingsProfileTab({
@@ -58,8 +56,6 @@ export function SettingsProfileTab({
   onStopRoomTracking,
   onResetApp,
   onShowOnboarding,
-  onShowTutorial,
-  onResetTutorials,
 }: SettingsProfileTabProps) {
   const { colors: C } = useTheme();
   const S = useScale();
@@ -534,24 +530,6 @@ export function SettingsProfileTab({
           {t("settings", "showOnboardingAgainHint")}
         </Text>
       )}
-      {onShowTutorial && (
-        <Pressable style={styles.addRoomBtn} onPress={onShowTutorial} accessibilityRole="button">
-          <Ionicons name="sparkles-outline" size={S.ms(15, 0.4)} color={C.accent} />
-          <Text style={[styles.addRoomBtnText, { color: C.accent }]}>{t("settings", "showTutorialAgain")}</Text>
-        </Pressable>
-      )}
-      {onShowTutorial && (
-        <Text style={[styles.offsetHint, { color: C.textTertiary, marginBottom: 12 }]}>
-          {t("settings", "showTutorialAgainHint")}
-        </Text>
-      )}
-      {onResetTutorials && (
-        <Pressable style={styles.addRoomBtn} onPress={onResetTutorials} accessibilityRole="button">
-          <Ionicons name="refresh-outline" size={S.ms(15, 0.4)} color={C.textSecondary} />
-          <Text style={[styles.addRoomBtnText, { color: C.textSecondary }]}>{t("settings", "resetTutorials")}</Text>
-        </Pressable>
-      )}
-
       {onResetApp && !showResetConfirm && (
         <Pressable style={styles.resetButton} onPress={() => setShowResetConfirm(true)}>
           <Ionicons name="refresh-circle-outline" size={S.ms(18, 0.4)} color="#F85149" />

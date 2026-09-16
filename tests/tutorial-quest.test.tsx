@@ -217,8 +217,6 @@ const settingsProps = (overrides: Record<string, unknown> = {}) => ({
   onBeatStaffNotationChange: jest.fn(),
   randomBarConfig: { strategy: "independent" as const, bundleSize: 2, bundleRepeats: 2 },
   onRandomBarConfigChange: jest.fn(),
-  onShowTutorial: jest.fn(),
-  onResetTutorials: jest.fn(),
   ...overrides,
 });
 
@@ -232,8 +230,6 @@ const profileProps = (overrides: Record<string, unknown> = {}) => ({
   trackingRoomName: null,
   onStartRoomTracking: jest.fn(),
   onStopRoomTracking: jest.fn(),
-  onShowTutorial: jest.fn(),
-  onResetTutorials: jest.fn(),
   ...overrides,
 });
 
@@ -319,19 +315,15 @@ describe("rendered mode tutorial quests", () => {
 });
 
 describe("tutorial replay and reset settings", () => {
-  test.each(["global", "beat"] as const)("renders replay and reset actions in %s settings", (scope) => {
-    const onShowTutorial = jest.fn();
-    const onResetTutorials = jest.fn();
+  test.each(["global", "beat"] as const)("does not render disabled tutorial controls in %s settings", (scope) => {
     const view = render(
       <SettingsModal
-        {...settingsProps({ scope, onShowTutorial, onResetTutorials })}
+        {...settingsProps({ scope })}
       />,
     );
 
-    fireEvent.click(view.getByText("Show tutorial again"));
-    fireEvent.click(view.getByText("Reset tutorials"));
-    expect(onShowTutorial).toHaveBeenCalledTimes(1);
-    expect(onResetTutorials).toHaveBeenCalledTimes(1);
+    expect(view.queryByText("Show tutorial again")).toBeNull();
+    expect(view.queryByText("Reset tutorials")).toBeNull();
     expect(view.getByTestId(`theme-tab-${scope}`)).toBeTruthy();
   });
 
@@ -342,21 +334,17 @@ describe("tutorial replay and reset settings", () => {
     expect(view.queryByText("Reset tutorials")).toBeNull();
   });
 
-  test("profile settings expose the same replay and reset actions", async () => {
-    const onShowTutorial = jest.fn();
-    const onResetTutorials = jest.fn();
+  test("profile settings do not expose disabled tutorial controls", async () => {
     const view = render(
       <SettingsProfileTab
-        {...profileProps({ onShowTutorial, onResetTutorials })}
+        {...profileProps()}
       />,
     );
 
     await act(async () => {
       await Promise.resolve();
     });
-    fireEvent.click(view.getByText("Show tutorial again"));
-    fireEvent.click(view.getByText("Reset tutorials"));
-    expect(onShowTutorial).toHaveBeenCalledTimes(1);
-    expect(onResetTutorials).toHaveBeenCalledTimes(1);
+    expect(view.queryByText("Show tutorial again")).toBeNull();
+    expect(view.queryByText("Reset tutorials")).toBeNull();
   });
 });

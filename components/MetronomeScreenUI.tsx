@@ -112,7 +112,6 @@ export function MetronomeScreenUI(props: Props) {
     showFadeOut, showBpmDetect, showPolygon,
     tutorialState, tutorialMode, tutorialLastAction,
     recordTutorialAction, completeTutorialStep, finishModeTutorial, skipModeTutorial,
-    openModeTutorial, resetModeTutorials,
     volume, updateVolume, tonePosition, updateTonePosition, sampleVolume, updateSampleVolume,
     backgroundPlay, updateBackgroundPlay,
     playbackNotifications, updatePlaybackNotifications,
@@ -295,17 +294,6 @@ export function MetronomeScreenUI(props: Props) {
     setSettingsScope(scope);
     openExclusive("settings");
   }, [openExclusive, settingsReturnModalRef]);
-
-  const replayCurrentModeTutorial = useCallback(() => {
-    const mode = currentMode === "bar" || currentMode === "note" || currentMode === "practice"
-      ? currentMode
-      : "beat";
-    settingsReturnModalRef.current = null;
-    clearMenuItemReturn();
-    setActiveModal(null);
-    setTimeout(() => openModeTutorial(mode, true), 180);
-  }, [clearMenuItemReturn, currentMode, openModeTutorial, setActiveModal, settingsReturnModalRef]);
-
 
   const openModeDial = () => {
     // 사용자가 다이얼에서 새 모드를 고르면 메뉴 복귀 흐름을 벗어난다.
@@ -647,8 +635,6 @@ export function MetronomeScreenUI(props: Props) {
         onStopRoomTracking={stopRoomTracking}
         onResetApp={handleResetApp}
         onShowOnboarding={() => openExclusive("onboarding")}
-        onShowTutorial={replayCurrentModeTutorial}
-        onResetTutorials={() => { void resetModeTutorials(); }}
       />
 
       <AssistantModal visible={showAssistant} onClose={closeMenuItem} />
@@ -1050,8 +1036,6 @@ export function MetronomeScreenUI(props: Props) {
         onRandomBarConfigChange={onRandomBarConfigChange}
         onEnterNoteMode={handleEnterNoteMode}
         onShowOnboarding={() => openExclusive("onboarding")}
-        onShowTutorial={replayCurrentModeTutorial}
-        onResetTutorials={() => { void resetModeTutorials(); }}
         keyBindings={keyBindings}
         onKeyBindingsChange={(kb) => {
           setKeyBindings(kb);
