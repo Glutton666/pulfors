@@ -3,6 +3,24 @@ export type BarDropAreaLayout = {
   height: number;
 };
 
+export type PatternDropAction =
+  | "add-bar"
+  | "apply-all"
+  | "apply-one"
+  | "clear-one"
+  | "none";
+
+export function getPatternDropAction(
+  dragMode: "bar" | "beat" | null,
+  target: number | null,
+  patternLength: number,
+): PatternDropAction {
+  if (target === null) return "none";
+  if (dragMode === "bar") return "add-bar";
+  if (target === -1) return "apply-all";
+  return patternLength > 0 ? "apply-one" : "clear-one";
+}
+
 export function getBarRowDropTarget(
   pageY: number,
   layout: BarDropAreaLayout,

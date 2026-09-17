@@ -1,11 +1,24 @@
 /** @jest-environment jsdom */
 
 import {
+  getPatternDropAction,
   getBarRowDropTarget,
   getBarRowDropTargetFromElement,
 } from "@/lib/bar-pattern-drop";
 
 describe("bar drawer pattern drop targeting", () => {
+  it("adds the configured pattern as a new bar when dropped onto the Bar list", () => {
+    expect(getPatternDropAction("bar", 0, 4)).toBe("add-bar");
+    expect(getPatternDropAction("bar", 7, 2)).toBe("add-bar");
+    expect(getPatternDropAction("bar", null, 4)).toBe("none");
+  });
+
+  it("keeps beat-mode pattern drops as edits to existing beats", () => {
+    expect(getPatternDropAction("beat", -1, 4)).toBe("apply-all");
+    expect(getPatternDropAction("beat", 2, 4)).toBe("apply-one");
+    expect(getPatternDropAction("beat", 2, 0)).toBe("clear-one");
+  });
+
   it("targets the first visible row without the removed center-padding offset", () => {
     expect(getBarRowDropTarget(120, { y: 100, height: 220 }, 0, 44, 8)).toBe(0);
     expect(getBarRowDropTarget(150, { y: 100, height: 220 }, 0, 44, 8)).toBe(1);

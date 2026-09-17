@@ -119,6 +119,7 @@ import { useBeatTypeControls } from "@/hooks/useBeatTypeControls";
 import { applySwitchToMode, type ModeSwitchState, type ModeSwitchCallbacks } from "@/lib/stage-mode-logic";
 import { findBeatStaffCellTarget, type BeatStaffCellRects } from "@/lib/beat-staff-logic";
 import {
+  getPatternDropAction,
   getBarRowDropTarget,
   getBarRowDropTargetFromElement,
 } from "@/lib/bar-pattern-drop";
@@ -3513,25 +3514,39 @@ export function useMetronomeScreen() {
 
   const handleDragEnd = useCallback(
     (pageX: number, pageY: number) => {
+      const dragMode = dragModeRef.current;
       const releaseTarget = findDropTarget(pageX, pageY);
       // A native/web release event can be delivered outside the row that was
       // visibly tracked during the drag. Preserve the last confirmed target
       // instead of discarding an otherwise valid drop.
       const target = releaseTarget ?? dropTargetBeatRef.current;
       const pattern = dragPatternRef.current ?? subdivisionPatternRef.current;
+      const action = getPatternDropAction(dragMode, target, pattern.length);
       clearDragState();
 
-      if (target === -1) {
+      // In Bar mode the lower editor is a draft for a new bar. Before the
+      // subdivision child started capturing this gesture, the parent panel's
+      // swipe-up responder called handleAddBar. Preserve that established
+      // behavior now that the child owns the drag and ghost.
+      if (action === "add-bar") {
+        if (Platform.OS !== "web") {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        }
+        handleAddBar();
+        return;
+      }
+
+      if (action === "apply-all") {
         if (Platform.OS !== "web") {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         }
         applyToAllBeats(pattern);
-      } else if (target !== null && pattern.length >= 1) {
+      } else if (action === "apply-one" && target !== null) {
         if (Platform.OS !== "web") {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         }
         applyBeatStaffSubdivision(target, pattern);
-      } else if (target !== null && pattern.length < 1) {
+      } else if (action === "clear-one" && target !== null) {
         if (Platform.OS !== "web") {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         }
@@ -3547,7 +3562,10 @@ export function useMetronomeScreen() {
         }
       }
     },
-    [findDropTarget, beatSubdivisions, persistSettings, applyToAllBeats, applyBeatStaffSubdivision, clearDragState]
+    [
+      findDropTarget, beatSubdivisions, persistSettings, applyToAllBeats,
+      applyBeatStaffSubdivision, clearDragState, handleAddBar,
+    ]
   );
 
   // handleBarRepeatChange / handleLoopBlocksChange → useBarMode
