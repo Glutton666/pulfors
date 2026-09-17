@@ -3532,7 +3532,7 @@ export function useMetronomeScreen() {
         if (Platform.OS !== "web") {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         }
-        handleAddBar();
+        handleAddBar(undefined, pattern);
         return;
       }
 

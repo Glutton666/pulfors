@@ -35,7 +35,10 @@ export function getBarRowDropTarget(
   if (relativeY < 0) return -1;
 
   const beat = Math.floor((relativeY + Math.max(0, scrollY)) / rowHeight);
-  return beat >= 0 && beat < beatCount ? beat : null;
+  // The Bar editor intentionally starts with an empty list. Treat any unused
+  // space inside the measured list as a valid list-level drop zone so the
+  // first bar (and bars dropped below the last row) can still be added.
+  return beat >= 0 && beat < beatCount ? beat : -1;
 }
 
 export function getBarRowDropTargetFromElement(

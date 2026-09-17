@@ -35,6 +35,14 @@ describe("bar drawer pattern drop targeting", () => {
     expect(getBarRowDropTarget(321, { y: 100, height: 220 }, 0, 44, 8)).toBeNull();
   });
 
+  it("accepts empty list space so the first Bar can be dropped", () => {
+    expect(getBarRowDropTarget(180, { y: 100, height: 220 }, 0, 44, 0)).toBe(-1);
+  });
+
+  it("accepts unused list space below the final rendered row", () => {
+    expect(getBarRowDropTarget(260, { y: 100, height: 220 }, 0, 44, 2)).toBe(-1);
+  });
+
   it("uses the actual row under a web pointer", () => {
     document.body.innerHTML = `
       <div data-testid="bar-row-3"><span id="cell">cell</span></div>

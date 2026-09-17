@@ -307,7 +307,7 @@ export interface UseBarModeResult {
   handleLoopBlocksChange: (blocks: LoopBlock[]) => void;
   handleBarReset: () => void;
   handleBarQuickSave: () => Promise<boolean>;
-  handleAddBar: (draftRepeat?: BarRepeat) => void;
+  handleAddBar: (draftRepeat?: BarRepeat, draftPattern?: BeatType[]) => void;
   /** Copies a single bar into the in-memory keyboard clipboard. */
   copyBarToClipboard: (beatIndex: number) => boolean;
   /** Inserts the keyboard clipboard after the supplied bar, or appends when null. */
@@ -686,7 +686,7 @@ export function useBarMode(p: UseBarModeParams): UseBarModeResult {
   // ─────────────────────────────────────────────────────────────────────────
 
   const handleAddBar = useCallback(
-    (draftRepeat?: BarRepeat) => {
+    (draftRepeat?: BarRepeat, draftPattern?: BeatType[]) => {
       if (p.beatsPerMeasure >= 16) return;
       const newBeat = p.beatsPerMeasure;
       const newBeats = p.beatsPerMeasure + 1;
@@ -695,7 +695,7 @@ export function useBarMode(p: UseBarModeParams): UseBarModeResult {
       p.setBeatTypes(newTypes);
       p.engineRef.current?.setBeatsPerMeasure(newBeats);
       p.engineRef.current?.setBeatTypes(newTypes);
-      const currentPattern = p.subdivisionPattern;
+      const currentPattern = draftPattern ?? p.subdivisionPattern;
       const newSubs = { ...p.beatSubdivisions };
       if (
         currentPattern.length > 1 ||
