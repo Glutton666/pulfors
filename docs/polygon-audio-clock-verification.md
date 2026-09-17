@@ -5,15 +5,16 @@
 Run the focused regression suite before a release:
 
 ```sh
-npx jest __tests__/usePolygonMode.test.ts --runInBand
+npx jest tests/polygon-scheduler.test.ts __tests__/usePolygonMode.test.ts --runInBand
 ```
 
 The suite covers:
 
-- A 4:4 polygon scheduling all four clicks on one Web Audio clock.
-- 3:4 and 5:4 layers sharing the same measure anchor at 300 BPM.
-- Custom/decoded PCM sources starting at future `AudioContext` times.
-- Cancellation of future sources after a layer edit or playback stop.
+- Stable integer event IDs and exact N-event measures for every N-gon.
+- 3:4, 5:4, and mixed 3/5/7 layers without duplicate or missing slots.
+- Mute and offset slots retained on the integer musical-time grid.
+- Session- and layer-scoped cancellation after edits, tempo changes, or stop.
+- Conversion from integer ticks to wall-clock delay only in the timer runner.
 - Existing native pooled-player, vertex role, mute, volume, offset, and meter behavior.
 
 ## Physical-device listening checklist

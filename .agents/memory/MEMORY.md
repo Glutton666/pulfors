@@ -68,3 +68,4 @@
 - [Complete playback-stop boundary](complete-playback-stop-boundary.md) — full stops must invalidate all async audio producers before stopping/releasing output; partial handoffs use narrower cleanup.
 - [Bar subdivision drag verification](bar-subdivision-drag-verification.md) — first Bar visit has zero rows by design; the measured list itself must remain a valid pattern-drop target.
 - [Backup image asset identity](backup-image-asset-identity.md) — key embedded images by source URI, then detect format from decoded bytes; filenames and blob URLs are not reliable identities.
+- [Restartable producer callbacks](restartable-producer-callbacks.md) — boolean gates do not reject callbacks from an older lifetime after restart; each installed producer needs an immutable generation.

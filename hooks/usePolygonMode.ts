@@ -19,6 +19,13 @@ import type { ClickPCMs } from "@/lib/audio-renderer";
 import type { SoundSet } from "@/lib/storage";
 import { buildPolygonPlaybackPlan, type PolygonPlaybackPlan } from "@/lib/audio-playback-plan";
 import {
+  buildPolygonSchedule,
+  createPolygonScheduleRunner,
+  type PolygonSchedule,
+  type PolygonScheduleEvent,
+  type PolygonScheduleRunner,
+} from "@/lib/polygon-scheduler";
+import {
   PolygonLayer,
   VertexBeatType,
   LAYER_COLORS,
@@ -131,8 +138,22 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
   useEffect(() => { beatsPerMeasureRef.current = p.beatsPerMeasure; }, [p.beatsPerMeasure]);
 
   const enabledRef = useRef(p.enabled);
-  useEffect(() => { enabledRef.current = p.enabled; }, [p.enabled]);
+  enabledRef.current = p.enabled;
+  const isPlayingRef = useRef(p.isPlaying);
+  isPlayingRef.current = p.isPlaying;
   const activePlaybackPlanRef = useRef<PolygonPlaybackPlan | null>(null);
+  // Keep the required production call at the hook boundary; active playback
+  // still replaces this snapshot only at explicit lifecycle/edit boundaries.
+  const initialSchedule = buildPolygonSchedule({
+    layers,
+    beatsPerMeasure: p.beatsPerMeasure,
+  });
+  const activeScheduleRef = useRef<PolygonSchedule | null>(
+    p.isPlaying ? initialSchedule : null,
+  );
+  const sessionIdRef = useRef(0);
+  const producerGenerationRef = useRef(0);
+  const runnerRef = useRef<PolygonScheduleRunner | null>(null);
   const replaceActivePlaybackPlan = useCallback((
     nextLayers = layersRef.current,
     nextBpm = bpmRef.current,
@@ -145,9 +166,16 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
       beatsPerMeasure: nextBeatsPerMeasure,
       layers: nextLayers,
     });
+    activeScheduleRef.current = buildPolygonSchedule({
+      layers: nextLayers,
+      beatsPerMeasure: nextBeatsPerMeasure,
+    });
   }, []);
 
   useEffect(() => {
+    runnerRef.current?.cancelSession(sessionIdRef.current);
+    sessionIdRef.current += 1;
+    absoluteBeatRef.current = 0;
     activePlaybackPlanRef.current = p.isPlaying
       ? buildPolygonPlaybackPlan({
           platform: Platform.OS === "web" ? "web" : "native",
@@ -156,6 +184,9 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
           layers,
         })
       : null;
+    activeScheduleRef.current = p.isPlaying
+      ? buildPolygonSchedule({ layers, beatsPerMeasure: p.beatsPerMeasure })
+      : null;
     // Playback starts from one complete snapshot. Live edits replace that
     // snapshot atomically at the same boundary that clears old timers.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -163,25 +194,6 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
 
   // ── 절대 비트 카운터 (엔진 콜백 내에서만 변경) ──────────────────────────
   const absoluteBeatRef = useRef(0);
-
-  // ── 오프셋 setTimeout 핸들 ───────────────────────────────────────────────
-  // Map<layerId, Set<timerId>>: 레이어별로 관리해 삭제 시 해당 레이어 타이머만 취소.
-  const pendingTimerMapRef = useRef<Map<string, Set<ReturnType<typeof setTimeout>>>>(new Map());
-
-  /** 특정 레이어의 대기 중 타이머를 모두 취소한다 */
-  const clearLayerTimers = useCallback((layerId: string) => {
-    const timers = pendingTimerMapRef.current.get(layerId);
-    if (timers) {
-      timers.forEach(clearTimeout);
-      pendingTimerMapRef.current.delete(layerId);
-    }
-  }, []);
-
-  /** 모든 레이어의 대기 중 타이머를 취소한다 (전역 cleanup 전용) */
-  const clearPendingTimers = useCallback(() => {
-    pendingTimerMapRef.current.forEach((timers) => timers.forEach(clearTimeout));
-    pendingTimerMapRef.current.clear();
-  }, []);
 
   // ── Per-layer PCM 캐시 (전역 clickPCMCacheRef와 분리) ───────────────────
   const polygonPCMCacheRef = useRef<Map<string, ClickPCMs>>(new Map());
@@ -204,6 +216,38 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
     [p.getClickPCMs],
   );
 
+  if (!runnerRef.current) {
+    runnerRef.current = createPolygonScheduleRunner((event: PolygonScheduleEvent) => {
+      if (event.type === "mute") {
+        setActiveVertices((prev) => {
+          if (!(event.layerId in prev)) return prev;
+          const next = { ...prev };
+          delete next[event.layerId];
+          return next;
+        });
+        return;
+      }
+      const soundRole = beatTypeToWebClickRole(event.type as VertexBeatType);
+      const cached = Platform.OS === "web"
+        ? polygonPCMCacheRef.current.get(event.soundSet)
+          ?? p.clickPCMCacheRef.current[event.soundSet]
+        : undefined;
+      const played = playPolygonOutput({
+        soundSet: event.soundSet,
+        role: soundRole,
+        volume: p.volumeRef.current * event.volume,
+        pcm: cached?.[soundRole],
+        channel: "both",
+        pools: p.allPlayersRef.current,
+      });
+      if (!cached && Platform.OS === "web") ensurePCM(event.soundSet);
+      if (played) p.recordAudioActivity();
+      setActiveVertices((prev) =>
+        prev[event.layerId] === event.vertex ? prev : { ...prev, [event.layerId]: event.vertex },
+      );
+    });
+  }
+
   // enabled=true 시 / 레이어 사운드셋 변경 시 PCM 선제 로드
   useEffect(() => {
     if (!p.enabled || Platform.OS !== "web") return;
@@ -215,10 +259,13 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
   // 비주얼 리셋(setActiveVertices)은 enabled가 false가 될 때 처리한다.
   useEffect(() => {
     if (!p.isPlaying) {
-      clearPendingTimers();
+      runnerRef.current?.cancelSession(sessionIdRef.current);
+      sessionIdRef.current += 1;
+      activePlaybackPlanRef.current = null;
+      activeScheduleRef.current = null;
       absoluteBeatRef.current = 0;
     }
-  }, [p.isPlaying, clearPendingTimers]);
+  }, [p.isPlaying]);
 
   // ── BPM 변경 → 예약된 슬롯 취소 (다음 비트부터 새 BPM 적용) ────────────
   // BPM이 바뀌면 현재 마디에서 아직 발화되지 않은 슬롯을 취소한다.
@@ -228,10 +275,11 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
     if (prevBpmRef.current !== p.bpm) {
       prevBpmRef.current = p.bpm;
       bpmRef.current = p.bpm;
-      clearPendingTimers();
+      runnerRef.current?.cancelSession(sessionIdRef.current);
+      sessionIdRef.current += 1;
       replaceActivePlaybackPlan(layersRef.current, p.bpm, beatsPerMeasureRef.current);
     }
-  }, [p.bpm, clearPendingTimers, replaceActivePlaybackPlan]);
+  }, [p.bpm, replaceActivePlaybackPlan]);
 
   // ── 박자표 변경 → 위상 재정렬 ──────────────────────────────────────────
   // 엔진이 자체 비트 카운터를 0으로 리셋하므로, 폴리곤도 다음 콜백을
@@ -242,137 +290,72 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
     if (prevMeterRef.current !== p.beatsPerMeasure) {
       prevMeterRef.current = p.beatsPerMeasure;
       beatsPerMeasureRef.current = p.beatsPerMeasure;
-      clearPendingTimers();
+      runnerRef.current?.cancelSession(sessionIdRef.current);
+      sessionIdRef.current += 1;
       absoluteBeatRef.current = 0;
       replaceActivePlaybackPlan(layersRef.current, bpmRef.current, p.beatsPerMeasure);
     }
-  }, [p.beatsPerMeasure, clearPendingTimers, replaceActivePlaybackPlan]);
+  }, [p.beatsPerMeasure, replaceActivePlaybackPlan]);
 
   // ── 엔진 비트 핸들러 등록/해제 ──────────────────────────────────────────
   // 웹도 꼭짓점 타이머에서 realtime click을 재생한다. AudioContext 미래 예약은
   // 브라우저별로 무음이 될 수 있어 사용하지 않는다.
   useEffect(() => {
-    if (!p.enabled) {
+    const producerGeneration = ++producerGenerationRef.current;
+    enabledRef.current = p.enabled;
+    isPlayingRef.current = p.isPlaying;
+    if (!p.enabled || !p.isPlaying) {
       // 엔진 콜백 해제 및 재생 상태 초기화.
       // 레이어 설정(layers, editingLayerId)은 보존한다:
       // 사용자가 폴리곤 모드를 닫았다 다시 열어도 설정한 레이어가 남아 있어야 한다.
       p.engineBeatCallbackRef.current = null;
-      clearPendingTimers();
+      runnerRef.current?.cancelSession(sessionIdRef.current);
+      sessionIdRef.current += 1;
+      activePlaybackPlanRef.current = null;
+      activeScheduleRef.current = null;
       absoluteBeatRef.current = 0;
-      setOffsetPopup(null);
-      setActiveVertices({});
+      if (!p.enabled) {
+        setOffsetPopup(null);
+        setActiveVertices({});
+      }
       return;
     }
 
     p.engineBeatCallbackRef.current = () => {
-      // 이 핸들러는 React lifecycle 밖(엔진 오디오 스레드)에서 호출된다.
-      // 최신 레이어/BPM/박자표는 ref를 통해 읽는다.
-      const plan = activePlaybackPlanRef.current ?? buildPolygonPlaybackPlan({
-        platform: Platform.OS === "web" ? "web" : "native",
-        bpm: bpmRef.current,
-        beatsPerMeasure: beatsPerMeasureRef.current,
+      if (
+        producerGeneration !== producerGenerationRef.current
+        || !enabledRef.current
+        || !isPlayingRef.current
+      ) return;
+      const schedule = activeScheduleRef.current ?? buildPolygonSchedule({
         layers: layersRef.current,
+        beatsPerMeasure: beatsPerMeasureRef.current,
       });
-      activePlaybackPlanRef.current = plan;
-      const layers = plan.unit.layers;
-      const bpm = plan.bpm;
-      const beatsPerMeasure = plan.unit.beatsPerMeasure;
+      activeScheduleRef.current = schedule;
       const absbeat = absoluteBeatRef.current++;
-
-      const beatWithinMeasure = absbeat % beatsPerMeasure;
-      const beatDurationMs = 60000 / Math.max(20, bpm);
-      const beatStartMs = beatWithinMeasure * beatDurationMs; // 마디 시작 기준
-
-      layers.forEach((layer) => {
-        const sides = Math.max(1, layer.sides);
-        // N각형 슬롯 간격 = 마디 길이 / N
-        const slotDurationMs = (beatsPerMeasure * beatDurationMs) / sides;
-
-        const schedule = (delayMs: number, fn: () => void) => {
-          if (delayMs <= 0) {
-            fn();
-            return;
-          }
-          if (!pendingTimerMapRef.current.has(layer.id)) {
-            pendingTimerMapRef.current.set(layer.id, new Set());
-          }
-          const layerTimers = pendingTimerMapRef.current.get(layer.id)!;
-          const t = setTimeout(() => {
-            layerTimers.delete(t);
-            fn();
-          }, delayMs);
-          layerTimers.add(t);
-        };
-
-        for (let k = 0; k < sides; k++) {
-          const slotTimeMs = k * slotDurationMs;
-          // 이 비트 구간에 속하는 슬롯만 예약한다.
-          //
-          // sides가 beatsPerMeasure의 약수가 아니면(3각형=3/4 등) slotDurationMs가
-          // beatDurationMs로 딱 나누어떨어지지 않아 slotTimeMs/beatStartMs가 이진
-          // 부동소수점으로 정확히 표현 안 되는 값이 된다. ms 단위 비교(slotTimeMs <
-          // beatStartMs 등)를 쓰면 특정 bpm에서 슬롯 하나가 두 구간의 경계 오차 사이로
-          // 영구히 빠지거나(매 마디 계속 그 슬롯만 무음) 반대로 중복 발화할 수 있다.
-          // 대신 bpm(beatDurationMs)에 무관한 "몇 번째 메인비트에 속하는가" 비율로
-          // 비교하면 이 오차가 사라진다.
-          const slotBeatPos = (k * beatsPerMeasure) / sides;
-          if (Math.floor(slotBeatPos + 1e-9) !== beatWithinMeasure) continue;
-
-          const beatType = getVertexBeatType(layer, k);
-
-          if (beatType === "mute") {
-            // 뮤트 슬롯: 소리 없음 + 슬롯 시각에 비주얼도 끔 (주기는 유지)
-            schedule(slotTimeMs - beatStartMs, () => {
-              setActiveVertices((prev) => {
-                if (!(layer.id in prev)) return prev;
-                const next = { ...prev };
-                delete next[layer.id];
-                return next;
-              });
-            });
-            continue;
-          }
-
-          // 꼭짓점별 오프셋: 해당 슬롯 간격의 비율(0~0.5)만큼 지연
-          const delayMs =
-            slotTimeMs - beatStartMs + (layer.offsets[k] ?? 0) * slotDurationMs;
-
-          schedule(delayMs, () => {
-            // 오디오 트리거를 먼저 실행해, 뒤이은 React 상태 갱신(재조정 비용)이
-            // 같은 타이머 콜백 안에서 실제 재생 호출을 지연시키지 않게 한다.
-            const layerVol = Math.max(0, Math.min(1, layer.volume ?? 1.0));
-            const soundRole = beatTypeToWebClickRole(beatType);
-            const cached = Platform.OS === "web"
-              ? polygonPCMCacheRef.current.get(layer.soundSet)
-                ?? p.clickPCMCacheRef.current[layer.soundSet]
-              : undefined;
-            const played = playPolygonOutput({
-              soundSet: layer.soundSet,
-              role: soundRole,
-              volume: p.volumeRef.current * layerVol,
-              pcm: cached?.[soundRole],
-              channel: "both",
-              pools: p.allPlayersRef.current,
-            });
-            if (!cached && Platform.OS === "web") ensurePCM(layer.soundSet);
-            if (played) p.recordAudioActivity();
-            setActiveVertices((prev) =>
-              prev[layer.id] === k ? prev : { ...prev, [layer.id]: k },
-            );
-          });
-        }
+      runnerRef.current?.scheduleBeat({
+        sessionId: sessionIdRef.current,
+        schedule,
+        absoluteBeat: absbeat,
+        bpm: bpmRef.current,
       });
     };
 
     return () => {
       // enabled가 false로 바뀌거나 unmount 시 핸들러 해제 + 대기 타이머 정리
       p.engineBeatCallbackRef.current = null;
-      clearPendingTimers();
+      runnerRef.current?.cancelSession(sessionIdRef.current);
+      sessionIdRef.current += 1;
+      if (producerGenerationRef.current === producerGeneration) {
+        producerGenerationRef.current += 1;
+      }
+      enabledRef.current = false;
+      isPlayingRef.current = false;
     };
   // enabled가 변경될 때만 핸들러를 재등록한다.
   // layers/bpm/beatsPerMeasure/ensurePCM은 ref로 읽으므로 의존성 불필요.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [p.enabled, p.engineBeatCallbackRef, clearPendingTimers]);
+  }, [p.enabled, p.isPlaying, p.engineBeatCallbackRef]);
 
   // ── 레이어 관리 ─────────────────────────────────────────────────────────
 
@@ -397,8 +380,7 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
   }, [layers, ensurePCM, replaceActivePlaybackPlan]);
 
   const handleDeleteLayer = useCallback((id: string) => {
-    // 삭제 전 해당 레이어의 대기 중 타이머를 즉시 취소
-    clearLayerTimers(id);
+    runnerRef.current?.cancelLayer(sessionIdRef.current, id);
     // layersRef를 즉시 갱신 — effect 실행 전에 엔진 비트가 오면 삭제된
     // 레이어를 다시 읽어 슬롯을 재예약하는 경쟁 조건 방지
     layersRef.current = layersRef.current.filter((l) => l.id !== id);
@@ -410,7 +392,7 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
       delete next[id];
       return next;
     });
-  }, [clearLayerTimers, replaceActivePlaybackPlan]);
+  }, [replaceActivePlaybackPlan]);
 
   /**
    * 레이어 배열을 변환하고 layersRef와 state를 동시에 갱신한다.
@@ -431,7 +413,7 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
     (id: string, patch: Partial<PolygonLayer>) => {
       // 재생 중 편집: 옛 데이터로 예약된 이 레이어의 잔여 이벤트를 취소.
       // 남은 비트는 침묵하고 다음 비트부터 새 설정으로 발화한다.
-      clearLayerTimers(id);
+      runnerRef.current?.cancelLayer(sessionIdRef.current, id);
       applyLayerMutation((prev) =>
         prev.map((l) => {
           if (l.id !== id) return l;
@@ -464,12 +446,12 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
       );
       if (patch.soundSet) ensurePCM(patch.soundSet);
     },
-    [ensurePCM, clearLayerTimers, applyLayerMutation],
+    [ensurePCM, applyLayerMutation],
   );
 
   const handleSetOffset = useCallback(
     (layerId: string, vertexIdx: number, offset: number) => {
-      clearLayerTimers(layerId);
+      runnerRef.current?.cancelLayer(sessionIdRef.current, layerId);
       applyLayerMutation((prev) =>
         prev.map((l) => {
           if (l.id !== layerId) return l;
@@ -479,13 +461,13 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
         }),
       );
     },
-    [clearLayerTimers, applyLayerMutation],
+    [applyLayerMutation],
   );
 
   // ── 꼭짓점 강세 순환 (S → A → N → M) ──────────────────────────────────
   const handleVertexBeatTypeCycle = useCallback(
     (layerId: string, vertexIdx: number) => {
-      clearLayerTimers(layerId);
+      runnerRef.current?.cancelLayer(sessionIdRef.current, layerId);
       applyLayerMutation((prev) =>
         prev.map((l) => {
           if (l.id !== layerId) return l;
@@ -499,7 +481,7 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
         }),
       );
     },
-    [clearLayerTimers, applyLayerMutation],
+    [applyLayerMutation],
   );
 
   // ── 커스텀 사운드 등록 ──────────────────────────────────────────────────

@@ -1036,6 +1036,107 @@ describe("usePolygonMode — engine callback driven", () => {
     // 재생 상태(activeVertices)는 초기화되어야 한다
     expect(result.current.activeVertices).toEqual({});
   });
+
+  it("ignores an engine callback captured before playback stop", () => {
+    const { safePlay } = require("@/lib/audio-utils");
+    const params = makeParams();
+    const { rerender } = renderHook(
+      (props: UsePolygonModeParams) => usePolygonMode(props),
+      { initialProps: params },
+    );
+    const captured = params.engineBeatCallbackRef.current;
+    expect(captured).not.toBeNull();
+
+    rerender({ ...params, isPlaying: false });
+    (safePlay as jest.Mock).mockClear();
+    act(() => { captured?.(); });
+    advanceMs(2000);
+
+    expect(safePlay).not.toHaveBeenCalled();
+  });
+
+  it("ignores an engine callback captured before disable or unmount", () => {
+    const { safePlay } = require("@/lib/audio-utils");
+    const params = makeParams();
+    const { rerender, unmount } = renderHook(
+      (props: UsePolygonModeParams) => usePolygonMode(props),
+      { initialProps: params },
+    );
+    const capturedBeforeDisable = params.engineBeatCallbackRef.current;
+
+    rerender({ ...params, enabled: false });
+    (safePlay as jest.Mock).mockClear();
+    act(() => { capturedBeforeDisable?.(); });
+    expect(safePlay).not.toHaveBeenCalled();
+
+    rerender({ ...params, enabled: true });
+    const capturedBeforeUnmount = params.engineBeatCallbackRef.current;
+    unmount();
+    act(() => { capturedBeforeUnmount?.(); });
+    advanceMs(2000);
+    expect(safePlay).not.toHaveBeenCalled();
+  });
+
+  it("continues scheduling after React StrictMode effect replay", () => {
+    const params = makeParams();
+    const wrapper = ({ children }: { children: React.ReactNode }) =>
+      React.createElement(React.StrictMode, null, children);
+    const { result } = renderHook(() => usePolygonMode(params), { wrapper });
+
+    fireBeat(params.engineBeatCallbackRef);
+
+    expect(result.current.activeVertices[result.current.layers[0].id]).toBe(0);
+  });
+
+  it("rejects the old producer callback after stop and restart", () => {
+    Platform.OS = "web";
+    const { playWebClick } = jest.requireMock("@/lib/audio-renderer") as {
+      playWebClick: jest.Mock;
+    };
+    playWebClick.mockReturnValue(true);
+    const params = makeParams();
+    const { rerender } = renderHook(
+      (props: UsePolygonModeParams) => usePolygonMode(props),
+      { initialProps: params },
+    );
+    const stale = params.engineBeatCallbackRef.current;
+
+    rerender({ ...params, isPlaying: false });
+    rerender({ ...params, isPlaying: true });
+    const current = params.engineBeatCallbackRef.current;
+    playWebClick.mockClear();
+    act(() => {
+      stale?.();
+      current?.();
+    });
+
+    expect(playWebClick).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects the old producer callback after disable and re-enable", () => {
+    Platform.OS = "web";
+    const { playWebClick } = jest.requireMock("@/lib/audio-renderer") as {
+      playWebClick: jest.Mock;
+    };
+    playWebClick.mockReturnValue(true);
+    const params = makeParams();
+    const { rerender } = renderHook(
+      (props: UsePolygonModeParams) => usePolygonMode(props),
+      { initialProps: params },
+    );
+    const stale = params.engineBeatCallbackRef.current;
+
+    rerender({ ...params, enabled: false });
+    rerender({ ...params, enabled: true });
+    const current = params.engineBeatCallbackRef.current;
+    playWebClick.mockClear();
+    act(() => {
+      stale?.();
+      current?.();
+    });
+
+    expect(playWebClick).toHaveBeenCalledTimes(1);
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
