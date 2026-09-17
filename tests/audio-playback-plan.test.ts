@@ -4,13 +4,15 @@ import {
   buildPolygonPlaybackPlan,
   buildScorePlaybackPlan,
 } from "@/lib/audio-playback-plan";
+import { createAudioToneSnapshot } from "@/lib/audio-tone-snapshot";
 
 const audio = {
   soundSet: "classic" as const,
-  volume: 0.75,
+  tone: createAudioToneSnapshot({
+    volume: 0.75,
+    defaultSoundSet: "classic",
+  }),
   sampleVolume: 0.8,
-  tonePosition: { x: 0, y: 0 },
-  tonePositions: {},
   customSoundSets: {},
   noteSamples: { "0-0": "file:///sample.wav" },
   noteSampleChannels: { "0-0": "left" as const },
@@ -80,7 +82,13 @@ describe("audio playback plans", () => {
       mode: "beat",
       platform: "web",
       bpm: 120,
-      audio: { ...audio, volume: 1.2 },
+      audio: {
+        ...audio,
+        tone: createAudioToneSnapshot({
+          volume: 1.2,
+          defaultSoundSet: "classic",
+        }),
+      },
       config: dialConfig as any,
     });
     const bar = buildPlaybackPlan({
@@ -102,6 +110,28 @@ describe("audio playback plans", () => {
     expect(realtime.output.strategy).toBe("realtime");
     expect(boosted.output).toMatchObject({ strategy: "prerender", boosted: true });
     expect(bar.output.strategy).toBe("prerender");
+  });
+
+  test("ignores tone positions for sound sets outside the active plan", () => {
+    const plan = buildPlaybackPlan({
+      mode: "beat",
+      platform: "web",
+      bpm: 120,
+      audio: {
+        ...audio,
+        tone: createAudioToneSnapshot({
+          volume: 0.75,
+          defaultSoundSet: "classic",
+          positions: { wood: { x: 1, y: 1 } },
+        }),
+      },
+      config: dialConfig as any,
+    });
+
+    expect(plan.output).toMatchObject({
+      strategy: "realtime",
+      toneShaped: false,
+    });
   });
 
   test("clones mutable UI settings into the active plan", () => {
@@ -199,6 +229,7 @@ describe("audio playback plans", () => {
       platform: "web",
       beatsPerMeasure: 4,
       layers: polygonLayers as any,
+      tone: audio.tone,
     });
 
     expect(score.unit).toMatchObject({ kind: "timeline", documentId: "score-1" });

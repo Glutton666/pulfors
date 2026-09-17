@@ -178,7 +178,7 @@ export function MetronomeScreenUI(props: Props) {
     flashOpacity, beatProgress, flashStyle, halfTimeFlashStyle, modeSlideStyle, fullScreenResetFlashStyle,
     currentMode, cycleToNextMode, switchToMode,
     completedGoalPopups, dismissGoalPopup,
-    getClickPCMs, recordAudioActivity,
+    getClickPCMs, recordAudioActivity, captureAudioToneSnapshot,
     polygonOnBeatRef,
     scheduleReRender, stopRenderedAudio, clearSamplePlayStates, resetPlaybackVisuals,
     notifyVoicePlayState, persistSettings, persistStatus, noteSamplePersistStatus,
@@ -202,7 +202,6 @@ export function MetronomeScreenUI(props: Props) {
     handleBeatQuickSaveConfirm,
     allPlayersRef,
     outputOwner,
-    volumeRef,
   } = props;
 
   const { nativeGestureHandlers: easterEggGestureHandlers } = useEasterEggGesture({
@@ -312,8 +311,8 @@ export function MetronomeScreenUI(props: Props) {
     beatsPerMeasure,
     allPlayersRef,
     clickPCMCacheRef,
-    volumeRef,
     getClickPCMs,
+    captureAudioToneSnapshot,
     recordAudioActivity,
     outputOwner,
   });

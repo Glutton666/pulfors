@@ -7,17 +7,18 @@ import type { NoteSampleChannelMap, NoteSampleMap, NoteSampleMetroChannelMap, No
 import type { PlayEvent } from "@/lib/score-playback";
 import type { SampleChannel } from "@/lib/stereo-channel";
 import type { CustomSoundSetConfig, SoundSet } from "@/lib/storage";
-import { toneEffectIntensity, type TonePosition } from "@/lib/metronome-tone-dsp";
+import {
+  readAudioToneSnapshot,
+  type AudioToneSnapshot,
+} from "@/lib/audio-tone-snapshot";
 
 export type PlaybackPlatform = "web" | "native";
 export type PlaybackOutputStrategy = "realtime" | "prerender" | "scheduled-notes" | "polygon-realtime";
 
 export interface PlaybackAudioSnapshot {
   readonly soundSet: SoundSet;
-  readonly volume: number;
+  readonly tone: AudioToneSnapshot;
   readonly sampleVolume: number;
-  readonly tonePosition?: Readonly<TonePosition>;
-  readonly tonePositions: Readonly<Partial<Record<SoundSet, Readonly<TonePosition>>>>;
   readonly customSoundSets: Readonly<Record<string, Readonly<CustomSoundSetConfig>>>;
   readonly noteSamples: Readonly<NoteSampleMap>;
   readonly noteSampleChannels: Readonly<NoteSampleChannelMap>;
@@ -82,6 +83,7 @@ export interface ScorePlaybackPlan extends PlaybackPlanHeader {
 
 export interface PolygonPlaybackPlan extends PlaybackPlanHeader {
   readonly mode: "polygon";
+  readonly tone: AudioToneSnapshot;
   readonly unit: Readonly<{
     kind: "polygon-layers";
     beatsPerMeasure: number;
@@ -125,15 +127,8 @@ function cloneRecordOfArrays<T>(value: Record<string, T[]>): Record<string, T[]>
 function cloneAudio(audio: PlaybackAudioSnapshot): PlaybackAudioSnapshot {
   return {
     soundSet: audio.soundSet,
-    volume: audio.volume,
+    tone: audio.tone,
     sampleVolume: audio.sampleVolume,
-    tonePosition: audio.tonePosition ? { ...audio.tonePosition } : undefined,
-    tonePositions: Object.fromEntries(
-      Object.entries(audio.tonePositions).map(([set, position]) => [
-        set,
-        position ? { ...position } : position,
-      ]),
-    ),
     customSoundSets: Object.fromEntries(
       Object.entries(audio.customSoundSets).map(([set, config]) => [
         set,
@@ -208,10 +203,14 @@ function cloneBarConfig(config: BarConfig): BarConfig {
 }
 
 function outputFor(input: MetronomeInputBase, mode: "beat" | "bar" | "note"): PlaybackPlanHeader["output"] {
-  const toneShaped = input.audio.tonePosition
-    ? toneEffectIntensity(input.audio.tonePosition) > 0
-    : false;
-  const boosted = input.audio.volume > 1;
+  const relevantSoundSets = new Set<string>([
+    input.audio.soundSet,
+    ...Object.values(input.audio.layerSoundSets),
+  ]);
+  const toneShaped = [...relevantSoundSets].some(
+    (soundSet) => readAudioToneSnapshot(input.audio.tone, soundSet).active,
+  );
+  const boosted = input.audio.tone.boosted;
   const strategy: PlaybackOutputStrategy = input.platform === "native"
     || (input.platform === "web"
       && (mode === "bar" || String(input.audio.soundSet).startsWith("custom") || boosted || toneShaped))
@@ -292,6 +291,7 @@ export function buildPolygonPlaybackPlan(input: {
   platform: PlaybackPlatform;
   beatsPerMeasure: number;
   layers: readonly PolygonLayer[];
+  tone: AudioToneSnapshot;
   createdAtMs?: number;
 }): PolygonPlaybackPlan {
   return deepFreeze({
@@ -299,7 +299,12 @@ export function buildPolygonPlaybackPlan(input: {
     createdAtMs: input.createdAtMs ?? Date.now(),
     platform: input.platform,
     bpm: input.bpm,
-    output: { strategy: "polygon-realtime", boosted: false, toneShaped: false },
+    output: {
+      strategy: "polygon-realtime",
+      boosted: input.tone.boosted,
+      toneShaped: input.tone.toneShaped,
+    },
+    tone: input.tone,
     unit: {
       kind: "polygon-layers",
       beatsPerMeasure: Math.max(1, Math.floor(input.beatsPerMeasure || 4)),

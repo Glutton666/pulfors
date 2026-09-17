@@ -8,22 +8,6 @@ import type { SampleChannel, MetroChannel } from "./stereo-channel";
 
 const RENDER_SR = 44100;
 
-/** Built-in click source boost before the user-facing output volume is applied. */
-export const BUILTIN_CLICK_SOURCE_GAIN = 3.2;
-
-export function getClickRenderVolume(userVolume: number): number {
-  const volume = Math.max(0, userVolume);
-  return volume === 0 ? 0 : BUILTIN_CLICK_SOURCE_GAIN * Math.max(1, volume);
-}
-
-export function getClickOutputVolume(userVolume: number): number {
-  return Math.max(0, Math.min(1, userVolume));
-}
-
-export function getRealtimeClickGain(userVolume: number): number {
-  return getClickOutputVolume(userVolume) * BUILTIN_CLICK_SOURCE_GAIN;
-}
-
 let sharedAudioCtx: AudioContext | null = null;
 function getSharedAudioContext(): AudioContext | null {
   if (Platform.OS !== "web") return null;

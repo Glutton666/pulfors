@@ -886,12 +886,13 @@ export function useMetronomeScreen() {
     queueNoteSamplePlayback, releaseNoteSampleResource, releaseNoteSampleResources,
     armAudioWatchdog, clearAudioWatchdog,
     scheduleRealtimeWebClick, clearRealtimeWebAudio,
+    captureAudioToneSnapshot, setActiveAudioToneSnapshot,
   } = useAudioPipeline({
     engineRef, soundSet, soundSetRef, volume, customSoundSetsRef,
     layerSoundSetsRef, noteSamplesRef, noteSampleChannelsRef, noteSampleVolumesRef, noteSampleSpeedsRef, barModeRef,
     barMetronomeChannelRef, noteSampleMetroChannelsRef, volumeRef, sampleVolumeRef,
     clickPCMCacheRef, webClickReadyRef, noteSampleSoundsRef, tonePositionRef, tonePositionsRef,
-    isPlayingRef, bpmRef, t, showRecoveryToast, persistAudioSettingsCallbackRef,
+    isPlayingRef, isPreparingRef, bpmRef, t, showRecoveryToast, persistAudioSettingsCallbackRef,
     fatalRenderFailureRef,
   });
 
@@ -2145,9 +2146,8 @@ export function useMetronomeScreen() {
     clearAudioWatchdogRef,
     armAudioWatchdogRef,
     soundSetRef,
-    volumeRef,
-    tonePositionRef,
-    tonePositionsRef,
+    captureAudioToneSnapshot,
+    setActiveAudioToneSnapshot,
     customSoundSetsRef,
     sampleVolumeRef,
     noteSamplesRef,
@@ -4772,6 +4772,7 @@ export function useMetronomeScreen() {
     // Audio helpers used inline in JSX
     getClickPCMs,
     recordAudioActivity,
+    captureAudioToneSnapshot,
     polygonOnBeatRef,
     scheduleReRender,
     stopRenderedAudio,

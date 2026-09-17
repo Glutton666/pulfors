@@ -6,8 +6,6 @@ import {
   ensureWebClickBuffers,
   getWebAudioContext,
   renderMeasureAbortable,
-  getClickOutputVolume,
-  getClickRenderVolume,
   isRenderAborted,
 } from "@/lib/audio-renderer";
 import type { ClickPCMs, SamplePCMEntry, TickInfo } from "@/lib/audio-renderer";
@@ -17,7 +15,11 @@ import type { CustomSoundSetConfig, PracticeEntry, SoundSet } from "@/lib/storag
 import { PracticeSessionTracker, type PracticeSessionData } from "@/lib/activity-log";
 import type { Language } from "@/lib/i18n";
 import type { SampleChannel } from "@/lib/stereo-channel";
-import { NEUTRAL, type TonePosition } from "@/lib/metronome-tone-dsp";
+import type { TonePosition } from "@/lib/metronome-tone-dsp";
+import {
+  readAudioToneSnapshot,
+  type AudioToneSnapshot,
+} from "@/lib/audio-tone-snapshot";
 import {
   applyMetronomePlaybackPlan,
   buildPlaybackPlan,
@@ -86,15 +88,17 @@ export interface UsePlaybackControlParams {
   invalidateAudioStartupProbe: () => void;
   waitForFirstAudioActivity: (epoch: number, isCancelled?: () => boolean, timeoutMs?: number) => Promise<boolean>;
   audioRenderLifecycle: AudioRenderLifecycle;
-  prepareRenderedPlayer: (plan?: MetronomePlaybackPlan) => Promise<
+  prepareRenderedPlayer: (
+    plan?: MetronomePlaybackPlan,
+    toneSnapshotOverride?: AudioToneSnapshot,
+  ) => Promise<
     AudioRenderResult<AudioOutputResource>
   >;
   clearAudioWatchdogRef: Ref<() => void>;
   armAudioWatchdogRef: Ref<() => void>;
   soundSetRef: Ref<SoundSet>;
-  volumeRef: Ref<number>;
-  tonePositionRef?: Ref<TonePosition>;
-  tonePositionsRef?: Ref<Partial<Record<SoundSet, TonePosition>>>;
+  captureAudioToneSnapshot: () => AudioToneSnapshot;
+  setActiveAudioToneSnapshot: (snapshot: AudioToneSnapshot) => void;
   customSoundSetsRef?: Ref<Record<string, CustomSoundSetConfig>>;
   sampleVolumeRef: Ref<number>;
   noteSamplesRef: Ref<NoteSampleMap>;
@@ -105,7 +109,7 @@ export interface UsePlaybackControlParams {
   getClickPCMs: (
     soundSet: SoundSet,
     signal?: AbortSignal,
-    toneOverride?: Readonly<TonePosition>,
+    toneSnapshot?: AudioToneSnapshot,
     customConfigOverride?: Readonly<CustomSoundSetConfig> | null,
   ) => Promise<ClickPCMs>;
   getSamplePCMs: (samples: NoteSampleMap, signal?: AbortSignal) => Promise<Map<string, SamplePCMEntry>>;
@@ -115,7 +119,7 @@ export interface UsePlaybackControlParams {
     snapshot?: {
       defaultSoundSet: SoundSet;
       layerSoundSets: Readonly<Record<number, SoundSet>>;
-      tonePositions: Readonly<Partial<Record<SoundSet, Readonly<TonePosition>>>>;
+      tone: AudioToneSnapshot;
       customSoundSets: Readonly<Record<string, Readonly<CustomSoundSetConfig>>>;
     },
   ) => Promise<Map<string, ClickPCMs>>;
@@ -236,17 +240,18 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
       }
       const scheduleInfo = engine.getScheduleInfo();
       const ticks = scheduleInfo.ticks as TickInfo[];
+      readAudioToneSnapshot(plan.audio.tone, plan.audio.soundSet);
       const [clickPCMs, layerClickPCMs, samplePCMs] = await Promise.all([
         p.getClickPCMs(
           plan.audio.soundSet,
           signal,
-          plan.audio.tonePosition ?? NEUTRAL,
+          plan.audio.tone,
           plan.audio.customSoundSets[plan.audio.soundSet] ?? null,
         ),
         p.getLayerClickPCMsForSchedule(ticks, signal, {
           defaultSoundSet: plan.audio.soundSet,
           layerSoundSets: plan.audio.layerSoundSets,
-          tonePositions: plan.audio.tonePositions,
+          tone: plan.audio.tone,
           customSoundSets: plan.audio.customSoundSets,
         }),
         p.getSamplePCMs(plan.audio.noteSamples, signal),
@@ -263,7 +268,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
         measureDurationMs: scheduleInfo.durationMs,
         clickPCMs,
         samplePCMs,
-        clickVolume: getClickRenderVolume(plan.audio.volume),
+        clickVolume: plan.audio.tone.renderGain,
         sampleVolume: samplePCMs.size > 0 ? plan.audio.sampleVolume : 0,
         sampleVolumes: plan.audio.noteSampleVolumes,
         sampleSpeeds: plan.audio.noteSampleSpeeds,
@@ -292,7 +297,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
           const boundary = phaseCompatible ? previous?.getNextBoundaryTime?.() : undefined;
           const next = (p.outputOwner.adapter as WebAudioOutput).rendered(
             readyPcm,
-            1,
+            plan.audio.tone.outputGain,
             "both",
             boundary,
           );
@@ -312,7 +317,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
             : undefined;
           loop = (p.outputOwner.adapter as WebAudioOutput).rendered(
             readyPcm,
-            getClickOutputVolume(plan.audio.volume),
+            plan.audio.tone.outputGain,
             "both",
             startAtAudioTime,
           );
@@ -378,12 +383,15 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
     } = {},
   ): Promise<boolean> => {
     const playbackAtStart = p.getPlaybackContext({ activeBarIndex: startBeat ?? 0 });
+    const toneSnapshot = p.captureAudioToneSnapshot();
+    const startTone = readAudioToneSnapshot(toneSnapshot, p.soundSetRef.current);
+    if (!Number.isFinite(startTone.intensity)) {
+      throw new Error("Audio tone snapshot is invalid");
+    }
     const audio = {
       soundSet: p.soundSetRef.current,
-      volume: p.volumeRef.current,
       sampleVolume: p.sampleVolumeRef.current,
-      tonePosition: p.tonePositionRef?.current,
-      tonePositions: p.tonePositionsRef?.current ?? {},
+      tone: toneSnapshot,
       customSoundSets: p.customSoundSetsRef?.current ?? {},
       noteSamples: p.noteSamplesRef.current,
       noteSampleChannels: p.noteSampleChannelsRef.current,
@@ -421,6 +429,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
             config: p.dialConfigRef.current,
           },
     );
+    p.setActiveAudioToneSnapshot(plan.audio.tone);
     const attempt = ++startAttemptRef.current;
     const startupEpoch = p.beginAudioStartupProbe();
     let deadline = Date.now() + 8000;

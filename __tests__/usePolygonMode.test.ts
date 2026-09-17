@@ -26,6 +26,7 @@ import {
 } from "@/components/polygon-mode/PolygonTypes";
 import type { PolygonLayer } from "@/components/polygon-mode/PolygonTypes";
 import { createAudioOutputOwner } from "@/lib/audio-output-owner";
+import { createAudioToneSnapshot } from "@/lib/audio-tone-snapshot";
 
 // ── 모듈 모킹 ─────────────────────────────────────────────────────────────
 
@@ -70,11 +71,15 @@ function makeParams(
     beatsPerMeasure: 4,
     allPlayersRef: { current: {} as any },
     clickPCMCacheRef: { current: {} },
-    volumeRef: { current: 0.75 },
     getClickPCMs: jest.fn().mockResolvedValue({ strong: new Float32Array(), high: new Float32Array(), low: new Float32Array() }),
     recordAudioActivity: jest.fn(() => true),
     outputOwner: createAudioOutputOwner(),
     ...overrides,
+    captureAudioToneSnapshot: overrides?.captureAudioToneSnapshot ?? (() =>
+      createAudioToneSnapshot({
+        volume: 0.75,
+        defaultSoundSet: "classic",
+      })),
   };
 }
 
@@ -619,7 +624,10 @@ describe("usePolygonMode — engine callback driven", () => {
       low: new Float32Array([6]),
     };
     const params = makeParams({
-      volumeRef: { current: 0.6 },
+      captureAudioToneSnapshot: () => createAudioToneSnapshot({
+        volume: 0.6,
+        defaultSoundSet: "classic",
+      }),
       clickPCMCacheRef: { current: { classic } },
     });
     const { result } = renderHook(() => usePolygonMode(params));
@@ -630,7 +638,7 @@ describe("usePolygonMode — engine callback driven", () => {
     expect(starts).toHaveLength(2);
     expect(renderer.playWebClick).not.toHaveBeenCalled();
     expect(audioContext.createBuffer).toHaveBeenCalledWith(1, 1, 44100);
-    expect(gains).toEqual([0.6, 0.6]);
+    expect(gains).toEqual([1.92, 1.92]);
   });
 
   it("web cached PCM failures fall back to playWebClick with role and gain", () => {
@@ -643,7 +651,10 @@ describe("usePolygonMode — engine callback driven", () => {
       createBuffer: jest.fn(() => { throw new Error("decode unavailable"); }),
     });
     const params = makeParams({
-      volumeRef: { current: 0.4 },
+      captureAudioToneSnapshot: () => createAudioToneSnapshot({
+        volume: 0.4,
+        defaultSoundSet: "classic",
+      }),
       clickPCMCacheRef: { current: { classic: {
         strong: new Float32Array([1]),
         high: new Float32Array([1]),
@@ -654,7 +665,84 @@ describe("usePolygonMode — engine callback driven", () => {
     act(() => { result.current.handleUpdateLayer(result.current.layers[0].id, { role: "strong", volume: 0.5 }); });
     fireBeat(params.engineBeatCallbackRef);
 
-    expect(renderer.playWebClick).toHaveBeenCalledWith("strong", "both", 0.2);
+    expect(renderer.playWebClick).toHaveBeenCalledWith(
+      "strong",
+      "both",
+      expect.closeTo(0.64),
+    );
+  });
+
+  it("rebuilds a custom PCM tone variant when the active snapshot changes", () => {
+    Platform.OS = "web";
+    const starts: jest.Mock[] = [];
+    const audioContext = {
+      state: "running",
+      currentTime: 0,
+      sampleRate: 44100,
+      destination: {},
+      createBuffer: jest.fn((_channels: number, length: number) => ({
+        getChannelData: () => ({ set: jest.fn() }),
+        length,
+      })),
+      createBufferSource: jest.fn(() => {
+        const start = jest.fn();
+        starts.push(start);
+        return {
+          buffer: null,
+          connect: jest.fn(),
+          disconnect: jest.fn(),
+          start,
+          stop: jest.fn(),
+          onended: null,
+        };
+      }),
+      createGain: jest.fn(() => ({
+        gain: { value: 0 },
+        connect: jest.fn(),
+        disconnect: jest.fn(),
+      })),
+      resume: jest.fn(() => Promise.resolve()),
+    };
+    require("@/lib/audio-renderer").getWebAudioContext.mockReturnValue(audioContext);
+
+    let snapshot = createAudioToneSnapshot({
+      volume: 0.5,
+      defaultSoundSet: "classic",
+    });
+    const params = makeParams({
+      captureAudioToneSnapshot: () => snapshot,
+      clickPCMCacheRef: {
+        current: {
+          classic: {
+            strong: new Float32Array([0.2]),
+            high: new Float32Array([0.2]),
+            low: new Float32Array([0.2]),
+          },
+        },
+      },
+    });
+    const { result, rerender } = renderHook(() => usePolygonMode(params));
+    act(() => { result.current.handleAddLayer(); });
+    const customLayerId = result.current.layers[1].id;
+    act(() => {
+      result.current.setLayerCustomSound(customLayerId, {
+        strong: new Float32Array([0.5, -0.25]),
+        high: new Float32Array([0.4, -0.2]),
+        low: new Float32Array([0.3, -0.15]),
+      });
+    });
+
+    snapshot = createAudioToneSnapshot({
+      volume: 0.5,
+      defaultSoundSet: "classic",
+      positions: { [`custom-${customLayerId}`]: { x: 0.8, y: -0.4 } },
+    });
+    rerender();
+    fireBeat(params.engineBeatCallbackRef);
+    advanceMs(1);
+
+    expect(starts).toHaveLength(2);
+    expect(require("@/lib/audio-renderer").playWebClick).not.toHaveBeenCalled();
   });
 
   it("web does not play muted vertices", () => {
@@ -926,9 +1014,14 @@ describe("usePolygonMode — engine callback driven", () => {
       highA: trackablePlayer, highB: {}, highC: {}, highD: {},
       lowA: {}, lowB: {}, lowC: {}, lowD: {},
     };
-    const volumeRef = { current: 0.8 }; // 전역 볼륨 0.8
     const allPlayersRef = { current: { classic: classicPool } as any };
-    const params = makeParams({ allPlayersRef, volumeRef });
+    const params = makeParams({
+      allPlayersRef,
+      captureAudioToneSnapshot: () => createAudioToneSnapshot({
+        volume: 0.8,
+        defaultSoundSet: "classic",
+      }),
+    });
     const { result } = renderHook(() => usePolygonMode(params));
 
     const layerId = result.current.layers[0].id;

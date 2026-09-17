@@ -14,9 +14,6 @@ import {
   getWebAudioContext,
   isRenderAborted,
   renderMeasureAbortable,
-  getClickOutputVolume,
-  getClickRenderVolume,
-  getRealtimeClickGain,
 } from "@/lib/audio-renderer";
 import {
   createAudioRenderLifecycle,
@@ -48,7 +45,13 @@ import type {
 import type { SoundSet, CustomSoundSetConfig } from "@/lib/storage";
 import type { NoteSampleMap, NoteSampleChannelMap, NoteSampleMetroChannelMap, NoteSampleVolumeMap, NoteSampleSpeedMap } from "@/lib/note-samples";
 import type { SampleChannel } from "@/lib/stereo-channel";
-import { NEUTRAL, processClickPCM, type TonePosition } from "@/lib/metronome-tone-dsp";
+import type { TonePosition } from "@/lib/metronome-tone-dsp";
+import {
+  applyAudioToneSnapshot,
+  createAudioToneSnapshot,
+  readAudioToneSnapshot,
+  type AudioToneSnapshot,
+} from "@/lib/audio-tone-snapshot";
 import type { MetronomePlaybackPlan } from "@/lib/audio-playback-plan";
 import { useAudioPlayers } from "@/hooks/useAudioPlayers";
 import type { BuiltinPlayers } from "@/hooks/useAudioPlayers";
@@ -107,6 +110,7 @@ export interface UseAudioPipelineParams {
   /** Per-note sample players — created in useMetronomeScreen, shared with useSettings. */
   noteSampleSoundsRef: React.MutableRefObject<Record<string, ExpoAudioPlayer>>;
   isPlayingRef: React.MutableRefObject<boolean>;
+  isPreparingRef: React.MutableRefObject<boolean>;
   bpmRef: React.MutableRefObject<number>;
   t: TranslationFn;
   showRecoveryToast: (msg: string) => void;
@@ -162,7 +166,10 @@ export interface UseAudioPipelineResult {
   clearAudioWatchdogRef: React.MutableRefObject<() => void>;
   samplePlayStateRef: React.MutableRefObject<Record<string, { playing: boolean; endTimer: ReturnType<typeof setTimeout> | null }>>;
   // ── Functions ────────────────────────────────────────────────────────────
-  prepareRenderedPlayer: (plan?: MetronomePlaybackPlan) => Promise<
+  prepareRenderedPlayer: (
+    plan?: MetronomePlaybackPlan,
+    toneSnapshotOverride?: AudioToneSnapshot,
+  ) => Promise<
     AudioRenderResult<AudioOutputResource>
   >;
   scheduleReRender: () => void;
@@ -171,7 +178,7 @@ export interface UseAudioPipelineResult {
   getClickPCMs: (
     set: SoundSet,
     signal?: AbortSignal,
-    toneOverride?: Readonly<TonePosition>,
+    toneSnapshot?: AudioToneSnapshot,
     customConfigOverride?: Readonly<CustomSoundSetConfig> | null,
   ) => Promise<ClickPCMs>;
   getSamplePCMs: (samples: NoteSampleMap, signal?: AbortSignal) => Promise<Map<string, SamplePCMEntry>>;
@@ -181,7 +188,7 @@ export interface UseAudioPipelineResult {
     snapshot?: {
       defaultSoundSet: SoundSet;
       layerSoundSets: Readonly<Record<number, SoundSet>>;
-      tonePositions: Readonly<Partial<Record<SoundSet, Readonly<TonePosition>>>>;
+      tone: AudioToneSnapshot;
       customSoundSets: Readonly<Record<string, Readonly<CustomSoundSetConfig>>>;
     },
   ) => Promise<Map<string, ClickPCMs>>;
@@ -205,6 +212,8 @@ export interface UseAudioPipelineResult {
     atPerformanceTime: number,
   ) => boolean;
   clearRealtimeWebAudio: () => void;
+  captureAudioToneSnapshot: () => AudioToneSnapshot;
+  setActiveAudioToneSnapshot: (snapshot: AudioToneSnapshot) => void;
 }
 
 /**
@@ -219,7 +228,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
     engineRef, soundSet, volume, customSoundSetsRef,
     layerSoundSetsRef, noteSamplesRef, noteSampleChannelsRef, noteSampleVolumesRef, noteSampleSpeedsRef, barModeRef,
     barMetronomeChannelRef, noteSampleMetroChannelsRef, volumeRef, sampleVolumeRef, tonePositionRef, tonePositionsRef,
-    isPlayingRef, bpmRef, t, showRecoveryToast, persistAudioSettingsCallbackRef,
+    isPlayingRef, isPreparingRef, bpmRef, t, showRecoveryToast, persistAudioSettingsCallbackRef,
     fatalRenderFailureRef,
   } = params;
 
@@ -237,6 +246,23 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
 
   // 3 refs now live in useMetronomeScreen (shared with useSettings)
   const { clickPCMCacheRef, webClickReadyRef, noteSampleSoundsRef } = params;
+  const initialToneSnapshot = createAudioToneSnapshot({
+    volume: volumeRef.current,
+    defaultSoundSet: soundSetRef.current,
+    defaultPosition: tonePositionRef?.current,
+    positions: tonePositionsRef?.current,
+  });
+  const activeToneSnapshotRef = useRef(initialToneSnapshot);
+  const captureAudioToneSnapshot = useCallback(() => createAudioToneSnapshot({
+    volume: volumeRef.current,
+    defaultSoundSet: soundSetRef.current,
+    defaultPosition: tonePositionRef?.current,
+    positions: tonePositionsRef?.current,
+  }), [soundSetRef, tonePositionRef, tonePositionsRef, volumeRef]);
+  const setActiveAudioToneSnapshot = useCallback((snapshot: AudioToneSnapshot) => {
+    activeToneSnapshotRef.current = snapshot;
+    setPoolsVolume(snapshot.realtimeGain);
+  }, [setPoolsVolume]);
 
   // ── Audio-session settings (moved from useMetronomeScreen) ─────────────────
   const [backgroundPlay, setBackgroundPlay] = useState(true);
@@ -310,9 +336,17 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
   // Object.values() returns []. We use setPoolsVolume() which walks the internal
   // cache directly and also records the value for pools created lazily afterward.
   useEffect(() => {
-    setPoolsVolume(getRealtimeClickGain(volume));
-    outputOwner.active()?.setVolume?.(getClickOutputVolume(volume));
-  }, [outputOwner, volume, setPoolsVolume]);
+    const snapshot = createAudioToneSnapshot({
+      volume,
+      defaultSoundSet: soundSetRef.current,
+      defaultPosition: tonePositionRef?.current,
+      positions: tonePositionsRef?.current,
+    });
+    if (!isPlayingRef.current && !isPreparingRef?.current) {
+      activeToneSnapshotRef.current = snapshot;
+      setPoolsVolume(snapshot.realtimeGain);
+    }
+  }, [isPlayingRef, isPreparingRef, setPoolsVolume, soundSetRef, tonePositionRef, tonePositionsRef, volume]);
 
   // ── Owned refs ──────────────────────────────────────────────────────────────
   const releasedPlayersRef = useRef(new WeakSet<object>());
@@ -414,7 +448,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
     const source = (outputOwner.adapter as WebAudioOutput).click(
       role,
       channel,
-      getRealtimeClickGain(volumeRef.current),
+      activeToneSnapshotRef.current.realtimeGain,
       atAudioTime,
     );
     if (!source) return false;
@@ -425,7 +459,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
       }
     });
     return true;
-  }, [outputOwner, recordAudioActivity, volumeRef]);
+  }, [outputOwner, recordAudioActivity]);
   useEffect(() => {
     // StrictMode replays cleanup/setup while preserving refs. Reactivating the
     // same state machine supports that replay, while a true unmount leaves it
@@ -483,17 +517,18 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
   const getClickPCMs = useCallback(async (
     set: SoundSet,
     signal?: AbortSignal,
-    toneOverride?: Readonly<TonePosition>,
+    toneSnapshot?: AudioToneSnapshot,
     customConfigOverride?: Readonly<CustomSoundSetConfig> | null,
   ): Promise<ClickPCMs> => {
-    if (!toneOverride && clickPCMCacheRef.current[set]) return clickPCMCacheRef.current[set];
+    if (!toneSnapshot && clickPCMCacheRef.current[set]) return clickPCMCacheRef.current[set];
+    const snapshot = toneSnapshot ?? createAudioToneSnapshot({
+      volume: volumeRef.current,
+      defaultSoundSet: soundSetRef.current,
+      defaultPosition: tonePositionRef?.current,
+      positions: tonePositionsRef?.current,
+    });
     const shape = (pcm: Float32Array) =>
-      processClickPCM(
-        pcm,
-        toneOverride ?? (tonePositionsRef
-          ? tonePositionsRef.current[set] ?? NEUTRAL
-          : tonePositionRef?.current ?? NEUTRAL),
-      ) as Float32Array;
+      applyAudioToneSnapshot(pcm, snapshot, set) as Float32Array;
     const customCfg = customConfigOverride === undefined
       ? customSoundSetsRef.current[set]
       : customConfigOverride ?? undefined;
@@ -522,15 +557,15 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
       };
       const [strong, high, low] = await Promise.all([loadSample(customCfg.strong), loadSample(customCfg.accent), loadSample(customCfg.normal)]);
        const result: ClickPCMs = { strong: shape(strong), high: shape(high), low: shape(low) };
-      if (!toneOverride) clickPCMCacheRef.current[set] = result;
+      if (!toneSnapshot) clickPCMCacheRef.current[set] = result;
       return result;
     }
     const src = soundSets[set as keyof typeof soundSets] || soundSets.classic;
     const [strong, high, low] = await Promise.all([loadAssetPCM(src.strong, signal), loadAssetPCM(src.high, signal), loadAssetPCM(src.low, signal)]);
     const result: ClickPCMs = { strong: shape(strong), high: shape(high), low: shape(low) };
-    if (!toneOverride) clickPCMCacheRef.current[set] = result;
+    if (!toneSnapshot) clickPCMCacheRef.current[set] = result;
     return result;
-  }, [clickPCMCacheRef, customSoundSetsRef, tonePositionRef, tonePositionsRef, trimPCM]);
+  }, [clickPCMCacheRef, customSoundSetsRef, soundSetRef, tonePositionRef, tonePositionsRef, trimPCM, volumeRef]);
 
   const getSamplePCMs = useCallback(async (samples: NoteSampleMap, signal?: AbortSignal): Promise<Map<string, SamplePCMEntry>> => {
     const map = new Map<string, SamplePCMEntry>();
@@ -584,7 +619,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
     snapshot?: {
       defaultSoundSet: SoundSet;
       layerSoundSets: Readonly<Record<number, SoundSet>>;
-      tonePositions: Readonly<Partial<Record<SoundSet, Readonly<TonePosition>>>>;
+      tone: AudioToneSnapshot;
       customSoundSets: Readonly<Record<string, Readonly<CustomSoundSetConfig>>>;
     },
   ): Promise<Map<string, ClickPCMs>> => {
@@ -609,7 +644,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
       const pcms = await getClickPCMs(
         ss as SoundSet,
         signal,
-        snapshot ? snapshot.tonePositions[ss as SoundSet] ?? NEUTRAL : undefined,
+        snapshot?.tone,
         snapshot ? snapshot.customSoundSets[ss] ?? null : undefined,
       );
       loaded.set(ss, pcms);
@@ -643,6 +678,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
 
   const prepareRenderedPlayer = useCallback(async (
     plan?: MetronomePlaybackPlan,
+    toneSnapshotOverride?: AudioToneSnapshot,
   ): Promise<AudioRenderResult<AudioOutputResource>> => {
     const engine = engineRef.current;
     const session = audioRenderLifecycle.start();
@@ -651,10 +687,8 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
     try {
       const audio = plan?.audio ?? {
         soundSet: soundSetRef.current,
-        volume: volumeRef.current,
         sampleVolume: sampleVolumeRef.current,
-        tonePosition: tonePositionRef?.current,
-        tonePositions: tonePositionsRef?.current ?? {},
+        tone: toneSnapshotOverride ?? captureAudioToneSnapshot(),
         customSoundSets: customSoundSetsRef.current,
         noteSamples: noteSamplesRef.current,
         noteSampleChannels: noteSampleChannelsRef.current,
@@ -670,13 +704,13 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
         getClickPCMs(
           audio.soundSet,
           signal,
-          plan ? audio.tonePosition ?? NEUTRAL : undefined,
+          audio.tone,
           plan ? audio.customSoundSets[audio.soundSet] ?? null : undefined,
         ),
         getLayerClickPCMsForSchedule(ticks, signal, plan ? {
           defaultSoundSet: audio.soundSet,
           layerSoundSets: audio.layerSoundSets,
-          tonePositions: audio.tonePositions,
+          tone: audio.tone,
           customSoundSets: audio.customSoundSets,
         } : undefined),
         getSamplePCMs(audio.noteSamples, signal),
@@ -689,7 +723,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
         measureDurationMs: scheduleInfo.durationMs,
         clickPCMs,
         samplePCMs,
-        clickVolume: getClickRenderVolume(audio.volume),
+        clickVolume: audio.tone.renderGain,
         sampleVolume: samplePCMs.size > 0 ? audio.sampleVolume : 0,
         sampleVolumes: audio.noteSampleVolumes,
         sampleSpeeds: audio.noteSampleSpeeds,
@@ -708,7 +742,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
       try {
         output = (outputOwner.adapter as NativeAudioOutput).rendered(
           wavUri,
-          getClickOutputVolume(audio.volume),
+          audio.tone.outputGain,
           releaseRenderedWav,
         );
       } catch (error) {
@@ -744,6 +778,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
     }
   }, [
     audioRenderLifecycle,
+    captureAudioToneSnapshot,
     barMetronomeChannelRef,
     barModeRef,
     engineRef,
@@ -758,7 +793,6 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
     outputOwner,
     sampleVolumeRef,
     soundSetRef,
-    volumeRef,
   ]);
 
   const stopRenderedAudio = useCallback(() => {
@@ -772,8 +806,8 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
   }, [audioRenderLifecycle, clearRealtimeWebAudio, engineRef, outputOwner]);
 
   const scheduleReRender = useCallback(() => {
-    const outputVolume = getClickOutputVolume(volumeRef.current);
-    outputOwner.active()?.setVolume?.(outputVolume);
+    const toneSnapshot = captureAudioToneSnapshot();
+    setActiveAudioToneSnapshot(toneSnapshot);
     audioRenderLifecycle.cancel();
     engineRef.current?.setPendingMeasureStartAction(null);
     if (reRenderTimerRef.current) clearTimeout(reRenderTimerRef.current);
@@ -785,9 +819,8 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
       const realtimeBeatMode =
         !barModeRef.current &&
         !String(soundSetRef.current).startsWith("custom") &&
-        volumeRef.current <= 1 &&
-        tonePositionRef?.current.x === 0 &&
-        tonePositionRef?.current.y === 0 &&
+        !toneSnapshot.boosted &&
+        !toneSnapshot.toneShaped &&
         Platform.OS === "web";
       if (realtimeBeatMode) {
         stopRenderedAudio();
@@ -803,8 +836,13 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
           const scheduleInfo = engine.getScheduleInfo();
           const ticks = scheduleInfo.ticks as TickInfo[];
           const [clickPCMs, layerClickPCMs, samplePCMs] = await Promise.all([
-            getClickPCMs(soundSetRef.current, signal),
-            getLayerClickPCMsForSchedule(ticks, signal),
+            getClickPCMs(soundSetRef.current, signal, toneSnapshot),
+            getLayerClickPCMsForSchedule(ticks, signal, {
+              defaultSoundSet: soundSetRef.current,
+              layerSoundSets: layerSoundSetsRef.current,
+              tone: toneSnapshot,
+              customSoundSets: customSoundSetsRef.current,
+            }),
             getSamplePCMs(noteSamplesRef.current, signal),
           ]);
           if (!session.isCurrent()) return;
@@ -817,7 +855,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
             measureDurationMs: scheduleInfo.durationMs,
             clickPCMs,
             samplePCMs,
-            clickVolume: getClickRenderVolume(volumeRef.current),
+            clickVolume: toneSnapshot.renderGain,
             sampleVolume: samplePCMs.size > 0 ? sampleVolumeRef.current : 0,
             sampleVolumes: noteSampleVolumesRef.current,
             sampleSpeeds: noteSampleSpeedsRef.current,
@@ -851,7 +889,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
             outputOwner.transition("transitioning");
             const loop = (outputOwner.adapter as WebAudioOutput).rendered(
               readyPcm,
-              getClickOutputVolume(volumeRef.current),
+              toneSnapshot.outputGain,
               "both",
               boundary,
             );
@@ -875,7 +913,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
         }
       } else {
         try {
-          const result = await prepareRenderedPlayer();
+          const result = await prepareRenderedPlayer(undefined, toneSnapshot);
           if (result.status === "cancelled" || result.status === "superseded") return;
           if (result.status === "failed") {
             fatalRenderFailureRef.current();
@@ -905,6 +943,9 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
     }, 300);
    }, [
      barMetronomeChannelRef,
+     captureAudioToneSnapshot,
+     customSoundSetsRef,
+     layerSoundSetsRef,
      barModeRef,
      audioRenderLifecycle,
      engineRef,
@@ -921,9 +962,8 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
      prepareRenderedPlayer,
      sampleVolumeRef,
      soundSetRef,
+     setActiveAudioToneSnapshot,
      stopRenderedAudio,
-     tonePositionRef,
-     volumeRef,
    ]);
 
   const invalidateSamplePCMCache = useCallback((key?: string) => {
@@ -1360,5 +1400,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
     clearAudioWatchdog,
     scheduleRealtimeWebClick,
     clearRealtimeWebAudio,
+    captureAudioToneSnapshot,
+    setActiveAudioToneSnapshot,
   };
 }

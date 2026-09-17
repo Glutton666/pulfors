@@ -12,6 +12,7 @@ import {
 } from "@/lib/sample-cache";
 import { createAudioRenderLifecycle } from "@/lib/audio-render-lifecycle";
 import { createAudioOutputOwner } from "@/lib/audio-output-owner";
+import { createAudioToneSnapshot } from "@/lib/audio-tone-snapshot";
 
 const mockPlayer = {
   volume: 1,
@@ -30,6 +31,7 @@ const mockPlayWebRenderedLoop = jest.fn(
 );
 const mockDecodeSampleFile = jest.fn(async (_uri: string) => new Float32Array([0.8, 0.4, 0.2]));
 const mockCreateAudioPlayer = jest.fn((_source: unknown) => ({ ...mockPlayer }));
+const mockSetPoolsVolume = jest.fn();
 const mockReleaseRenderedWav = jest.fn();
 const mockSaveRenderedWav = jest.fn(async (
   _pcm?: unknown,
@@ -78,9 +80,6 @@ jest.mock("@/lib/audio-renderer", () => ({
     currentTime: 0,
     resume: jest.fn().mockResolvedValue(undefined),
   })),
-  getRealtimeClickGain: (volume: number) => Math.max(0, Math.min(1, volume)) * 3.2,
-  getClickRenderVolume: (volume: number) => 3.2 * Math.max(1, Math.max(0, volume)),
-  getClickOutputVolume: (volume: number) => Math.max(0, Math.min(1, volume)),
   clearWebClickBuffers: jest.fn(),
 }));
 
@@ -93,7 +92,7 @@ jest.mock("@/hooks/useAudioPlayers", () => ({
     highToggle: { current: 0 },
     lowToggle: { current: 0 },
     strongToggle: { current: 0 },
-    setPoolsVolume: jest.fn(),
+    setPoolsVolume: mockSetPoolsVolume,
   }),
 }));
 
@@ -105,8 +104,20 @@ jest.mock("@/lib/metronome-engine", () => ({
 
 jest.mock("@/lib/metronome-tone-dsp", () => ({
   NEUTRAL: { x: 0, y: 0 },
-  processClickPCM: (pcm: Float32Array, position: { x: number; y: number }) =>
-    mockProcessClickPCM(pcm, position),
+  sanitizeTonePosition: (position?: { x?: number; y?: number }) => ({
+    x: Math.max(-1, Math.min(1, Number.isFinite(position?.x) ? position!.x! : 0)),
+    y: Math.max(-1, Math.min(1, Number.isFinite(position?.y) ? position!.y! : 0)),
+  }),
+  processClickPCM: (
+    pcm: Float32Array,
+    positionOrOptions: { x?: number; y?: number; position?: { x: number; y: number } },
+  ) => {
+    const position = positionOrOptions.position ?? {
+      x: positionOrOptions.x ?? 0,
+      y: positionOrOptions.y ?? 0,
+    };
+    return mockProcessClickPCM(pcm, position);
+  },
   toneEffectIntensity: ({ x, y }: { x: number; y: number }) => Math.max(Math.abs(x), Math.abs(y)),
 }));
 
@@ -192,8 +203,45 @@ function makeEngine() {
 
 describe("pre-rendered playback reliability", () => {
   beforeEach(() => {
+    mockSetPoolsVolume.mockClear();
     jest.clearAllMocks();
     (Platform as unknown as { OS: string }).OS = "ios";
+  });
+
+  it("keeps active pool gain unchanged until an explicit snapshot replacement", () => {
+    const engine = makeEngine();
+    const params = makePipelineParams(engine);
+    params.isPlayingRef.current = true;
+    const { result, rerender } = renderHook(() => useAudioPipeline(params as any));
+    mockSetPoolsVolume.mockClear();
+
+    params.volume = 0.9;
+    params.volumeRef.current = 0.9;
+    rerender();
+    expect(mockSetPoolsVolume).not.toHaveBeenCalled();
+
+    act(() => {
+      result.current.setActiveAudioToneSnapshot(createAudioToneSnapshot({
+        volume: 0.9,
+        defaultSoundSet: "classic",
+      }));
+    });
+    expect(mockSetPoolsVolume).toHaveBeenCalledWith(expect.closeTo(2.88));
+  });
+
+  it("does not replace pool gain while a playback start is still preparing", () => {
+    const engine = makeEngine();
+    const params = makePipelineParams(engine);
+    params.isPlayingRef.current = false;
+    params.isPreparingRef.current = true;
+    const { rerender } = renderHook(() => useAudioPipeline(params as any));
+    mockSetPoolsVolume.mockClear();
+
+    params.volume = 0.95;
+    params.volumeRef.current = 0.95;
+    rerender();
+
+    expect(mockSetPoolsVolume).not.toHaveBeenCalled();
   });
 
   afterEach(() => {
@@ -323,10 +371,13 @@ describe("pre-rendered playback reliability", () => {
     } as any;
     const snapshot = {
       soundSet: "classic",
-      volume: 0.4,
+      tone: createAudioToneSnapshot({
+        volume: 0.4,
+        defaultSoundSet: "classic",
+        defaultPosition: { x: 0, y: 0 },
+        positions: { classic: { x: 0, y: 0 } },
+      }),
       sampleVolume: 0.6,
-      tonePosition: { x: 0, y: 0 },
-      tonePositions: { classic: { x: 0, y: 0 } },
       customSoundSets: {},
       noteSamples: { "0-0": "file:///start.wav" },
       noteSampleChannels: { "0-0": "left" },
@@ -422,7 +473,11 @@ describe("pre-rendered playback reliability", () => {
       {
         defaultSoundSet: "classic",
         layerSoundSets: { 1: "custom-start" as any },
-        tonePositions: { ["custom-start" as any]: { x: 0.6, y: -0.2 } },
+        tone: createAudioToneSnapshot({
+          volume: 1,
+          defaultSoundSet: "classic",
+          positions: { ["custom-start" as any]: { x: 0.6, y: -0.2 } },
+        }),
         customSoundSets: capturedCustomSoundSets,
       },
     );
@@ -2173,6 +2228,8 @@ function makePlaybackParams(engine: ReturnType<typeof makeEngine>, player: typeo
     stopRenderedAudio();
     clearSamplePlayStates();
   });
+  const soundSetRef = { current: "classic" };
+  const volumeRef = { current: 0.35 };
   return {
     engineRef: { current: engine },
     isPlaying: false,
@@ -2220,8 +2277,13 @@ function makePlaybackParams(engine: ReturnType<typeof makeEngine>, player: typeo
     }),
     clearAudioWatchdogRef: { current: clearAudioWatchdog },
     armAudioWatchdogRef: { current: jest.fn() },
-    soundSetRef: { current: "classic" },
-    volumeRef: { current: 0.35 },
+    soundSetRef,
+    volumeRef,
+    captureAudioToneSnapshot: () => createAudioToneSnapshot({
+      volume: volumeRef.current,
+      defaultSoundSet: soundSetRef.current,
+    }),
+    setActiveAudioToneSnapshot: jest.fn(),
     sampleVolumeRef: { current: 0.7 },
     noteSamplesRef: { current: sampleMap },
     noteSampleChannelsRef: { current: sampleChannels },
@@ -2276,6 +2338,7 @@ function makePipelineParams(
     noteSampleSoundsRef: { current: noteSampleSounds },
     renderGenerationRef: { current: 0 },
     isPlayingRef: { current: true },
+    isPreparingRef: { current: false },
     bpmRef: { current: 120 },
     t: (key: string) => key,
     showRecoveryToast: jest.fn(),

@@ -26,6 +26,11 @@ import {
   type PolygonScheduleRunner,
 } from "@/lib/polygon-scheduler";
 import {
+  applyAudioToneSnapshot,
+  readAudioToneSnapshot,
+  type AudioToneSnapshot,
+} from "@/lib/audio-tone-snapshot";
+import {
   PolygonLayer,
   VertexBeatType,
   LAYER_COLORS,
@@ -64,10 +69,13 @@ export interface UsePolygonModeParams {
   allPlayersRef: React.MutableRefObject<BuiltinPlayers>;
   /** 전역 PCM 캐시 ref (read-only) */
   clickPCMCacheRef: React.MutableRefObject<Record<string, ClickPCMs>>;
-  /** 볼륨 ref */
-  volumeRef: React.MutableRefObject<number>;
   /** PCM 로더 콜백 (web에서 레이어별 사운드셋 비동기 로드) */
-  getClickPCMs: (set: SoundSet) => Promise<ClickPCMs>;
+  getClickPCMs: (
+    set: SoundSet,
+    signal?: AbortSignal,
+    toneSnapshot?: AudioToneSnapshot,
+  ) => Promise<ClickPCMs>;
+  captureAudioToneSnapshot: () => AudioToneSnapshot;
   /** 폴리곤 자체 출력도 시작 확인·watchdog에 오디오 활동으로 보고한다. */
   recordAudioActivity: () => boolean;
   outputOwner: AudioOutputOwner;
@@ -119,6 +127,19 @@ const INITIAL_LAYERS: PolygonLayer[] = [
 
 export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
   const playPolygonOutput = playPolygonAudioOutput(p.outputOwner);
+  const toneAtRender = p.captureAudioToneSnapshot();
+  const defaultToneAtRender = readAudioToneSnapshot(toneAtRender);
+  const toneVersion = [
+    toneAtRender.volume,
+    toneAtRender.defaultSoundSet,
+    defaultToneAtRender.position.x,
+    defaultToneAtRender.position.y,
+    ...Object.entries(toneAtRender.tones).flatMap(([set, tone]) => [
+      set,
+      tone.position.x,
+      tone.position.y,
+    ]),
+  ].join(":");
   const [layers, setLayers] = useState<PolygonLayer[]>(INITIAL_LAYERS);
   const [editingLayerId, setEditingLayerId] = useState<string | null>(null);
   const [activeVertices, setActiveVertices] = useState<Record<string, number>>({});
@@ -158,6 +179,7 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
     nextLayers = layersRef.current,
     nextBpm = bpmRef.current,
     nextBeatsPerMeasure = beatsPerMeasureRef.current,
+    nextTone = activePlaybackPlanRef.current?.tone ?? toneAtRender,
   ) => {
     if (!activePlaybackPlanRef.current) return;
     activePlaybackPlanRef.current = buildPolygonPlaybackPlan({
@@ -165,12 +187,13 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
       bpm: nextBpm,
       beatsPerMeasure: nextBeatsPerMeasure,
       layers: nextLayers,
+      tone: nextTone,
     });
     activeScheduleRef.current = buildPolygonSchedule({
       layers: nextLayers,
       beatsPerMeasure: nextBeatsPerMeasure,
     });
-  }, []);
+  }, [toneAtRender]);
 
   useEffect(() => {
     runnerRef.current?.cancelSession(sessionIdRef.current);
@@ -182,6 +205,7 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
           bpm: p.bpm,
           beatsPerMeasure: p.beatsPerMeasure,
           layers,
+          tone: toneAtRender,
         })
       : null;
     activeScheduleRef.current = p.isPlaying
@@ -192,28 +216,54 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [p.isPlaying]);
 
+  useEffect(() => {
+    if (!activePlaybackPlanRef.current) return;
+    runnerRef.current?.cancelSession(sessionIdRef.current);
+    sessionIdRef.current += 1;
+    replaceActivePlaybackPlan(
+      layersRef.current,
+      bpmRef.current,
+      beatsPerMeasureRef.current,
+      toneAtRender,
+    );
+  // toneVersion is a stable value signature; the snapshot object itself is new
+  // on each render because it captures mutable settings refs.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [toneVersion]);
+
   // ── 절대 비트 카운터 (엔진 콜백 내에서만 변경) ──────────────────────────
   const absoluteBeatRef = useRef(0);
 
   // ── Per-layer PCM 캐시 (전역 clickPCMCacheRef와 분리) ───────────────────
   const polygonPCMCacheRef = useRef<Map<string, ClickPCMs>>(new Map());
+  const polygonRawPCMRef = useRef<Map<string, ClickPCMs>>(new Map());
   const loadingRef = useRef<Set<string>>(new Set());
 
   const ensurePCM = useCallback(
-    (soundSet: string) => {
+    (soundSet: string, toneSnapshot = toneAtRender) => {
       if (Platform.OS !== "web") return;
-      // 사용자 업로드 커스텀 사운드는 이미 캐시에 등록되어 있으므로 네트워크 요청 불필요
+      const tone = readAudioToneSnapshot(toneSnapshot, soundSet);
+      const cacheKey = `${soundSet}:${tone.position.x}:${tone.position.y}`;
+      if (polygonPCMCacheRef.current.has(cacheKey)) return;
+      if (loadingRef.current.has(cacheKey)) return;
+      const rawCustom = polygonRawPCMRef.current.get(soundSet);
+      if (rawCustom) {
+        polygonPCMCacheRef.current.set(cacheKey, {
+          strong: applyAudioToneSnapshot(rawCustom.strong, toneSnapshot, soundSet) as Float32Array,
+          high: applyAudioToneSnapshot(rawCustom.high, toneSnapshot, soundSet) as Float32Array,
+          low: applyAudioToneSnapshot(rawCustom.low, toneSnapshot, soundSet) as Float32Array,
+        });
+        return;
+      }
       if (soundSet.startsWith("custom-")) return;
-      if (polygonPCMCacheRef.current.has(soundSet)) return;
-      if (loadingRef.current.has(soundSet)) return;
-      loadingRef.current.add(soundSet);
-      p.getClickPCMs(soundSet as SoundSet)
-        .then((pcms) => { polygonPCMCacheRef.current.set(soundSet, pcms); })
+      loadingRef.current.add(cacheKey);
+      p.getClickPCMs(soundSet as SoundSet, undefined, toneSnapshot)
+        .then((pcms) => { polygonPCMCacheRef.current.set(cacheKey, pcms); })
         .catch(() => {})
-        .finally(() => { loadingRef.current.delete(soundSet); });
+        .finally(() => { loadingRef.current.delete(cacheKey); });
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [p.getClickPCMs],
+    [p.getClickPCMs, toneAtRender],
   );
 
   if (!runnerRef.current) {
@@ -228,19 +278,35 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
         return;
       }
       const soundRole = beatTypeToWebClickRole(event.type as VertexBeatType);
-      const cached = Platform.OS === "web"
-        ? polygonPCMCacheRef.current.get(event.soundSet)
-          ?? p.clickPCMCacheRef.current[event.soundSet]
+      const toneSnapshot = activePlaybackPlanRef.current?.tone ?? toneAtRender;
+      const tone = readAudioToneSnapshot(toneSnapshot, event.soundSet);
+      const cacheKey = `${event.soundSet}:${tone.position.x}:${tone.position.y}`;
+      let cached = Platform.OS === "web"
+        ? polygonPCMCacheRef.current.get(cacheKey)
+          ?? (!tone.active ? p.clickPCMCacheRef.current[event.soundSet] : undefined)
         : undefined;
+      if (Platform.OS === "web" && !cached) {
+        ensurePCM(event.soundSet, toneSnapshot);
+        cached = polygonPCMCacheRef.current.get(cacheKey);
+      }
+      if (
+        Platform.OS === "web"
+        && !cached
+        && (tone.active || event.soundSet.startsWith("custom-"))
+      ) {
+        return;
+      }
       const played = playPolygonOutput({
         soundSet: event.soundSet,
         role: soundRole,
-        volume: p.volumeRef.current * event.volume,
+        volume: (Platform.OS === "web"
+          ? toneSnapshot.realtimeGain
+          : toneSnapshot.outputGain) * event.volume,
         pcm: cached?.[soundRole],
         channel: "both",
         pools: p.allPlayersRef.current,
       });
-      if (!cached && Platform.OS === "web") ensurePCM(event.soundSet);
+      if (!cached && Platform.OS === "web") ensurePCM(event.soundSet, toneSnapshot);
       if (played) p.recordAudioActivity();
       setActiveVertices((prev) =>
         prev[event.layerId] === event.vertex ? prev : { ...prev, [event.layerId]: event.vertex },
@@ -251,8 +317,8 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
   // enabled=true 시 / 레이어 사운드셋 변경 시 PCM 선제 로드
   useEffect(() => {
     if (!p.enabled || Platform.OS !== "web") return;
-    layers.forEach((l) => ensurePCM(l.soundSet));
-  }, [p.enabled, layers, ensurePCM]);
+    layers.forEach((l) => ensurePCM(l.soundSet, toneAtRender));
+  }, [p.enabled, layers, ensurePCM, toneVersion]);
 
   // ── 재생 중단 → absoluteBeat 리셋 ──────────────────────────────────────
   // 엔진이 멈추면 더 이상 콜백이 오지 않으므로 카운터만 초기화한다.
@@ -490,10 +556,18 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
   const setLayerCustomSound = useCallback(
     (layerId: string, pcms: ClickPCMs) => {
       const customKey = `custom-${layerId}`;
-      polygonPCMCacheRef.current.set(customKey, pcms);
+      const toneSnapshot = activePlaybackPlanRef.current?.tone ?? toneAtRender;
+      const tone = readAudioToneSnapshot(toneSnapshot, customKey);
+      const cacheKey = `${customKey}:${tone.position.x}:${tone.position.y}`;
+      polygonRawPCMRef.current.set(customKey, pcms);
+      polygonPCMCacheRef.current.set(cacheKey, {
+        strong: applyAudioToneSnapshot(pcms.strong, toneSnapshot, customKey) as Float32Array,
+        high: applyAudioToneSnapshot(pcms.high, toneSnapshot, customKey) as Float32Array,
+        low: applyAudioToneSnapshot(pcms.low, toneSnapshot, customKey) as Float32Array,
+      });
       handleUpdateLayer(layerId, { soundSet: customKey });
     },
-    [handleUpdateLayer],
+    [handleUpdateLayer, toneAtRender],
   );
 
   return {
