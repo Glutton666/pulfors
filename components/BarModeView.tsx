@@ -81,6 +81,8 @@ export interface BarModeViewProps {
   onBarReset?: () => void;
   onBarScrollOffset?: (offset: number) => void;
   barAreaRef?: React.RefObject<View | null>;
+  onBarAreaLayout?: (pageY: number, height: number) => void;
+  patternDropTargetBeat?: number | null;
   noteSamples?: Record<string, string>;
   noteSampleNames?: Record<string, string>;
   noteSampleSources?: Record<string, string>;
@@ -126,6 +128,7 @@ export function BarModeView({
   onRandomPlayRequest, onBarLoopModeChange, blockPlayMode, onBlockPlayModeChange, progressInfo,
   barStartBeat, onBarStartBeatSelect, onAddBar, onDeleteBar,
   subdivisionBarElement, onBarQuickSave, onBarScrollOffset, barAreaRef,
+  onBarAreaLayout, patternDropTargetBeat,
   bpm, onBpmChange, halfTime, beatDenominator = 4, onDenominatorCycle,
   soundSet = "classic", onSoundSetChange, layerSoundSets = {} as Record<number, string>,
   onLayerSoundSetsChange, onPreviewSoundSet,
@@ -167,6 +170,41 @@ export function BarModeView({
   const draggingDyAnim = useRef(new Animated.Value(0)).current;
   const draggingBeatRef = useRef<number | null>(null);
   const rowH = rowHeight ?? BAR_ROW_H;
+
+  const reportBarAreaLayout = useCallback((layoutHeight: number) => {
+    if (!onBarAreaLayout) return;
+    const ref = barAreaRef?.current as unknown as {
+      getBoundingClientRect?: () => { top: number; height: number };
+      measureInWindow?: (
+        callback: (x: number, y: number, width: number, height: number) => void,
+      ) => void;
+      measure?: (
+        callback: (
+          x: number,
+          y: number,
+          width: number,
+          height: number,
+          pageX: number,
+          pageY: number,
+        ) => void,
+      ) => void;
+    } | null;
+
+    if (Platform.OS === "web" && ref?.getBoundingClientRect) {
+      const rect = ref.getBoundingClientRect();
+      onBarAreaLayout(rect.top, rect.height || layoutHeight);
+      return;
+    }
+    if (ref?.measureInWindow) {
+      ref.measureInWindow((_x, pageY, _width, height) => {
+        onBarAreaLayout(pageY, height || layoutHeight);
+      });
+      return;
+    }
+    ref?.measure?.((_x, _y, _width, height, _pageX, pageY) => {
+      onBarAreaLayout(pageY, height || layoutHeight);
+    });
+  }, [barAreaRef, onBarAreaLayout]);
 
   const handleDragStart = useCallback((beat: number) => {
     if (isPlaying) return;
@@ -541,6 +579,7 @@ export function BarModeView({
           const height = e.nativeEvent.layout.height;
           setBarContainerHeight(height);
           onRandomViewportCapacityChange?.(Math.max(1, Math.ceil(height / rowH)));
+          requestAnimationFrame(() => reportBarAreaLayout(height));
         }}
       >
         <FlatList
@@ -645,6 +684,7 @@ export function BarModeView({
               onDragMove={isRandom ? undefined : handleDragMove}
               onDragEnd={isRandom ? undefined : handleDragEnd}
               isDragging={isDragging}
+              isPatternDropTarget={patternDropTargetBeat === sourceBeat}
               showDropLineAbove={showDropLineAbove}
               dragTranslateY={isDragging ? draggingDyAnim : undefined}
               colors={C}

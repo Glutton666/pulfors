@@ -3354,6 +3354,11 @@ export function useMetronomeScreen() {
     }
   }, []);
 
+  const handleBarAreaLayout = useCallback((pageY: number, height: number) => {
+    if (!Number.isFinite(pageY) || !Number.isFinite(height) || height <= 0) return;
+    barAreaLayoutRef.current = { y: pageY, height };
+  }, []);
+
   useEffect(() => {
     if (!barMode) return;
     const frame = requestAnimationFrame(measureBarArea);
@@ -4416,6 +4421,7 @@ export function useMetronomeScreen() {
     // Refs
     rootViewRef,
     barAreaRef,
+    handleBarAreaLayout,
     beatStaffCellRectsRef,
     handleBeatStaffDelete,
     dialRef,

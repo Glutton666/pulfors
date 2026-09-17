@@ -87,7 +87,7 @@ export function MetronomeScreenUI(props: Props) {
   const {
     styles, C, S, t, themeMode, language, insets, webTopInset, webBottomInset,
     isLandscape, windowWidth,
-    rootViewRef, barAreaRef, dialRef, stopwatchTimerRef, stopwatchTimerLandscapeRef,
+    rootViewRef, barAreaRef, handleBarAreaLayout, dialRef, stopwatchTimerRef, stopwatchTimerLandscapeRef,
     barScrollOffsetRef, beatStaffCellRectsRef, engineRef, togglePlayPauseRef, updateBpmRef, beatDenominatorRef,
     seamlessNextEntryRef, tuningGuideOnSelectRef, reopenSignalGenAfterTuningGuideRef,
     settingsReturnModalRef, featureStartRef, practiceStartRef, discardPracticeSession, startOrResumePracticeSession,
@@ -1141,6 +1141,7 @@ export function MetronomeScreenUI(props: Props) {
             onBeatSubdivisionChange={handleBeatSubdivisionChange}
             activeSubNote={activeSubNote}
             barAreaRef={barAreaRef}
+            onBarAreaLayout={handleBarAreaLayout}
             barRepeats={barRepeats}
             onBarRepeatChange={(beat, repeat) => {
               handleBarRepeatChange(beat, repeat);

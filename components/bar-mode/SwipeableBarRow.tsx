@@ -48,6 +48,7 @@ export interface SwipeableBarRowProps {
   onDragMove?: (beat: number, dy: number) => void;
   onDragEnd?: (beat: number, dy: number) => void;
   isDragging?: boolean;
+  isPatternDropTarget?: boolean;
   showDropLineAbove?: boolean;
   dragTranslateY?: Animated.Value;
   colors: BarModeColors;
@@ -76,7 +77,8 @@ export function SwipeableBarRow({
   blockDepth: _blockDepth, blockStart, blockEnd, blockEditIndex, blockRepeatText, symbolBadges, isPlaying,
   progressCurrent, progressTotal, bpm, meterNumerator, meterDenominator, beatsPerMeasure,
   onPress, onSwipeLeft, onSwipeRight, onLongPress, onEditBlock,
-  onDragStart, onDragMove, onDragEnd, isDragging, showDropLineAbove, dragTranslateY,
+  onDragStart, onDragMove, onDragEnd, isDragging, isPatternDropTarget = false,
+  showDropLineAbove, dragTranslateY,
   colors: C, ms,
   rowHeight, showStaffNotation = false, cellOverlayOpacity = 0.55, sampleCells = [], sampleCellCoverage = [],
 }: SwipeableBarRowProps) {
@@ -184,14 +186,16 @@ export function SwipeableBarRow({
             styles.barRow,
             {
               height: rowHeight ?? BAR_ROW_H,
-              backgroundColor: isCurrentBeat
+              backgroundColor: isPatternDropTarget
+                ? C.accent + "22"
+                : isCurrentBeat
                 ? C.accent + "18"
                 : isEditingBeat
                 ? C.backgroundSecondary
                 : "transparent",
               borderBottomColor: C.overlay06,
-               borderLeftWidth: isCurrentBeat ? 3 : isEditingBeat ? 2 : 0,
-               borderLeftColor: isCurrentBeat ? C.accent : isEditingBeat ? C.textSecondary : "transparent",
+               borderLeftWidth: isPatternDropTarget || isCurrentBeat ? 3 : isEditingBeat ? 2 : 0,
+                borderLeftColor: isPatternDropTarget || isCurrentBeat ? C.accent : isEditingBeat ? C.textSecondary : "transparent",
             },
           ]}
         >

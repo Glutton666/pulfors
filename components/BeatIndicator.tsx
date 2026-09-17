@@ -93,6 +93,7 @@ interface BeatIndicatorProps {
   onBeatSubdivisionChange: (beatIndex: number, pattern: BeatType[] | null) => void;
   activeSubNote: number;
   barAreaRef?: React.RefObject<View | null>;
+  onBarAreaLayout?: (pageY: number, height: number) => void;
   barRepeats: Record<number, BarRepeat>;
   onBarRepeatChange: (beat: number, repeat: BarRepeat | null) => void;
   onBarMeterChange?: (
@@ -189,6 +190,7 @@ export function BeatIndicator({
   onBeatSubdivisionChange,
   activeSubNote,
   barAreaRef,
+  onBarAreaLayout,
   barRepeats,
   onBarRepeatChange,
   onBarMeterChange,
@@ -1291,6 +1293,8 @@ export function BeatIndicator({
         onBarReset={onBarReset}
         onBarScrollOffset={onBarScrollOffset}
         barAreaRef={barAreaRef}
+        onBarAreaLayout={onBarAreaLayout}
+        patternDropTargetBeat={dropTargetBeat}
         noteSamples={noteSamples ?? {}}
         noteSampleNames={noteSampleNames}
         noteSampleSources={noteSampleSources}
