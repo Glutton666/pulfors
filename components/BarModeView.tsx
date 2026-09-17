@@ -80,6 +80,7 @@ export interface BarModeViewProps {
   onResetFlash?: () => void;
   onBarReset?: () => void;
   onBarScrollOffset?: (offset: number) => void;
+  barAreaRef?: React.RefObject<View | null>;
   noteSamples?: Record<string, string>;
   noteSampleNames?: Record<string, string>;
   noteSampleSources?: Record<string, string>;
@@ -124,7 +125,7 @@ export function BarModeView({
   isPlaying, isPreparing, currentBeat, activeSubNote, onTogglePlay, barLoopMode,
   onRandomPlayRequest, onBarLoopModeChange, blockPlayMode, onBlockPlayModeChange, progressInfo,
   barStartBeat, onBarStartBeatSelect, onAddBar, onDeleteBar,
-  subdivisionBarElement, onBarQuickSave, onBarScrollOffset,
+  subdivisionBarElement, onBarQuickSave, onBarScrollOffset, barAreaRef,
   bpm, onBpmChange, halfTime, beatDenominator = 4, onDenominatorCycle,
   soundSet = "classic", onSoundSetChange, layerSoundSets = {} as Record<number, string>,
   onLayerSoundSetsChange, onPreviewSoundSet,
@@ -531,35 +532,41 @@ export function BarModeView({
       />
 
       {/* ── Bar list ── */}
-      <FlatList
-        ref={barScrollRef}
-        data={barListItems}
-        keyExtractor={item => item.key}
-        style={[{ flex: 1 }, S.isTablet && { paddingHorizontal: S.ms(16, 0.5) }]}
-        showsVerticalScrollIndicator={false}
-        nestedScrollEnabled
-        scrollEnabled={!isPlaying && draggingBeat === null}
-        initialNumToRender={Math.max(4, Math.ceil((barContainerHeight || rowH * 4) / rowH))}
-        maxToRenderPerBatch={8}
-        updateCellsBatchingPeriod={32}
-        windowSize={5}
-        removeClippedSubviews={Platform.OS !== "web"}
-        getItemLayout={(_data, index) => ({
-          length: rowH,
-          offset: rowH * index,
-          index,
-        })}
+      <View
+        ref={barAreaRef}
+        collapsable={false}
+        testID="bar-mode-drop-area"
+        style={{ flex: 1, minHeight: 0 }}
         onLayout={e => {
           const height = e.nativeEvent.layout.height;
           setBarContainerHeight(height);
           onRandomViewportCapacityChange?.(Math.max(1, Math.ceil(height / rowH)));
         }}
-        onScroll={e => {
-          barScrollYRef.current = e.nativeEvent.contentOffset.y;
-          onBarScrollOffset?.(e.nativeEvent.contentOffset.y);
-        }}
-        scrollEventThrottle={16}
-        renderItem={({ item }) => {
+      >
+        <FlatList
+          ref={barScrollRef}
+          data={barListItems}
+          keyExtractor={item => item.key}
+          style={[{ flex: 1 }, S.isTablet && { paddingHorizontal: S.ms(16, 0.5) }]}
+          showsVerticalScrollIndicator={false}
+          nestedScrollEnabled
+          scrollEnabled={!isPlaying && draggingBeat === null}
+          initialNumToRender={Math.max(4, Math.ceil((barContainerHeight || rowH * 4) / rowH))}
+          maxToRenderPerBatch={8}
+          updateCellsBatchingPeriod={32}
+          windowSize={5}
+          removeClippedSubviews={Platform.OS !== "web"}
+          getItemLayout={(_data, index) => ({
+            length: rowH,
+            offset: rowH * index,
+            index,
+          })}
+          onScroll={e => {
+            barScrollYRef.current = e.nativeEvent.contentOffset.y;
+            onBarScrollOffset?.(e.nativeEvent.contentOffset.y);
+          }}
+          scrollEventThrottle={16}
+          renderItem={({ item }) => {
           const { displayBeat: beat, sourceBeat, isRandom } = item;
           const bType = beatTypes[sourceBeat] || "normal";
           const subs = beatSubdivisions[String(sourceBeat)] ?? [];
@@ -649,8 +656,8 @@ export function BarModeView({
               sampleCellCoverage={rowSampleCoverage}
             />
           );
-        }}
-        ListFooterComponent={(
+          }}
+          ListFooterComponent={(
           <>
              {barStartBeat === null && !isPlaying && !showingRandomList && (
               <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", paddingTop: 12, paddingHorizontal: Spacing.sm, paddingVertical: Spacing.xs }}>
@@ -663,8 +670,9 @@ export function BarModeView({
             )}
             <View style={{ height: 8 }} />
           </>
-        )}
-      />
+          )}
+        />
+      </View>
 
       {randomBarSession?.order.length ? (
         <View

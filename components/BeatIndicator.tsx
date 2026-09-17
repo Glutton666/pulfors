@@ -1290,6 +1290,7 @@ export function BeatIndicator({
         onResetFlash={onResetFlash}
         onBarReset={onBarReset}
         onBarScrollOffset={onBarScrollOffset}
+        barAreaRef={barAreaRef}
         noteSamples={noteSamples ?? {}}
         noteSampleNames={noteSampleNames}
         noteSampleSources={noteSampleSources}

@@ -98,4 +98,24 @@ describe("SubdivisionBar drag cancellation", () => {
 
     expect(onDragCancel).toHaveBeenCalledTimes(1);
   });
+
+  it("delivers a complete web pointer drag from the drawer to its drop owner", () => {
+    const previousOS = ReactNative.Platform.OS;
+    (ReactNative.Platform as unknown as { OS: string }).OS = "web";
+    const { getByTestId, onDragStart, onDragMove, onDragEnd, unmount } = renderBar();
+    const pointerEvent = (type: string, clientX: number, clientY: number) =>
+      new MouseEvent(type, { bubbles: true, clientX, clientY });
+
+    getByTestId("subdivision-gesture-wrapper").dispatchEvent(pointerEvent("pointerdown", 180, 420));
+    document.dispatchEvent(pointerEvent("pointermove", 180, 390));
+    document.dispatchEvent(pointerEvent("pointermove", 120, 180));
+    document.dispatchEvent(pointerEvent("pointerup", 120, 180));
+
+    expect(onDragStart).toHaveBeenCalledTimes(1);
+    expect(onDragMove).toHaveBeenLastCalledWith(120, 180);
+    expect(onDragEnd).toHaveBeenCalledWith(120, 180);
+
+    unmount();
+    (ReactNative.Platform as unknown as { OS: string }).OS = previousOS;
+  });
 });

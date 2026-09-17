@@ -118,6 +118,10 @@ import { useStageMode } from "@/hooks/useStageMode";
 import { useBeatTypeControls } from "@/hooks/useBeatTypeControls";
 import { applySwitchToMode, type ModeSwitchState, type ModeSwitchCallbacks } from "@/lib/stage-mode-logic";
 import { findBeatStaffCellTarget, type BeatStaffCellRects } from "@/lib/beat-staff-logic";
+import {
+  getBarRowDropTarget,
+  getBarRowDropTargetFromElement,
+} from "@/lib/bar-pattern-drop";
 import { useBeatStaffControls } from "@/hooks/useBeatStaffControls";
 import { createDebouncedPersister, type DebouncedPersister } from "@/lib/persist";
 import { createRafBatcher } from "@/lib/raf-batcher";
@@ -3352,25 +3356,37 @@ export function useMetronomeScreen() {
     }
   }, []);
 
+  useEffect(() => {
+    if (!barMode) return;
+    const frame = requestAnimationFrame(measureBarArea);
+    return () => cancelAnimationFrame(frame);
+  }, [
+    barMode,
+    barRowHeight,
+    beatsPerMeasure,
+    measureBarArea,
+    windowHeight,
+    windowWidth,
+  ]);
+
   const findDropTarget = useCallback(
     (pageX: number, pageY: number): number | null => {
       if (barMode) {
         const layout = barAreaLayoutRef.current;
-        if (layout.height <= 0) return null;
-        const relY = pageY - layout.y;
-        if (relY < -60) return null;
-        if (relY < 0) return -1;
-        if (relY > layout.height) return null;
-        const BAR_HEIGHT = 36;
-        const barGap = 18;
-        const rowH = BAR_HEIGHT + 1 + barGap;
-        const scrollY = barScrollOffsetRef.current;
-        const contentY = relY + scrollY;
-        const centerPad = Math.max(0, (layout.height - BAR_HEIGHT) / 2);
-        const adjustedY = contentY - centerPad;
-        const beatIdx = Math.floor(adjustedY / rowH);
-        if (beatIdx >= 0 && beatIdx < beatsPerMeasure) return beatIdx;
-        return null;
+        if (Platform.OS === "web" && typeof document !== "undefined") {
+          const rowTarget = getBarRowDropTargetFromElement(
+            document.elementFromPoint(pageX, pageY),
+            beatsPerMeasure,
+          );
+          if (rowTarget !== null) return rowTarget;
+        }
+        return getBarRowDropTarget(
+          pageY,
+          layout,
+          barScrollOffsetRef.current,
+          barRowHeight ?? 44,
+          beatsPerMeasure,
+        );
       }
 
       if (beatStaffNotation) {
@@ -3402,7 +3418,7 @@ export function useMetronomeScreen() {
       if (closestDist < S.ms(55, 0.3)) return closestBeat;
       return null;
     },
-    [beatsPerMeasure, barMode, S, beatStaffNotation]
+    [beatsPerMeasure, barMode, S, beatStaffNotation, barRowHeight]
   );
 
   const handleDragStart = useCallback(() => {
