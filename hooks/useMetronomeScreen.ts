@@ -365,8 +365,12 @@ export function useMetronomeScreen() {
   const [dragPattern, setDragPattern] = useState<BeatType[] | null>(null);
   const [dropTargetBeat, setDropTargetBeat] = useState<number | null>(null);
   const dragModeRef = useRef<"bar" | "beat" | null>(null);
+  const dragPatternRef = useRef<BeatType[] | null>(null);
+  const dropTargetBeatRef = useRef<number | null>(null);
   const clearDragState = useCallback(() => {
     dragModeRef.current = null;
+    dragPatternRef.current = null;
+    dropTargetBeatRef.current = null;
     setIsDragging(false);
     setDragPattern(null);
     setDragPos({ x: 0, y: 0 });
@@ -3425,8 +3429,11 @@ export function useMetronomeScreen() {
   );
 
   const handleDragStart = useCallback(() => {
+    const pattern = [...subdivisionPatternRef.current];
     dragModeRef.current = barMode ? "bar" : "beat";
-    setDragPattern([...subdivisionPatternRef.current]);
+    dragPatternRef.current = pattern;
+    dropTargetBeatRef.current = null;
+    setDragPattern(pattern);
     setDragPos({ x: 0, y: 0 });
     setIsDragging(true);
     if (barMode) {
@@ -3443,6 +3450,7 @@ export function useMetronomeScreen() {
     (pageX: number, pageY: number) => {
       setDragPos({ x: pageX, y: pageY });
       const target = findDropTarget(pageX, pageY);
+      dropTargetBeatRef.current = target;
       setDropTargetBeat(target);
     },
     [findDropTarget]
@@ -3505,20 +3513,25 @@ export function useMetronomeScreen() {
 
   const handleDragEnd = useCallback(
     (pageX: number, pageY: number) => {
-      const target = findDropTarget(pageX, pageY);
+      const releaseTarget = findDropTarget(pageX, pageY);
+      // A native/web release event can be delivered outside the row that was
+      // visibly tracked during the drag. Preserve the last confirmed target
+      // instead of discarding an otherwise valid drop.
+      const target = releaseTarget ?? dropTargetBeatRef.current;
+      const pattern = dragPatternRef.current ?? subdivisionPatternRef.current;
       clearDragState();
 
       if (target === -1) {
         if (Platform.OS !== "web") {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         }
-        applyToAllBeats(subdivisionPattern);
-      } else if (target !== null && subdivisionPattern.length >= 1) {
+        applyToAllBeats(pattern);
+      } else if (target !== null && pattern.length >= 1) {
         if (Platform.OS !== "web") {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         }
-        applyBeatStaffSubdivision(target, subdivisionPattern);
-      } else if (target !== null && subdivisionPattern.length < 1) {
+        applyBeatStaffSubdivision(target, pattern);
+      } else if (target !== null && pattern.length < 1) {
         if (Platform.OS !== "web") {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         }
@@ -3534,7 +3547,7 @@ export function useMetronomeScreen() {
         }
       }
     },
-    [findDropTarget, subdivisionPattern, beatSubdivisions, persistSettings, applyToAllBeats, applyBeatStaffSubdivision, clearDragState]
+    [findDropTarget, beatSubdivisions, persistSettings, applyToAllBeats, applyBeatStaffSubdivision, clearDragState]
   );
 
   // handleBarRepeatChange / handleLoopBlocksChange → useBarMode

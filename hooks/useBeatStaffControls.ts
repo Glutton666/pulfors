@@ -59,7 +59,10 @@ export function useBeatStaffControls({
   ]);
 
   const applyBeatStaffSubdivision = useCallback((target: number, pattern: BeatType[]) => {
-    const newSubs = { ...beatSubdivisions };
+    const currentSubs = barModeRef.current
+      ? barConfigRef.current.beatSubdivisions
+      : beatSubdivisions;
+    const newSubs = { ...currentSubs };
     if (pattern.length) newSubs[String(target)] = [...pattern];
     else delete newSubs[String(target)];
     setBeatSubdivisions(newSubs);
@@ -87,9 +90,10 @@ export function useBeatStaffControls({
       dialConfigRef.current.beatSubdivisions = { ...newSubs };
       persistSettings({ beatSubdivisions: newSubs });
     }
+    scheduleReRender();
   }, [
     barConfigRef, barModeRef, beatSubdivisions, dialConfigRef, engineRef,
-    persistSettings, setBeatSubdivisions, setBeatTypes,
+    persistSettings, scheduleReRender, setBeatSubdivisions, setBeatTypes,
   ]);
 
   return { handleBeatStaffDelete, applyBeatStaffSubdivision };
