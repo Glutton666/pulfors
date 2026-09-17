@@ -1061,7 +1061,9 @@ export function MetronomeScreenUI(props: Props) {
               : styles.content,
           {
             paddingTop: noteMode
-              ? (isLandscape ? (insets.top || 8) : (insets.top || webTopInset) + 4)
+              ? (isLandscape
+                ? (insets.top || 8)
+                : (insets.top || webTopInset) + (noteIsPlaying ? 4 : 48))
               : (insets.top || webTopInset) + (isLandscape ? 8 : 12),
             paddingBottom: noteMode
               ? (isLandscape ? (insets.bottom || 4) : (insets.bottom || webBottomInset) + 4)

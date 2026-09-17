@@ -42,6 +42,7 @@ import { registerMetronomeBridge, notifyUserMetronomeToggle } from "@/lib/audio-
 import { captureBreadcrumb } from "@/lib/error-tracking";
 import { sanitizeDeepLinkEntry } from "@/lib/deep-link-import";
 import { normalizeNoteImageCrop } from "@/lib/note-image-crop";
+import type { NoteImageCrop } from "@/lib/storage";
 import { isNoteSourceEntry } from "@/lib/note-mode-sources";
 import * as Haptics from "expo-haptics";
 import * as Crypto from "expo-crypto";
@@ -4115,7 +4116,7 @@ export function useMetronomeScreen() {
     }
   }, []);
 
-  const handleNoteQueueItemImageChange = useCallback((index: number, imageUri: string | undefined, imageCrop?: { scale: number; x: number; y: number }) => {
+  const handleNoteQueueItemImageChange = useCallback((index: number, imageUri: string | undefined, imageCrop?: NoteImageCrop) => {
     setNoteQueue(prev => {
       const updated = [...prev];
       if (updated[index]) {

@@ -1,5 +1,6 @@
 import {
   clampNoteImageCropToFrame,
+  fitNoteImageFrame,
   getNoteImagePanBounds,
   normalizeNoteImageCrop,
 } from "@/lib/note-image-crop";
@@ -24,5 +25,15 @@ describe("normalizeNoteImageCrop", () => {
       300,
       600,
     )).toEqual({ scale: 1, x: 0.5, y: 0 });
+  });
+
+  test("preserves and bounds a saved frame aspect ratio", () => {
+    expect(normalizeNoteImageCrop({ scale: 1, x: 0, y: 0, aspectRatio: 0.25 }))
+      .toEqual({ scale: 1, x: 0, y: 0, aspectRatio: 0.4 });
+  });
+
+  test("fits the saved frame inside portrait and landscape playback areas", () => {
+    expect(fitNoteImageFrame(390, 844, 0.5)).toEqual({ width: 390, height: 780 });
+    expect(fitNoteImageFrame(844, 390, 0.5)).toEqual({ width: 195, height: 390 });
   });
 });

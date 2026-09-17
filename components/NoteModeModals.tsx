@@ -21,6 +21,7 @@ import type { NoteImageCrop } from "@/lib/storage";
 import { getNoteSourceMode } from "@/lib/note-mode-sources";
 import {
   clampNoteImageCropToFrame,
+  fitNoteImageFrame,
   getNoteImagePanBounds,
   normalizeNoteImageCrop,
 } from "@/lib/note-image-crop";
@@ -111,15 +112,20 @@ export function ImageFramingModal({ visible, uri, crop, onCancel, onConfirm, onR
   const [scale, setScale] = useState(crop?.scale ?? 1);
   const [x, setX] = useState(crop?.x ?? 0);
   const [y, setY] = useState(crop?.y ?? 0);
+  const screenAspectRatio = Math.max(0.4, Math.min(2.2, width / Math.max(1, height)));
+  const [aspectRatio, setAspectRatio] = useState(crop?.aspectRatio ?? screenAspectRatio);
+  const wasVisible = React.useRef(false);
+  const initializedCrop = React.useRef(crop);
   const [imageSize, setImageSize] = useState<{ uri: string | null; width: number; height: number }>({
     uri: null,
     width: 0,
     height: 0,
   });
-  const preview = Math.min(width - 48, 360);
-  const previewHeight = width > height
-    ? Math.min(preview * 0.62, height * 0.5)
-    : Math.min(preview * 1.3, height * 0.58);
+  const maxPreviewWidth = Math.min(width - 48, 360);
+  const maxPreviewHeight = Math.min(height * 0.54, 520);
+  const fittedPreview = fitNoteImageFrame(maxPreviewWidth, maxPreviewHeight, aspectRatio);
+  const preview = fittedPreview.width;
+  const previewHeight = fittedPreview.height;
   const start = React.useRef({ x: 0, y: 0 });
   const clampPosition = React.useCallback((nextX: number, nextY: number, nextScale = scale) => {
     if (imageSize.uri !== uri || imageSize.width <= 0 || imageSize.height <= 0) {
@@ -152,7 +158,16 @@ export function ImageFramingModal({ visible, uri, crop, onCancel, onConfirm, onR
       );
     },
   }), [clampPosition, preview, previewHeight, x, y]);
-  React.useEffect(() => { if (visible) { setScale(crop?.scale ?? 1); setX(crop?.x ?? 0); setY(crop?.y ?? 0); } }, [visible, crop]);
+  React.useEffect(() => {
+    if (visible && (!wasVisible.current || initializedCrop.current !== crop)) {
+      setScale(crop?.scale ?? 1);
+      setX(crop?.x ?? 0);
+      setY(crop?.y ?? 0);
+      setAspectRatio(crop?.aspectRatio ?? screenAspectRatio);
+    }
+    wasVisible.current = visible;
+    initializedCrop.current = crop;
+  }, [visible, crop, screenAspectRatio]);
   React.useEffect(() => {
     if (!visible) return;
     let active = true;
@@ -185,6 +200,11 @@ export function ImageFramingModal({ visible, uri, crop, onCancel, onConfirm, onR
     const step = 0.04;
     clampPosition(x + dx * step, y + dy * step);
   };
+  const changeAspectRatio = (delta: number) => {
+    setAspectRatio((current) =>
+      Math.max(0.4, Math.min(2.2, Number((current + delta).toFixed(2)))),
+    );
+  };
   const bounds = imageSize.uri === uri
     ? getNoteImagePanBounds(imageSize.width, imageSize.height, preview, previewHeight, scale)
     : { x: 0, y: 0 };
@@ -193,6 +213,19 @@ export function ImageFramingModal({ visible, uri, crop, onCancel, onConfirm, onR
       <View accessibilityViewIsModal style={styles.frameContent}>
       <View style={styles.sheetHeader}><View style={{ flex: 1 }}><Text style={[styles.title, { color: C.text }]}>{t("noteMode", "framePhoto")}</Text><Text style={[styles.subtitle, { color: C.textTertiary }]}>{t("noteMode", "frameHint")}</Text></View><Pressable accessibilityRole="button" accessibilityLabel={t("main", "cancel")} onPress={onCancel}><Ionicons name="close" size={24} color={C.textSecondary} /></Pressable></View>
        <View {...pan.panHandlers} style={[styles.frame, { width: preview, height: previewHeight, borderColor: C.accent }]}><View pointerEvents="none" style={{ width: "100%", height: "100%" }}><Image source={{ uri }} resizeMode="cover" style={{ width: "100%", height: "100%", transform: [{ scale }, { translateX: x * preview }, { translateY: y * previewHeight }] }} /></View></View>
+       <View style={styles.frameRatioRow}>
+         <Text style={{ color: C.textSecondary }}>{t("noteMode", "frameSize")}</Text>
+         <Pressable accessibilityRole="button" accessibilityLabel={t("noteMode", "frameTaller")} onPress={() => changeAspectRatio(-0.1)} style={[styles.ratioButton, { borderColor: C.border }]}>
+           <Ionicons name="contract-outline" size={18} color={C.accent} />
+         </Pressable>
+         <Pressable accessibilityRole="button" accessibilityLabel={t("noteMode", "matchScreen")} onPress={() => setAspectRatio(screenAspectRatio)} style={[styles.screenRatioButton, { borderColor: C.accent }]}>
+           <Ionicons name="phone-portrait-outline" size={16} color={C.accent} />
+           <Text style={{ color: C.accent, fontWeight: "700", fontSize: 12 }}>{t("noteMode", "matchScreen")}</Text>
+         </Pressable>
+         <Pressable accessibilityRole="button" accessibilityLabel={t("noteMode", "frameWider")} onPress={() => changeAspectRatio(0.1)} style={[styles.ratioButton, { borderColor: C.border }]}>
+           <Ionicons name="expand-outline" size={18} color={C.accent} />
+         </Pressable>
+       </View>
       <View style={styles.zoomRow}><Text style={{ color: C.textSecondary }}>{t("noteMode", "zoom")}</Text><Pressable accessibilityRole="button" accessibilityLabel={t("noteMode", "zoomOut")} onPress={() => changeScale(-0.1)}><Ionicons name="remove-circle-outline" size={28} color={C.accent} /></Pressable><Text style={{ color: C.accent, fontWeight: "700" }}>{Math.round(scale * 100)}%</Text><Pressable accessibilityRole="button" accessibilityLabel={t("noteMode", "zoomIn")} onPress={() => changeScale(0.1)}><Ionicons name="add-circle-outline" size={28} color={C.accent} /></Pressable></View>
       <View style={styles.nudgeRow}>
         <Pressable disabled={bounds.x === 0} accessibilityRole="button" accessibilityLabel={t("noteMode", "moveLeft")} onPress={() => nudge(-1, 0)} style={styles.nudgeButton}><Ionicons name="arrow-back" size={20} color={bounds.x === 0 ? C.textTertiary : C.accent} /></Pressable>
@@ -200,7 +233,7 @@ export function ImageFramingModal({ visible, uri, crop, onCancel, onConfirm, onR
         <Pressable disabled={bounds.y === 0} accessibilityRole="button" accessibilityLabel={t("noteMode", "moveDown")} onPress={() => nudge(0, 1)} style={styles.nudgeButton}><Ionicons name="arrow-down" size={20} color={bounds.y === 0 ? C.textTertiary : C.accent} /></Pressable>
         <Pressable disabled={bounds.x === 0} accessibilityRole="button" accessibilityLabel={t("noteMode", "moveRight")} onPress={() => nudge(1, 0)} style={styles.nudgeButton}><Ionicons name="arrow-forward" size={20} color={bounds.x === 0 ? C.textTertiary : C.accent} /></Pressable>
       </View>
-      <View style={styles.actions}><Pressable accessibilityRole="button" accessibilityLabel={t("main", "cancel")} onPress={onCancel} style={[styles.action, { borderColor: C.border }]}><Text style={{ color: C.textSecondary }}>{t("main", "cancel")}</Text></Pressable>{onRemove && <Pressable accessibilityRole="button" accessibilityLabel={t("noteMode", "removePhoto")} onPress={onRemove} style={[styles.action, { borderColor: C.danger }]}><Text style={{ color: C.danger }}>{t("noteMode", "removePhoto")}</Text></Pressable>}<Pressable accessibilityRole="button" accessibilityLabel={t("noteMode", "applyFrame")} onPress={() => onConfirm({ scale, x, y })} style={[styles.action, { backgroundColor: C.accent }]}><Text style={{ color: C.background, fontWeight: "700" }}>{t("noteMode", "applyFrame")}</Text></Pressable></View>
+      <View style={styles.actions}><Pressable accessibilityRole="button" accessibilityLabel={t("main", "cancel")} onPress={onCancel} style={[styles.action, { borderColor: C.border }]}><Text style={{ color: C.textSecondary }}>{t("main", "cancel")}</Text></Pressable>{onRemove && <Pressable accessibilityRole="button" accessibilityLabel={t("noteMode", "removePhoto")} onPress={onRemove} style={[styles.action, { borderColor: C.danger }]}><Text style={{ color: C.danger }}>{t("noteMode", "removePhoto")}</Text></Pressable>}<Pressable accessibilityRole="button" accessibilityLabel={t("noteMode", "applyFrame")} onPress={() => onConfirm({ scale, x, y, aspectRatio })} style={[styles.action, { backgroundColor: C.accent }]}><Text style={{ color: C.background, fontWeight: "700" }}>{t("noteMode", "applyFrame")}</Text></Pressable></View>
       </View>
     </ScrollView></View>
   </Modal>;
@@ -212,6 +245,9 @@ const styles = StyleSheet.create({
   frameSheet: { maxHeight: "94%", borderRadius: 22, borderWidth: 1 },
   frameSheetContent: { padding: 18, alignItems: "center" },
   frameContent: { width: "100%", alignItems: "center" },
+  frameRatioRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 10 },
+  ratioButton: { width: 34, height: 32, borderWidth: 1, borderRadius: 8, alignItems: "center", justifyContent: "center" },
+  screenRatioButton: { height: 32, paddingHorizontal: 10, borderWidth: 1, borderRadius: 8, flexDirection: "row", alignItems: "center", gap: 5 },
   sheetHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 },
   title: { fontFamily: "SpaceGrotesk_700Bold", fontSize: 20 },
   subtitle: { marginTop: 3, fontSize: 12 },

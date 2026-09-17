@@ -29,7 +29,7 @@ import type { ScoreDocument } from "@/lib/score-types";
 import { ScoreRenderer } from "@/components/ScoreRenderer";
 import { ImageFramingModal, PracticeSourcePickerModal } from "@/components/NoteModeModals";
 import { reconcileNoteSources } from "@/lib/note-mode-sources";
-import { clampNoteImageCropToFrame } from "@/lib/note-image-crop";
+import { clampNoteImageCropToFrame, fitNoteImageFrame, normalizeNoteImageCrop } from "@/lib/note-image-crop";
 import type { NoteImageCrop } from "@/lib/storage";
 import { BarPlayButton } from "@/components/BarPlayButton";
 
@@ -54,7 +54,7 @@ interface NoteModeViewProps {
   onSave: () => Promise<boolean>;
   onReset: () => void;
   onExitNoteMode: () => void;
-  onQueueItemImageChange?: (index: number, imageUri: string | undefined, crop?: { scale: number; x: number; y: number }) => void;
+  onQueueItemImageChange?: (index: number, imageUri: string | undefined, crop?: NoteImageCrop) => void;
   onLoadPracticeSources?: () => Promise<PracticeEntry[]>;
   onSourceSelectionChange?: (entries: PracticeEntry[]) => void;
   onOpenSettings?: () => void;
@@ -187,6 +187,7 @@ function FramedPracticeImage({
 }) {
   const [frame, setFrame] = useState({ width: 0, height: 0 });
   const [image, setImage] = useState({ width: 0, height: 0 });
+  const { colors: C } = useTheme();
 
   useEffect(() => {
     let active = true;
@@ -214,34 +215,48 @@ function FramedPracticeImage({
     );
   }, []);
 
+  const normalizedCrop = normalizeNoteImageCrop(crop);
+  const fittedFrame = normalizedCrop?.aspectRatio
+    ? fitNoteImageFrame(frame.width, frame.height, normalizedCrop.aspectRatio)
+    : frame;
   const safeCrop = clampNoteImageCropToFrame(
-    crop ?? { scale: 1, x: 0, y: 0 },
+    normalizedCrop ?? { scale: 1, x: 0, y: 0 },
     image.width,
     image.height,
-    frame.width,
-    frame.height,
+    fittedFrame.width,
+    fittedFrame.height,
   );
 
   return (
     <View
       pointerEvents="none"
       onLayout={handleLayout}
-      style={[style, { overflow: "hidden" }]}
+      style={[style, { overflow: "hidden", backgroundColor: C.background }]}
     >
-      <Image
-        source={{ uri }}
-        resizeMode="cover"
-        style={[
-          StyleSheet.absoluteFillObject,
-          {
-            transform: [
-              { scale: safeCrop.scale },
-              { translateX: safeCrop.x * frame.width },
-              { translateY: safeCrop.y * frame.height },
-            ],
-          },
-        ]}
-      />
+      <View
+        style={{
+          width: fittedFrame.width || "100%",
+          height: fittedFrame.height || "100%",
+          alignSelf: "center",
+          marginTop: fittedFrame.height ? (frame.height - fittedFrame.height) / 2 : 0,
+          overflow: "hidden",
+        }}
+      >
+        <Image
+          source={{ uri }}
+          resizeMode="cover"
+          style={[
+            StyleSheet.absoluteFillObject,
+            {
+              transform: [
+                { scale: safeCrop.scale },
+                { translateX: safeCrop.x * fittedFrame.width },
+                { translateY: safeCrop.y * fittedFrame.height },
+              ],
+            },
+          ]}
+        />
+      </View>
     </View>
   );
 }
@@ -273,8 +288,8 @@ function QueueItem({
   onMoveUp: () => void;
   onMoveDown: () => void;
   onImageChange?: (imageUri: string | undefined) => void;
-  onImageFrame?: (imageUri: string | undefined, crop?: { scale: number; x: number; y: number }) => void;
-  imageCrop?: { scale: number; x: number; y: number };
+  onImageFrame?: (imageUri: string | undefined, crop?: NoteImageCrop) => void;
+  imageCrop?: NoteImageCrop;
   currentMeasureIdx?: number;
   previewUnit?: "measure" | "phrase";
   phraseSize?: number;

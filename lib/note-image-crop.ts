@@ -20,6 +20,9 @@ export function normalizeNoteImageCrop(value: unknown): NoteImageCrop | undefine
     scale: clamp(crop.scale, 1, 3),
     x: clamp(crop.x, -0.5, 0.5),
     y: clamp(crop.y, -0.5, 0.5),
+    ...(typeof crop.aspectRatio === "number" && Number.isFinite(crop.aspectRatio)
+      ? { aspectRatio: clamp(crop.aspectRatio, 0.4, 2.2) }
+      : {}),
   };
 }
 
@@ -67,5 +70,20 @@ export function clampNoteImageCropToFrame(
     scale: normalized.scale,
     x: clamp(normalized.x, -bounds.x, bounds.x),
     y: clamp(normalized.y, -bounds.y, bounds.y),
+    ...(normalized.aspectRatio ? { aspectRatio: normalized.aspectRatio } : {}),
   };
+}
+
+export function fitNoteImageFrame(
+  containerWidth: number,
+  containerHeight: number,
+  aspectRatio: number,
+): { width: number; height: number } {
+  if (containerWidth <= 0 || containerHeight <= 0 || aspectRatio <= 0) {
+    return { width: 0, height: 0 };
+  }
+  if (containerWidth / containerHeight > aspectRatio) {
+    return { width: containerHeight * aspectRatio, height: containerHeight };
+  }
+  return { width: containerWidth, height: containerWidth / aspectRatio };
 }

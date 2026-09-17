@@ -306,7 +306,7 @@ describe("Note image framing lifecycle", () => {
     });
     const onConfirm = jest.fn();
     const crop = { scale: 1, x: 0.4, y: 0 };
-    const { getByText } = render(
+    const { getByText, getByTestId } = render(
       <ImageFramingModal
         visible
         uri="file:///panorama.jpg"
@@ -321,6 +321,61 @@ describe("Note image framing lifecycle", () => {
     });
     fireEvent.click(getByText("applyFrame").closest("button")!);
 
-    expect(onConfirm).toHaveBeenCalledWith(crop);
+    expect(onConfirm).toHaveBeenCalledWith({
+      ...crop,
+      aspectRatio: 390 / 844,
+    });
+  });
+
+  it("saves a changed frame size", () => {
+    (Image as any).getSize = jest.fn((
+      _uri: string,
+      onSuccess: (width: number, height: number) => void,
+    ) => onSuccess(1000, 500));
+    const onConfirm = jest.fn();
+    const { getByText, getByTestId } = render(
+      <ImageFramingModal
+        visible
+        uri="file:///panorama.jpg"
+        onCancel={jest.fn()}
+        onConfirm={onConfirm}
+      />,
+    );
+
+    fireEvent.click(getByTestId("icon-expand-outline").closest("button")!);
+    fireEvent.click(getByText("applyFrame").closest("button")!);
+
+    expect(onConfirm).toHaveBeenCalledWith(expect.objectContaining({
+      aspectRatio: Number((390 / 844 + 0.1).toFixed(2)),
+    }));
+  });
+
+  it("keeps draft framing when the screen rotates", () => {
+    (Image as any).getSize = jest.fn((
+      _uri: string,
+      onSuccess: (width: number, height: number) => void,
+    ) => onSuccess(1000, 500));
+    const onConfirm = jest.fn();
+    const modal = (
+      <ImageFramingModal
+        visible
+        uri="file:///panorama.jpg"
+        onCancel={jest.fn()}
+        onConfirm={onConfirm}
+      />
+    );
+    const view = render(modal);
+
+    fireEvent.click(view.getByTestId("icon-expand-outline").closest("button")!);
+    act(() => {
+      mockDimensions = { width: 844, height: 390, scale: 1, fontScale: 1 };
+      view.rerender(modal);
+    });
+    fireEvent.click(view.getByText("applyFrame").closest("button")!);
+
+    expect(onConfirm).toHaveBeenCalledWith(expect.objectContaining({
+      aspectRatio: Number((390 / 844 + 0.1).toFixed(2)),
+    }));
+    mockDimensions = { width: 390, height: 844, scale: 1, fontScale: 1 };
   });
 });

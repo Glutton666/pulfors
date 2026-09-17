@@ -442,11 +442,13 @@ test("sanitizePracticeEntry: 정상 entry는 sanitize 후 반환", () => {
   const entry = {
     id: "a", label: "t", bpm: 120, beatsPerMeasure: 4, beatTypes: [], createdAt: 1,
     imageUri: "file:///ok.jpg",
+    imageCrop: { scale: 1.2, x: 0.1, y: -0.1, aspectRatio: 0.6 },
     noteSamples: { k: "file:///ok.wav" },
   };
   const out = sanitizePracticeEntry(entry);
   assert.ok(out !== null);
   assert.equal(out!.imageUri, "file:///ok.jpg");
+  assert.deepEqual(out!.imageCrop, { scale: 1.2, x: 0.1, y: -0.1, aspectRatio: 0.6 });
   assert.equal(out!.noteSamples!.k, "file:///ok.wav");
 });
 

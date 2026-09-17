@@ -645,6 +645,8 @@ export interface NoteImageCrop {
   scale: number;
   x: number;
   y: number;
+  /** Width divided by height for the framing viewport. Legacy crops omit it. */
+  aspectRatio?: number;
 }
 
 export interface PracticeEntry {

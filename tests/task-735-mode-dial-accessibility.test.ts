@@ -34,6 +34,15 @@ test("visible mode trigger reports its expanded state and current mode", () => {
   assert.match(ui, /returnFocusRef=\{modeDialTriggerRef\}/);
 });
 
+test("idle portrait Note mode reserves a separate row below the mode trigger", () => {
+  const ui = readSource("components/MetronomeScreenUI.tsx");
+  assert.match(
+    ui,
+    /noteIsPlaying \? 4 : 48/,
+    "Note controls must start below the tappable mode label while idle",
+  );
+});
+
 test("mode dial accessibility copy exists in both languages", () => {
   for (const language of ["ko", "en"] as const) {
     const t = createT(language);
