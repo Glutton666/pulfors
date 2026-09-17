@@ -42,6 +42,7 @@ import type { SoundSet, CustomSoundSetConfig } from "@/lib/storage";
 import type { NoteSampleMap, NoteSampleChannelMap, NoteSampleMetroChannelMap, NoteSampleVolumeMap, NoteSampleSpeedMap } from "@/lib/note-samples";
 import type { SampleChannel } from "@/lib/stereo-channel";
 import { NEUTRAL, processClickPCM, type TonePosition } from "@/lib/metronome-tone-dsp";
+import type { MetronomePlaybackPlan } from "@/lib/audio-playback-plan";
 import { useAudioPlayers } from "@/hooks/useAudioPlayers";
 import type { BuiltinPlayers } from "@/hooks/useAudioPlayers";
 import {
@@ -159,13 +160,13 @@ export interface UseAudioPipelineResult {
   clearAudioWatchdogRef: React.MutableRefObject<() => void>;
   samplePlayStateRef: React.MutableRefObject<Record<string, { playing: boolean; endTimer: ReturnType<typeof setTimeout> | null }>>;
   // ── Functions ────────────────────────────────────────────────────────────
-  buildRenderedPlayer: () => Promise<ExpoAudioPlayer | null>;
+  buildRenderedPlayer: (plan?: MetronomePlaybackPlan) => Promise<ExpoAudioPlayer | null>;
   /**
    * buildRenderedPlayer과 동일한 렌더링을 수행하지만, null 하나로는 구분 못 하는
    * "다른 렌더에 의해 대체됨(aborted)"과 "진짜 렌더 실패(failed)"를 구분해 반환한다.
    * 호출자가 aborted를 실패로 오인해 불필요한 에러/폴백을 유발하지 않도록 한다.
    */
-  buildRenderedPlayerDetailed: () => Promise<
+  buildRenderedPlayerDetailed: (plan?: MetronomePlaybackPlan) => Promise<
     | { status: "ready"; player: ExpoAudioPlayer }
     | { status: "aborted" }
     | { status: "failed" }
@@ -173,9 +174,23 @@ export interface UseAudioPipelineResult {
   scheduleReRender: () => void;
   stopRenderedAudio: () => void;
   stopPlaybackAudio: () => void;
-  getClickPCMs: (set: SoundSet, signal?: AbortSignal) => Promise<ClickPCMs>;
+  getClickPCMs: (
+    set: SoundSet,
+    signal?: AbortSignal,
+    toneOverride?: Readonly<TonePosition>,
+    customConfigOverride?: Readonly<CustomSoundSetConfig> | null,
+  ) => Promise<ClickPCMs>;
   getSamplePCMs: (samples: NoteSampleMap, signal?: AbortSignal) => Promise<Map<string, SamplePCMEntry>>;
-  getLayerClickPCMsForSchedule: (ticks: TickInfo[], signal?: AbortSignal) => Promise<Map<string, ClickPCMs>>;
+  getLayerClickPCMsForSchedule: (
+    ticks: TickInfo[],
+    signal?: AbortSignal,
+    snapshot?: {
+      defaultSoundSet: SoundSet;
+      layerSoundSets: Readonly<Record<number, SoundSet>>;
+      tonePositions: Readonly<Partial<Record<SoundSet, Readonly<TonePosition>>>>;
+      customSoundSets: Readonly<Record<string, Readonly<CustomSoundSetConfig>>>;
+    },
+  ) => Promise<Map<string, ClickPCMs>>;
   invalidateSamplePCMCache: (key?: string) => void;
   preloadNoteSampleSounds: (samples: NoteSampleMap, keepExisting?: boolean) => Promise<void>;
   cancelNoteSamplePreload: () => void;
@@ -480,16 +495,23 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
     }
   }, []);
 
-  const getClickPCMs = useCallback(async (set: SoundSet, signal?: AbortSignal): Promise<ClickPCMs> => {
-    if (clickPCMCacheRef.current[set]) return clickPCMCacheRef.current[set];
+  const getClickPCMs = useCallback(async (
+    set: SoundSet,
+    signal?: AbortSignal,
+    toneOverride?: Readonly<TonePosition>,
+    customConfigOverride?: Readonly<CustomSoundSetConfig> | null,
+  ): Promise<ClickPCMs> => {
+    if (!toneOverride && clickPCMCacheRef.current[set]) return clickPCMCacheRef.current[set];
     const shape = (pcm: Float32Array) =>
       processClickPCM(
         pcm,
-        tonePositionsRef
+        toneOverride ?? (tonePositionsRef
           ? tonePositionsRef.current[set] ?? NEUTRAL
-          : tonePositionRef?.current ?? NEUTRAL,
+          : tonePositionRef?.current ?? NEUTRAL),
       ) as Float32Array;
-    const customCfg = customSoundSetsRef.current[set];
+    const customCfg = customConfigOverride === undefined
+      ? customSoundSetsRef.current[set]
+      : customConfigOverride ?? undefined;
     if (customCfg) {
       const loadSample = async (cfg: any) => {
         if (cfg.type === "custom" && cfg.sampleUri) {
@@ -515,13 +537,13 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
       };
       const [strong, high, low] = await Promise.all([loadSample(customCfg.strong), loadSample(customCfg.accent), loadSample(customCfg.normal)]);
        const result: ClickPCMs = { strong: shape(strong), high: shape(high), low: shape(low) };
-      clickPCMCacheRef.current[set] = result;
+      if (!toneOverride) clickPCMCacheRef.current[set] = result;
       return result;
     }
     const src = soundSets[set as keyof typeof soundSets] || soundSets.classic;
     const [strong, high, low] = await Promise.all([loadAssetPCM(src.strong, signal), loadAssetPCM(src.high, signal), loadAssetPCM(src.low, signal)]);
     const result: ClickPCMs = { strong: shape(strong), high: shape(high), low: shape(low) };
-    clickPCMCacheRef.current[set] = result;
+    if (!toneOverride) clickPCMCacheRef.current[set] = result;
     return result;
   }, [clickPCMCacheRef, customSoundSetsRef, tonePositionRef, tonePositionsRef, trimPCM]);
 
@@ -571,7 +593,16 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
     return map;
   }, [noteSamplesRef, touchSamplePCMByUri]);
 
-  const getLayerClickPCMsForSchedule = useCallback(async (ticks: TickInfo[], signal?: AbortSignal): Promise<Map<string, ClickPCMs>> => {
+  const getLayerClickPCMsForSchedule = useCallback(async (
+    ticks: TickInfo[],
+    signal?: AbortSignal,
+    snapshot?: {
+      defaultSoundSet: SoundSet;
+      layerSoundSets: Readonly<Record<number, SoundSet>>;
+      tonePositions: Readonly<Partial<Record<SoundSet, Readonly<TonePosition>>>>;
+      customSoundSets: Readonly<Record<string, Readonly<CustomSoundSetConfig>>>;
+    },
+  ): Promise<Map<string, ClickPCMs>> => {
     const soundSetByName = new Set<string>();
     const fallbackByIndex = new Map<number, string>();
     for (const tick of ticks) {
@@ -580,7 +611,9 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
         if (tick.layerSoundSet) {
           soundSetByName.add(tick.layerSoundSet);
         } else {
-          const ss = layerSoundSetsRef.current[li] || soundSetRef.current;
+          const ss = snapshot
+            ? snapshot.layerSoundSets[li] || snapshot.defaultSoundSet
+            : layerSoundSetsRef.current[li] || soundSetRef.current;
           fallbackByIndex.set(li, ss);
           soundSetByName.add(ss);
         }
@@ -588,7 +621,12 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
     }
     const loaded = new Map<string, ClickPCMs>();
     await Promise.all([...soundSetByName].map(async (ss) => {
-      const pcms = await getClickPCMs(ss as SoundSet, signal);
+      const pcms = await getClickPCMs(
+        ss as SoundSet,
+        signal,
+        snapshot ? snapshot.tonePositions[ss as SoundSet] ?? NEUTRAL : undefined,
+        snapshot ? snapshot.customSoundSets[ss] ?? null : undefined,
+      );
       loaded.set(ss, pcms);
     }));
     const map = new Map<string, ClickPCMs>(loaded);
@@ -609,7 +647,9 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
     try { player.release(); } catch {}
   }, []);
 
-  const buildRenderedPlayerDetailed = useCallback(async (): Promise<
+  const buildRenderedPlayerDetailed = useCallback(async (
+    plan?: MetronomePlaybackPlan,
+  ): Promise<
     | { status: "ready"; player: ExpoAudioPlayer }
     | { status: "aborted" }
     | { status: "failed" }
@@ -620,12 +660,37 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
     const signal = beginAbortableRender(renderGenerationRef);
     outputStateRef.current.transition("rendering");
     try {
+      const audio = plan?.audio ?? {
+        soundSet: soundSetRef.current,
+        volume: volumeRef.current,
+        sampleVolume: sampleVolumeRef.current,
+        tonePosition: tonePositionRef?.current,
+        tonePositions: tonePositionsRef?.current ?? {},
+        customSoundSets: customSoundSetsRef.current,
+        noteSamples: noteSamplesRef.current,
+        noteSampleChannels: noteSampleChannelsRef.current,
+        noteSampleVolumes: noteSampleVolumesRef.current,
+        noteSampleSpeeds: noteSampleSpeedsRef.current,
+        metronomeChannel: barModeRef.current ? barMetronomeChannelRef.current : "both" as const,
+        noteSampleMetroChannels: noteSampleMetroChannelsRef.current,
+        layerSoundSets: layerSoundSetsRef.current,
+      };
       const scheduleInfo = engine.getScheduleInfo();
       const ticks = scheduleInfo.ticks as TickInfo[];
       const [clickPCMs, layerClickPCMs, samplePCMs] = await Promise.all([
-        getClickPCMs(soundSetRef.current, signal),
-        getLayerClickPCMsForSchedule(ticks, signal),
-        getSamplePCMs(noteSamplesRef.current, signal),
+        getClickPCMs(
+          audio.soundSet,
+          signal,
+          plan ? audio.tonePosition ?? NEUTRAL : undefined,
+          plan ? audio.customSoundSets[audio.soundSet] ?? null : undefined,
+        ),
+        getLayerClickPCMsForSchedule(ticks, signal, plan ? {
+          defaultSoundSet: audio.soundSet,
+          layerSoundSets: audio.layerSoundSets,
+          tonePositions: audio.tonePositions,
+          customSoundSets: audio.customSoundSets,
+        } : undefined),
+        getSamplePCMs(audio.noteSamples, signal),
       ]);
       if (generation !== renderGenerationRef.current) return { status: "aborted" };
       await new Promise(r => setTimeout(r, 0));
@@ -635,13 +700,15 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
         measureDurationMs: scheduleInfo.durationMs,
         clickPCMs,
         samplePCMs,
-        clickVolume: getClickRenderVolume(volumeRef.current),
-        sampleVolume: samplePCMs.size > 0 ? sampleVolumeRef.current : 0,
-        sampleVolumes: noteSampleVolumesRef.current,
-        sampleSpeeds: noteSampleSpeedsRef.current,
-        sampleChannels: noteSampleChannelsRef.current,
-        metronomeChannel: barModeRef.current ? barMetronomeChannelRef.current : "both",
-        metroChannelsByBeat: barModeRef.current ? noteSampleMetroChannelsRef.current : undefined,
+        clickVolume: getClickRenderVolume(audio.volume),
+        sampleVolume: samplePCMs.size > 0 ? audio.sampleVolume : 0,
+        sampleVolumes: audio.noteSampleVolumes,
+        sampleSpeeds: audio.noteSampleSpeeds,
+        sampleChannels: audio.noteSampleChannels,
+        metronomeChannel: audio.metronomeChannel,
+        metroChannelsByBeat: plan
+          ? plan.mode === "bar" ? audio.noteSampleMetroChannels : undefined
+          : barModeRef.current ? audio.noteSampleMetroChannels : undefined,
         layerClickPCMs,
       }, signal);
       const wavUri = await saveRenderedWav(pcm);
@@ -670,7 +737,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
       // pre-rendered 루프로 전환되는 순간 항상 최대 볼륨으로 재생됐다
       // (2026-08-25 확인). per-tick 풀 플레이어(setPoolsVolume)와 동일하게
       // 실제 볼륨을 반영한다.
-      player.volume = getClickOutputVolume(volumeRef.current);
+      player.volume = getClickOutputVolume(audio.volume);
       outputStateRef.current.transition("prerender");
       return { status: "ready", player };
     } catch (e) {
@@ -698,8 +765,10 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
     volumeRef,
   ]);
 
-  const buildRenderedPlayer = useCallback(async (): Promise<ExpoAudioPlayer | null> => {
-    const result = await buildRenderedPlayerDetailed();
+  const buildRenderedPlayer = useCallback(async (
+    plan?: MetronomePlaybackPlan,
+  ): Promise<ExpoAudioPlayer | null> => {
+    const result = await buildRenderedPlayerDetailed(plan);
     return result.status === "ready" ? result.player : null;
   }, [buildRenderedPlayerDetailed]);
 

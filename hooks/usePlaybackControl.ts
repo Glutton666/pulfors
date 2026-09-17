@@ -2,8 +2,7 @@ import { useCallback, useEffect, useRef } from "react";
 import { Platform } from "react-native";
 import * as Haptics from "expo-haptics";
 import { safePlayAndConfirm } from "@/lib/audio-utils";
-import { toEngineBpm, soundSets } from "@/lib/metronome-engine";
-import { applyDialConfigToEngine } from "@/lib/dial-engine-boundary";
+import { soundSets } from "@/lib/metronome-engine";
 import {
   ensureWebClickBuffers,
   getWebAudioContext,
@@ -19,11 +18,16 @@ import {
 import type { ClickPCMs, SamplePCMEntry, TickInfo, WebRenderedLoop } from "@/lib/audio-renderer";
 import type { BeatType, MetronomeEngine } from "@/lib/metronome-engine";
 import type { BarConfig, DialConfig } from "@/lib/index.helpers";
-import type { PracticeEntry, SoundSet } from "@/lib/storage";
+import type { CustomSoundSetConfig, PracticeEntry, SoundSet } from "@/lib/storage";
 import { PracticeSessionTracker, type PracticeSessionData } from "@/lib/activity-log";
 import type { Language } from "@/lib/i18n";
 import type { SampleChannel } from "@/lib/stereo-channel";
-import { toneEffectIntensity, type TonePosition } from "@/lib/metronome-tone-dsp";
+import { NEUTRAL, type TonePosition } from "@/lib/metronome-tone-dsp";
+import {
+  applyMetronomePlaybackPlan,
+  buildPlaybackPlan,
+  type MetronomePlaybackPlan,
+} from "@/lib/audio-playback-plan";
 import type {
   NoteSampleChannelMap,
   NoteSampleMap,
@@ -80,7 +84,7 @@ export interface UsePlaybackControlParams {
   invalidateAudioStartupProbe: () => void;
   waitForFirstAudioActivity: (epoch: number, isCancelled?: () => boolean, timeoutMs?: number) => Promise<boolean>;
   renderGenerationRef: Ref<number>;
-  buildRenderedPlayer: () => Promise<AudioPlayer | null>;
+  buildRenderedPlayer: (plan?: MetronomePlaybackPlan) => Promise<AudioPlayer | null>;
   /**
    * buildRenderedPlayer의 null만으로는 "다른 렌더에 의해 대체됨(aborted)"과
    * "진짜 렌더 실패(failed)"를 구분할 수 없어, 대체된 경우까지 실패로 오인해
@@ -88,7 +92,7 @@ export interface UsePlaybackControlParams {
    * 우선 사용해 그 둘을 구분한다. optional인 이유는 기존 테스트 mock과의
    * 하위 호환 유지용.
    */
-  buildRenderedPlayerDetailed?: () => Promise<
+  buildRenderedPlayerDetailed?: (plan?: MetronomePlaybackPlan) => Promise<
     | { status: "ready"; player: AudioPlayer }
     | { status: "aborted" }
     | { status: "failed" }
@@ -98,17 +102,34 @@ export interface UsePlaybackControlParams {
   soundSetRef: Ref<SoundSet>;
   volumeRef: Ref<number>;
   tonePositionRef?: Ref<TonePosition>;
+  tonePositionsRef?: Ref<Partial<Record<SoundSet, TonePosition>>>;
+  customSoundSetsRef?: Ref<Record<string, CustomSoundSetConfig>>;
   sampleVolumeRef: Ref<number>;
   noteSamplesRef: Ref<NoteSampleMap>;
   noteSampleChannelsRef: Ref<NoteSampleChannelMap>;
   noteSampleVolumesRef: Ref<NoteSampleVolumeMap>;
   noteSampleSpeedsRef: Ref<NoteSampleSpeedMap>;
   webClickReadyRef: Ref<boolean>;
-  getClickPCMs: (soundSet: SoundSet, signal?: AbortSignal) => Promise<ClickPCMs>;
+  getClickPCMs: (
+    soundSet: SoundSet,
+    signal?: AbortSignal,
+    toneOverride?: Readonly<TonePosition>,
+    customConfigOverride?: Readonly<CustomSoundSetConfig> | null,
+  ) => Promise<ClickPCMs>;
   getSamplePCMs: (samples: NoteSampleMap, signal?: AbortSignal) => Promise<Map<string, SamplePCMEntry>>;
-  getLayerClickPCMsForSchedule: (ticks: TickInfo[], signal?: AbortSignal) => Promise<Map<string, ClickPCMs>>;
+  getLayerClickPCMsForSchedule: (
+    ticks: TickInfo[],
+    signal?: AbortSignal,
+    snapshot?: {
+      defaultSoundSet: SoundSet;
+      layerSoundSets: Readonly<Record<number, SoundSet>>;
+      tonePositions: Readonly<Partial<Record<SoundSet, Readonly<TonePosition>>>>;
+      customSoundSets: Readonly<Record<string, Readonly<CustomSoundSetConfig>>>;
+    },
+  ) => Promise<Map<string, ClickPCMs>>;
   barMetronomeChannelRef: Ref<SampleChannel>;
   noteSampleMetroChannelsRef: Ref<NoteSampleMetroChannelMap>;
+  layerSoundSetsRef?: Ref<Record<number, SoundSet>>;
   notifyVoicePlayState: (playing: boolean) => void;
   languageRef: Ref<Language>;
   notifyUserToggle: () => Promise<unknown> | undefined;
@@ -204,42 +225,9 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
     p.practiceStartRef.current = null;
   }, [p]);
 
-  const configureEngine = useCallback((engine: MetronomeEngine) => {
-    if (p.barModeRef.current) {
-      const cfg = p.barConfigRef.current;
-      engine.setBeatTypes([...(cfg.beatTypes || [])]);
-      engine.setAllBeatSubdivisions(cfg.beatSubdivisions || {});
-      engine.setAllBarRepeats(cfg.barRepeats || {});
-      engine.setLoopBlocks(cfg.loopBlocks || []);
-      engine.setBlockPlayMode(cfg.blockPlayMode ?? p.blockPlayModeRef.current);
-      const bpmOverrides: Record<number, number> = {};
-      for (const [key, repeat] of Object.entries(cfg.barRepeats || {})) {
-        if (repeat.bpm) {
-          bpmOverrides[Number(key)] = toEngineBpm(
-            repeat.bpm,
-            repeat.meterDenominator ?? p.beatDenominatorRef.current,
-          );
-        }
-      }
-      engine.setAllBarBpmOverrides(bpmOverrides);
-    } else {
-      // The Beat-owned ref is updated synchronously by every rhythm editor.
-      // Reading it here avoids a Bar→Beat transition applying stale shared
-      // render state before React commits the restored Beat profile.
-      const cfg = p.dialConfigRef.current;
-      applyDialConfigToEngine(engine, {
-        beatsPerMeasure: cfg.beatsPerMeasure,
-        beatTypes: [...cfg.beatTypes],
-        beatSubdivisions: Object.fromEntries(
-          Object.entries(cfg.beatSubdivisions).map(([key, pattern]) => [key, [...pattern]]),
-        ),
-      });
-    }
-    engine.buildScheduleOnly();
-  }, [p]);
-
   const renderWebLoop = useCallback(async (
     engine: MetronomeEngine,
+    plan: MetronomePlaybackPlan,
     atMeasureBoundary: boolean,
     startAtPerformanceTime?: number,
   ) => {
@@ -250,9 +238,19 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
       const scheduleInfo = engine.getScheduleInfo();
       const ticks = scheduleInfo.ticks as TickInfo[];
       const [clickPCMs, layerClickPCMs, samplePCMs] = await Promise.all([
-        p.getClickPCMs(p.soundSetRef.current, signal),
-        p.getLayerClickPCMsForSchedule(ticks, signal),
-        p.getSamplePCMs(p.noteSamplesRef.current, signal),
+        p.getClickPCMs(
+          plan.audio.soundSet,
+          signal,
+          plan.audio.tonePosition ?? NEUTRAL,
+          plan.audio.customSoundSets[plan.audio.soundSet] ?? null,
+        ),
+        p.getLayerClickPCMsForSchedule(ticks, signal, {
+          defaultSoundSet: plan.audio.soundSet,
+          layerSoundSets: plan.audio.layerSoundSets,
+          tonePositions: plan.audio.tonePositions,
+          customSoundSets: plan.audio.customSoundSets,
+        }),
+        p.getSamplePCMs(plan.audio.noteSamples, signal),
       ]);
       if (
         generation !== renderGenerationRef.current ||
@@ -263,13 +261,13 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
         measureDurationMs: scheduleInfo.durationMs,
         clickPCMs,
         samplePCMs,
-        clickVolume: getClickRenderVolume(p.volumeRef.current),
-        sampleVolume: samplePCMs.size > 0 ? p.sampleVolumeRef.current : 0,
-        sampleVolumes: p.noteSampleVolumesRef.current,
-        sampleSpeeds: p.noteSampleSpeedsRef.current,
-        sampleChannels: p.noteSampleChannelsRef.current,
-        metronomeChannel: p.barModeRef.current ? p.barMetronomeChannelRef.current : "both",
-        metroChannelsByBeat: p.barModeRef.current ? p.noteSampleMetroChannelsRef.current : undefined,
+        clickVolume: getClickRenderVolume(plan.audio.volume),
+        sampleVolume: samplePCMs.size > 0 ? plan.audio.sampleVolume : 0,
+        sampleVolumes: plan.audio.noteSampleVolumes,
+        sampleSpeeds: plan.audio.noteSampleSpeeds,
+        sampleChannels: plan.audio.noteSampleChannels,
+        metronomeChannel: plan.audio.metronomeChannel,
+        metroChannelsByBeat: plan.mode === "bar" ? plan.audio.noteSampleMetroChannels : undefined,
         layerClickPCMs,
       }, signal);
       if (atMeasureBoundary) {
@@ -304,7 +302,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
           pcm,
           undefined,
           "both",
-          getClickOutputVolume(p.volumeRef.current),
+          getClickOutputVolume(plan.audio.volume),
           startAtAudioTime,
         ));
         engine.setPreRenderedAudio(true);
@@ -364,6 +362,50 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
       stopAfterMeasure?: boolean;
     } = {},
   ): Promise<boolean> => {
+    const playbackAtStart = p.getPlaybackContext({ activeBarIndex: startBeat ?? 0 });
+    const audio = {
+      soundSet: p.soundSetRef.current,
+      volume: p.volumeRef.current,
+      sampleVolume: p.sampleVolumeRef.current,
+      tonePosition: p.tonePositionRef?.current,
+      tonePositions: p.tonePositionsRef?.current ?? {},
+      customSoundSets: p.customSoundSetsRef?.current ?? {},
+      noteSamples: p.noteSamplesRef.current,
+      noteSampleChannels: p.noteSampleChannelsRef.current,
+      noteSampleVolumes: p.noteSampleVolumesRef.current,
+      noteSampleSpeeds: p.noteSampleSpeedsRef.current,
+      metronomeChannel: p.barModeRef.current ? p.barMetronomeChannelRef.current : "both" as const,
+      noteSampleMetroChannels: p.noteSampleMetroChannelsRef.current,
+      layerSoundSets: p.layerSoundSetsRef?.current ?? {},
+    };
+    const plan = buildPlaybackPlan(
+      options.configureEngine === false || playbackAtStart.mode === "note"
+        ? {
+            mode: "note",
+            platform: Platform.OS === "web" ? "web" : "native",
+            bpm: playbackAtStart.bpm,
+            audio,
+            stopAfterMeasure: options.stopAfterMeasure ?? false,
+          }
+        : p.barModeRef.current
+        ? {
+            mode: "bar",
+            platform: Platform.OS === "web" ? "web" : "native",
+            bpm: playbackAtStart.bpm,
+            audio,
+            config: p.barConfigRef.current,
+            startBeat,
+            denominator: p.beatDenominatorRef.current,
+            blockPlayMode: p.blockPlayModeRef.current,
+          }
+        : {
+            mode: "beat",
+            platform: Platform.OS === "web" ? "web" : "native",
+            bpm: playbackAtStart.bpm,
+            audio,
+            config: p.dialConfigRef.current,
+          },
+    );
     const attempt = ++startAttemptRef.current;
     const startupEpoch = p.beginAudioStartupProbe();
     let deadline = Date.now() + 8000;
@@ -412,7 +454,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
     p.preparingCancelledRef.current = false;
     p.stopRenderedAudio();
     if (options.configureEngine !== false) {
-      configureEngine(engine);
+      applyMetronomePlaybackPlan(engine, plan);
     }
 
     let localNativePlayer: AudioPlayer | null = null;
@@ -436,25 +478,14 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
       // subdivisions those seeks can resolve out of order across normal/accent
       // pools, so native playback always attempts one deterministic rendered loop
       // first. A render failure still falls back to the realtime callbacks below.
-      const tonePosition = p.tonePositionRef?.current;
-      // toneEffectIntensity()가 정의하는 것과 같은 중심부 데드존(0.05)을 존중한다.
-      // 좌표가 정확히 0이 아니어도 그 데드존 안이면 DSP가 실제로는 완전히 중립과
-      // 동일한 소리를 내므로(processClickPCM의 intensity===0 우회 경로), 여기서도
-      // "톤 조정됨"으로 취급하지 않아야 불필요하게 더 취약한 렌더 경로로 몰지 않는다.
-      const hasToneShaping = tonePosition
-        ? toneEffectIntensity(tonePosition) > 0
-        : false;
-      const useRenderedLoop = Platform.OS === "web"
-        ? p.barModeRef.current || String(p.soundSetRef.current).startsWith("custom")
-          || p.volumeRef.current > 1 || hasToneShaping
-        : true;
+      const useRenderedLoop = plan.output.strategy === "prerender";
 
       if (Platform.OS === "web") {
         const context = getWebAudioContext();
         if (context?.state === "suspended") {
           await awaitWithin(context.resume(), "Web AudioContext resume");
         }
-        const source = soundSets[p.soundSetRef.current as keyof typeof soundSets] || soundSets.classic;
+        const source = soundSets[plan.audio.soundSet as keyof typeof soundSets] || soundSets.classic;
         const buffersReady = p.webClickReadyRef.current ||
           await awaitWithin(ensureWebClickBuffers(source as never).catch(() => false), "Web click buffers");
         if (!buffersReady) throw new Error("Web click buffers were not ready");
@@ -468,7 +499,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
 
         if (useRenderedLoop) {
           await awaitWithin(
-            renderWebLoop(engine, false, startAtPerformanceTime),
+            renderWebLoop(engine, plan, false, startAtPerformanceTime),
             "Web rendered loop",
           );
           if (cancelled()) {
@@ -483,7 +514,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
           engine.setPreRenderedAudio(false);
           const ticks = engine.getScheduleInfo().ticks as TickInfo[];
           const expectsAudio = ticks.some((tick) => tick.type !== "mute") ||
-            Object.keys(p.noteSamplesRef.current).length > 0;
+            Object.keys(plan.audio.noteSamples).length > 0;
           startEngine();
           await waitForScheduledStart();
           const active = !expectsAudio || await p.waitForFirstAudioActivity(
@@ -503,8 +534,8 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
         // 취소/에러가 나도 releaseLocalNativePlayer()가 확실히 정리한다.
         const detailedResult = useRenderedLoop
           ? p.buildRenderedPlayerDetailed
-            ? await awaitWithin(p.buildRenderedPlayerDetailed(), "Native rendered player")
-            : await awaitWithin(p.buildRenderedPlayer(), "Native rendered player").then(
+            ? await awaitWithin(p.buildRenderedPlayerDetailed(plan), "Native rendered player")
+            : await awaitWithin(p.buildRenderedPlayer(plan), "Native rendered player").then(
                 (built): { status: "ready"; player: AudioPlayer } | { status: "failed" } =>
                   built ? { status: "ready" as const, player: built } : { status: "failed" as const },
               )
@@ -551,13 +582,13 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
           cancelPlaybackAttempt(false);
           return false;
         } else {
-          if (p.volumeRef.current > 1 || hasToneShaping) {
+          if (plan.output.boosted || plan.output.toneShaped) {
             throw new Error("Boosted or tone-shaped native playback requires rendered audio");
           }
           engine.setPreRenderedAudio(false);
           const ticks = engine.getScheduleInfo().ticks as TickInfo[];
           const expectsAudio = ticks.some((tick) => tick.type !== "mute") ||
-            Object.keys(p.noteSamplesRef.current).length > 0;
+            Object.keys(plan.audio.noteSamples).length > 0;
           await waitForScheduledStart();
           if (cancelled()) {
             return false;
@@ -581,11 +612,10 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
       p.notifyVoicePlayState(true);
       markAudioPlaying();
       p.armAudioWatchdogRef.current();
-      const playback = p.getPlaybackContext({ activeBarIndex: startBeat ?? 0 });
-      p.showPlayingNotification(playback.bpm, playback.modeLabel, p.languageRef.current);
+      p.showPlayingNotification(plan.bpm, playbackAtStart.modeLabel, p.languageRef.current);
       startOrResumePracticeSession();
       if (
-        options.stopAfterMeasure ||
+        plan.mode === "note" && plan.unit.stopAfterMeasure ||
         (p.barModeRef.current && p.barLoopModeRef.current === "once")
       ) {
         engine.requestStopAfterMeasure();
@@ -601,7 +631,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
       cancelPlaybackAttempt(true);
       return false;
     }
-  }, [cancelPlaybackAttempt, configureEngine, p, renderWebLoop, startOrResumePracticeSession]);
+  }, [cancelPlaybackAttempt, p, renderWebLoop, startOrResumePracticeSession]);
 
   const togglePlayPause = useCallback(async () => {
     const engine = p.engineRef.current;

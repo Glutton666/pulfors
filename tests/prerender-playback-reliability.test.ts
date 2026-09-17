@@ -30,6 +30,10 @@ const mockDecodeSampleFile = jest.fn(async (_uri: string) => new Float32Array([0
 const mockCreateAudioPlayer = jest.fn((_source: unknown) => ({ ...mockPlayer }));
 const mockApplyDialConfigToEngine = jest.fn();
 const mockScheduleWebClickAt = jest.fn((..._args: unknown[]) => null as any);
+const mockProcessClickPCM = jest.fn((
+  pcm: Float32Array,
+  _position: { x: number; y: number },
+) => pcm);
 
 jest.mock("expo-audio", () => ({
   createAudioPlayer: (source: unknown) => mockCreateAudioPlayer(source),
@@ -86,6 +90,13 @@ jest.mock("@/lib/metronome-engine", () => ({
   soundSets: {
     classic: { strong: "strong.wav", high: "high.wav", low: "low.wav" },
   },
+}));
+
+jest.mock("@/lib/metronome-tone-dsp", () => ({
+  NEUTRAL: { x: 0, y: 0 },
+  processClickPCM: (pcm: Float32Array, position: { x: number; y: number }) =>
+    mockProcessClickPCM(pcm, position),
+  toneEffectIntensity: ({ x, y }: { x: number; y: number }) => Math.max(Math.abs(x), Math.abs(y)),
 }));
 
 jest.mock("@/lib/dial-engine-boundary", () => ({
@@ -225,6 +236,155 @@ describe("pre-rendered playback reliability", () => {
     }));
     expect(mockRenderMeasure.mock.calls[0][0].samplePCMs.has("0-0")).toBe(true);
     expect(player?.volume).toBe(0.35);
+  });
+
+  it("native builder keeps the supplied start snapshot while refs change during decoding", async () => {
+    const engine = makeEngine();
+    let resolveDecode!: (pcm: Float32Array<ArrayBuffer>) => void;
+    mockDecodeSampleFile.mockImplementationOnce(
+      () => new Promise<Float32Array<ArrayBuffer>>((resolve) => { resolveDecode = resolve; }),
+    );
+    const params = {
+      engineRef: { current: engine },
+      soundSet: "classic",
+      soundSetRef: { current: "classic" },
+      customSoundSetsRef: { current: {} },
+      layerSoundSetsRef: { current: {} },
+      noteSamplesRef: { current: { "0-0": "file:///start.wav" } },
+      noteSampleChannelsRef: { current: { "0-0": "left" } },
+      noteSampleVolumesRef: { current: { "0-0": 0.25 } },
+      noteSampleSpeedsRef: { current: { "0-0": 0.75 } },
+      barModeRef: { current: true },
+      barMetronomeChannelRef: { current: "right" },
+      noteSampleMetroChannelsRef: { current: { "0": "left" } },
+      volume: 0.4,
+      volumeRef: { current: 0.4 },
+      tonePositionRef: { current: { x: 0, y: 0 } },
+      sampleVolumeRef: { current: 0.6 },
+      clickPCMCacheRef: { current: {} },
+      webClickReadyRef: { current: false },
+      noteSampleSoundsRef: { current: {} },
+      renderGenerationRef: { current: 0 },
+      isPlayingRef: { current: false },
+      bpmRef: { current: 120 },
+      t: (key: string) => key,
+      showRecoveryToast: jest.fn(),
+      persistAudioSettingsCallbackRef: { current: jest.fn() },
+    } as any;
+    const snapshot = {
+      soundSet: "classic",
+      volume: 0.4,
+      sampleVolume: 0.6,
+      tonePosition: { x: 0, y: 0 },
+      tonePositions: { classic: { x: 0, y: 0 } },
+      customSoundSets: {},
+      noteSamples: { "0-0": "file:///start.wav" },
+      noteSampleChannels: { "0-0": "left" },
+      noteSampleVolumes: { "0-0": 0.25 },
+      noteSampleSpeeds: { "0-0": 0.75 },
+      metronomeChannel: "both",
+      noteSampleMetroChannels: { "0": "left" },
+      layerSoundSets: { "1": "classic" },
+    } as any;
+    const { result } = renderHook(() => useAudioPipeline(params));
+
+    let building!: Promise<unknown>;
+    act(() => {
+      building = result.current.buildRenderedPlayer({ mode: "bar", audio: snapshot } as any);
+    });
+    params.volumeRef.current = 0.95;
+    params.sampleVolumeRef.current = 1;
+    params.noteSampleChannelsRef.current = { "0-0": "right" };
+    params.noteSampleVolumesRef.current = { "0-0": 1 };
+    params.noteSampleSpeedsRef.current = { "0-0": 2 };
+    params.barMetronomeChannelRef.current = "left";
+    resolveDecode(new Float32Array([0.8, 0.4]));
+    await act(async () => { await building; });
+
+    expect(mockRenderMeasure).toHaveBeenCalledWith(expect.objectContaining({
+      clickVolume: 3.2,
+      sampleVolume: 0.6,
+      sampleChannels: { "0-0": "left" },
+      sampleVolumes: { "0-0": 0.25 },
+      sampleSpeeds: { "0-0": 0.75 },
+      metronomeChannel: "both",
+      metroChannelsByBeat: { "0": "left" },
+    }));
+    expect(mockCreateAudioPlayer.mock.results.at(-1)?.value.volume).toBe(0.4);
+  });
+
+  it("resolves legacy layer sound fallbacks from the supplied start snapshot", async () => {
+    const engine = makeEngine();
+    const customRole = (uri: string) => ({
+      type: "custom",
+      sampleUri: uri,
+      duration: 1,
+    });
+    const params = {
+      engineRef: { current: engine },
+      soundSet: "classic",
+      soundSetRef: { current: "classic" },
+      customSoundSetsRef: {
+        current: {
+          "custom-start": {
+            strong: customRole("file:///start-strong.wav"),
+            accent: customRole("file:///start-accent.wav"),
+            normal: customRole("file:///start-normal.wav"),
+          },
+          "custom-live": {
+            strong: customRole("file:///live-strong.wav"),
+            accent: customRole("file:///live-accent.wav"),
+            normal: customRole("file:///live-normal.wav"),
+          },
+        },
+      },
+      layerSoundSetsRef: { current: { 1: "custom-live" } },
+      noteSamplesRef: { current: {} },
+      noteSampleChannelsRef: { current: {} },
+      noteSampleVolumesRef: { current: {} },
+      noteSampleSpeedsRef: { current: {} },
+      barModeRef: { current: true },
+      barMetronomeChannelRef: { current: "both" },
+      noteSampleMetroChannelsRef: { current: {} },
+      volume: 0.4,
+      volumeRef: { current: 0.4 },
+      sampleVolumeRef: { current: 0.6 },
+      clickPCMCacheRef: { current: {} },
+      webClickReadyRef: { current: false },
+      noteSampleSoundsRef: { current: {} },
+      renderGenerationRef: { current: 0 },
+      isPlayingRef: { current: false },
+      bpmRef: { current: 120 },
+      t: (key: string) => key,
+      showRecoveryToast: jest.fn(),
+      persistAudioSettingsCallbackRef: { current: jest.fn() },
+    } as any;
+    const { result } = renderHook(() => useAudioPipeline(params));
+    const capturedCustomSoundSets = JSON.parse(
+      JSON.stringify(params.customSoundSetsRef.current),
+    );
+    params.customSoundSetsRef.current["custom-start"] =
+      params.customSoundSetsRef.current["custom-live"];
+
+    await result.current.getLayerClickPCMsForSchedule(
+      [{ layerIndex: 1 } as any],
+      undefined,
+      {
+        defaultSoundSet: "classic",
+        layerSoundSets: { 1: "custom-start" as any },
+        tonePositions: { ["custom-start" as any]: { x: 0.6, y: -0.2 } },
+        customSoundSets: capturedCustomSoundSets,
+      },
+    );
+
+    expect(mockDecodeSampleFile).toHaveBeenCalledWith("file:///start-strong.wav");
+    expect(mockDecodeSampleFile).toHaveBeenCalledWith("file:///start-accent.wav");
+    expect(mockDecodeSampleFile).toHaveBeenCalledWith("file:///start-normal.wav");
+    expect(mockDecodeSampleFile).not.toHaveBeenCalledWith("file:///live-strong.wav");
+    expect(mockProcessClickPCM).toHaveBeenCalledWith(
+      expect.any(Float32Array),
+      { x: 0.6, y: -0.2 },
+    );
   });
 
   it("does not restore an old decoded sample into cache after the URI changes", async () => {

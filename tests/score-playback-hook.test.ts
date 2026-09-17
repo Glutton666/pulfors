@@ -448,6 +448,55 @@ describe("useScorePlayback — edge cases (H12–H13)", () => {
   });
 });
 
+describe("useScorePlayback — live mute plan updates", () => {
+  it("applies mute and unmute to subsequent measures without restarting playback", () => {
+    (Platform as unknown as { OS: string }).OS = "web";
+    const sourceMeasure = DOC_WITH_NOTES.parts[0].measures[0];
+    const docWithMute = (muteAudio: boolean): ScoreDocument => ({
+      ...DOC_WITH_NOTES,
+      playbackSettings: { muteAudio },
+      parts: [{
+        ...DOC_WITH_NOTES.parts[0],
+        measures: [0, 1, 2].map((index) => ({
+          ...sourceMeasure,
+          id: `m${index + 1}`,
+          elements: sourceMeasure.elements.map((element) => ({
+            ...element,
+            id: `${element.id}-${index}`,
+          })),
+        })),
+      }],
+    });
+    const rafCallbacks: FrameRequestCallback[] = [];
+    rafSpy.mockImplementation((callback: FrameRequestCallback) => {
+      rafCallbacks.push(callback);
+      return rafCallbacks.length;
+    });
+    const dateNowSpy = jest.spyOn(Date, "now").mockReturnValue(0);
+    const { result, rerender } = renderHook(
+      (doc: ScoreDocument) => useScorePlayback(doc),
+      { initialProps: docWithMute(true) },
+    );
+
+    act(() => { result.current.play(); });
+    act(() => { rafCallbacks[0](0); });
+    expect(scoreAudio.scheduleMeasureNotes).not.toHaveBeenCalled();
+
+    act(() => { rerender(docWithMute(false)); });
+    dateNowSpy.mockReturnValue(2000);
+    act(() => { rafCallbacks[1](2000); });
+    expect(scoreAudio.scheduleMeasureNotes).toHaveBeenCalledTimes(1);
+
+    act(() => { rerender(docWithMute(true)); });
+    dateNowSpy.mockReturnValue(4000);
+    act(() => { rafCallbacks[2](4000); });
+    expect(scoreAudio.scheduleMeasureNotes).toHaveBeenCalledTimes(1);
+    expect(scoreAudio.stopAllScoreNotes).toHaveBeenCalled();
+
+    dateNowSpy.mockRestore();
+  });
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // H14. Unmount cleanup
 // ─────────────────────────────────────────────────────────────────────────────

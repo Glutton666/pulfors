@@ -7,6 +7,7 @@ import { Alert, Platform } from "react-native";
 import { buildPlayTimeline, findCurrentEvent, totalTimelineMs } from "@/lib/score-playback";
 import type { PlayEvent } from "@/lib/score-playback";
 import type { ScoreDocument, DrumType } from "@/lib/score-types";
+import { buildScorePlaybackPlan, type ScorePlaybackPlan } from "@/lib/audio-playback-plan";
 import { captureException } from "@/lib/error-tracking";
 import {
   getPrepareBatchSize,
@@ -48,6 +49,7 @@ export function useScorePlayback(doc: ScoreDocument): ScorePlaybackState {
   const [currentLinkedEntryId, setCurrentLinkedEntryId] = useState<string | undefined>(undefined);
 
   const timelineRef = useRef<PlayEvent[]>([]);
+  const activePlanRef = useRef<ScorePlaybackPlan | null>(null);
   const isPlayingRef = useRef(false);
   const startWallRef = useRef(0);     // Date.now() at play/resume
   const resumeOffsetRef = useRef(0);  // elapsed ms at pause
@@ -68,18 +70,6 @@ export function useScorePlayback(doc: ScoreDocument): ScorePlaybackState {
 
   // 오디오: 마디 변경 감지용 seqIdx 추적
   const lastSeqIdxRef = useRef(-1);
-
-  // muteAudio 를 ref로 유지해 tick 클로저에서 최신값 읽기
-  const muteAudioRef = useRef(doc.playbackSettings?.muteAudio ?? false);
-  useEffect(() => {
-    muteAudioRef.current = doc.playbackSettings?.muteAudio ?? false;
-  }, [doc.playbackSettings?.muteAudio]);
-
-  // doc을 ref로 유지해 tick 클로저에서 최신 마디 정보 접근
-  const docRef = useRef(doc);
-  useEffect(() => {
-    docRef.current = doc;
-  }, [doc]);
 
   const tick = useCallback(() => {
     if (!isPlayingRef.current) return;
@@ -107,7 +97,7 @@ export function useScorePlayback(doc: ScoreDocument): ScorePlaybackState {
       if (event.seqIdx !== lastSeqIdxRef.current) {
         lastSeqIdxRef.current = event.seqIdx;
 
-        if (!muteAudioRef.current && event.notes.length > 0) {
+        if (!activePlanRef.current?.unit.muteAudio && event.notes.length > 0) {
           const elapsedInMeasure = elapsed - event.startTimeMs;
           const adjustedNotes = event.notes
             .filter((n) => n.startOffsetMs >= elapsedInMeasure - LATE_THRESHOLD_MS)
@@ -121,8 +111,7 @@ export function useScorePlayback(doc: ScoreDocument): ScorePlaybackState {
         }
 
         // 현재 마디의 연결된 연습 항목 ID 추적
-        const measures = docRef.current.parts[0]?.measures;
-        const linkedId = measures?.[event.measureIdx]?.linkedPracticeEntryId ?? undefined;
+        const linkedId = activePlanRef.current?.unit.linkedEntryIds[event.measureIdx];
         setCurrentLinkedEntryId(linkedId || undefined);
       }
 
@@ -191,7 +180,16 @@ export function useScorePlayback(doc: ScoreDocument): ScorePlaybackState {
 
   const play = useCallback(() => {
     if (isPlayingRef.current || isPreparing) return;
-    const timeline = buildPlayTimeline(doc);
+    const plan = buildScorePlaybackPlan({
+      documentId: doc.id,
+      bpm: doc.bpm,
+      platform: Platform.OS === "web" ? "web" : "native",
+      timeline: buildPlayTimeline(doc),
+      linkedEntryIds: (doc.parts[0]?.measures ?? []).map((measure) => measure.linkedPracticeEntryId),
+      muteAudio: doc.playbackSettings?.muteAudio ?? false,
+    });
+    activePlanRef.current = plan;
+    const timeline = [...plan.unit.timeline];
     timelineRef.current = timeline;
     setTotalMs(totalTimelineMs(timeline));
 
@@ -250,6 +248,7 @@ export function useScorePlayback(doc: ScoreDocument): ScorePlaybackState {
     prepareParamsRef.current = null;
     startRafRef.current = null;
     isAudioReadyRef.current = false;
+    activePlanRef.current = null;
     timelineRef.current = [];
     setIsPreparing(false);
     setPrepareProgress(null);
@@ -297,7 +296,18 @@ export function useScorePlayback(doc: ScoreDocument): ScorePlaybackState {
     // Publish the replacement timeline before starting the replacement
     // preparation. Its completion callback can start RAF immediately, so the
     // ref must never briefly point at an empty timeline for that session.
-    const freshTimeline = preparingReplacement ? buildPlayTimeline(doc) : null;
+    const freshPlan = preparingReplacement
+      ? buildScorePlaybackPlan({
+          documentId: doc.id,
+          bpm: doc.bpm,
+          platform: Platform.OS === "web" ? "web" : "native",
+          timeline: buildPlayTimeline(doc),
+          linkedEntryIds: (doc.parts[0]?.measures ?? []).map((measure) => measure.linkedPracticeEntryId),
+          muteAudio: doc.playbackSettings?.muteAudio ?? false,
+        })
+      : null;
+    const freshTimeline = freshPlan ? [...freshPlan.unit.timeline] : null;
+    activePlanRef.current = freshPlan;
     isAudioReadyRef.current = false;
     timelineRef.current = freshTimeline ?? [];
     lastSeqIdxRef.current = -1;
@@ -324,6 +334,24 @@ export function useScorePlayback(doc: ScoreDocument): ScorePlaybackState {
     }
   }, [doc, playbackSignature, _runPrepare, stop]);
 
+  // Mute is a live transport control rather than structural score content.
+  // Replace only the active plan snapshot so the current timeline, elapsed
+  // position, preparation state, and RAF session continue unchanged.
+  const muteAudio = doc.playbackSettings?.muteAudio ?? false;
+  useEffect(() => {
+    const current = activePlanRef.current;
+    if (!current || current.unit.muteAudio === muteAudio) return;
+    activePlanRef.current = buildScorePlaybackPlan({
+      documentId: current.unit.documentId,
+      bpm: current.bpm,
+      platform: current.platform,
+      timeline: current.unit.timeline,
+      linkedEntryIds: current.unit.linkedEntryIds,
+      muteAudio,
+    });
+    if (muteAudio) stopAllScoreNotes();
+  }, [muteAudio]);
+
   // unmount cleanup
   useEffect(() => {
     const prepareSessionRefForCleanup = prepareSessionRef;
@@ -331,6 +359,7 @@ export function useScorePlayback(doc: ScoreDocument): ScorePlaybackState {
       // 진행 중인 prepare 비동기 작업 무효화
       prepareSessionRefForCleanup.current++;
       prepareParamsRef.current = null;
+      activePlanRef.current = null;
       isPlayingRef.current = false;
       stopAllScoreNotes();
       if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);

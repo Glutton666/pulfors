@@ -19,6 +19,7 @@ import { getWebAudioContext, playWebClick } from "@/lib/audio-renderer";
 import type { BuiltinPlayers, SoundSetPlayers } from "@/hooks/useAudioPlayers";
 import type { ClickPCMs } from "@/lib/audio-renderer";
 import type { SoundSet } from "@/lib/storage";
+import { buildPolygonPlaybackPlan, type PolygonPlaybackPlan } from "@/lib/audio-playback-plan";
 import {
   PolygonLayer,
   VertexBeatType,
@@ -157,6 +158,34 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
 
   const enabledRef = useRef(p.enabled);
   useEffect(() => { enabledRef.current = p.enabled; }, [p.enabled]);
+  const activePlaybackPlanRef = useRef<PolygonPlaybackPlan | null>(null);
+  const replaceActivePlaybackPlan = useCallback((
+    nextLayers = layersRef.current,
+    nextBpm = bpmRef.current,
+    nextBeatsPerMeasure = beatsPerMeasureRef.current,
+  ) => {
+    if (!activePlaybackPlanRef.current) return;
+    activePlaybackPlanRef.current = buildPolygonPlaybackPlan({
+      platform: Platform.OS === "web" ? "web" : "native",
+      bpm: nextBpm,
+      beatsPerMeasure: nextBeatsPerMeasure,
+      layers: nextLayers,
+    });
+  }, []);
+
+  useEffect(() => {
+    activePlaybackPlanRef.current = p.isPlaying
+      ? buildPolygonPlaybackPlan({
+          platform: Platform.OS === "web" ? "web" : "native",
+          bpm: p.bpm,
+          beatsPerMeasure: p.beatsPerMeasure,
+          layers,
+        })
+      : null;
+    // Playback starts from one complete snapshot. Live edits replace that
+    // snapshot atomically at the same boundary that clears old timers.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [p.isPlaying]);
 
   // ── 절대 비트 카운터 (엔진 콜백 내에서만 변경) ──────────────────────────
   const absoluteBeatRef = useRef(0);
@@ -229,8 +258,9 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
       prevBpmRef.current = p.bpm;
       bpmRef.current = p.bpm;
       clearPendingTimers();
+      replaceActivePlaybackPlan(layersRef.current, p.bpm, beatsPerMeasureRef.current);
     }
-  }, [p.bpm, clearPendingTimers]);
+  }, [p.bpm, clearPendingTimers, replaceActivePlaybackPlan]);
 
   // ── 박자표 변경 → 위상 재정렬 ──────────────────────────────────────────
   // 엔진이 자체 비트 카운터를 0으로 리셋하므로, 폴리곤도 다음 콜백을
@@ -243,8 +273,9 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
       beatsPerMeasureRef.current = p.beatsPerMeasure;
       clearPendingTimers();
       absoluteBeatRef.current = 0;
+      replaceActivePlaybackPlan(layersRef.current, bpmRef.current, p.beatsPerMeasure);
     }
-  }, [p.beatsPerMeasure, clearPendingTimers]);
+  }, [p.beatsPerMeasure, clearPendingTimers, replaceActivePlaybackPlan]);
 
   // ── 엔진 비트 핸들러 등록/해제 ──────────────────────────────────────────
   // 웹도 꼭짓점 타이머에서 realtime click을 재생한다. AudioContext 미래 예약은
@@ -309,9 +340,16 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
     p.engineBeatCallbackRef.current = () => {
       // 이 핸들러는 React lifecycle 밖(엔진 오디오 스레드)에서 호출된다.
       // 최신 레이어/BPM/박자표는 ref를 통해 읽는다.
-      const layers = layersRef.current;
-      const bpm = bpmRef.current;
-      const beatsPerMeasure = Math.max(1, Math.floor(beatsPerMeasureRef.current || 4));
+      const plan = activePlaybackPlanRef.current ?? buildPolygonPlaybackPlan({
+        platform: Platform.OS === "web" ? "web" : "native",
+        bpm: bpmRef.current,
+        beatsPerMeasure: beatsPerMeasureRef.current,
+        layers: layersRef.current,
+      });
+      activePlaybackPlanRef.current = plan;
+      const layers = plan.unit.layers;
+      const bpm = plan.bpm;
+      const beatsPerMeasure = plan.unit.beatsPerMeasure;
       const absbeat = absoluteBeatRef.current++;
 
       const beatWithinMeasure = absbeat % beatsPerMeasure;
@@ -430,9 +468,10 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
     };
     setLayers((prev) => [...prev, newLayer]);
     layersRef.current = [...layersRef.current, newLayer];
+    replaceActivePlaybackPlan(layersRef.current);
     setEditingLayerId(id);
     ensurePCM(newLayer.soundSet);
-  }, [layers, ensurePCM]);
+  }, [layers, ensurePCM, replaceActivePlaybackPlan]);
 
   const handleDeleteLayer = useCallback((id: string) => {
     // 삭제 전 해당 레이어의 대기 중 타이머를 즉시 취소
@@ -440,6 +479,7 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
     // layersRef를 즉시 갱신 — effect 실행 전에 엔진 비트가 오면 삭제된
     // 레이어를 다시 읽어 슬롯을 재예약하는 경쟁 조건 방지
     layersRef.current = layersRef.current.filter((l) => l.id !== id);
+    replaceActivePlaybackPlan(layersRef.current);
     setLayers(layersRef.current);
     setEditingLayerId((prev) => (prev === id ? null : prev));
     setActiveVertices((prev) => {
@@ -447,7 +487,7 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
       delete next[id];
       return next;
     });
-  }, [clearLayerTimers]);
+  }, [clearLayerTimers, replaceActivePlaybackPlan]);
 
   /**
    * 레이어 배열을 변환하고 layersRef와 state를 동시에 갱신한다.
@@ -458,9 +498,10 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
     (transform: (prev: PolygonLayer[]) => PolygonLayer[]) => {
       const next = transform(layersRef.current);
       layersRef.current = next;
+      replaceActivePlaybackPlan(next);
       setLayers(next);
     },
-    [],
+    [replaceActivePlaybackPlan],
   );
 
   const handleUpdateLayer = useCallback(

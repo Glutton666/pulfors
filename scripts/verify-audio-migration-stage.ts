@@ -185,6 +185,13 @@ function enclosingFunctionName(node: ts.Node): string | undefined {
       if (ts.isVariableDeclaration(current.parent) && ts.isIdentifier(current.parent.name)) {
         return current.parent.name.text;
       }
+      let owner: ts.Node | undefined = current.parent;
+      while (owner && (ts.isCallExpression(owner) || ts.isParenthesizedExpression(owner))) {
+        owner = owner.parent;
+      }
+      if (owner && ts.isVariableDeclaration(owner) && ts.isIdentifier(owner.name)) {
+        return owner.name.text;
+      }
       return undefined;
     }
     current = current.parent;
