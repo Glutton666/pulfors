@@ -1088,8 +1088,9 @@ export function playWebRenderedLoop(
   source.loop = true;
   const gain = ctx.createGain();
   gain.gain.value = Math.max(0, Math.min(1, volume));
+  let panner: StereoPannerNode | null = null;
   if (!stereo && channel !== "both" && hasStereoPanner(ctx)) {
-    const panner = ctx.createStereoPanner();
+    panner = ctx.createStereoPanner();
     panner.pan.value = channel === "left" ? -1 : 1;
     source.connect(panner);
     panner.connect(gain);
@@ -1105,6 +1106,9 @@ export function playWebRenderedLoop(
   let ended = false;
   source.onended = () => {
     ended = true;
+    try { source.disconnect(); } catch {}
+    try { panner?.disconnect(); } catch {}
+    try { gain.disconnect(); } catch {}
     if (!stopped) onEnded?.();
   };
 
@@ -1132,6 +1136,7 @@ export function playWebRenderedLoop(
       try { source.stop(stopAt); } catch {}
       if (stopAt <= ctx.currentTime) {
         try { source.disconnect(); } catch {}
+        try { panner?.disconnect(); } catch {}
         try { gain.disconnect(); } catch {}
       }
     },

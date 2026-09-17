@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useCallback } from "react";
-import { createAudioPlayer } from "expo-audio";
 import type { AudioPlayer as ExpoAudioPlayer, AudioSource } from "expo-audio";
 import { soundSets } from "@/lib/metronome-engine";
 import type { SoundSet } from "@/lib/storage";
+import { createAudioOutputOwner, type AudioOutputOwner } from "@/lib/audio-output-owner";
 
 /**
  * 빌트인 사운드셋 플레이어 풀 크기 (역할당 인스턴스 수).
@@ -61,31 +61,6 @@ export interface AudioPlayersHook {
 
 type SoundSetDef = { high: AudioSource; low: AudioSource; strong: AudioSource };
 
-/**
- * 사운드셋 하나에 대해 역할 3 × 풀 4 = 12개 AudioPlayer를 즉석 생성한다.
- * createAudioPlayer는 동기 함수이므로 엔진 틱 콜백 내에서도 안전하게 호출할 수 있다.
- */
-function makeSoundSetPlayers(def: SoundSetDef): SoundSetPlayers {
-  const h = def.high;
-  const l = def.low;
-  const s = def.strong;
-  return {
-    highA: createAudioPlayer(h), highB: createAudioPlayer(h),
-    highC: createAudioPlayer(h), highD: createAudioPlayer(h),
-    lowA:  createAudioPlayer(l), lowB:  createAudioPlayer(l),
-    lowC:  createAudioPlayer(l), lowD:  createAudioPlayer(l),
-    strongA: createAudioPlayer(s), strongB: createAudioPlayer(s),
-    strongC: createAudioPlayer(s), strongD: createAudioPlayer(s),
-  };
-}
-
-/** 사운드셋 플레이어 12개를 모두 해제한다. */
-function disposeSoundSetPlayers(players: SoundSetPlayers): void {
-  for (const p of Object.values(players) as ExpoAudioPlayer[]) {
-    try { p.remove(); } catch { /* 이미 해제된 경우 무시 */ }
-  }
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // 훅
 // ─────────────────────────────────────────────────────────────────────────────
@@ -114,7 +89,14 @@ function disposeSoundSetPlayers(players: SoundSetPlayers): void {
 export function useAudioPlayers(
   soundSet: SoundSet,
   playbackSoundSetRef?: React.MutableRefObject<SoundSet>,
+  owner?: AudioOutputOwner,
 ): AudioPlayersHook {
+  const fallbackOwnerRef = useRef<AudioOutputOwner | null>(null);
+  if (!fallbackOwnerRef.current) {
+    fallbackOwnerRef.current = createAudioOutputOwner();
+  }
+  const playerOwner = owner ?? fallbackOwnerRef.current;
+  const playerOutput = playerOwner.nativeAdapter;
   // soundset key → SoundSetPlayers 캐시
   const cacheRef = useRef<Map<string, SoundSetPlayers>>(new Map());
   // Tracks the last volume set via setPoolsVolume so newly created pools
@@ -131,7 +113,11 @@ export function useAudioPlayers(
     if (hit) return hit;
     const def = soundSets[key as keyof typeof soundSets] as SoundSetDef | undefined;
     if (!def) return undefined;
-    const players = makeSoundSetPlayers(def);
+    const players = playerOutput.createPool(def) as SoundSetPlayers;
+    playerOwner.manage(players, {
+      stop: () => playerOutput.stopPool(players),
+      release: () => playerOutput.disposePool(players),
+    });
     // Apply current volume so the pool is ready at the right level on first use.
     const v = Math.max(0, Math.min(1, currentVolumeRef.current));
     for (const p of Object.values(players) as ExpoAudioPlayer[]) {
@@ -140,7 +126,7 @@ export function useAudioPlayers(
     cacheRef.current.set(key, players);
     return players;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // cacheRef and currentVolumeRef are refs — stable
+  }, [playerOutput, playerOwner]);
 
   /**
    * Sets volume on all currently-cached player pools AND stores the value so
@@ -198,19 +184,20 @@ export function useAudioPlayers(
   //   1. soundSetRef 동기화
   //   2. 새 세트를 미리 생성(warm-up) — 첫 틱에서 즉시 재생 가능
   useEffect(() => {
+    playerOwner.activate();
     soundSetRef.current = soundSet;
     getOrCreate(soundSet);
-  }, [soundSet, getOrCreate]);
+  }, [soundSet, getOrCreate, playerOwner]);
 
   // 언마운트 시 모든 캐시된 플레이어 해제
   useEffect(() => {
     return () => {
-      for (const players of cacheRef.current.values()) {
-        disposeSoundSetPlayers(players);
+      if (!owner) {
+        fallbackOwnerRef.current?.dispose();
       }
       cacheRef.current.clear();
     };
-  }, []);
+  }, [owner]);
 
   return { allPlayers, allPlayersRef, soundSetRef, highToggle, lowToggle, strongToggle, setPoolsVolume };
 }

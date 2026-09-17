@@ -1,18 +1,16 @@
 import { useCallback, useEffect, useRef } from "react";
 import { Platform } from "react-native";
 import * as Haptics from "expo-haptics";
-import { safePlayAndConfirm } from "@/lib/audio-utils";
 import { soundSets } from "@/lib/metronome-engine";
 import {
   ensureWebClickBuffers,
   getWebAudioContext,
-  playWebRenderedLoop,
   renderMeasureAbortable,
   getClickOutputVolume,
   getClickRenderVolume,
   isRenderAborted,
 } from "@/lib/audio-renderer";
-import type { ClickPCMs, SamplePCMEntry, TickInfo, WebRenderedLoop } from "@/lib/audio-renderer";
+import type { ClickPCMs, SamplePCMEntry, TickInfo } from "@/lib/audio-renderer";
 import type { BeatType, MetronomeEngine } from "@/lib/metronome-engine";
 import type { BarConfig, DialConfig } from "@/lib/index.helpers";
 import type { CustomSoundSetConfig, PracticeEntry, SoundSet } from "@/lib/storage";
@@ -34,11 +32,16 @@ import type {
 } from "@/lib/note-samples";
 
 import type { PlaybackContext } from "@/lib/playback-context";
-import type { AudioPlayer } from "expo-audio";
 import type {
   AudioRenderLifecycle,
   AudioRenderResult,
 } from "@/lib/audio-render-lifecycle";
+import {
+  publishAudioOutput,
+  type AudioOutputOwner,
+  type AudioOutputResource,
+} from "@/lib/audio-output-owner";
+import type { WebAudioOutput } from "@/lib/web-audio-output";
 import {
   getAudioLifecycleSnapshot,
   markAudioPlaying,
@@ -78,16 +81,13 @@ export interface UsePlaybackControlParams {
   clearSamplePlayStates: () => void;
   resetPlaybackVisuals: () => void;
   flushPlaybackVisuals: () => void;
-  renderedPlayerRef: Ref<AudioPlayer | null>;
-  renderedUrlRef: Ref<string | null>;
-  webRenderedLoopRef: Ref<WebRenderedLoop | null>;
-  activateWebRenderedLoop: (loop: WebRenderedLoop) => void;
+  outputOwner: AudioOutputOwner;
   beginAudioStartupProbe: () => number;
   invalidateAudioStartupProbe: () => void;
   waitForFirstAudioActivity: (epoch: number, isCancelled?: () => boolean, timeoutMs?: number) => Promise<boolean>;
   audioRenderLifecycle: AudioRenderLifecycle;
   prepareRenderedPlayer: (plan?: MetronomePlaybackPlan) => Promise<
-    AudioRenderResult<{ player: AudioPlayer; uri: string }>
+    AudioRenderResult<AudioOutputResource>
   >;
   clearAudioWatchdogRef: Ref<() => void>;
   armAudioWatchdogRef: Ref<() => void>;
@@ -282,7 +282,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
             return;
           }
           prepared.commit((readyPcm) => {
-          const previous = p.webRenderedLoopRef.current;
+          const previous = p.outputOwner.active();
           const previousDuration = previous?.getDurationSeconds?.();
           const nextDuration = (readyPcm instanceof Float32Array
             ? readyPcm.length
@@ -290,32 +290,34 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
           const phaseCompatible = previousDuration !== undefined
             && Math.abs(previousDuration - nextDuration) < 0.001;
           const boundary = phaseCompatible ? previous?.getNextBoundaryTime?.() : undefined;
-          const next = playWebRenderedLoop(readyPcm, undefined, "both", 1, boundary);
-          p.activateWebRenderedLoop(next);
-          if (previous) {
-            try { previous.stop(boundary); } catch {}
-          }
+          const next = (p.outputOwner.adapter as WebAudioOutput).rendered(
+            readyPcm,
+            1,
+            "both",
+            boundary,
+          );
+          publishAudioOutput(p.outputOwner, next, { replaceAtAudioTime: boundary });
+          p.outputOwner.transition("prerender");
           p.engineRef.current?.setPreRenderedAudio(true);
           });
         });
         return { status: "completed" };
       } else {
-        let loop: WebRenderedLoop | null = null;
+        let loop: AudioOutputResource | null = null;
         const committed = prepared.commit((readyPcm) => {
-          p.webRenderedLoopRef.current?.stop();
           const context = getWebAudioContext();
           const now = typeof performance !== "undefined" ? performance.now() : Date.now();
           const startAtAudioTime = startAtPerformanceTime !== undefined && context
             ? context.currentTime + Math.max(0, startAtPerformanceTime - now) / 1000
             : undefined;
-          loop = playWebRenderedLoop(
+          loop = (p.outputOwner.adapter as WebAudioOutput).rendered(
             readyPcm,
-            undefined,
-            "both",
             getClickOutputVolume(plan.audio.volume),
+            "both",
             startAtAudioTime,
           );
-          p.activateWebRenderedLoop(loop);
+          publishAudioOutput(p.outputOwner, loop);
+          p.outputOwner.transition("prerender");
           engine.setPreRenderedAudio(true);
         });
         if (!committed || !loop) return session.interruption();
@@ -514,7 +516,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
           if (cancelled()) {
             return false;
           }
-          if (!p.webRenderedLoopRef.current?.isRunning()) {
+          if (!p.outputOwner.active()?.isRunning?.()) {
             throw new Error("Web rendered loop did not start");
           }
           startEngine();
@@ -543,12 +545,16 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
         }
         if (renderResult.status === "completed") {
           const prepared = renderResult.prepared;
-          const player = prepared.value.player;
-          const committed = prepared.commit(({ player: readyPlayer, uri }) => {
-            p.renderedPlayerRef.current = readyPlayer;
-            p.renderedUrlRef.current = uri;
+          let output: AudioOutputResource | null = null;
+          const committed = prepared.commit((readyOutput) => {
+            output = readyOutput;
           });
           if (!committed) {
+            cancelPlaybackAttempt(false);
+            return false;
+          }
+          const published = publishAudioOutput(p.outputOwner, output);
+          if (!published) {
             cancelPlaybackAttempt(false);
             return false;
           }
@@ -561,7 +567,8 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
           if (cancelled()) {
             return false;
           }
-          const playConfirmation = safePlayAndConfirm(player, "metronome.start.native");
+          const playConfirmation = p.outputOwner.active()?.playAndConfirm?.("metronome.start.native")
+            ?? Promise.resolve(false);
           startEngine();
           const accepted = await awaitWithin(
             playConfirmation,

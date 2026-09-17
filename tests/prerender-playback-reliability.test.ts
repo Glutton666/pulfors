@@ -11,6 +11,7 @@ import {
   syncStereoArtifact,
 } from "@/lib/sample-cache";
 import { createAudioRenderLifecycle } from "@/lib/audio-render-lifecycle";
+import { createAudioOutputOwner } from "@/lib/audio-output-owner";
 
 const mockPlayer = {
   volume: 1,
@@ -235,7 +236,7 @@ describe("pre-rendered playback reliability", () => {
     await act(async () => {
       const built = await result.current.prepareRenderedPlayer();
       if (built.status === "completed") {
-        built.prepared.commit(({ player: readyPlayer }) => { player = readyPlayer; });
+        built.prepared.commit((output) => { player = (output as any).player; });
       }
     });
 
@@ -753,10 +754,11 @@ describe("pre-rendered playback reliability", () => {
     } as any;
     const { result, unmount } = renderHook(() => useAudioPipeline(params));
     const renderedStop = jest.fn();
-    result.current.webRenderedLoopRef.current = {
+    result.current.outputOwner.publish({
       stop: renderedStop,
+      release: renderedStop,
       isRunning: () => true,
-    };
+    });
 
     act(() => {
       result.current.armAudioWatchdog();
@@ -805,8 +807,20 @@ describe("pre-rendered playback reliability", () => {
       persistAudioSettingsCallbackRef: { current: jest.fn() },
     } as any;
     const { result, unmount } = renderHook(() => useAudioPipeline(params));
-    result.current.webRenderedLoopRef.current = webLoop;
-    result.current.renderedPlayerRef.current = nativePlayer as any;
+    if (webLoop) {
+      result.current.outputOwner.publish({
+        ...webLoop,
+        release: webLoop.stop,
+      });
+    } else if (nativePlayer) {
+      result.current.outputOwner.publish({
+        isRunning: () => nativePlayer.playing,
+        release: () => {
+          nativePlayer.pause();
+          nativePlayer.release();
+        },
+      });
+    }
 
     act(() => {
       result.current.armAudioWatchdog();
@@ -1107,7 +1121,7 @@ describe("pre-rendered playback reliability", () => {
 
     expect(player.pause).toHaveBeenCalledTimes(1);
     expect(player.release).toHaveBeenCalledTimes(1);
-    expect(params.renderedPlayerRef.current).toBeNull();
+    expect(params.outputOwner.active()).toBeNull();
     expect(engine.start).not.toHaveBeenCalled();
   });
 
@@ -1129,7 +1143,7 @@ describe("pre-rendered playback reliability", () => {
     expect(params.setIsPlaying).not.toHaveBeenCalledWith(true);
     expect(params.showPlayingNotification).not.toHaveBeenCalled();
     expect(params.showPlaybackStartFailure).toHaveBeenCalledTimes(1);
-    expect(params.renderedPlayerRef.current).toBeNull();
+    expect(params.outputOwner.active()).toBeNull();
   });
 
   it("unmount cleanup releases rendered and note-sample players and cancels the watchdog", () => {
@@ -1165,7 +1179,13 @@ describe("pre-rendered playback reliability", () => {
       persistAudioSettingsCallbackRef: { current: jest.fn() },
     } as any;
     const { result, unmount } = renderHook(() => useAudioPipeline(params));
-    result.current.renderedPlayerRef.current = renderedPlayer as any;
+    result.current.outputOwner.publish({
+      isRunning: () => false,
+      release: () => {
+        renderedPlayer.pause();
+        renderedPlayer.release();
+      },
+    });
     act(() => result.current.armAudioWatchdog());
 
     unmount();
@@ -1237,9 +1257,18 @@ describe("pre-rendered playback reliability", () => {
       persistAudioSettingsCallbackRef: { current: jest.fn() },
     } as any;
     const { result, unmount } = renderHook(() => useAudioPipeline(params));
-    result.current.renderedPlayerRef.current = renderedPlayer as any;
-    result.current.webRenderedLoopRef.current = renderedLoop as any;
-    result.current.renderedUrlRef.current = "blob:https://example.test/rendered";
+    result.current.outputOwner.publish({
+      release: () => {
+        renderedPlayer.pause();
+        renderedPlayer.release();
+      },
+    });
+    result.current.outputOwner.publish({
+      ...renderedLoop,
+      release: () => {
+        URL.revokeObjectURL("blob:https://example.test/rendered");
+      },
+    });
     result.current.samplePlayStateRef.current = {
       "0-0": { playing: true, endTimer: setTimeout(jest.fn(), 1000) },
     };
@@ -1910,7 +1939,7 @@ describe("pre-rendered playback reliability", () => {
     }));
     expect(mockPlayWebRenderedLoop).toHaveBeenCalledWith(
       expect.any(Float32Array),
-      undefined,
+      expect.any(Function),
       "both",
       0.35,
     );
@@ -2109,24 +2138,30 @@ describe("pre-rendered playback reliability", () => {
 
 function completePreparedPlayer(session: any, player: any) {
   return session.complete(
-    { player, uri: "file:///rendered.wav" },
-    ({ player: ownedPlayer }: { player: typeof mockPlayer }) => {
-      ownedPlayer.pause();
-      ownedPlayer.release();
+    {
+      player,
+      uri: "file:///rendered.wav",
+      stop: () => player.pause(),
+      release: () => player.release(),
+      isRunning: () => true,
+      playAndConfirm: async () => {
+        await player.play();
+        return true;
+      },
+    },
+    (output: { stop: () => void; release: () => void }) => {
+      output.stop();
+      output.release();
     },
   );
 }
 
 function makePlaybackParams(engine: ReturnType<typeof makeEngine>, player: typeof mockPlayer | null) {
-  const webRenderedLoopRef = { current: null as any };
-  const renderedPlayerRef = { current: null as any };
-  const renderedUrlRef = { current: null as string | null };
   const audioRenderLifecycle = createAudioRenderLifecycle();
+  const outputOwner = createAudioOutputOwner();
   const stopRenderedAudio = jest.fn(() => {
     audioRenderLifecycle.cancel();
-    renderedPlayerRef.current = null;
-    renderedUrlRef.current = null;
-    webRenderedLoopRef.current = null;
+    outputOwner.stop();
   });
   const clearSamplePlayStates = jest.fn();
   const invalidateAudioStartupProbe = jest.fn();
@@ -2172,10 +2207,7 @@ function makePlaybackParams(engine: ReturnType<typeof makeEngine>, player: typeo
     clearSamplePlayStates,
     resetPlaybackVisuals: jest.fn(),
     flushPlaybackVisuals: jest.fn(),
-    renderedPlayerRef,
-    renderedUrlRef,
-    webRenderedLoopRef,
-    activateWebRenderedLoop: jest.fn((loop) => { webRenderedLoopRef.current = loop; }),
+    outputOwner,
     beginAudioStartupProbe: jest.fn(() => 1),
     invalidateAudioStartupProbe,
     waitForFirstAudioActivity: jest.fn(async (_epoch: number) => true),

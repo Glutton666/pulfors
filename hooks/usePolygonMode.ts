@@ -13,10 +13,8 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Platform } from "react-native";
 import * as Crypto from "expo-crypto";
-import { safePlayWithVolume } from "@/lib/audio-utils";
-import { captureBreadcrumb } from "@/lib/error-tracking";
-import { getWebAudioContext, playWebClick } from "@/lib/audio-renderer";
-import type { BuiltinPlayers, SoundSetPlayers } from "@/hooks/useAudioPlayers";
+import { playPolygonAudioOutput, type AudioOutputOwner } from "@/lib/audio-output-owner";
+import type { BuiltinPlayers } from "@/hooks/useAudioPlayers";
 import type { ClickPCMs } from "@/lib/audio-renderer";
 import type { SoundSet } from "@/lib/storage";
 import { buildPolygonPlaybackPlan, type PolygonPlaybackPlan } from "@/lib/audio-playback-plan";
@@ -65,6 +63,7 @@ export interface UsePolygonModeParams {
   getClickPCMs: (set: SoundSet) => Promise<ClickPCMs>;
   /** 폴리곤 자체 출력도 시작 확인·watchdog에 오디오 활동으로 보고한다. */
   recordAudioActivity: () => boolean;
+  outputOwner: AudioOutputOwner;
 }
 
 export interface UsePolygonModeResult {
@@ -94,32 +93,6 @@ function beatTypeToWebClickRole(bt: VertexBeatType): "strong" | "high" | "low" {
   return "low";
 }
 
-/** Play a cached layer PCM immediately on the shared Web Audio context. */
-function playPCMOnWebRealtime(pcm: Float32Array, volume: number): boolean {
-  if (!pcm.length) return false;
-  const ctx = getWebAudioContext();
-  if (!ctx) return false;
-  try {
-    if (ctx.state === "suspended") ctx.resume().catch(() => {});
-    const buffer = ctx.createBuffer(1, pcm.length, ctx.sampleRate);
-    buffer.getChannelData(0).set(pcm);
-    const source = ctx.createBufferSource();
-    source.buffer = buffer;
-    const gain = ctx.createGain();
-    gain.gain.value = Math.max(0, Math.min(2, volume));
-    source.connect(gain);
-    gain.connect(ctx.destination);
-    source.start(ctx.currentTime);
-    source.onended = () => {
-      try { source.disconnect(); } catch {}
-      try { gain.disconnect(); } catch {}
-    };
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Hook
 // ─────────────────────────────────────────────────────────────────────────────
@@ -138,6 +111,7 @@ const INITIAL_LAYERS: PolygonLayer[] = [
 ];
 
 export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
+  const playPolygonOutput = playPolygonAudioOutput(p.outputOwner);
   const [layers, setLayers] = useState<PolygonLayer[]>(INITIAL_LAYERS);
   const [editingLayerId, setEditingLayerId] = useState<string | null>(null);
   const [activeVertices, setActiveVertices] = useState<Record<string, number>>({});
@@ -189,9 +163,6 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
 
   // ── 절대 비트 카운터 (엔진 콜백 내에서만 변경) ──────────────────────────
   const absoluteBeatRef = useRef(0);
-
-  // ── Native 플레이어 풀 round-robin: soundSet+beatType 조합별 toggle 카운터 ──
-  const polygonToggleRef = useRef<Record<string, number>>({});
 
   // ── 오프셋 setTimeout 핸들 ───────────────────────────────────────────────
   // Map<layerId, Set<timerId>>: 레이어별로 관리해 삭제 시 해당 레이어 타이머만 취소.
@@ -293,50 +264,6 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
       return;
     }
 
-    // Native 사운드 재생 헬퍼.
-    const playNativeSound = (layer: PolygonLayer, beatType: Exclude<VertexBeatType, "mute">): boolean => {
-      // layer.volume (0-1)를 전역 볼륨에 곱해 레이어별 음량을 제어한다.
-      const layerVol = Math.max(0, Math.min(1, layer.volume ?? 1.0));
-      const soundRole = beatType === "strong" ? "strong" : beatType === "accent" ? "high" : "low";
-      try {
-        const players =
-          p.allPlayersRef.current[layer.soundSet as keyof BuiltinPlayers]
-          ?? p.allPlayersRef.current.classic;
-        const pool = players as SoundSetPlayers;
-        // 같은 sound-set과 강세를 쓰는 레이어가 동시에 발화할 때
-        // 서로 다른 슬롯을 선택해 겹침 재생을 지원한다.
-        const toggleKey = `${layer.soundSet}:${soundRole}`;
-        const idx = polygonToggleRef.current[toggleKey] ?? 0;
-        polygonToggleRef.current[toggleKey] = (idx + 1) % 4; // BUILTIN_POOL_SIZE=4
-        const player = soundRole === "strong"
-          ? [pool.strongA, pool.strongB, pool.strongC, pool.strongD][idx]
-          : soundRole === "high"
-          ? [pool.highA, pool.highB, pool.highC, pool.highD][idx]
-          : [pool.lowA, pool.lowB, pool.lowC, pool.lowD][idx];
-        // 진단용 breadcrumb: 프로덕션 빌드에서도(Sentry DSN 설정 시) 남아
-        // 레이어별로 실제 재생 호출이 계속 발생하는지 추적할 수 있다.
-        // (멀티레이어 폴리리듬에서 특정 레이어만 침묵하는 버그의 근본 원인이
-        // "JS가 더 이상 호출을 안 함"인지 "호출은 되는데 안 들림"인지 구분용.)
-        captureBreadcrumb({
-          category: "polygon.beat",
-          message: `layer=${layer.id.slice(0, 8)} sides=${layer.sides} role=${soundRole} slot=${toggleKey}#${idx} hasPlayer=${!!player}`,
-          level: "debug",
-        });
-        if (player) {
-          safePlayWithVolume(player, layerVol * p.volumeRef.current, "polygon.beat");
-          return true;
-        }
-      } catch (e) {
-        captureBreadcrumb({
-          category: "polygon.beat",
-          message: `layer=${layer.id.slice(0, 8)} playNativeSound threw`,
-          level: "warning",
-          data: { error: String(e) },
-        });
-      }
-      return false;
-    };
-
     p.engineBeatCallbackRef.current = () => {
       // 이 핸들러는 React lifecycle 밖(엔진 오디오 스레드)에서 호출된다.
       // 최신 레이어/BPM/박자표는 ref를 통해 읽는다.
@@ -413,26 +340,22 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
           schedule(delayMs, () => {
             // 오디오 트리거를 먼저 실행해, 뒤이은 React 상태 갱신(재조정 비용)이
             // 같은 타이머 콜백 안에서 실제 재생 호출을 지연시키지 않게 한다.
-            if (Platform.OS === "web") {
-              const layerVol = Math.max(0, Math.min(1, layer.volume ?? 1.0));
-              const soundRole = beatTypeToWebClickRole(beatType);
-              const cached =
-                polygonPCMCacheRef.current.get(layer.soundSet)
-                ?? p.clickPCMCacheRef.current[layer.soundSet];
-              let played = cached
-                ? playPCMOnWebRealtime(
-                    cached[soundRole],
-                    p.volumeRef.current * layerVol,
-                  )
-                : false;
-              if (!played) {
-                ensurePCM(layer.soundSet);
-                played = playWebClick(soundRole, "both", p.volumeRef.current * layerVol);
-              }
-              if (played) p.recordAudioActivity();
-            } else {
-              if (playNativeSound(layer, beatType)) p.recordAudioActivity();
-            }
+            const layerVol = Math.max(0, Math.min(1, layer.volume ?? 1.0));
+            const soundRole = beatTypeToWebClickRole(beatType);
+            const cached = Platform.OS === "web"
+              ? polygonPCMCacheRef.current.get(layer.soundSet)
+                ?? p.clickPCMCacheRef.current[layer.soundSet]
+              : undefined;
+            const played = playPolygonOutput({
+              soundSet: layer.soundSet,
+              role: soundRole,
+              volume: p.volumeRef.current * layerVol,
+              pcm: cached?.[soundRole],
+              channel: "both",
+              pools: p.allPlayersRef.current,
+            });
+            if (!cached && Platform.OS === "web") ensurePCM(layer.soundSet);
+            if (played) p.recordAudioActivity();
             setActiveVertices((prev) =>
               prev[layer.id] === k ? prev : { ...prev, [layer.id]: k },
             );

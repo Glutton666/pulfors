@@ -201,6 +201,7 @@ export function MetronomeScreenUI(props: Props) {
     handleBeatQuickSaveCancel,
     handleBeatQuickSaveConfirm,
     allPlayersRef,
+    outputOwner,
     volumeRef,
   } = props;
 
@@ -314,6 +315,7 @@ export function MetronomeScreenUI(props: Props) {
     volumeRef,
     getClickPCMs,
     recordAudioActivity,
+    outputOwner,
   });
 
   type NativeKbViewProps = React.ComponentProps<typeof View> & {

@@ -25,6 +25,7 @@ import {
   computePulseLabelPosition,
 } from "@/components/polygon-mode/PolygonTypes";
 import type { PolygonLayer } from "@/components/polygon-mode/PolygonTypes";
+import { createAudioOutputOwner } from "@/lib/audio-output-owner";
 
 // ── 모듈 모킹 ─────────────────────────────────────────────────────────────
 
@@ -39,11 +40,18 @@ jest.mock("@/lib/audio-utils", () => {
   });
   return { safePlay, safePlayWithVolume };
 });
-jest.mock("@/lib/audio-renderer", () => ({
-  playWebClick: jest.fn(),
-  scheduleWebClickAt: jest.fn(),
-  getWebAudioContext: jest.fn(() => null),
-}));
+jest.mock("@/lib/audio-renderer", () => {
+  const playWebClick = jest.fn();
+  return {
+    playWebClick,
+    scheduleWebClickAt: jest.fn((role, channel, gain) =>
+      playWebClick(role, channel, gain)
+        ? { cancel: jest.fn(), onEnded: jest.fn() }
+        : null,
+    ),
+    getWebAudioContext: jest.fn(() => null),
+  };
+});
 jest.mock("expo-crypto", () => ({
   randomUUID: () => `test-uuid-${Math.random()}`,
 }));
@@ -65,6 +73,7 @@ function makeParams(
     volumeRef: { current: 0.75 },
     getClickPCMs: jest.fn().mockResolvedValue({ strong: new Float32Array(), high: new Float32Array(), low: new Float32Array() }),
     recordAudioActivity: jest.fn(() => true),
+    outputOwner: createAudioOutputOwner(),
     ...overrides,
   };
 }
@@ -559,7 +568,7 @@ describe("usePolygonMode — engine callback driven", () => {
     fireBeat(params.engineBeatCallbackRef, 4);
 
     expect(renderer.playWebClick).toHaveBeenCalledTimes(4);
-    expect(renderer.scheduleWebClickAt).not.toHaveBeenCalled();
+    expect(renderer.scheduleWebClickAt).toHaveBeenCalledTimes(4);
     expect(result.current.activeVertices[layerId]).toBe(3);
   });
 
@@ -735,7 +744,7 @@ describe("usePolygonMode — engine callback driven", () => {
     fireBeat(params.engineBeatCallbackRef);
 
     expect(renderer.playWebClick).toHaveBeenCalledTimes(2);
-    expect(renderer.scheduleWebClickAt).not.toHaveBeenCalled();
+    expect(renderer.scheduleWebClickAt).toHaveBeenCalledTimes(2);
   });
 
   // ── getClickPCMs 참조 변경 시 엔진 핸들러가 재등록되지 않음 ────────────

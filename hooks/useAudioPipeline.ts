@@ -1,6 +1,5 @@
 import { useRef, useEffect, useCallback, useState } from "react";
 import { Platform } from "react-native";
-import { createAudioPlayer } from "expo-audio";
 import type { AudioPlayer as ExpoAudioPlayer } from "expo-audio";
 import { soundSets } from "@/lib/metronome-engine";
 import type { MetronomeEngine } from "@/lib/metronome-engine";
@@ -12,9 +11,7 @@ import {
   saveRenderedWav,
   releaseRenderedWav,
   ensureWebClickBuffers,
-  playWebRenderedLoop,
   getWebAudioContext,
-  scheduleWebClickAt,
   isRenderAborted,
   renderMeasureAbortable,
   getClickOutputVolume,
@@ -33,13 +30,20 @@ import {
 } from "@/lib/sample-cache";
 import { captureBreadcrumb } from "@/lib/error-tracking";
 import { safePlay } from "@/lib/audio-utils";
+import {
+  createAudioOutputOwner,
+  publishAudioOutput,
+  type AudioOutputOwner,
+  type AudioOutputResource,
+} from "@/lib/audio-output-owner";
+import type { NativeAudioOutput } from "@/lib/native-audio-output";
+import type { WebAudioOutput } from "@/lib/web-audio-output";
 import { isSafeNoteSampleUri } from "@/lib/index.helpers";
 import type {
   ClickPCMs,
   SamplePCMEntry,
   TickInfo,
   DecodedSample,
-  WebRenderedLoop,
 } from "@/lib/audio-renderer";
 import type { SoundSet, CustomSoundSetConfig } from "@/lib/storage";
 import type { NoteSampleMap, NoteSampleChannelMap, NoteSampleMetroChannelMap, NoteSampleVolumeMap, NoteSampleSpeedMap } from "@/lib/note-samples";
@@ -62,7 +66,6 @@ import type { TranslationFn } from "@/lib/i18n";
 import {
   AUDIO_TIMING_LIMITS,
   AudioClockAdapter,
-  AudioOutputStateMachine,
   AudioTimingDiagnostics,
 } from "@/lib/audio-clock";
 
@@ -145,12 +148,9 @@ export interface UseAudioPipelineResult {
     autoResumeAfterInterruption: boolean;
   }>) => void;
   // ── Refs owned by this hook, exposed for coordination ────────────────────
-  renderedPlayerRef: React.MutableRefObject<ExpoAudioPlayer | null>;
   samplePCMCacheRef: React.MutableRefObject<Map<string, SamplePCMEntry>>;
-  renderedUrlRef: React.MutableRefObject<string | null>;
   audioRenderLifecycle: AudioRenderLifecycle;
-  webRenderedLoopRef: React.MutableRefObject<WebRenderedLoop | null>;
-  activateWebRenderedLoop: (loop: WebRenderedLoop) => void;
+  outputOwner: AudioOutputOwner;
   lastAudioFireRef: React.MutableRefObject<number>;
   beginAudioStartupProbe: () => number;
   getAudioStartupEpoch: () => number;
@@ -163,7 +163,7 @@ export interface UseAudioPipelineResult {
   samplePlayStateRef: React.MutableRefObject<Record<string, { playing: boolean; endTimer: ReturnType<typeof setTimeout> | null }>>;
   // ── Functions ────────────────────────────────────────────────────────────
   prepareRenderedPlayer: (plan?: MetronomePlaybackPlan) => Promise<
-    AudioRenderResult<{ player: ExpoAudioPlayer; uri: string }>
+    AudioRenderResult<AudioOutputResource>
   >;
   scheduleReRender: () => void;
   stopRenderedAudio: () => void;
@@ -223,11 +223,17 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
     fatalRenderFailureRef,
   } = params;
 
+  const outputOwnerRef = useRef<AudioOutputOwner | null>(null);
+  if (!outputOwnerRef.current) {
+    outputOwnerRef.current = createAudioOutputOwner();
+  }
+  const outputOwner = outputOwnerRef.current;
+
   // ── Player pool ownership (moved from useMetronomeScreen) ───────────────────
   // allPlayersRef, soundSetRef, highToggle/lowToggle/strongToggle are now owned
   // here. useMetronomeScreen's tick callback reads these via the return value.
   const { allPlayersRef, soundSetRef, highToggle, lowToggle, strongToggle, setPoolsVolume } =
-    useAudioPlayers(soundSet, params.soundSetRef);
+    useAudioPlayers(soundSet, params.soundSetRef, outputOwner);
 
   // 3 refs now live in useMetronomeScreen (shared with useSettings)
   const { clickPCMCacheRef, webClickReadyRef, noteSampleSoundsRef } = params;
@@ -305,14 +311,10 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
   // cache directly and also records the value for pools created lazily afterward.
   useEffect(() => {
     setPoolsVolume(getRealtimeClickGain(volume));
-    webRenderedLoopRef.current?.setVolume?.(getClickOutputVolume(volume));
-    if (renderedPlayerRef.current) {
-      renderedPlayerRef.current.volume = getClickOutputVolume(volume);
-    }
-  }, [volume, setPoolsVolume]);
+    outputOwner.active()?.setVolume?.(getClickOutputVolume(volume));
+  }, [outputOwner, volume, setPoolsVolume]);
 
   // ── Owned refs ──────────────────────────────────────────────────────────────
-  const renderedPlayerRef = useRef<ExpoAudioPlayer | null>(null);
   const releasedPlayersRef = useRef(new WeakSet<object>());
   const mountedRef = useRef(true);
   const samplePreloadGenerationRef = useRef(0);
@@ -324,20 +326,11 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
   // can safely warm this cache without replacing the current entry's key map.
   const samplePCMByUriRef = useRef<Map<string, SamplePCMEntry>>(new Map());
   const samplePCMCacheGenerationRef = useRef(0);
-  const renderedUrlRef = useRef<string | null>(null);
-  const releasedRenderedUrisRef = useRef(new Set<string>());
   const audioRenderLifecycleRef = useRef<AudioRenderLifecycle | null>(null);
   if (!audioRenderLifecycleRef.current) {
     audioRenderLifecycleRef.current = createAudioRenderLifecycle();
   }
   const audioRenderLifecycle = audioRenderLifecycleRef.current;
-  const releaseRenderedUri = useCallback((uri: string) => {
-    if (releasedRenderedUrisRef.current.has(uri)) return;
-    releasedRenderedUrisRef.current.add(uri);
-    releaseRenderedWav(uri);
-  }, []);
-  const webRenderedLoopRef = useRef<WebRenderedLoop | null>(null);
-  const outputStateRef = useRef(new AudioOutputStateMachine());
   const webClockAdapterRef = useRef<AudioClockAdapter | null>(null);
   const timingDiagnosticsRef = useRef(new AudioTimingDiagnostics(__DEV__));
   const lastAudioFireRef = useRef(0);
@@ -347,7 +340,6 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
   const armAudioWatchdogRef = useRef<() => void>(() => {});
   const clearAudioWatchdogRef = useRef<() => void>(() => {});
   const reRenderTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const realtimeSourcesRef = useRef(new Set<import("@/lib/audio-renderer").ScheduledWebAudio>());
   const samplePlayStateRef = useRef<Record<string, { playing: boolean; endTimer: ReturnType<typeof setTimeout> | null }>>({});
   const samplePlaybackEpochRef = useRef(0);
   const armTimeRef = useRef<number | null>(null);
@@ -355,11 +347,8 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
   useEffect(() => { showRecoveryToastRef.current = showRecoveryToast; }, [showRecoveryToast]);
 
   const clearRealtimeWebAudio = useCallback(() => {
-    realtimeSourcesRef.current.forEach((source) => {
-      try { source.cancel(); } catch {}
-    });
-    realtimeSourcesRef.current.clear();
-  }, []);
+    outputOwner.clearRealtime();
+  }, [outputOwner]);
 
   const beginAudioStartupProbe = useCallback(() => {
     audioStartupEpochRef.current += 1;
@@ -417,39 +406,26 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
     }
     const atAudioTime = adapter.performanceTimeToAudioSeconds(atPerformanceTime);
     if (atAudioTime === null) return false;
-    if (outputStateRef.current.snapshot().mode !== "realtime") {
-      outputStateRef.current.transition("realtime");
+    if (outputOwner.snapshot().mode !== "realtime") {
+      outputOwner.transition("realtime");
     }
-    const generation = outputStateRef.current.snapshot().generation;
+    const generation = outputOwner.snapshot().generation;
     const startupEpoch = audioStartupEpochRef.current;
-    const source = scheduleWebClickAt(role, channel, getRealtimeClickGain(volumeRef.current), atAudioTime);
+    const source = (outputOwner.adapter as WebAudioOutput).click(
+      role,
+      channel,
+      getRealtimeClickGain(volumeRef.current),
+      atAudioTime,
+    );
     if (!source) return false;
-    realtimeSourcesRef.current.add(source);
+    outputOwner.trackRealtime(source);
     source.onEnded?.(() => {
-      realtimeSourcesRef.current.delete(source);
-      if (outputStateRef.current.owns(generation) && outputStateRef.current.snapshot().mode === "realtime") {
+      if (outputOwner.owns(generation) && outputOwner.snapshot().mode === "realtime") {
         recordAudioActivity(startupEpoch);
       }
     });
     return true;
-  }, [recordAudioActivity, volumeRef]);
-
-  const activateWebRenderedLoop = useCallback((loop: WebRenderedLoop) => {
-    if (!mountedRef.current) {
-      try { loop.stop(); } catch {}
-      return;
-    }
-    webRenderedLoopRef.current = loop;
-    const ctx = getWebAudioContext();
-    if (ctx) {
-      const adapter = new AudioClockAdapter({ nowSeconds: () => ctx.currentTime });
-      adapter.map(loop.getPositionSeconds?.() ?? 0);
-      webClockAdapterRef.current = adapter;
-      const sample = adapter.now();
-      if (sample) timingDiagnosticsRef.current.record(sample);
-    }
-    outputStateRef.current.transition("prerender");
-  }, []);
+  }, [outputOwner, recordAudioActivity, volumeRef]);
   useEffect(() => {
     // StrictMode replays cleanup/setup while preserving refs. Reactivating the
     // same state machine supports that replay, while a true unmount leaves it
@@ -653,12 +629,21 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
     if (pause) {
       try { player.pause(); } catch {}
     }
-    try { player.release(); } catch {}
-  }, []);
+    if (!outputOwner.releaseManaged(player)) {
+      outputOwner.nativeAdapter.releasePlayer(player);
+    }
+  }, [outputOwner]);
+  const manageAudioPlayer = useCallback((player: ExpoAudioPlayer) => {
+    outputOwner.manage(player, {
+      stop: () => { try { player.pause(); } catch {} },
+      release: () => outputOwner.nativeAdapter.releasePlayer(player),
+    });
+    return player;
+  }, [outputOwner]);
 
   const prepareRenderedPlayer = useCallback(async (
     plan?: MetronomePlaybackPlan,
-  ): Promise<AudioRenderResult<{ player: ExpoAudioPlayer; uri: string }>> => {
+  ): Promise<AudioRenderResult<AudioOutputResource>> => {
     const engine = engineRef.current;
     const session = audioRenderLifecycle.start();
     if (!engine) return session.fail(new Error("Audio engine is unavailable"));
@@ -719,23 +704,20 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
         pcm,
         `rendered_measure_${session.id}.wav`,
       );
-      const owned: { player: ExpoAudioPlayer | null; uri: string } = {
-        player: null,
-        uri: wavUri,
-      };
-      const acquired = session.complete(owned, ({ player, uri }) => {
-        if (player) releaseAudioPlayer(player);
-        releaseRenderedUri(uri);
-      });
-      if (acquired.status !== "completed") return acquired;
+      let output: AudioOutputResource;
       try {
-        owned.player = createAudioPlayer(wavUri);
-        owned.player.loop = true;
-        owned.player.volume = getClickOutputVolume(audio.volume);
+        output = (outputOwner.adapter as NativeAudioOutput).rendered(
+          wavUri,
+          getClickOutputVolume(audio.volume),
+          releaseRenderedWav,
+        );
       } catch (error) {
+        releaseRenderedWav(wavUri);
         captureBreadcrumb({ category: "pre-render", message: "Failed, falling back to per-tick audio", level: "warning", data: { error: String(error) } });
-        return acquired.prepared.fail(error);
+        return session.fail(error);
       }
+      const acquired = session.complete(output, (resource) => resource.release());
+      if (acquired.status !== "completed") return acquired;
       // 예전엔 1.0 고정값이라 사용자가 설정한 실제 볼륨(예: 0.8)을 무시하고
       // pre-rendered 루프로 전환되는 순간 항상 최대 볼륨으로 재생됐다
       // (2026-08-25 확인). per-tick 풀 플레이어(setPoolsVolume)와 동일하게
@@ -744,12 +726,11 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
       return {
         status: "completed" as const,
         prepared: {
-          value: { player: owned.player, uri: owned.uri },
-          commit(publish: (value: { player: ExpoAudioPlayer; uri: string }) => void) {
-            return prepared.commit(({ player, uri }) => {
-              if (!player) throw new Error("Rendered player was not created");
-              publish({ player, uri });
-              outputStateRef.current.transition("prerender");
+          value: output,
+          commit(publish: (value: AudioOutputResource) => void) {
+            return prepared.commit((resource) => {
+              publish(resource);
+              outputOwner.transition("prerender");
             });
           },
           discard: () => prepared.discard(),
@@ -774,8 +755,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
     noteSampleSpeedsRef,
     noteSampleVolumesRef,
     noteSamplesRef,
-    releaseAudioPlayer,
-    releaseRenderedUri,
+    outputOwner,
     sampleVolumeRef,
     soundSetRef,
     volumeRef,
@@ -785,30 +765,15 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
     audioRenderLifecycle.cancel();
     clearRealtimeWebAudio();
     engineRef.current?.setPendingMeasureStartAction(null);
-    if (webRenderedLoopRef.current) {
-      try { webRenderedLoopRef.current.stop(); } catch {}
-      webRenderedLoopRef.current = null;
-    }
-    if (renderedPlayerRef.current) {
-      releaseAudioPlayer(renderedPlayerRef.current);
-      renderedPlayerRef.current = null;
-    }
-    if (renderedUrlRef.current) {
-      releaseRenderedUri(renderedUrlRef.current);
-      renderedUrlRef.current = null;
-    }
+    outputOwner.stop();
     const engine = engineRef.current;
     if (engine) engine.setPreRenderedAudio(false);
-    outputStateRef.current.transition("idle");
     webClockAdapterRef.current?.invalidate();
-  }, [audioRenderLifecycle, clearRealtimeWebAudio, engineRef, releaseAudioPlayer, releaseRenderedUri]);
+  }, [audioRenderLifecycle, clearRealtimeWebAudio, engineRef, outputOwner]);
 
   const scheduleReRender = useCallback(() => {
     const outputVolume = getClickOutputVolume(volumeRef.current);
-    webRenderedLoopRef.current?.setVolume?.(outputVolume);
-    if (renderedPlayerRef.current) {
-      renderedPlayerRef.current.volume = outputVolume;
-    }
+    outputOwner.active()?.setVolume?.(outputVolume);
     audioRenderLifecycle.cancel();
     engineRef.current?.setPendingMeasureStartAction(null);
     if (reRenderTimerRef.current) clearTimeout(reRenderTimerRef.current);
@@ -827,7 +792,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
       if (realtimeBeatMode) {
         stopRenderedAudio();
         engine.setPreRenderedAudio(false);
-        outputStateRef.current.transition("realtime");
+        outputOwner.transition("realtime");
         return;
       }
 
@@ -875,7 +840,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
               return;
             }
             prepared.commit((readyPcm) => {
-            const previous = webRenderedLoopRef.current;
+            const previous = outputOwner.active();
             const previousDuration = previous?.getDurationSeconds?.();
             const nextDuration = (readyPcm instanceof Float32Array
               ? readyPcm.length
@@ -883,18 +848,23 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
             const phaseCompatible = previousDuration !== undefined
               && Math.abs(previousDuration - nextDuration) < 0.001;
             const boundary = phaseCompatible ? previous?.getNextBoundaryTime?.() : undefined;
-            outputStateRef.current.transition("transitioning");
-            const loop = playWebRenderedLoop(
+            outputOwner.transition("transitioning");
+            const loop = (outputOwner.adapter as WebAudioOutput).rendered(
               readyPcm,
-              undefined,
-              "both",
               getClickOutputVolume(volumeRef.current),
+              "both",
               boundary,
             );
-            if (previous) {
-              try { previous.stop(boundary); } catch {}
+            publishAudioOutput(outputOwner, loop, { replaceAtAudioTime: boundary });
+            const ctx = getWebAudioContext();
+            if (ctx) {
+              const adapter = new AudioClockAdapter({ nowSeconds: () => ctx.currentTime });
+              adapter.map(loop.getPositionSeconds?.() ?? 0);
+              webClockAdapterRef.current = adapter;
+              const sample = adapter.now();
+              if (sample) timingDiagnosticsRef.current.record(sample);
             }
-            activateWebRenderedLoop(loop);
+            outputOwner.transition("prerender");
             engine.setPreRenderedAudio(true);
             });
           });
@@ -912,7 +882,6 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
             return;
           }
           const prepared = result.prepared;
-          const player = prepared.value.player;
            if (!mountedRef.current || !engine.getIsRunning()) {
               prepared.discard();
              return;
@@ -922,17 +891,10 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
                prepared.discard();
               return;
             }
-            prepared.commit(({ player: readyPlayer, uri }) => {
-              if (renderedPlayerRef.current) {
-                releaseAudioPlayer(renderedPlayerRef.current);
-              }
-              if (renderedUrlRef.current) {
-                releaseRenderedUri(renderedUrlRef.current);
-              }
+            prepared.commit((output) => {
               engine.setPreRenderedAudio(true);
-              renderedPlayerRef.current = readyPlayer;
-              renderedUrlRef.current = uri;
-              safePlay(readyPlayer, "preRender.initial");
+              publishAudioOutput(outputOwner, output);
+              void output.playAndConfirm?.("preRender.initial");
             });
           });
          } catch {
@@ -942,7 +904,6 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
       }
     }, 300);
    }, [
-     activateWebRenderedLoop,
      barMetronomeChannelRef,
      barModeRef,
      audioRenderLifecycle,
@@ -956,8 +917,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
      noteSampleSpeedsRef,
      noteSampleVolumesRef,
      noteSamplesRef,
-     releaseAudioPlayer,
-     releaseRenderedUri,
+      outputOwner,
      prepareRenderedPlayer,
      sampleVolumeRef,
      soundSetRef,
@@ -1042,7 +1002,10 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
       } else {
         try {
           const isFileUri = result.uri.startsWith("file://");
-          const player = createAudioPlayer(result.uri, { downloadFirst: isFileUri });
+          const player = manageAudioPlayer(outputOwner.nativeAdapter.createPlayer(
+            result.uri,
+            { downloadFirst: isFileUri },
+          ));
           player.volume = Math.max(0, Math.min(1, sampleVolumeRef.current * (noteSampleVolumesRef.current[key] ?? 1)));
           player.playbackRate = noteSampleSpeedsRef.current[key] ?? 1;
           player.shouldCorrectPitch = false;
@@ -1075,6 +1038,8 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
     noteSampleSoundsRef,
     noteSampleSpeedsRef,
     noteSampleVolumesRef,
+    manageAudioPlayer,
+    outputOwner,
     releaseAudioPlayer,
     sampleVolumeRef,
   ]);
@@ -1245,17 +1210,15 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
         ? Date.now() - lastAudioFireRef.current
         : Date.now() - (armTimeRef.current ?? Date.now());
       const webCtxSuspended = Platform.OS === "web" && (getWebAudioContext()?.state === "suspended");
-      const renderedOutputHealthy = Platform.OS === "web"
-        ? (webRenderedLoopRef.current?.isRunning() ?? false)
-        : (renderedPlayerRef.current?.playing ?? false);
+      const renderedOutputHealthy = outputOwner.active()?.isRunning?.() ?? false;
       const isStuck = webCtxSuspended || (!renderedOutputHealthy && timeSinceFire > threshold);
 
       if (!isStuck) {
         const sample = webClockAdapterRef.current?.now();
         if (sample) {
           timingDiagnosticsRef.current.record(sample);
-          const positionSeconds = webRenderedLoopRef.current?.getPositionSeconds?.();
-          if (positionSeconds !== undefined && outputStateRef.current.snapshot().mode === "prerender") {
+          const positionSeconds = outputOwner.active()?.getPositionSeconds?.();
+          if (positionSeconds !== undefined && outputOwner.snapshot().mode === "prerender") {
             engine.syncToMeasureElapsedMs(
               positionSeconds * 1000,
               AUDIO_TIMING_LIMITS.uiResyncThresholdMs,
@@ -1292,11 +1255,11 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
           }
         }
         stopRenderedAudio();
-        outputStateRef.current.transition("recovering");
+        outputOwner.transition("recovering");
         lastAudioFireRef.current = Date.now();
         audioWatchdogTimerRef.current = setTimeout(runCheck, 3500);
       } else {
-        outputStateRef.current.transition("failed");
+        outputOwner.transition("failed");
         markAudioRecoveryFailed("watchdog");
         showRecoveryToastRef.current(t("main", "audioRecoveryFailed"));
         audioWatchdogTimerRef.current = null;
@@ -1310,6 +1273,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
     clearAudioWatchdog,
     engineRef,
     isPlayingRef,
+    outputOwner,
     soundSetRef,
     stopRenderedAudio,
     t,
@@ -1329,22 +1293,25 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
     samplePCMCacheGenerationRef.current += 1;
     stopPlaybackAudio();
     cleanupNoteSampleResources(true);
+    outputOwner.dispose();
     samplePCMCacheRef.current.clear();
     samplePCMUriRef.current.clear();
     samplePCMByUriRef.current.clear();
     samplePreloadKeysRef.current.clear();
   }, [
     cleanupNoteSampleResources,
+    outputOwner,
     stopPlaybackAudio,
   ]);
 
   useEffect(() => {
     mountedRef.current = true;
+    outputOwner.activate();
     // A StrictMode effect replay is a new producer lifetime even though the
     // hook refs are preserved between the two effect setups.
     samplePreloadGenerationRef.current += 1;
     return cleanupAudioResources;
-  }, [cleanupAudioResources]);
+  }, [cleanupAudioResources, outputOwner]);
 
   return {
     // Player pool
@@ -1362,12 +1329,9 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
     updateAutoResumeAfterInterruption,
     applyAudioSettings,
     // PCM / rendered-player refs
-    renderedPlayerRef,
     samplePCMCacheRef,
-    renderedUrlRef,
     audioRenderLifecycle,
-    webRenderedLoopRef,
-    activateWebRenderedLoop,
+    outputOwner,
     lastAudioFireRef,
     beginAudioStartupProbe,
     getAudioStartupEpoch,
