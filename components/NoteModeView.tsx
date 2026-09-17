@@ -31,6 +31,7 @@ import { ImageFramingModal, PracticeSourcePickerModal } from "@/components/NoteM
 import { reconcileNoteSources } from "@/lib/note-mode-sources";
 import { clampNoteImageCropToFrame } from "@/lib/note-image-crop";
 import type { NoteImageCrop } from "@/lib/storage";
+import { BarPlayButton } from "@/components/BarPlayButton";
 
 interface NoteModeViewProps {
   queue: PracticeEntry[];
@@ -460,18 +461,11 @@ export function NoteModeView({
     else setSourceCollapsed(false);
   }, [isPlaying]);
 
-  const playModes: Array<"once" | "loop" | "random"> = ["once", "loop", "random"];
   const playModeLabels = {
     once: t("noteMode", "playModeOnce"),
     loop: t("noteMode", "playModeLoop"),
     random: t("noteMode", "playModeRandom"),
   };
-  const playModeIcons: Record<string, string> = {
-    once: "play-forward",
-    loop: "repeat",
-    random: "shuffle",
-  };
-
   const handleReset = useCallback(() => {
     confirmDestructive(t("noteMode", "resetConfirm"), {
       title: t("noteMode", "reset"),
@@ -480,6 +474,11 @@ export function NoteModeView({
       onConfirm: onReset,
     });
   }, [onReset, t]);
+
+  const handleRandomPlayRequest = useCallback(() => {
+    onPlayModeChange("random");
+    onTogglePlay();
+  }, [onPlayModeChange, onTogglePlay]);
 
   const currentEntry = queue[currentIndex];
   const prevEntry = currentIndex > 0 ? queue[currentIndex - 1] : (playMode === "loop" && queue.length > 0 ? queue[queue.length - 1] : null);
@@ -606,7 +605,7 @@ export function NoteModeView({
                 onPress={onTogglePlay}
                 hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                 accessibilityRole="button"
-                accessibilityLabel={t("a11y", "playButton")}
+                accessibilityLabel={t("barModeView", "stopLabel")}
                 testID="note-play-button"
               >
                 <Ionicons name="stop" size={S.ms(20, 0.4)} color="#fff" />
@@ -697,7 +696,7 @@ export function NoteModeView({
               style={[styles.playButton, { backgroundColor: C.danger }]}
               onPress={onTogglePlay}
               accessibilityRole="button"
-              accessibilityLabel={t("a11y", "playButton")}
+              accessibilityLabel={t("barModeView", "stopLabel")}
               testID="note-play-button"
             >
               <Ionicons name="stop" size={S.ms(28, 0.4)} color="#fff" />
@@ -889,51 +888,75 @@ export function NoteModeView({
   const renderPlayControls = () => (
     <View style={[styles.playControls, isLandscape && { marginBottom: S.ms(4, 0.3) }]}>
       <View style={styles.playModeRow}>
-        {playModes.map((mode) => (
+        {onOpenSettings && (
           <Pressable
-            key={mode}
-            style={[
-              styles.playModeBtn,
-              playMode === mode && { backgroundColor: C.accent + "22", borderColor: C.accent },
-              isLandscape && { paddingHorizontal: S.ms(6, 0.3), paddingVertical: S.ms(4, 0.3) },
-            ]}
-            onPress={() => onPlayModeChange(mode)}
+            onPress={onOpenSettings}
+            testID="open-note-settings"
+            accessibilityRole="button"
+            accessibilityLabel={t("settings", "title")}
+            style={styles.playActionBtn}
           >
-            <Ionicons
-              name={playModeIcons[mode] as any}
-              size={isLandscape ? 12 : 14}
-              color={playMode === mode ? C.accent : C.textTertiary}
-            />
-            <Text
-              style={[
-                styles.playModeText,
-                playMode === mode && { color: C.accent },
-                isLandscape && { fontSize: S.ms(9, 0.3) },
-              ]}
-            >
-              {playModeLabels[mode]}
-            </Text>
+            <Ionicons name="settings-outline" size={isLandscape ? 13 : 16} color={C.textSecondary} />
+            <Text style={styles.playActionText}>{t("settings", "title")}</Text>
           </Pressable>
-        ))}
+        )}
+        <Pressable
+          onPress={handleSaveWithFeedback}
+          testID="save-note-mode"
+          accessibilityRole="button"
+          accessibilityLabel={t("noteMode", "save")}
+          style={[styles.playActionBtn, { borderColor: saved ? "#4CAF50" : C.accent, backgroundColor: saved ? "#4CAF5020" : C.surface }]}
+        >
+          <Ionicons name={saved ? "checkmark" : "save-outline"} size={isLandscape ? 13 : 16} color={saved ? "#4CAF50" : C.accent} />
+          <Text style={[styles.playActionText, { color: saved ? "#4CAF50" : C.accent }]}>
+            {saved ? t("noteMode", "saved") : t("noteMode", "save")}
+          </Text>
+        </Pressable>
+        <Pressable
+          onPress={handleReset}
+          testID="reset-note-mode"
+          accessibilityRole="button"
+          accessibilityLabel={t("noteMode", "reset")}
+          style={[styles.playActionBtn, { borderColor: C.danger }]}
+        >
+          <Ionicons name="refresh" size={isLandscape ? 13 : 16} color={C.danger} />
+          <Text style={[styles.playActionText, { color: C.danger }]}>{t("noteMode", "reset")}</Text>
+        </Pressable>
       </View>
       <View style={{ flexDirection: "row" as const, alignItems: "center" as const, gap: S.ms(6, 0.3) }}>
-        <Pressable
-          style={[
+        <BarPlayButton
+          isPlaying={isPlaying}
+          isPreparing={false}
+          barLoopMode={playMode === "loop" ? "loop" : "once"}
+          onTogglePlay={onTogglePlay}
+          onBarLoopModeChange={onPlayModeChange}
+          blockPlayMode={playMode === "random" ? "random" : undefined}
+          onRandomPlayRequest={handleRandomPlayRequest}
+          baseStyle={[
             styles.playButton,
             { backgroundColor: isPlaying ? C.danger : C.accent },
-            queue.length === 0 && { opacity: 0.4 },
-            isLandscape && { width: S.ms(60, 0.4), height: S.ms(30, 0.4), borderRadius: S.ms(8, 0.3) },
           ]}
-          onPress={onTogglePlay}
+          sizeOverride={isLandscape ? { width: S.ms(60, 0.4), height: S.ms(30, 0.4), borderRadius: S.ms(8, 0.3) } : undefined}
+          accentColor={C.accent}
+          dangerColor="#fff"
+          backgroundColor={C.background}
+          idleIconColor="#fff"
+          playingIconColor="#fff"
+          iconSize={isLandscape ? 24 : 28}
+          badgeIconSize={isLandscape ? 10 : 12}
+          labels={{
+            once: playModeLabels.once,
+            loop: playModeLabels.loop,
+            random: playModeLabels.random,
+            play: t("a11y", "playButton"),
+            stop: t("barModeView", "stopLabel"),
+            switchToOnce: playModeLabels.once,
+            switchToLoop: playModeLabels.loop,
+          }}
           disabled={queue.length === 0}
-          hitSlop={isLandscape ? { top: 8, bottom: 8, left: 4, right: 4 } : undefined}
-          accessibilityRole="button"
-          accessibilityLabel={t("a11y", "playButton")}
           testID="note-play-button"
-          accessibilityState={{ selected: isPlaying, disabled: queue.length === 0 }}
-        >
-          <Ionicons name={isPlaying ? "stop" : "play"} size={isLandscape ? 24 : 28} color="#fff" />
-        </Pressable>
+          t={t}
+        />
         {isPlaying && queue.length > 1 && (
           <Pressable
             style={[
@@ -961,21 +984,6 @@ export function NoteModeView({
     return (
       <View style={[styles.container, { flexDirection: "row" as const, gap: S.ms(8, 0.3) }, S.isTablet && { maxWidth: 900, alignSelf: "center" as const, width: "100%" as const }]}>
         <View style={{ flex: 2 }}>
-          <View style={[styles.header, { marginBottom: S.ms(2, 0.3), gap: S.ms(8, 0.3) }]}>
-            <View style={[styles.headerActions, { gap: S.ms(6, 0.3), marginLeft: "auto" }]}>
-              {onOpenSettings && (
-                <Pressable onPress={onOpenSettings} hitSlop={8} testID="open-note-settings" accessibilityRole="button" accessibilityLabel={t("settings", "title")} style={[styles.headerBtn, { borderColor: C.border, width: S.ms(28, 0.4), height: S.ms(28, 0.4) }]}>
-                  <Ionicons name="settings-outline" size={S.ms(13, 0.3)} color={C.textSecondary} />
-                </Pressable>
-              )}
-              <Pressable onPress={handleSaveWithFeedback} hitSlop={8} style={[styles.headerBtn, { borderColor: saved ? "#4CAF50" : C.accent, backgroundColor: saved ? "#4CAF5020" : C.surface, width: S.ms(28, 0.4), height: S.ms(28, 0.4) }]}>
-                <Ionicons name={saved ? "checkmark" : "save-outline"} size={S.ms(13, 0.3)} color={saved ? "#4CAF50" : C.accent} />
-              </Pressable>
-              <Pressable onPress={handleReset} hitSlop={8} style={[styles.headerBtn, { borderColor: C.danger, width: S.ms(28, 0.4), height: S.ms(28, 0.4) }]}>
-                <Ionicons name="refresh" size={S.ms(13, 0.3)} color={C.danger} />
-              </Pressable>
-            </View>
-          </View>
           {renderQueueSection()}
         </View>
         <View style={[styles.landscapeRightPanel, { justifyContent: "space-between" as const }]}>
@@ -988,22 +996,6 @@ export function NoteModeView({
 
   return (
     <View style={[styles.container, S.isTablet && { maxWidth: 720, alignSelf: "center" as const, width: "100%" as const }]}>
-      <View style={styles.header}>
-        <View style={[styles.headerActions, { marginLeft: "auto" }]}>
-          {onOpenSettings && (
-            <Pressable onPress={onOpenSettings} hitSlop={8} testID="open-note-settings" accessibilityRole="button" accessibilityLabel={t("settings", "title")} style={[styles.headerBtn, { borderColor: C.border }]}>
-              <Ionicons name="settings-outline" size={S.ms(16, 0.4)} color={C.textSecondary} />
-            </Pressable>
-          )}
-          <Pressable onPress={handleSaveWithFeedback} hitSlop={8} style={[styles.headerBtn, { borderColor: saved ? "#4CAF50" : C.accent, backgroundColor: saved ? "#4CAF5020" : C.surface }]}>
-            <Ionicons name={saved ? "checkmark" : "save-outline"} size={S.ms(16, 0.4)} color={saved ? "#4CAF50" : C.accent} />
-          </Pressable>
-          <Pressable onPress={handleReset} hitSlop={8} style={[styles.headerBtn, { borderColor: C.danger }]}>
-            <Ionicons name="refresh" size={S.ms(16, 0.4)} color={C.danger} />
-          </Pressable>
-        </View>
-      </View>
-
       {renderPlayControls()}
 
       <HintBanner
@@ -1035,24 +1027,11 @@ const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
     color: C.text,
     flex: 1,
   },
-  headerActions: {
-    flexDirection: "row",
-    gap: S.ms(8, 0.3),
-  },
   closeButtonCenter: {
     alignSelf: "center",
     marginTop: S.ms(2, 0.3),
     marginBottom: S.ms(2, 0.3),
     padding: S.ms(6, 0.3),
-  },
-  headerBtn: {
-    width: S.ms(32, 0.4),
-    height: S.ms(32, 0.4),
-    borderRadius: S.ms(8, 0.3),
-    borderWidth: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: C.surface,
   },
   nowPlaying: {
     flexDirection: "row",
@@ -1164,18 +1143,20 @@ const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
     flexDirection: "row",
     gap: S.ms(6, 0.3),
   },
-  playModeBtn: {
+  playActionBtn: {
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
     gap: S.ms(4, 0.3),
-    paddingHorizontal: S.ms(10, 0.3),
+    paddingHorizontal: S.ms(6, 0.3),
     paddingVertical: S.ms(6, 0.3),
     borderRadius: S.ms(8, 0.3),
     borderWidth: 1,
     borderColor: C.border,
     backgroundColor: C.surface,
   },
-  playModeText: {
+  playActionText: {
     fontFamily: "SpaceGrotesk_500Medium",
     fontSize: S.ms(11, 0.3),
     color: C.textTertiary,

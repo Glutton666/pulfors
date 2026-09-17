@@ -345,6 +345,10 @@ export function useMetronomeScreen() {
   const [notePlayMode, setNotePlayMode] = useState<"once" | "loop" | "random">("once");
   const notePlayModeRef = useRef<"once" | "loop" | "random">("once");
   useEffect(() => { notePlayModeRef.current = notePlayMode; }, [notePlayMode]);
+  const handleNotePlayModeChange = useCallback((mode: "once" | "loop" | "random") => {
+    notePlayModeRef.current = mode;
+    setNotePlayMode(mode);
+  }, []);
   const [noteCurrentIndex, setNoteCurrentIndex] = useState(-1);
   const noteCurrentIndexRef = useRef(-1);
   useEffect(() => { noteCurrentIndexRef.current = noteCurrentIndex; }, [noteCurrentIndex]);
@@ -4680,7 +4684,7 @@ export function useMetronomeScreen() {
     noteCurrentIndex,
     noteIsPlaying,
     noteMeasureCount,
-    setNotePlayMode,
+    setNotePlayMode: handleNotePlayModeChange,
     handleNoteAddToQueue,
     handleNoteRemoveFromQueue,
     handleNoteReorderQueue,

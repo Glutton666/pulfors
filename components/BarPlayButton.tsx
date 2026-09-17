@@ -19,10 +19,22 @@ export interface BarPlayButtonProps {
   blockPlayMode?: "sequential" | "loop" | "random";
   onBlockPlayModeChange?: (mode: "sequential" | "loop" | "random") => void;
   onRandomPlayRequest?: () => void;
+  disabled?: boolean;
+  labels?: {
+    once: string;
+    loop: string;
+    random: string;
+    play: string;
+    stop: string;
+    switchToOnce: string;
+    switchToLoop: string;
+  };
   baseStyle: StyleProp<ViewStyle>;
   accentColor: string;
   dangerColor: string;
   backgroundColor: string;
+  idleIconColor?: string;
+  playingIconColor?: string;
   iconSize: number;
   badgeIconSize: number;
   sizeOverride?: { width: number; height: number; borderRadius: number };
@@ -38,10 +50,14 @@ export function BarPlayButton({
   onBarLoopModeChange,
   blockPlayMode,
   onRandomPlayRequest,
+  disabled = false,
+  labels,
   baseStyle,
   accentColor,
   dangerColor,
   backgroundColor,
+  idleIconColor = accentColor,
+  playingIconColor = dangerColor,
   iconSize,
   badgeIconSize,
   sizeOverride,
@@ -92,6 +108,7 @@ export function BarPlayButton({
   const shakePanel = PanResponder.create({
     onStartShouldSetPanResponder: () => false,
     onMoveShouldSetPanResponder: (_e, g) =>
+      !disabled &&
       !isPlaying &&
       !isPreparing &&
       !gestureTriggeredRef.current &&
@@ -103,7 +120,7 @@ export function BarPlayButton({
       gestureTriggeredRef.current = false;
     },
     onPanResponderMove: (_e, g) => {
-      if (isPlaying || isPreparing || gestureTriggeredRef.current) return;
+      if (disabled || isPlaying || isPreparing || gestureTriggeredRef.current) return;
       const result = updateBarPlayGesture(gestureStateRef.current, g.dx);
       gestureStateRef.current = result.state;
       if (result.triggered) {
@@ -130,15 +147,15 @@ export function BarPlayButton({
   const isRandom = blockPlayMode === "random";
 
   const barLoopModeLabel = barLoopMode === "loop"
-    ? t("barModeView", "loopModeLoop")
-    : t("barModeView", "loopModeOnce");
+    ? labels?.loop ?? t("barModeView", "loopModeLoop")
+    : labels?.once ?? t("barModeView", "loopModeOnce");
 
   const blockPlayModeLabel = blockPlayMode === "sequential"
     ? t("barModeView", "blockModeSequential")
     : blockPlayMode === "loop"
     ? t("barModeView", "blockModeLoop")
     : blockPlayMode === "random"
-    ? t("barModeView", "blockModeRandom")
+    ? labels?.random ?? t("barModeView", "blockModeRandom")
     : undefined;
 
   const accessibilityValueText = blockPlayModeLabel
@@ -155,19 +172,19 @@ export function BarPlayButton({
           baseStyle,
           sizeOverride,
           pressed && { opacity: 0.7 },
-          isPreparing && { opacity: 0.5 },
+          (isPreparing || disabled) && { opacity: 0.5 },
           barLoopMode === "loop" && { borderWidth: 1.5, borderColor: accentColor },
         ]}
         testID={testID}
-        disabled={isPreparing}
+        disabled={isPreparing || disabled}
         accessibilityRole="button"
-        accessibilityLabel={isPlaying ? t("barModeView", "stopLabel") : t("barModeView", "playLabel")}
+        accessibilityLabel={isPlaying ? labels?.stop ?? t("barModeView", "stopLabel") : labels?.play ?? t("barModeView", "playLabel")}
         accessibilityValue={{ text: accessibilityValueText }}
-        accessibilityState={{ busy: isPreparing, disabled: isPreparing }}
+        accessibilityState={{ busy: isPreparing, disabled: isPreparing || disabled }}
         accessibilityHint={
           barLoopMode === "loop"
-            ? t("barModeView", "hintSwitchToOnce")
-            : t("barModeView", "hintSwitchToLoop")
+            ? labels?.switchToOnce ?? t("barModeView", "hintSwitchToOnce")
+            : labels?.switchToLoop ?? t("barModeView", "hintSwitchToLoop")
         }
       >
         {isPreparing ? (
@@ -176,7 +193,7 @@ export function BarPlayButton({
           <Ionicons
             name={isPlaying ? "stop" : "play"}
             size={iconSize}
-            color={isPlaying ? dangerColor : accentColor}
+            color={isPlaying ? playingIconColor : idleIconColor}
             style={!isPlaying ? { marginLeft: Spacing.xxs } : undefined}
           />
         )}
@@ -184,7 +201,7 @@ export function BarPlayButton({
       {barLoopMode === "loop" && (
         <View
           accessible
-          accessibilityLabel={t("barModeView", "loopModeLoop")}
+          accessibilityLabel={labels?.loop ?? t("barModeView", "loopModeLoop")}
           style={{
             position: "absolute",
             top: -6,
@@ -203,7 +220,7 @@ export function BarPlayButton({
       {isRandom && !isPlaying && (
         <View
           accessible
-          accessibilityLabel={t("barModeView", "blockModeRandom")}
+          accessibilityLabel={labels?.random ?? t("barModeView", "blockModeRandom")}
           style={{
             position: "absolute",
             bottom: -6,
