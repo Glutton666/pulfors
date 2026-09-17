@@ -66,3 +66,4 @@
 - [Mode keyboard override persistence](mode-keyboard-override-persistence.md) — store only per-mode differences from global bindings, or later global rebinding changes are silently shadowed.
 - [Photo cover crop bounds](photo-cover-crop-bounds.md) — normalized pan offsets must be clamped for each rendered frame aspect and zoom, not only when the crop is created.
 - [Complete playback-stop boundary](complete-playback-stop-boundary.md) — full stops must invalidate all async audio producers before stopping/releasing output; partial handoffs use narrower cleanup.
+- [Bar subdivision drag verification](bar-subdivision-drag-verification.md) — browser Bar-mode FlatList may render no rows in fresh Playwright contexts; verify nested drag ownership below the browser row layer.

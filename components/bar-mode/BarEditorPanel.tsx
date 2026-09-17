@@ -536,8 +536,18 @@ export function BarEditorPanel({
 
   const editorSwipePan = useMemo(() => PanResponder.create({
     onStartShouldSetPanResponder: () => false,
-    onMoveShouldSetPanResponder: (_e, g) =>
-      !isPlaying && !isDragging && g.dy < -15 && Math.abs(g.dy) > Math.abs(g.dx) * 1.5,
+    onMoveShouldSetPanResponder: (event, g) => {
+      if (Platform.OS === "web") {
+        const target = event.target as unknown;
+        if (
+          target instanceof Element &&
+          target.closest('[data-testid="subdivision-gesture-wrapper"]')
+        ) {
+          return false;
+        }
+      }
+      return !isPlaying && !isDragging && g.dy < -15 && Math.abs(g.dy) > Math.abs(g.dx) * 1.5;
+    },
     onPanResponderMove: () => {},
     onPanResponderRelease: (_e, g) => {
       if (g.dy < -50) handleAddBarFromPanel();

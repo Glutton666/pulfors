@@ -87,6 +87,28 @@ describe("SubdivisionBar drag cancellation", () => {
     expect(onDragEnd).not.toHaveBeenCalled();
   });
 
+  it("claims an upward pattern drag before the parent bar-add gesture", () => {
+    renderBar();
+    const pan = getLastPanResponderConfig();
+
+    expect(pan.onMoveShouldSetPanResponderCapture({}, { dx: 2, dy: -20 })).toBe(true);
+    expect(pan.onMoveShouldSetPanResponderCapture({}, { dx: 2, dy: 20 })).toBe(false);
+    expect(pan.onMoveShouldSetPanResponderCapture({}, { dx: 20, dy: -10 })).toBe(false);
+  });
+
+  it("uses the latest native gesture coordinates when the release event is stale", () => {
+    const { onDragMove, onDragEnd } = renderBar();
+    const pan = getLastPanResponderConfig();
+    const staleEvent = { nativeEvent: { pageX: 0, pageY: 0 } };
+
+    pan.onPanResponderGrant(staleEvent, {});
+    pan.onPanResponderMove(staleEvent, { dx: 0, dy: -24, moveX: 140, moveY: 260 });
+    pan.onPanResponderRelease(staleEvent, { dx: 0, dy: -80, moveX: 120, moveY: 180 });
+
+    expect(onDragMove).toHaveBeenCalledWith(140, 260);
+    expect(onDragEnd).toHaveBeenCalledWith(120, 180);
+  });
+
   it("cleans up an active drag when the drawer unmounts", () => {
     const { unmount, onDragCancel } = renderBar();
     const pan = getLastPanResponderConfig();

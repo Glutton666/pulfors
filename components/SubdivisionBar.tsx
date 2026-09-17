@@ -70,6 +70,19 @@ function getCellBorder(type: BeatType, textTertiaryColor: string, whiteColor: st
 
 const BEAT_TYPES: BeatType[] = ["normal", "accent", "strong", "mute"];
 
+function getGesturePagePosition(
+  event: { nativeEvent: { pageX?: number; pageY?: number } },
+  gestureState: { moveX?: number; moveY?: number },
+): { pageX: number; pageY: number } {
+  const pageX = Number.isFinite(gestureState.moveX)
+    ? gestureState.moveX as number
+    : event.nativeEvent.pageX ?? 0;
+  const pageY = Number.isFinite(gestureState.moveY)
+    ? gestureState.moveY as number
+    : event.nativeEvent.pageY ?? 0;
+  return { pageX, pageY };
+}
+
 export function SubdivisionBar({
   pattern,
   onPatternChange,
@@ -211,6 +224,13 @@ export function SubdivisionBar({
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => false,
+      // The Bar editor panel also owns an upward swipe gesture for adding a
+      // bar. Claim upward drags in this child during capture so the parent
+      // cannot steal a subdivision-pattern drag before onDragStart runs.
+      onMoveShouldSetPanResponderCapture: (_, gs) => {
+        if (isPlayingRef.current) return false;
+        return gs.dy < -12 && Math.abs(gs.dy) > Math.abs(gs.dx);
+      },
       onMoveShouldSetPanResponder: (_, gs) => {
         if (isPlayingRef.current) return false;
         return Math.abs(gs.dy) > 12 || Math.abs(gs.dx) > 15;
@@ -221,19 +241,20 @@ export function SubdivisionBar({
         beginShakeTracking(shakeTrackerRef.current);
       },
       onPanResponderMove: (e, gs) => {
+        const { pageX, pageY } = getGesturePagePosition(e, gs);
         if (isDraggingUpRef.current) {
-          onDragMoveRef.current(e.nativeEvent.pageX, e.nativeEvent.pageY);
+          onDragMoveRef.current(pageX, pageY);
           return;
         }
 
         if (
           !horizontalTriggeredRef.current &&
-          Math.abs(gs.dy) > 12 &&
+          gs.dy < -12 &&
           Math.abs(gs.dy) > Math.abs(gs.dx)
         ) {
           isDraggingUpRef.current = true;
           onDragStartRef.current();
-          onDragMoveRef.current(e.nativeEvent.pageX, e.nativeEvent.pageY);
+          onDragMoveRef.current(pageX, pageY);
           return;
         }
 
@@ -256,10 +277,11 @@ export function SubdivisionBar({
           }
         }
       },
-      onPanResponderRelease: (e) => {
+      onPanResponderRelease: (e, gs) => {
         if (isDraggingUpRef.current) {
           isDraggingUpRef.current = false;
-          onDragEndRef.current(e.nativeEvent.pageX, e.nativeEvent.pageY);
+          const { pageX, pageY } = getGesturePagePosition(e, gs);
+          onDragEndRef.current(pageX, pageY);
         }
         horizontalTriggeredRef.current = false;
         resetShakeTracker(shakeTrackerRef.current);
@@ -326,7 +348,7 @@ export function SubdivisionBar({
 
       if (
         !g.horizontalTriggered &&
-        Math.abs(dy) > 12 &&
+        dy < -12 &&
         Math.abs(dy) > Math.abs(dx)
       ) {
         g.isDraggingUp = true;
