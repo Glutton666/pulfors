@@ -12,13 +12,17 @@ import {
   RESTORE_SNAPSHOT_KEY,
   type BackupFile,
   collectAllAudioUris,
+  collectAllImageUris,
   downloadJsonWeb,
   formatDateForFilename,
   pickFileWeb,
   readAllAudioFiles,
+  readAllImageFiles,
   readStringFromFile,
   remapDataUris,
+  remapDataImageUris,
   restoreAudioFiles,
+  restoreImageFiles,
   sanitizeBackupData,
   writeStringToFile,
 } from "./shared";
@@ -64,6 +68,7 @@ export async function exportBackup(): Promise<boolean> {
 
     const allUris = collectAllAudioUris(data);
     const audioFiles = await readAllAudioFiles(allUris);
+    const imageFiles = await readAllImageFiles(collectAllImageUris(data));
 
     const backup: BackupFile = {
       _meta: {
@@ -75,6 +80,7 @@ export async function exportBackup(): Promise<boolean> {
       schemaVersion: CURRENT_SCHEMA_VERSION,
       data,
       ...(Object.keys(audioFiles).length > 0 ? { audioFiles } : {}),
+      ...(Object.keys(imageFiles).length > 0 ? { imageFiles } : {}),
     };
 
     const json = JSON.stringify(backup);
@@ -238,6 +244,10 @@ async function restoreFromJsonInternal(
       if (uriMapping.size > 0) {
         data = remapDataUris(data, uriMapping);
       }
+    }
+    if (backup.imageFiles && Object.keys(backup.imageFiles).length > 0) {
+      const imageMapping = await restoreImageFiles(backup.imageFiles);
+      if (imageMapping.size > 0) data = remapDataImageUris(data, imageMapping);
     }
 
     data = sanitizeBackupData(data);

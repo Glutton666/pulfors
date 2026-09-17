@@ -38,10 +38,14 @@ export const SCORE_KEY_PREFIX = "metronome_score_";
 export const RESTORE_SNAPSHOT_KEY = "metronome_restore_snapshot_v1";
 
 export const SAMPLES_DIR = "note_samples/";
+export const IMAGES_DIR = "note_images/";
 
 export const MAX_IMPORT_JSON_CHARS = 100 * 1024 * 1024;
 export const MAX_AUDIO_FILE_COUNT = 500;
 export const MAX_AUDIO_FILE_B64_CHARS = 70 * 1024 * 1024;
+export const MAX_IMAGE_FILE_COUNT = 100;
+export const MAX_IMAGE_FILE_B64_CHARS = 20 * 1024 * 1024;
+export const MAX_IMAGE_FILES_TOTAL_B64_CHARS = 60 * 1024 * 1024;
 // 복원된 note sample 맵의 최대 항목 수. 초과 시 앱 기동마다 플레이어 생성
 // 부담이 반복되는 지속적 서비스 거부를 방지한다.
 export const MAX_NOTE_SAMPLES_PER_MAP = 200;
@@ -67,6 +71,7 @@ export interface BackupFile {
   schemaVersion?: number;
   data: Record<string, string | null>;
   audioFiles?: Record<string, string>;
+  imageFiles?: Record<string, string>;
 }
 
 export interface PracticeShareFile {
@@ -77,6 +82,7 @@ export interface PracticeShareFile {
   };
   entry: PracticeEntry;
   audioFiles?: Record<string, string>;
+  imageFiles?: Record<string, string>;
   /** 악보 모드 항목 전용: 연결된 ScoreDocument. 수신 기기에 악보가 없어도 복원할 수 있도록 포함한다. */
   scoreDoc?: ScoreDocument;
 }
@@ -163,12 +169,33 @@ export function filenameFromUri(uri: string): string {
   return parts[parts.length - 1] || `sample_${Date.now()}`;
 }
 
+export function imageAssetKey(uri: string): string {
+  const baseUri = extractBaseUri(uri);
+  let hash = 2166136261;
+  for (let i = 0; i < baseUri.length; i++) {
+    hash ^= baseUri.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  const dataMime = /^data:image\/(png|jpeg|gif|webp|heic|heif);base64,/i.exec(baseUri)?.[1];
+  const filename = dataMime
+    ? `inline.${dataMime.toLowerCase() === "jpeg" ? "jpg" : dataMime.toLowerCase()}`
+    : filenameFromUri(baseUri);
+  return `image_${(hash >>> 0).toString(36)}_${filename}`;
+}
+
 export async function ensureSamplesDir(): Promise<string> {
   const dir = FileSystem.documentDirectory + SAMPLES_DIR;
   const info = await FileSystem.getInfoAsync(dir);
   if (!info.exists) {
     await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
   }
+  return dir;
+}
+
+export async function ensureImagesDir(): Promise<string> {
+  const dir = FileSystem.documentDirectory + IMAGES_DIR;
+  const info = await FileSystem.getInfoAsync(dir);
+  if (!info.exists) await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
   return dir;
 }
 
@@ -186,6 +213,31 @@ export async function readAudioAsBase64(uri: string): Promise<string | null> {
     logger.warn("[Backup] Failed to read audio file:", baseUri, e);
     return null;
   }
+}
+
+export async function readImageAsBase64(uri: string): Promise<string | null> {
+  const baseUri = extractBaseUri(uri);
+  if (baseUri.startsWith("data:image/")) {
+    const marker = ";base64,";
+    const index = baseUri.indexOf(marker);
+    return index >= 0 ? baseUri.slice(index + marker.length) : null;
+  }
+  if (Platform.OS === "web" && baseUri.startsWith("blob:")) {
+    try {
+      const response = await fetch(baseUri);
+      if (!response.ok) return null;
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      let binary = "";
+      for (let i = 0; i < bytes.length; i += 0x8000) {
+        binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+      }
+      return btoa(binary);
+    } catch (e) {
+      logger.warn("[Backup] Failed to read blob image:", e);
+      return null;
+    }
+  }
+  return readAudioAsBase64(uri);
 }
 
 export function sanitizeAudioFilename(raw: string): string {
@@ -465,6 +517,51 @@ export async function writeAudioFromBase64(filename: string, base64: string): Pr
   return fileUri;
 }
 
+function decodeImageBase64(base64: string): Uint8Array | null {
+  if (base64.length === 0 || base64.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(base64)) return null;
+  try {
+    const decoded = atob(base64);
+    return Uint8Array.from(decoded, (char) => char.charCodeAt(0));
+  } catch {
+    return null;
+  }
+}
+
+function detectImageExtension(base64: string): string | null {
+  const b = decodeImageBase64(base64);
+  if (!b || b.length < 12) return null;
+  if (
+    b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff &&
+    b[b.length - 2] === 0xff && b[b.length - 1] === 0xd9
+  ) return "jpg";
+  const pngHeader = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+  const pngEnd = [0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82];
+  if (
+    b.length >= 24 &&
+    pngHeader.every((v, i) => b[i] === v) &&
+    pngEnd.every((v, i) => b[b.length - pngEnd.length + i] === v)
+  ) return "png";
+  const gifHeader = String.fromCharCode(...b.slice(0, 6));
+  if ((gifHeader === "GIF87a" || gifHeader === "GIF89a") && b[b.length - 1] === 0x3b) return "gif";
+  if (
+    String.fromCharCode(...b.slice(0, 4)) === "RIFF" &&
+    String.fromCharCode(...b.slice(8, 12)) === "WEBP"
+  ) {
+    const declaredSize = b[4] | (b[5] << 8) | (b[6] << 16) | (b[7] << 24);
+    if (declaredSize + 8 === b.length) return "webp";
+  }
+  if (b.length >= 16 && String.fromCharCode(...b.slice(4, 8)) === "ftyp") return "heic";
+  return null;
+}
+
+export async function writeImageFromBase64(filename: string, base64: string): Promise<string> {
+  const dir = await ensureImagesDir();
+  const safe = sanitizeAudioFilename(filename);
+  const fileUri = dir + safe;
+  await FileSystem.writeAsStringAsync(fileUri, base64, { encoding: FileSystem.EncodingType.Base64 });
+  return fileUri;
+}
+
 export function collectUrisFromSampleMap(
   samples: Record<string, string> | undefined,
 ): Map<string, string> {
@@ -517,6 +614,39 @@ export function collectAllAudioUris(
   return uris;
 }
 
+function collectEntryImageUris(entry: PracticeEntry, uris: Map<string, string>): void {
+  if (entry.imageUri) uris.set(imageAssetKey(entry.imageUri), extractBaseUri(entry.imageUri));
+  for (const child of entry.noteQueueEntries ?? []) collectEntryImageUris(child, uris);
+}
+
+export function collectImageUrisFromEntry(entry: PracticeEntry): Map<string, string> {
+  const uris = new Map<string, string>();
+  collectEntryImageUris(entry, uris);
+  return uris;
+}
+
+export function collectAllImageUris(data: Record<string, string | null>): Map<string, string> {
+  const uris = new Map<string, string>();
+  try {
+    const images: unknown = JSON.parse(data["metronome_hub_images"] ?? "[]");
+    if (Array.isArray(images)) {
+      for (const image of images) {
+        const uri = image && typeof image === "object" ? (image as { uri?: unknown }).uri : undefined;
+        if (typeof uri === "string") uris.set(imageAssetKey(uri), extractBaseUri(uri));
+      }
+    }
+  } catch {}
+  try {
+    const entries: unknown = JSON.parse(data["practice_book"] ?? "[]");
+    if (Array.isArray(entries)) {
+      for (const entry of entries) {
+        if (entry && typeof entry === "object") collectEntryImageUris(entry as PracticeEntry, uris);
+      }
+    }
+  } catch {}
+  return uris;
+}
+
 export async function readAllAudioFiles(
   uris: Map<string, string>,
 ): Promise<Record<string, string>> {
@@ -528,6 +658,25 @@ export async function readAllAudioFiles(
     }
   }
   return audioFiles;
+}
+
+export async function readAllImageFiles(uris: Map<string, string>): Promise<Record<string, string>> {
+  const imageFiles: Record<string, string> = {};
+  let total = 0;
+  for (const [fname, baseUri] of uris) {
+    if (Object.keys(imageFiles).length >= MAX_IMAGE_FILE_COUNT) break;
+    const base64 = await readImageAsBase64(baseUri);
+    if (
+      base64 &&
+      base64.length <= MAX_IMAGE_FILE_B64_CHARS &&
+      total + base64.length <= MAX_IMAGE_FILES_TOTAL_B64_CHARS &&
+      detectImageExtension(base64) !== null
+    ) {
+      imageFiles[fname] = base64;
+      total += base64.length;
+    }
+  }
+  return imageFiles;
 }
 
 export function remapUri(oldUri: string, uriMapping: Map<string, string>): string {
@@ -572,6 +721,74 @@ export async function restoreAudioFiles(
     }
   }
   return uriMapping;
+}
+
+export async function restoreImageFiles(
+  imageFiles: Record<string, string>,
+): Promise<Map<string, string>> {
+  const uriMapping = new Map<string, string>();
+  const entries = Object.entries(imageFiles);
+  if (entries.length > MAX_IMAGE_FILE_COUNT) {
+    logger.warn("[Backup] Image file count exceeds limit:", entries.length);
+    return uriMapping;
+  }
+  let total = 0;
+  for (const [fname, base64] of entries) {
+    if (
+      typeof base64 !== "string" ||
+      base64.length > MAX_IMAGE_FILE_B64_CHARS ||
+      total + base64.length > MAX_IMAGE_FILES_TOTAL_B64_CHARS ||
+      !detectImageExtension(base64)
+    ) {
+      logger.warn("[Backup] Invalid or oversized image, skipping:", fname);
+      continue;
+    }
+    try {
+      const ext = detectImageExtension(base64)!;
+      const mime = ext === "jpg" ? "image/jpeg" : `image/${ext}`;
+      const newUri = Platform.OS === "web"
+        ? `data:${mime};base64,${base64}`
+        : await writeImageFromBase64(`${fname.replace(/\.[^.]+$/, "")}.${ext}`, base64);
+      uriMapping.set(fname, newUri);
+      total += base64.length;
+    } catch (e) {
+      logger.warn("[Backup] Failed to restore image file:", fname, e);
+    }
+  }
+  return uriMapping;
+}
+
+export function remapEntryImageUris(entry: PracticeEntry, uriMapping: Map<string, string>): PracticeEntry {
+  return {
+    ...entry,
+    imageUri: entry.imageUri ? remapImageUri(entry.imageUri, uriMapping) : entry.imageUri,
+    noteQueueEntries: entry.noteQueueEntries?.map((child) => remapEntryImageUris(child, uriMapping)),
+  };
+}
+
+function remapImageUri(oldUri: string, uriMapping: Map<string, string>): string {
+  // filename fallback keeps compatibility with early/hand-authored imageFiles maps.
+  const newBase = uriMapping.get(imageAssetKey(oldUri)) ?? uriMapping.get(filenameFromUri(oldUri));
+  return newBase ? newBase + extractFragment(oldUri) : oldUri;
+}
+
+export function remapDataImageUris(
+  data: Record<string, string | null>,
+  uriMapping: Map<string, string>,
+): Record<string, string | null> {
+  const result = { ...data };
+  try {
+    const entries: PracticeEntry[] = JSON.parse(result["practice_book"] ?? "[]");
+    result["practice_book"] = JSON.stringify(entries.map((entry) => remapEntryImageUris(entry, uriMapping)));
+  } catch {}
+  try {
+    const images: Array<Record<string, unknown>> = JSON.parse(result["metronome_hub_images"] ?? "[]");
+    result["metronome_hub_images"] = JSON.stringify(images.map((image) => ({
+      ...image,
+      uri: typeof image.uri === "string" ? remapImageUri(image.uri, uriMapping) : image.uri,
+    })));
+  } catch {}
+  return result;
 }
 
 export function remapDataUris(

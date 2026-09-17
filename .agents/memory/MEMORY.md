@@ -67,3 +67,4 @@
 - [Photo cover crop bounds](photo-cover-crop-bounds.md) — normalized pan offsets must be clamped for each rendered frame aspect and zoom, not only when the crop is created.
 - [Complete playback-stop boundary](complete-playback-stop-boundary.md) — full stops must invalidate all async audio producers before stopping/releasing output; partial handoffs use narrower cleanup.
 - [Bar subdivision drag verification](bar-subdivision-drag-verification.md) — first Bar visit has zero rows by design; the measured list itself must remain a valid pattern-drop target.
+- [Backup image asset identity](backup-image-asset-identity.md) — key embedded images by source URI, then detect format from decoded bytes; filenames and blob URLs are not reliable identities.

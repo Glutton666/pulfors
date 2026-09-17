@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import type { PracticeEntry } from "../lib/storage";
 import {
   extractBaseUri,
   extractFragment,
@@ -13,9 +14,18 @@ import {
   sanitizeCustomSoundSetsJson,
   collectUrisFromSampleMap,
   collectAllAudioUris,
+  collectAllImageUris,
+  collectImageUrisFromEntry,
   remapUri,
   remapSampleMap,
   remapDataUris,
+  remapDataImageUris,
+  remapEntryImageUris,
+  restoreImageFiles,
+  MAX_IMAGE_FILE_COUNT,
+  MAX_IMAGE_FILE_B64_CHARS,
+  imageAssetKey,
+  readImageAsBase64,
   formatDateForFilename,
   ALL_KEYS,
   MAX_QUEUE_ENTRIES,
@@ -585,4 +595,99 @@ test("sanitizeBackupData: metronome_hub_images 원격 URI 제거", () => {
   const parsed = JSON.parse(out.metronome_hub_images!);
   assert.equal(parsed[0].uri, "file:///local/img.jpg");
   assert.equal(parsed[1].uri, "");
+});
+
+test("collectAllImageUris: 허브와 중첩 큐 사진을 모두 수집", () => {
+  const data = {
+    metronome_hub_images: JSON.stringify([{ id: "h", uri: "file:///photos/hub.png" }]),
+    practice_book: JSON.stringify([{
+      id: "root",
+      imageUri: "file:///photos/root.jpg",
+      noteQueueEntries: [{
+        id: "child",
+        imageUri: "file:///photos/child.webp",
+        noteQueueEntries: [{ id: "grand", imageUri: "file:///photos/grand.gif" }],
+      }],
+    }]),
+  };
+  const uris = collectAllImageUris(data);
+  assert.equal(uris.get(imageAssetKey("file:///photos/hub.png")), "file:///photos/hub.png");
+  assert.equal(uris.get(imageAssetKey("file:///photos/root.jpg")), "file:///photos/root.jpg");
+  assert.equal(uris.get(imageAssetKey("file:///photos/child.webp")), "file:///photos/child.webp");
+  assert.equal(uris.get(imageAssetKey("file:///photos/grand.gif")), "file:///photos/grand.gif");
+});
+
+test("collectImageUrisFromEntry + remapEntryImageUris: 중첩 큐 왕복과 crop 보존", () => {
+  const entry = {
+    id: "root", bpm: 120, beatsPerMeasure: 4, beatTypes: [], createdAt: 1,
+    imageUri: "file:///old/root.jpg",
+    imageCrop: { scale: 2, x: 0.2, y: -0.1, aspectRatio: 1 },
+    noteQueueEntries: [{
+      id: "child", bpm: 100, beatsPerMeasure: 3, beatTypes: [], createdAt: 2,
+      imageUri: "file:///old/child.png",
+    }],
+  };
+  assert.equal(collectImageUrisFromEntry(entry as unknown as PracticeEntry).size, 2);
+  const remapped = remapEntryImageUris(entry as unknown as PracticeEntry, new Map([
+    [imageAssetKey("file:///old/root.jpg"), "file:///new/root.jpg"],
+    [imageAssetKey("file:///old/child.png"), "file:///new/child.png"],
+  ]));
+  assert.equal(remapped.imageUri, "file:///new/root.jpg");
+  assert.deepEqual(remapped.imageCrop, entry.imageCrop);
+  assert.equal(remapped.noteQueueEntries![0].imageUri, "file:///new/child.png");
+});
+
+test("remapDataImageUris: 허브와 practice 중첩 사진을 함께 재매핑", () => {
+  const out = remapDataImageUris({
+    metronome_hub_images: JSON.stringify([{ id: "h", uri: "file:///old/h.png" }]),
+    practice_book: JSON.stringify([{
+      id: "p", imageUri: "file:///old/p.jpg",
+      noteQueueEntries: [{ id: "q", imageUri: "file:///old/q.gif" }],
+    }]),
+  }, new Map([
+    ["h.png", "file:///new/h.png"],
+    ["p.jpg", "file:///new/p.jpg"],
+    ["q.gif", "file:///new/q.gif"],
+  ]));
+  assert.equal(JSON.parse(out.metronome_hub_images!)[0].uri, "file:///new/h.png");
+  const entry = JSON.parse(out.practice_book!)[0];
+  assert.equal(entry.imageUri, "file:///new/p.jpg");
+  assert.equal(entry.noteQueueEntries[0].imageUri, "file:///new/q.gif");
+});
+
+test("collectImageUrisFromEntry: 파일명이 같아도 서로 다른 사진을 덮어쓰지 않음", () => {
+  const entry = {
+    id: "root", bpm: 120, beatsPerMeasure: 4, beatTypes: [], createdAt: 1,
+    imageUri: "file:///album-a/photo.jpg",
+    noteQueueEntries: [{
+      id: "child", bpm: 120, beatsPerMeasure: 4, beatTypes: [], createdAt: 2,
+      imageUri: "file:///album-b/photo.jpg",
+    }],
+  };
+  const uris = collectImageUrisFromEntry(entry as unknown as PracticeEntry);
+  assert.equal(uris.size, 2);
+  assert.notEqual(
+    imageAssetKey("file:///album-a/photo.jpg"),
+    imageAssetKey("file:///album-b/photo.jpg"),
+  );
+});
+
+test("restoreImageFiles: 손상 이미지와 파일 개수 초과를 거부", async () => {
+  assert.equal((await restoreImageFiles({ "bad.jpg": "not-an-image" })).size, 0);
+  assert.equal((await restoreImageFiles({ "truncated.png": "iVBORw0KGgoAAA" })).size, 0);
+  assert.equal(
+    (await restoreImageFiles({ "huge.png": "A".repeat(MAX_IMAGE_FILE_B64_CHARS + 1) })).size,
+    0,
+  );
+  const tooMany = Object.fromEntries(
+    Array.from({ length: MAX_IMAGE_FILE_COUNT + 1 }, (_, i) => [`${i}.png`, "iVBORw0KGgoAAA"]),
+  );
+  assert.equal((await restoreImageFiles(tooMany)).size, 0);
+});
+
+test("readImageAsBase64: data image와 고유 확장자 키를 지원", async () => {
+  const png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
+  const uri = `data:image/png;base64,${png}`;
+  assert.equal(await readImageAsBase64(uri), png);
+  assert.match(imageAssetKey(uri), /^image_[a-z0-9]+_inline\.png$/);
 });

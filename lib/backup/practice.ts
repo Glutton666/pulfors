@@ -11,12 +11,16 @@ import {
   MAX_IMPORT_JSON_CHARS,
   type PracticeShareFile,
   collectUrisFromSampleMap,
+  collectImageUrisFromEntry,
   downloadJsonWeb,
   pickFileWeb,
   readAllAudioFiles,
+  readAllImageFiles,
   readStringFromFile,
   remapSampleMap,
+  remapEntryImageUris,
   restoreAudioFiles,
+  restoreImageFiles,
   sanitizePracticeEntry,
   writeStringToFile,
 } from "./shared";
@@ -48,6 +52,7 @@ export async function sharePracticeEntry(entry: PracticeEntry): Promise<boolean>
       }
     }
     const audioFiles = await readAllAudioFiles(entryUris);
+    const imageFiles = await readAllImageFiles(collectImageUrisFromEntry(entry));
 
     // 악보 모드 항목인 경우 연결된 ScoreDocument 도 함께 포함한다.
     // 수신 기기에 해당 악보가 없어도 import 시 복원할 수 있도록 한다.
@@ -71,6 +76,7 @@ export async function sharePracticeEntry(entry: PracticeEntry): Promise<boolean>
       },
       entry,
       ...(Object.keys(audioFiles).length > 0 ? { audioFiles } : {}),
+      ...(Object.keys(imageFiles).length > 0 ? { imageFiles } : {}),
       ...(scoreDoc ? { scoreDoc } : {}),
     };
 
@@ -180,7 +186,7 @@ async function parsePracticeJson(
     const data = parseResult.data;
     const entry = data.entry as unknown as PracticeEntry;
 
-    const sanitized = sanitizePracticeEntry(entry);
+    let sanitized = sanitizePracticeEntry(entry);
     if (sanitized === null) {
       logger.warn("[Backup] Practice entry failed sanitization, rejecting import");
       return { success: false };
@@ -197,6 +203,10 @@ async function parsePracticeJson(
           noteSamples: qe.noteSamples ? remapSampleMap(qe.noteSamples, uriMapping) : qe.noteSamples,
         }));
       }
+    }
+    if (data.imageFiles && Object.keys(data.imageFiles).length > 0) {
+      const imageMapping = await restoreImageFiles(data.imageFiles);
+      if (imageMapping.size > 0) sanitized = remapEntryImageUris(sanitized, imageMapping);
     }
 
     // 악보 모드 항목에 scoreDoc 이 포함된 경우, 수신 기기에 해당 악보가 없으면 복원한다.

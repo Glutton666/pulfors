@@ -27,6 +27,7 @@ import {
   remapSampleMap,
 } from "../lib/backup/shared";
 import { exportBackup, restoreFromJson } from "../lib/backup/full";
+import { sharePracticeEntry } from "../lib/backup/practice";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { CURRENT_SCHEMA_VERSION } from "../lib/backup/migrations";
 
@@ -502,4 +503,96 @@ test("[backup-export-import] schemaVersion=999으로 조작된 JSON은 importBac
   assert.equal(result.success, false, "미래 버전 파일은 거부되어야 한다");
   assert.equal(result.errorCode, "unsupported_version", "errorCode='unsupported_version'");
   assert.equal(result.keyCount, 0, "복원된 키 없음");
+});
+
+test("[backup-photo-roundtrip] 전체 백업의 허브·노트·중첩 큐 사진을 새 위치로 복원", async () => {
+  (AsyncStorage as unknown as { __reset(): void }).__reset();
+  const imageBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
+  const backup = JSON.stringify({
+    _meta: {
+      app: "metronome",
+      version: 2,
+      createdAt: "2026-09-17T00:00:00.000Z",
+      keyCount: 2,
+    },
+    schemaVersion: CURRENT_SCHEMA_VERSION,
+    data: {
+      metronome_hub_images: JSON.stringify([
+        { id: "hub", uri: "file:///old/hub.png", beatTypes: ["normal"] },
+      ]),
+      practice_book: JSON.stringify([{
+        id: "root", label: "사진 노트", createdAt: 1, bpm: 120,
+        beatsPerMeasure: 4, beatTypes: ["accent", "normal", "normal", "normal"],
+        imageUri: "file:///old/root.png",
+        imageCrop: { scale: 1.5, x: 0.1, y: -0.2, aspectRatio: 0.75 },
+        noteQueueEntries: [{
+          id: "child", label: "큐", createdAt: 2, bpm: 90,
+          beatsPerMeasure: 3, beatTypes: ["accent", "normal", "normal"],
+          imageUri: "file:///old/child.png",
+        }],
+      }]),
+    },
+    imageFiles: {
+      "hub.png": imageBase64,
+      "root.png": imageBase64,
+      "child.png": imageBase64,
+      "corrupt.png": "iVBORw0KGgoAAA",
+    },
+  });
+
+  const writtenImages: string[] = [];
+  const originalWrite = FileSystemStub.writeAsStringAsync;
+  FileSystemStub.writeAsStringAsync = async (uri: string) => { writtenImages.push(uri); };
+  try {
+    const result = await restoreFromJson(backup);
+    assert.equal(result.success, true);
+  } finally {
+    FileSystemStub.writeAsStringAsync = originalWrite;
+  }
+
+  assert.equal(writtenImages.filter((uri) => uri.includes("/note_images/")).length, 3);
+  assert.equal(writtenImages.some((uri) => uri.includes("corrupt")), false);
+  const hubs = JSON.parse((await AsyncStorage.getItem("metronome_hub_images"))!);
+  assert.match(hubs[0].uri, /^file:\/\/\/stub\/doc\/note_images\//);
+  const book = JSON.parse((await AsyncStorage.getItem("practice_book"))!);
+  assert.match(book[0].imageUri, /^file:\/\/\/stub\/doc\/note_images\//);
+  assert.match(book[0].noteQueueEntries[0].imageUri, /^file:\/\/\/stub\/doc\/note_images\//);
+  assert.deepEqual(book[0].imageCrop, { scale: 1.5, x: 0.1, y: -0.2, aspectRatio: 0.75 });
+});
+
+test("[practice-photo-share] 연습 항목 공유 파일에 중첩 큐 사진 바이트를 포함", async () => {
+  const png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
+  const entry: PracticeEntry = {
+    id: "root", label: "사진 공유", createdAt: 1, bpm: 120,
+    beatsPerMeasure: 4, beatTypes: ["accent", "normal", "normal", "normal"],
+    beatSubdivisions: {}, barRepeats: {}, barLoopMode: "once" as const,
+    subdivisionPattern: ["accent"],
+    imageUri: "file:///photos/root.png",
+    noteQueueEntries: [{
+      id: "child", label: "중첩 사진", createdAt: 2, bpm: 90,
+      beatsPerMeasure: 3, beatTypes: ["accent", "normal", "normal"],
+      beatSubdivisions: {}, barRepeats: {}, barLoopMode: "once" as const,
+      subdivisionPattern: ["accent"],
+      imageUri: "file:///photos/child.png",
+    }],
+  };
+  let capturedJson: string | null = null;
+  const originalInfo = FileSystemStub.getInfoAsync;
+  const originalRead = FileSystemStub.readAsStringAsync;
+  const originalWrite = FileSystemStub.writeAsStringAsync;
+  FileSystemStub.getInfoAsync = async () => ({ exists: true });
+  FileSystemStub.readAsStringAsync = async () => png;
+  FileSystemStub.writeAsStringAsync = async (_uri: string, content: string) => { capturedJson = content; };
+  try {
+    await sharePracticeEntry(entry);
+  } finally {
+    FileSystemStub.getInfoAsync = originalInfo;
+    FileSystemStub.readAsStringAsync = originalRead;
+    FileSystemStub.writeAsStringAsync = originalWrite;
+  }
+  assert.ok(capturedJson);
+  const shared = JSON.parse(capturedJson!);
+  assert.equal(Object.keys(shared.imageFiles).length, 2);
+  assert.deepEqual(Object.values(shared.imageFiles), [png, png]);
+  assert.equal(shared.entry.noteQueueEntries[0].imageUri, "file:///photos/child.png");
 });
