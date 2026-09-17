@@ -407,7 +407,6 @@ export function useMetronomeScreen() {
   /** 폴리곤 모드 비트 핸들러 ref — 엔진 오디오 콜백에서 매 비트마다 호출된다 */
   const polygonOnBeatRef = useRef<(() => void) | null>(null);
   const sampleVolumeRef = useRef(0.8);
-  const renderGenerationRef = useRef(0);
   // 단일 활성 모달 상태 머신: null = 모달 없음. openExclusive로만 전환해 mutual exclusion 보장.
   const [activeModal, setActiveModal] = useState<ActiveModal>(null);
   const [tutorialState, setTutorialState] = useState<TutorialState>(DEFAULT_TUTORIAL_STATE);
@@ -876,13 +875,13 @@ export function useMetronomeScreen() {
     backgroundPlay, playbackNotifications, autoResumeAfterInterruption,
     updateBackgroundPlay, updatePlaybackNotifications, updateAutoResumeAfterInterruption, applyAudioSettings,
     // PCM / rendered-player refs & functions
-    renderedPlayerRef, samplePCMCacheRef, renderedUrlRef,
+    renderedPlayerRef, samplePCMCacheRef, renderedUrlRef, audioRenderLifecycle,
     webRenderedLoopRef, activateWebRenderedLoop, lastAudioFireRef,
     beginAudioStartupProbe, getAudioStartupEpoch, invalidateAudioStartupProbe,
     isAudioStartupEpochCurrent, recordAudioActivity, waitForFirstAudioActivity,
     armAudioWatchdogRef, clearAudioWatchdogRef,
     samplePlayStateRef,
-    buildRenderedPlayer, buildRenderedPlayerDetailed, scheduleReRender, stopRenderedAudio, stopPlaybackAudio,
+    prepareRenderedPlayer, scheduleReRender, stopRenderedAudio, stopPlaybackAudio,
     getClickPCMs, getSamplePCMs, getLayerClickPCMsForSchedule,
     invalidateSamplePCMCache, preloadNoteSampleSounds, cancelNoteSamplePreload, clearSamplePlayStates,
     queueNoteSamplePlayback, releaseNoteSampleResource, releaseNoteSampleResources,
@@ -893,7 +892,6 @@ export function useMetronomeScreen() {
     layerSoundSetsRef, noteSamplesRef, noteSampleChannelsRef, noteSampleVolumesRef, noteSampleSpeedsRef, barModeRef,
     barMetronomeChannelRef, noteSampleMetroChannelsRef, volumeRef, sampleVolumeRef,
     clickPCMCacheRef, webClickReadyRef, noteSampleSoundsRef, tonePositionRef, tonePositionsRef,
-    renderGenerationRef,
     isPlayingRef, bpmRef, t, showRecoveryToast, persistAudioSettingsCallbackRef,
     fatalRenderFailureRef,
   });
@@ -2140,14 +2138,14 @@ export function useMetronomeScreen() {
     resetPlaybackVisuals,
     flushPlaybackVisuals: () => flushPendingPlaybackVisualsRef.current(),
     renderedPlayerRef,
+    renderedUrlRef,
     webRenderedLoopRef,
     activateWebRenderedLoop,
     beginAudioStartupProbe,
     invalidateAudioStartupProbe,
     waitForFirstAudioActivity,
-    renderGenerationRef,
-    buildRenderedPlayer,
-    buildRenderedPlayerDetailed,
+    audioRenderLifecycle,
+    prepareRenderedPlayer,
     clearAudioWatchdogRef,
     armAudioWatchdogRef,
     soundSetRef,

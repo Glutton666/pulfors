@@ -10,6 +10,7 @@ import {
   releaseStereoArtifactIfCurrent,
   syncStereoArtifact,
 } from "@/lib/sample-cache";
+import { createAudioRenderLifecycle } from "@/lib/audio-render-lifecycle";
 
 const mockPlayer = {
   volume: 1,
@@ -28,6 +29,11 @@ const mockPlayWebRenderedLoop = jest.fn(
 );
 const mockDecodeSampleFile = jest.fn(async (_uri: string) => new Float32Array([0.8, 0.4, 0.2]));
 const mockCreateAudioPlayer = jest.fn((_source: unknown) => ({ ...mockPlayer }));
+const mockReleaseRenderedWav = jest.fn();
+const mockSaveRenderedWav = jest.fn(async (
+  _pcm?: unknown,
+  _filename?: string,
+) => "file:///rendered.wav");
 const mockApplyDialConfigToEngine = jest.fn();
 const mockScheduleWebClickAt = jest.fn((..._args: unknown[]) => null as any);
 const mockProcessClickPCM = jest.fn((
@@ -54,7 +60,11 @@ jest.mock("@/lib/audio-renderer", () => ({
   isRenderAborted: jest.fn((error: unknown) => (error as Error)?.message === "RENDER_ABORTED"),
   scheduleWebClickAt: (...args: unknown[]) => mockScheduleWebClickAt(...args),
   applySoftClip: jest.fn(),
-  saveRenderedWav: jest.fn(async () => "file:///rendered.wav"),
+  saveRenderedWav: (...args: unknown[]) => mockSaveRenderedWav(...args),
+  releaseRenderedWav: (uri: string) => {
+    mockReleaseRenderedWav(uri);
+    if (uri.startsWith("blob:")) URL.revokeObjectURL(uri);
+  },
   ensureWebClickBuffers: jest.fn(async () => true),
   playWebRenderedLoop: (
     pcm: unknown,
@@ -223,7 +233,10 @@ describe("pre-rendered playback reliability", () => {
     const { result } = renderHook(() => useAudioPipeline(params));
     let player: any = null;
     await act(async () => {
-      player = await result.current.buildRenderedPlayer();
+      const built = await result.current.prepareRenderedPlayer();
+      if (built.status === "completed") {
+        built.prepared.commit(({ player: readyPlayer }) => { player = readyPlayer; });
+      }
     });
 
     expect(mockDecodeSampleFile).toHaveBeenCalledWith("file:///sample.wav");
@@ -236,6 +249,42 @@ describe("pre-rendered playback reliability", () => {
     }));
     expect(mockRenderMeasure.mock.calls[0][0].samplePCMs.has("0-0")).toBe(true);
     expect(player?.volume).toBe(0.35);
+  });
+
+  it("uses a unique native artifact filename for consecutive render sessions", async () => {
+    const engine = makeEngine();
+    const params = makePipelineParams(engine);
+    const { result, unmount } = renderHook(() => useAudioPipeline(params as any));
+
+    const first = await result.current.prepareRenderedPlayer();
+    const second = await result.current.prepareRenderedPlayer();
+    if (second.status === "completed") second.prepared.discard();
+    if (first.status === "completed") first.prepared.discard();
+
+    const filenames = mockSaveRenderedWav.mock.calls.map((call) => call[1]);
+    expect(filenames).toHaveLength(2);
+    expect(filenames[0]).toMatch(/^rendered_measure_\d+\.wav$/);
+    expect(filenames[1]).toMatch(/^rendered_measure_\d+\.wav$/);
+    expect(filenames[0]).not.toBe(filenames[1]);
+    unmount();
+  });
+
+  it("uses distinct native artifact filenames across concurrent pipeline instances", async () => {
+    const firstEngine = makeEngine();
+    const secondEngine = makeEngine();
+    const first = renderHook(() => useAudioPipeline(makePipelineParams(firstEngine) as any));
+    const second = renderHook(() => useAudioPipeline(makePipelineParams(secondEngine) as any));
+
+    const firstResult = await first.result.current.prepareRenderedPlayer();
+    const secondResult = await second.result.current.prepareRenderedPlayer();
+    if (firstResult.status === "completed") firstResult.prepared.discard();
+    if (secondResult.status === "completed") secondResult.prepared.discard();
+
+    const filenames = mockSaveRenderedWav.mock.calls.map((call) => call[1]);
+    expect(filenames).toHaveLength(2);
+    expect(filenames[0]).not.toBe(filenames[1]);
+    first.unmount();
+    second.unmount();
   });
 
   it("native builder keeps the supplied start snapshot while refs change during decoding", async () => {
@@ -290,7 +339,7 @@ describe("pre-rendered playback reliability", () => {
 
     let building!: Promise<unknown>;
     act(() => {
-      building = result.current.buildRenderedPlayer({ mode: "bar", audio: snapshot } as any);
+      building = result.current.prepareRenderedPlayer({ mode: "bar", audio: snapshot } as any);
     });
     params.volumeRef.current = 0.95;
     params.sampleVolumeRef.current = 1;
@@ -793,9 +842,12 @@ describe("pre-rendered playback reliability", () => {
     const player = { ...mockPlayer, volume: 0.35 };
     let resolvePlayer!: (value: typeof player) => void;
     const params = makePlaybackParams(engine, null);
-    params.buildRenderedPlayer.mockImplementation(
-      () => new Promise((resolve) => { resolvePlayer = resolve; }),
-    );
+    params.prepareRenderedPlayer.mockImplementation(() => {
+      const session = params.audioRenderLifecycle.start();
+      return new Promise((resolve) => {
+        resolvePlayer = (readyPlayer) => resolve(completePreparedPlayer(session, readyPlayer));
+      });
+    });
     const { result } = renderHook(() => usePlaybackControl(params as any));
 
     let pendingStart!: Promise<unknown>;
@@ -866,9 +918,15 @@ describe("pre-rendered playback reliability", () => {
     };
     let resolveStale!: (player: typeof stalePlayer) => void;
     const params = makePlaybackParams(engine, null);
-    params.buildRenderedPlayer
-      .mockImplementationOnce(() => new Promise((resolve) => { resolveStale = resolve; }))
-      .mockResolvedValueOnce(currentPlayer);
+    params.prepareRenderedPlayer
+      .mockImplementationOnce(() => {
+        const session = params.audioRenderLifecycle.start();
+        return new Promise((resolve) => {
+          resolveStale = (readyPlayer) => resolve(completePreparedPlayer(session, readyPlayer));
+        });
+      })
+      .mockImplementationOnce(async () =>
+        completePreparedPlayer(params.audioRenderLifecycle.start(), currentPlayer));
     const { result } = renderHook(() => usePlaybackControl(params as any));
 
     let staleStart!: Promise<boolean>;
@@ -905,9 +963,12 @@ describe("pre-rendered playback reliability", () => {
     };
     let resolvePlayer!: (value: typeof mockPlayer) => void;
     const params = makePlaybackParams(engine, null);
-    params.buildRenderedPlayer.mockImplementationOnce(
-      () => new Promise((resolve) => { resolvePlayer = resolve; }),
-    );
+    params.prepareRenderedPlayer.mockImplementationOnce(() => {
+      const session = params.audioRenderLifecycle.start();
+      return new Promise((resolve) => {
+        resolvePlayer = (readyPlayer) => resolve(completePreparedPlayer(session, readyPlayer));
+      });
+    });
     const { result } = renderHook(() => usePlaybackControl(params as any));
 
     let pendingStart!: Promise<boolean>;
@@ -1022,9 +1083,12 @@ describe("pre-rendered playback reliability", () => {
     };
     let resolvePlayer!: (value: typeof player) => void;
     const params = makePlaybackParams(engine, null);
-    params.buildRenderedPlayer.mockImplementation(
-      () => new Promise((resolve) => { resolvePlayer = resolve; }),
-    );
+    params.prepareRenderedPlayer.mockImplementation(() => {
+      const session = params.audioRenderLifecycle.start();
+      return new Promise((resolve) => {
+        resolvePlayer = (readyPlayer) => resolve(completePreparedPlayer(session, readyPlayer));
+      });
+    });
     const { result } = renderHook(() => usePlaybackControl(params as any));
 
     let pendingStart!: Promise<unknown>;
@@ -1114,6 +1178,20 @@ describe("pre-rendered playback reliability", () => {
     expect(releaseStereoArtifact).toHaveBeenCalledWith("0-0");
     expect(params.showRecoveryToast).not.toHaveBeenCalled();
     jest.useRealTimers();
+  });
+
+  it("permanently rejects a new render started through an escaped callback after unmount", async () => {
+    const engine = makeEngine();
+    const params = makePipelineParams(engine);
+    const { result, unmount } = renderHook(() => useAudioPipeline(params as any));
+    const escapedPrepare = result.current.prepareRenderedPlayer;
+
+    unmount();
+    const outcome = await escapedPrepare();
+
+    expect(outcome.status).toBe("cancelled");
+    expect(mockSaveRenderedWav).not.toHaveBeenCalled();
+    expect(mockCreateAudioPlayer).not.toHaveBeenCalled();
   });
 
   it("complete playback stop clears rendered, sampled, realtime, watchdog, and blob ownership", () => {
@@ -1645,7 +1723,7 @@ describe("pre-rendered playback reliability", () => {
     const engine = makeEngine();
     const params = makePlaybackParams(engine, null);
     params.volumeRef.current = 1.5; // boosted — old code always threw when player was null
-    (params as any).buildRenderedPlayerDetailed = jest.fn(async () => ({ status: "aborted" as const }));
+    (params as any).prepareRenderedPlayer = jest.fn(async () => ({ status: "superseded" as const }));
     const { result } = renderHook(() => usePlaybackControl(params as any));
 
     await act(async () => {
@@ -1665,7 +1743,10 @@ describe("pre-rendered playback reliability", () => {
     const engine = makeEngine();
     const params = makePlaybackParams(engine, null);
     params.volumeRef.current = 1.5;
-    (params as any).buildRenderedPlayerDetailed = jest.fn(async () => ({ status: "failed" as const }));
+    (params as any).prepareRenderedPlayer = jest.fn(async () => ({
+      status: "failed" as const,
+      error: new Error("render failed"),
+    }));
     const { result } = renderHook(() => usePlaybackControl(params as any));
 
     await act(async () => {
@@ -1711,7 +1792,7 @@ describe("pre-rendered playback reliability", () => {
       await result.current.togglePlayPause();
     });
 
-    expect(params.buildRenderedPlayer).toHaveBeenCalledTimes(1);
+    expect(params.prepareRenderedPlayer).toHaveBeenCalledTimes(1);
     expect(engine.setPreRenderedAudio).toHaveBeenCalledWith(true);
     expect(engine.start).toHaveBeenCalledTimes(1);
     expect(player.play).toHaveBeenCalledTimes(1);
@@ -1732,7 +1813,7 @@ describe("pre-rendered playback reliability", () => {
       await result.current.togglePlayPause();
     });
 
-    expect(params.buildRenderedPlayer).toHaveBeenCalledTimes(1);
+    expect(params.prepareRenderedPlayer).toHaveBeenCalledTimes(1);
     expect(engine.setPreRenderedAudio).toHaveBeenCalledWith(true);
     expect(engine.start).toHaveBeenCalledTimes(1);
     expect(player.play).toHaveBeenCalledTimes(1);
@@ -1853,7 +1934,7 @@ describe("pre-rendered playback reliability", () => {
       await Promise.resolve();
     });
 
-    expect(params.buildRenderedPlayer).toHaveBeenCalledTimes(1);
+    expect(params.prepareRenderedPlayer).toHaveBeenCalledTimes(1);
     expect(player.play).not.toHaveBeenCalled();
     expect(engine.start).not.toHaveBeenCalled();
 
@@ -1896,7 +1977,7 @@ describe("pre-rendered playback reliability", () => {
 
     expect(engine.stop).toHaveBeenCalledTimes(1);
     expect(params.stopRenderedAudio).toHaveBeenCalled();
-    expect(params.buildRenderedPlayer).toHaveBeenCalledTimes(1);
+    expect(params.prepareRenderedPlayer).toHaveBeenCalledTimes(1);
     expect(player.play).not.toHaveBeenCalled();
 
     await act(async () => {
@@ -1976,7 +2057,6 @@ describe("pre-rendered playback reliability", () => {
   it("shared render epoch cancels an in-flight web render when settings request a re-render", async () => {
     (Platform as unknown as { OS: string }).OS = "web";
     const engine = makeEngine();
-    const sharedEpoch = { current: 0 };
     let resolveSampleLoad!: (value: typeof samplePCMs) => void;
     let markSampleLoadEntered!: () => void;
     const sampleLoadEntered = new Promise<void>((resolve) => {
@@ -1984,7 +2064,6 @@ describe("pre-rendered playback reliability", () => {
     });
     const playbackParams = makePlaybackParams(engine, null);
     playbackParams.soundSetRef.current = "custom1";
-    playbackParams.renderGenerationRef = sharedEpoch;
     playbackParams.getSamplePCMs.mockImplementationOnce(
       () => {
         markSampleLoadEntered();
@@ -2000,7 +2079,7 @@ describe("pre-rendered playback reliability", () => {
     await act(async () => {
       await sampleLoadEntered;
     });
-    sharedEpoch.current += 1;
+    playbackParams.audioRenderLifecycle.cancel();
     resolveSampleLoad(samplePCMs);
     await act(async () => {
       await pendingStart;
@@ -2028,11 +2107,25 @@ describe("pre-rendered playback reliability", () => {
   });
 });
 
+function completePreparedPlayer(session: any, player: any) {
+  return session.complete(
+    { player, uri: "file:///rendered.wav" },
+    ({ player: ownedPlayer }: { player: typeof mockPlayer }) => {
+      ownedPlayer.pause();
+      ownedPlayer.release();
+    },
+  );
+}
+
 function makePlaybackParams(engine: ReturnType<typeof makeEngine>, player: typeof mockPlayer | null) {
   const webRenderedLoopRef = { current: null as any };
   const renderedPlayerRef = { current: null as any };
+  const renderedUrlRef = { current: null as string | null };
+  const audioRenderLifecycle = createAudioRenderLifecycle();
   const stopRenderedAudio = jest.fn(() => {
+    audioRenderLifecycle.cancel();
     renderedPlayerRef.current = null;
+    renderedUrlRef.current = null;
     webRenderedLoopRef.current = null;
   });
   const clearSamplePlayStates = jest.fn();
@@ -2080,13 +2173,19 @@ function makePlaybackParams(engine: ReturnType<typeof makeEngine>, player: typeo
     resetPlaybackVisuals: jest.fn(),
     flushPlaybackVisuals: jest.fn(),
     renderedPlayerRef,
+    renderedUrlRef,
     webRenderedLoopRef,
     activateWebRenderedLoop: jest.fn((loop) => { webRenderedLoopRef.current = loop; }),
     beginAudioStartupProbe: jest.fn(() => 1),
     invalidateAudioStartupProbe,
     waitForFirstAudioActivity: jest.fn(async (_epoch: number) => true),
-    renderGenerationRef: { current: 0 },
-    buildRenderedPlayer: jest.fn(async () => player),
+    audioRenderLifecycle,
+    prepareRenderedPlayer: jest.fn(async () => {
+      const session = audioRenderLifecycle.start();
+      return player
+        ? completePreparedPlayer(session, player)
+        : session.fail(new Error("render failed"));
+    }),
     clearAudioWatchdogRef: { current: clearAudioWatchdog },
     armAudioWatchdogRef: { current: jest.fn() },
     soundSetRef: { current: "classic" },

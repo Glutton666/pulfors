@@ -764,9 +764,10 @@ function hasStereoPanner(ctx: AudioContext): ctx is StereoPannerCapableContext {
 
 export async function saveRenderedWav(
   pcm: Float32Array | StereoPCM,
+  filename: string = "rendered_measure.wav",
 ): Promise<string> {
   if (isStereoPCM(pcm)) {
-    return saveRenderedWavStereo(pcm.left, pcm.right);
+    return saveRenderedWavStereo(pcm.left, pcm.right, filename);
   }
   const wav = encodeWav(pcm, RENDER_SR, true);
 
@@ -775,11 +776,24 @@ export async function saveRenderedWav(
     return URL.createObjectURL(blob);
   } else {
     const cacheDir = Paths.cache;
-    const file = new File(cacheDir, "rendered_measure.wav");
+    const file = new File(cacheDir, filename);
     const bytes = new Uint8Array(wav);
     file.write(bytes);
     return file.uri;
   }
+}
+
+export function releaseRenderedWav(uri: string): void {
+  if (!uri) return;
+  if (Platform.OS === "web") {
+    if (uri.startsWith("blob:")) {
+      try { URL.revokeObjectURL(uri); } catch {}
+    }
+    return;
+  }
+  try {
+    new File(uri.split("#")[0]).delete();
+  } catch {}
 }
 
 export function getRenderSampleRate(): number {

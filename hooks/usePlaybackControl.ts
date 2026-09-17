@@ -10,9 +10,6 @@ import {
   renderMeasureAbortable,
   getClickOutputVolume,
   getClickRenderVolume,
-  beginAbortableRender,
-  abortActiveRender,
-  finishAbortableRender,
   isRenderAborted,
 } from "@/lib/audio-renderer";
 import type { ClickPCMs, SamplePCMEntry, TickInfo, WebRenderedLoop } from "@/lib/audio-renderer";
@@ -38,6 +35,10 @@ import type {
 
 import type { PlaybackContext } from "@/lib/playback-context";
 import type { AudioPlayer } from "expo-audio";
+import type {
+  AudioRenderLifecycle,
+  AudioRenderResult,
+} from "@/lib/audio-render-lifecycle";
 import {
   getAudioLifecycleSnapshot,
   markAudioPlaying,
@@ -78,24 +79,15 @@ export interface UsePlaybackControlParams {
   resetPlaybackVisuals: () => void;
   flushPlaybackVisuals: () => void;
   renderedPlayerRef: Ref<AudioPlayer | null>;
+  renderedUrlRef: Ref<string | null>;
   webRenderedLoopRef: Ref<WebRenderedLoop | null>;
   activateWebRenderedLoop: (loop: WebRenderedLoop) => void;
   beginAudioStartupProbe: () => number;
   invalidateAudioStartupProbe: () => void;
   waitForFirstAudioActivity: (epoch: number, isCancelled?: () => boolean, timeoutMs?: number) => Promise<boolean>;
-  renderGenerationRef: Ref<number>;
-  buildRenderedPlayer: (plan?: MetronomePlaybackPlan) => Promise<AudioPlayer | null>;
-  /**
-   * buildRenderedPlayer의 null만으로는 "다른 렌더에 의해 대체됨(aborted)"과
-   * "진짜 렌더 실패(failed)"를 구분할 수 없어, 대체된 경우까지 실패로 오인해
-   * 불필요한 시작 실패 에러를 던지는 레이스 컨디션이 있었다. 있으면 이 버전을
-   * 우선 사용해 그 둘을 구분한다. optional인 이유는 기존 테스트 mock과의
-   * 하위 호환 유지용.
-   */
-  buildRenderedPlayerDetailed?: (plan?: MetronomePlaybackPlan) => Promise<
-    | { status: "ready"; player: AudioPlayer }
-    | { status: "aborted" }
-    | { status: "failed" }
+  audioRenderLifecycle: AudioRenderLifecycle;
+  prepareRenderedPlayer: (plan?: MetronomePlaybackPlan) => Promise<
+    AudioRenderResult<{ player: AudioPlayer; uri: string }>
   >;
   clearAudioWatchdogRef: Ref<() => void>;
   armAudioWatchdogRef: Ref<() => void>;
@@ -152,7 +144,6 @@ export interface UsePlaybackControlParams {
 export function usePlaybackControl(p: UsePlaybackControlParams) {
   const seamlessNextEntryRef = useRef<PracticeEntry | null>(null);
   const seamlessRef = p.seamlessNextEntryRef ?? seamlessNextEntryRef;
-  const renderGenerationRef = p.renderGenerationRef;
   const startAttemptRef = useRef(0);
   const scheduledStartTokenRef = useRef<symbol | null>(null);
 
@@ -230,11 +221,19 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
     plan: MetronomePlaybackPlan,
     atMeasureBoundary: boolean,
     startAtPerformanceTime?: number,
-  ) => {
-    const generation = ++renderGenerationRef.current;
-    const signal = beginAbortableRender(renderGenerationRef);
+  ): Promise<
+    | { status: "completed" }
+    | { status: "cancelled" }
+    | { status: "superseded" }
+    | { status: "failed"; error: unknown }
+  > => {
+    const session = p.audioRenderLifecycle.start();
+    const signal = session.signal;
     try {
-      if (atMeasureBoundary && !p.engineRef.current?.getIsRunning()) return;
+      if (atMeasureBoundary && !p.engineRef.current?.getIsRunning()) {
+        p.audioRenderLifecycle.cancel();
+        return session.interruption();
+      }
       const scheduleInfo = engine.getScheduleInfo();
       const ticks = scheduleInfo.ticks as TickInfo[];
       const [clickPCMs, layerClickPCMs, samplePCMs] = await Promise.all([
@@ -253,9 +252,12 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
         p.getSamplePCMs(plan.audio.noteSamples, signal),
       ]);
       if (
-        generation !== renderGenerationRef.current ||
+        !session.isCurrent() ||
         (atMeasureBoundary && !p.engineRef.current?.getIsRunning())
-      ) return;
+      ) {
+        if (session.isCurrent()) p.audioRenderLifecycle.cancel();
+        return session.interruption();
+      }
       const pcm = await renderMeasureAbortable({
         schedule: ticks,
         measureDurationMs: scheduleInfo.durationMs,
@@ -270,49 +272,60 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
         metroChannelsByBeat: plan.mode === "bar" ? plan.audio.noteSampleMetroChannels : undefined,
         layerClickPCMs,
       }, signal);
+      const preparedPcm = session.complete(pcm, () => {});
+      if (preparedPcm.status !== "completed") return preparedPcm;
+      const prepared = preparedPcm.prepared;
       if (atMeasureBoundary) {
         engine.setPendingMeasureStartAction(() => {
-          if (
-            generation !== renderGenerationRef.current ||
-            !p.engineRef.current?.getIsRunning()
-          ) return;
+          if (!p.engineRef.current?.getIsRunning()) {
+            prepared.discard();
+            return;
+          }
+          prepared.commit((readyPcm) => {
           const previous = p.webRenderedLoopRef.current;
           const previousDuration = previous?.getDurationSeconds?.();
-          const nextDuration = (pcm instanceof Float32Array
-            ? pcm.length
-            : Math.min(pcm.left.length, pcm.right.length)) / 44100;
+          const nextDuration = (readyPcm instanceof Float32Array
+            ? readyPcm.length
+            : Math.min(readyPcm.left.length, readyPcm.right.length)) / 44100;
           const phaseCompatible = previousDuration !== undefined
             && Math.abs(previousDuration - nextDuration) < 0.001;
           const boundary = phaseCompatible ? previous?.getNextBoundaryTime?.() : undefined;
-          const next = playWebRenderedLoop(pcm, undefined, "both", 1, boundary);
+          const next = playWebRenderedLoop(readyPcm, undefined, "both", 1, boundary);
           p.activateWebRenderedLoop(next);
           if (previous) {
             try { previous.stop(boundary); } catch {}
           }
           p.engineRef.current?.setPreRenderedAudio(true);
+          });
         });
+        return { status: "completed" };
       } else {
-        p.webRenderedLoopRef.current?.stop();
-        const context = getWebAudioContext();
-        const now = typeof performance !== "undefined" ? performance.now() : Date.now();
-        const startAtAudioTime = startAtPerformanceTime !== undefined && context
-          ? context.currentTime + Math.max(0, startAtPerformanceTime - now) / 1000
-          : undefined;
-        p.activateWebRenderedLoop(playWebRenderedLoop(
-          pcm,
-          undefined,
-          "both",
-          getClickOutputVolume(plan.audio.volume),
-          startAtAudioTime,
-        ));
-        engine.setPreRenderedAudio(true);
+        let loop: WebRenderedLoop | null = null;
+        const committed = prepared.commit((readyPcm) => {
+          p.webRenderedLoopRef.current?.stop();
+          const context = getWebAudioContext();
+          const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+          const startAtAudioTime = startAtPerformanceTime !== undefined && context
+            ? context.currentTime + Math.max(0, startAtPerformanceTime - now) / 1000
+            : undefined;
+          loop = playWebRenderedLoop(
+            readyPcm,
+            undefined,
+            "both",
+            getClickOutputVolume(plan.audio.volume),
+            startAtAudioTime,
+          );
+          p.activateWebRenderedLoop(loop);
+          engine.setPreRenderedAudio(true);
+        });
+        if (!committed || !loop) return session.interruption();
+        return { status: "completed" };
       }
     } catch (error) {
-      if (!isRenderAborted(error)) throw error;
-    } finally {
-      finishAbortableRender(renderGenerationRef, signal);
+      if (isRenderAborted(error) || !session.isCurrent()) return session.interruption();
+      return session.fail(error);
     }
-  }, [p, renderGenerationRef]);
+  }, [p]);
 
   const stopMetronome = useCallback((
     endReason: NonNullable<PracticeSessionData["endReason"]> = "manual",
@@ -457,15 +470,6 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
       applyMetronomePlaybackPlan(engine, plan);
     }
 
-    let localNativePlayer: AudioPlayer | null = null;
-    let nativePlayerPublished = false;
-    const releaseLocalNativePlayer = () => {
-      if (!localNativePlayer || nativePlayerPublished) return;
-      try { localNativePlayer.pause(); } catch {}
-      try { localNativePlayer.release(); } catch {}
-      localNativePlayer = null;
-    };
-
     try {
       if (Platform.OS === "android" && androidProbeReady) {
         await awaitWithin(androidProbeReady, "Android audio focus");
@@ -498,10 +502,15 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
         }
 
         if (useRenderedLoop) {
-          await awaitWithin(
+          const webRenderResult = await awaitWithin(
             renderWebLoop(engine, plan, false, startAtPerformanceTime),
             "Web rendered loop",
           );
+          if (webRenderResult.status === "cancelled" || webRenderResult.status === "superseded") {
+            cancelPlaybackAttempt(false);
+            return false;
+          }
+          if (webRenderResult.status === "failed") throw webRenderResult.error;
           if (cancelled()) {
             return false;
           }
@@ -525,33 +534,24 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
           if (!active) throw new Error("No initial Web Audio activity");
         }
       } else {
-        // buildRenderedPlayer()의 null만으로는 "다른 렌더에 의해 대체됨(aborted)"과
-        // "진짜 렌더 실패(failed)"를 구분할 수 없다. 예전엔 aborted도 failed와
-        // 똑같이 취급해, 부스트/톤 조정 중에는 아무 문제 없었는데도 순수 레이스
-        // 컨디션으로 "시작 실패" 에러를 던지는 경우가 있었다. 있으면 상세 버전을
-        // 써서 그 둘을 구분한다(없으면 이전 동작으로 폴백). 로컬 변수
-        // (localNativePlayer)로도 같이 들고 있어서, 공용 ref에 등록되기 전에
-        // 취소/에러가 나도 releaseLocalNativePlayer()가 확실히 정리한다.
-        const detailedResult = useRenderedLoop
-          ? p.buildRenderedPlayerDetailed
-            ? await awaitWithin(p.buildRenderedPlayerDetailed(plan), "Native rendered player")
-            : await awaitWithin(p.buildRenderedPlayer(plan), "Native rendered player").then(
-                (built): { status: "ready"; player: AudioPlayer } | { status: "failed" } =>
-                  built ? { status: "ready" as const, player: built } : { status: "failed" as const },
-              )
-          : ({ status: "failed" } as const);
-        if (detailedResult.status === "ready") {
-          localNativePlayer = detailedResult.player;
-        }
+        const renderResult = useRenderedLoop
+          ? await awaitWithin(p.prepareRenderedPlayer(plan), "Native rendered player")
+          : ({ status: "failed", error: new Error("Rendered output is disabled") } as const);
         if (cancelled()) {
-          releaseLocalNativePlayer();
+          if (renderResult.status === "completed") renderResult.prepared.discard();
           return false;
         }
-        if (detailedResult.status === "ready") {
-          const player = detailedResult.player;
-          p.renderedPlayerRef.current = player;
-          nativePlayerPublished = true;
-          localNativePlayer = null;
+        if (renderResult.status === "completed") {
+          const prepared = renderResult.prepared;
+          const player = prepared.value.player;
+          const committed = prepared.commit(({ player: readyPlayer, uri }) => {
+            p.renderedPlayerRef.current = readyPlayer;
+            p.renderedUrlRef.current = uri;
+          });
+          if (!committed) {
+            cancelPlaybackAttempt(false);
+            return false;
+          }
           engine.setPreRenderedAudio(true);
           // safePlayAndConfirm invokes play() synchronously before returning its
           // confirmation promise. Start the engine in the same turn so rendered
@@ -571,14 +571,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
           if (cancelled()) {
             return false;
           }
-        } else if (detailedResult.status === "aborted") {
-          // 이 시도의 렌더가 다른 무언가(설정 변경, 노트 편집, 알림 액션 등이
-          // 직접 부르는 stopRenderedAudio())에 의해 대체됐다 — cancelled()는
-          // startAttemptRef가 바뀔 때만 true가 되므로, 새 재생 시도 없이
-          // stopRenderedAudio만 호출된 이 경로에서는 아직 false다. 아무것도
-          // 실패하지 않았으니 실패 알림 없이(notifyFailure=false) 정리만 하고
-          // 끝낸다 — 그냥 return false만 하면 isPreparing이 영원히 true로
-          // 걸린 채 남는다.
+        } else if (renderResult.status === "cancelled" || renderResult.status === "superseded") {
           cancelPlaybackAttempt(false);
           return false;
         } else {
@@ -622,10 +615,6 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
       }
       return true;
     } catch (error) {
-      // A rendered player belongs to this startup attempt until it is
-      // published. Cancellation can happen while the async builder is
-      // resolving, so do not leave an unpublished native player alive.
-      releaseLocalNativePlayer();
       if (cancelled()) return false;
       p.capturePlaybackError("Audio startup failed", error, "warning");
       cancelPlaybackAttempt(true);
