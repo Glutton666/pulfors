@@ -84,6 +84,8 @@ interface BeatIndicatorProps {
   beatTypes: BeatType[];
   onBeatTypeChange: (index: number, type: BeatType) => void;
   dropTargetBeat: number | null;
+  /** true while a subdivision-pattern drag is in progress (see BarModeView's patternDragActive). */
+  isPatternDragging?: boolean;
   beatSubdivisionCounts: Record<number, number>;
   dialRef?: React.RefObject<View | null>;
   barMode: boolean;
@@ -181,6 +183,7 @@ export function BeatIndicator({
   beatTypes,
   onBeatTypeChange,
   dropTargetBeat,
+  isPatternDragging = false,
   beatSubdivisionCounts,
   dialRef,
   barMode,
@@ -1295,6 +1298,7 @@ export function BeatIndicator({
         barAreaRef={barAreaRef}
         onBarAreaLayout={onBarAreaLayout}
         patternDropTargetBeat={dropTargetBeat}
+        patternDragActive={isPatternDragging}
         noteSamples={noteSamples ?? {}}
         noteSampleNames={noteSampleNames}
         noteSampleSources={noteSampleSources}

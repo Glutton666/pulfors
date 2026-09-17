@@ -83,6 +83,18 @@ export interface BarModeViewProps {
   barAreaRef?: React.RefObject<View | null>;
   onBarAreaLayout?: (pageY: number, height: number) => void;
   patternDropTargetBeat?: number | null;
+  /**
+   * true while the bottom subdivision-pattern drag (drag a configured
+   * pattern up into this list to add a new bar) is in progress. The list's
+   * own FlatList must stop being scrollable during that gesture — otherwise
+   * once the finger crosses into the list's hit area, RN's touch responder
+   * arbitration can hand the touch to the (still-scrollable) FlatList instead
+   * of the child SubdivisionBar's PanResponder, which then receives
+   * onPanResponderTerminate instead of onPanResponderRelease and the drop
+   * never completes (ghost visibly tracks the finger the whole way, but
+   * nothing is added — 2026-09-18 확인).
+   */
+  patternDragActive?: boolean;
   noteSamples?: Record<string, string>;
   noteSampleNames?: Record<string, string>;
   noteSampleSources?: Record<string, string>;
@@ -128,7 +140,7 @@ export function BarModeView({
   onRandomPlayRequest, onBarLoopModeChange, blockPlayMode, onBlockPlayModeChange, progressInfo,
   barStartBeat, onBarStartBeatSelect, onAddBar, onDeleteBar,
   subdivisionBarElement, onBarQuickSave, onBarScrollOffset, barAreaRef,
-  onBarAreaLayout, patternDropTargetBeat,
+  onBarAreaLayout, patternDropTargetBeat, patternDragActive = false,
   bpm, onBpmChange, halfTime, beatDenominator = 4, onDenominatorCycle,
   soundSet = "classic", onSoundSetChange, layerSoundSets = {} as Record<number, string>,
   onLayerSoundSetsChange, onPreviewSoundSet,
@@ -589,7 +601,7 @@ export function BarModeView({
           style={[{ flex: 1 }, S.isTablet && { paddingHorizontal: S.ms(16, 0.5) }]}
           showsVerticalScrollIndicator={false}
           nestedScrollEnabled
-          scrollEnabled={!isPlaying && draggingBeat === null}
+          scrollEnabled={!isPlaying && draggingBeat === null && !patternDragActive}
           initialNumToRender={Math.max(4, Math.ceil((barContainerHeight || rowH * 4) / rowH))}
           maxToRenderPerBatch={8}
           updateCellsBatchingPeriod={32}

@@ -1133,6 +1133,7 @@ export function MetronomeScreenUI(props: Props) {
               recordTutorialAction("bar_edit");
             }}
             dropTargetBeat={dropTargetBeat}
+            isPatternDragging={isDragging}
             beatSubdivisionCounts={beatSubdivisionCounts}
             dialRef={dialRef}
             barMode={barMode}
