@@ -519,7 +519,6 @@ export function useMetronomeScreen() {
     showDrumKit,
     showScheduledStart,
     showFadeOut,
-    showBpmDetect,
     showPolygon,
   } = deriveModalFlags(activeModal);
   // soundSet/layerSoundSets/flashMode/hapticMode/audioOffsetMs/timerStopMode/
@@ -630,7 +629,6 @@ export function useMetronomeScreen() {
       if (showFadeOut) { setActiveModal(null); return true; }
       if (showScheduledStart) { setActiveModal(null); return true; }
       if (showDrumKit) { closeMenuItem(); return true; }
-      if (showBpmDetect) { setActiveModal(null); return true; }
       if (showPolygon) { closeMenuItem(); return true; }
       if (showMenu) { clearMenuItemReturn(); setActiveModal(null); return true; }
       if (showOnboarding) { setActiveModal(null); return true; }
@@ -4508,7 +4506,6 @@ export function useMetronomeScreen() {
     showDrumKit,
     showScheduledStart,
     showFadeOut,
-    showBpmDetect,
     showPolygon,
     tutorialState,
     tutorialMode,

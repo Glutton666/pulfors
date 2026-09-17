@@ -40,7 +40,6 @@ import type { ModeSwitcherDialHandle } from "@/components/ModeSwitcherDial";
 import type { ModeSlot } from "@/components/ModeSwitcherDial";
 import { ModeIcon } from "@/components/ModeIcon";
 import { MenuScreen } from "@/components/MenuScreen";
-import { BpmDetectModal } from "@/components/BpmDetectModal";
 import { PolygonModeView } from "@/components/PolygonModeView";
 import { usePolygonMode } from "@/hooks/usePolygonMode";
 import { DrumKitModal } from "@/components/DrumKitModal";
@@ -110,7 +109,7 @@ export function MetronomeScreenUI(props: Props) {
      showSettings, showProfile, showAssistant, showMenu, showSignalGen, showTuningGuide, showPracticeBook,
     showWorkUp, showOnboarding, showDrumKit, showScheduledStart,
      labUnlocked, unlockLab,
-    showFadeOut, showBpmDetect, showPolygon,
+    showFadeOut, showPolygon,
     tutorialState, tutorialMode, tutorialLastAction,
     recordTutorialAction, completeTutorialStep, finishModeTutorial, skipModeTutorial,
     volume, updateVolume, tonePosition, updateTonePosition, sampleVolume, updateSampleVolume,
@@ -648,15 +647,6 @@ export function MetronomeScreenUI(props: Props) {
         onClose={closeMenuItem}
       />
 
-      <BpmDetectModal
-        visible={showBpmDetect}
-        onClose={() => setActiveModal(null)}
-        onApply={(bpm) => {
-          updateBpm(bpm);
-          setActiveModal(null);
-        }}
-      />
-
       {/* ── 폴리곤 메트로놈 전체화면 ── */}
       {showPolygon && (
         <View style={[StyleSheet.absoluteFillObject, { zIndex: 600 }]}>
@@ -758,7 +748,6 @@ export function MetronomeScreenUI(props: Props) {
           reopenSignalGenAfterTuningGuideRef.current = next.reopenSignalGenAfterTuningGuide;
           setActiveModal(next.activeModal);
         }}
-        onOpenBpmDetect={() => { setActiveModal(null); setTimeout(() => openExclusive("bpmDetect"), 160); }}
         onMicTap={handleSignalMicTap}
       />
 

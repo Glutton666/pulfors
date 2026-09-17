@@ -67,7 +67,7 @@ test("modal-routing: 어떤 activeModal 값이든 visible 모달은 최대 1개"
   const allValues: ActiveModal[] = [
     "settings", "menu", "signalGen", "tuningGuide", "practiceBook", "workUp",
     "onboarding", "drumKit", "scheduledStart", "fadeOut",
-    "bpmDetect", "polygon",
+    "polygon",
     null,
   ];
   for (const modal of allValues) {
@@ -95,7 +95,6 @@ test("Android BackHandler가 모든 active modal 종료 경로를 가진다", ()
     showFadeOut: /setActiveModal\(null\)/,
     showScheduledStart: /setActiveModal\(null\)/,
     showDrumKit: /closeMenuItem\(\)/,
-    showBpmDetect: /setActiveModal\(null\)/,
     showPolygon: /closeMenuItem\(\)/,
     showMenu: /setActiveModal\(null\)/,
     showOnboarding: /setActiveModal\(null\)/,
@@ -147,6 +146,23 @@ test("menu return: 메뉴 화면의 각 항목 진입이 메뉴 복귀 상태를
   }
 });
 
+test("source: 시그널 전용 BPM 분석은 제거되고 샘플 편집 BPM 분석은 유지된다", () => {
+  const signal = readFileSync(join(process.cwd(), "components/SignalGeneratorModal.tsx"), "utf-8");
+  const ui = readFileSync(join(process.cwd(), "components/MetronomeScreenUI.tsx"), "utf-8");
+  const routing = readFileSync(join(process.cwd(), "lib/modal-routing.ts"), "utf-8");
+  const translations = readFileSync(join(process.cwd(), "lib/i18n.data.ts"), "utf-8");
+  const recorder = readFileSync(join(process.cwd(), "components/NoteRecorderModal.tsx"), "utf-8");
+
+  assert.doesNotMatch(signal, /onOpenBpmDetect|t\("bpmDetect"/);
+  assert.doesNotMatch(ui, /BpmDetectModal|showBpmDetect|openExclusive\("bpmDetect"\)/);
+  assert.doesNotMatch(routing, /"bpmDetect"|showBpmDetect/);
+  assert.doesNotMatch(translations, /^\s*bpmDetect:\s*\{/m);
+
+  assert.match(recorder, /detectBpmCandidatesOnDevice/);
+  assert.match(recorder, /onSuggestBpm/);
+  assert.match(translations, /^\s*bpmDetecting:\s*\{/m);
+});
+
 test("modal-routing: 각 activeModal 값은 정확히 해당 show* 플래그만 true로 만든다", () => {
   const cases: Array<[ActiveModal, keyof ReturnType<typeof deriveModalFlags>]> = [
     ["settings",       "showSettings"],
@@ -161,7 +177,6 @@ test("modal-routing: 각 activeModal 값은 정확히 해당 show* 플래그만 
     ["drumKit",        "showDrumKit"],
     ["scheduledStart", "showScheduledStart"],
     ["fadeOut",        "showFadeOut"],
-    ["bpmDetect",      "showBpmDetect"],
     ["polygon",        "showPolygon"],
   ];
   for (const [modal, expectedKey] of cases) {
@@ -614,7 +629,7 @@ test("android-appstate: 모든 모달 상태에서 foreground 복귀 → back-pr
     "settings", "menu", "signalGen", "tuningGuide",
     "practiceBook", "workUp", "drumKit",
     "scheduledStart", "fadeOut", "onboarding",
-    "bpmDetect", "polygon",
+    "polygon",
     null,
   ];
 

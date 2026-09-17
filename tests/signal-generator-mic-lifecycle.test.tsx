@@ -123,7 +123,6 @@ function makeProps() {
     visible: true,
     onClose: jest.fn(),
     onOpenTuningGuide: jest.fn(),
-    onOpenBpmDetect: jest.fn(),
   };
 }
 
