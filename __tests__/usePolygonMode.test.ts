@@ -27,6 +27,12 @@ import {
 import type { PolygonLayer } from "@/components/polygon-mode/PolygonTypes";
 import { createAudioOutputOwner } from "@/lib/audio-output-owner";
 import { createAudioToneSnapshot } from "@/lib/audio-tone-snapshot";
+import {
+  PCM_CACHE_MAX_ENTRIES,
+  peekPCM,
+  resetPCMCacheForTests,
+  setPCM,
+} from "@/lib/pcm-cache";
 
 // ── 모듈 모킹 ─────────────────────────────────────────────────────────────
 
@@ -103,6 +109,7 @@ describe("usePolygonMode — engine callback driven", () => {
   const originalPlatformOS = Platform.OS;
 
   beforeEach(() => {
+    resetPCMCacheForTests();
     jest.useFakeTimers();
   });
 
@@ -731,6 +738,23 @@ describe("usePolygonMode — engine callback driven", () => {
         low: new Float32Array([0.3, -0.15]),
       });
     });
+    const builtinLayerId = result.current.layers.find(layer => layer.id !== customLayerId)!.id;
+    act(() => { result.current.handleDeleteLayer(builtinLayerId); });
+    for (let index = 1; index < 8; index += 1) {
+      act(() => { result.current.handleAddLayer(); });
+      const layerId = result.current.layers[result.current.layers.length - 1].id;
+      act(() => {
+        result.current.setLayerCustomSound(layerId, {
+          strong: new Float32Array([0.5]),
+          high: new Float32Array([0.4]),
+          low: new Float32Array([0.3]),
+        });
+      });
+    }
+    expect(result.current.layers).toHaveLength(8);
+    for (let index = 0; index < PCM_CACHE_MAX_ENTRIES + 2; index += 1) {
+      setPCM(`eviction-pressure:${index}`, new Float32Array([index]));
+    }
 
     snapshot = createAudioToneSnapshot({
       volume: 0.5,
@@ -741,8 +765,11 @@ describe("usePolygonMode — engine callback driven", () => {
     fireBeat(params.engineBeatCallbackRef);
     advanceMs(1);
 
-    expect(starts).toHaveLength(2);
+    expect(starts).toHaveLength(8);
     expect(require("@/lib/audio-renderer").playWebClick).not.toHaveBeenCalled();
+    expect(peekPCM(`polygon-raw:custom-${customLayerId}`)).toBeDefined();
+    act(() => { result.current.handleDeleteLayer(customLayerId); });
+    expect(peekPCM(`polygon-raw:custom-${customLayerId}`)).toBeUndefined();
   });
 
   it("web does not play muted vertices", () => {

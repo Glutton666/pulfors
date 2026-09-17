@@ -17,6 +17,13 @@ import { playPolygonAudioOutput, type AudioOutputOwner } from "@/lib/audio-outpu
 import type { BuiltinPlayers } from "@/hooks/useAudioPlayers";
 import type { ClickPCMs } from "@/lib/audio-renderer";
 import type { SoundSet } from "@/lib/storage";
+import {
+  getClickPCM,
+  invalidatePCMCache,
+  invalidatePCMCachePrefix,
+  peekPCM,
+  setPCM,
+} from "@/lib/pcm-cache";
 import { buildPolygonPlaybackPlan, type PolygonPlaybackPlan } from "@/lib/audio-playback-plan";
 import {
   buildPolygonSchedule,
@@ -233,34 +240,37 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
 
   // ── 절대 비트 카운터 (엔진 콜백 내에서만 변경) ──────────────────────────
   const absoluteBeatRef = useRef(0);
-
-  // ── Per-layer PCM 캐시 (전역 clickPCMCacheRef와 분리) ───────────────────
-  const polygonPCMCacheRef = useRef<Map<string, ClickPCMs>>(new Map());
-  const polygonRawPCMRef = useRef<Map<string, ClickPCMs>>(new Map());
-  const loadingRef = useRef<Set<string>>(new Set());
-
-  const ensurePCM = useCallback(
-    (soundSet: string, toneSnapshot = toneAtRender) => {
-      if (Platform.OS !== "web") return;
+  const requestClickPCM = useCallback(
+    (soundSet: string, toneSnapshot = toneAtRender): ClickPCMs | undefined => {
+      if (Platform.OS !== "web") return undefined;
       const tone = readAudioToneSnapshot(toneSnapshot, soundSet);
-      const cacheKey = `${soundSet}:${tone.position.x}:${tone.position.y}`;
-      if (polygonPCMCacheRef.current.has(cacheKey)) return;
-      if (loadingRef.current.has(cacheKey)) return;
-      const rawCustom = polygonRawPCMRef.current.get(soundSet);
-      if (rawCustom) {
-        polygonPCMCacheRef.current.set(cacheKey, {
-          strong: applyAudioToneSnapshot(rawCustom.strong, toneSnapshot, soundSet) as Float32Array,
-          high: applyAudioToneSnapshot(rawCustom.high, toneSnapshot, soundSet) as Float32Array,
-          low: applyAudioToneSnapshot(rawCustom.low, toneSnapshot, soundSet) as Float32Array,
-        });
-        return;
+      const cacheKey = `polygon:${soundSet}:${JSON.stringify(toneSnapshot)}`;
+      const ready = peekPCM<ClickPCMs>(cacheKey);
+      if (ready) return ready;
+      const rawKey = `polygon-raw:${soundSet}`;
+      let base = peekPCM<ClickPCMs>(rawKey);
+      if (!base && p.clickPCMCacheRef.current[soundSet]) {
+        // Adopt a legacy compatibility entry into the canonical owner, then
+        // release the duplicate strong reference.
+        base = setPCM(rawKey, p.clickPCMCacheRef.current[soundSet]);
+        delete p.clickPCMCacheRef.current[soundSet];
       }
-      if (soundSet.startsWith("custom-")) return;
-      loadingRef.current.add(cacheKey);
-      p.getClickPCMs(soundSet as SoundSet, undefined, toneSnapshot)
-        .then((pcms) => { polygonPCMCacheRef.current.set(cacheKey, pcms); })
-        .catch(() => {})
-        .finally(() => { loadingRef.current.delete(cacheKey); });
+      if (base) {
+        const shaped = {
+          strong: applyAudioToneSnapshot(base.strong, toneSnapshot, soundSet) as Float32Array,
+          high: applyAudioToneSnapshot(base.high, toneSnapshot, soundSet) as Float32Array,
+          low: applyAudioToneSnapshot(base.low, toneSnapshot, soundSet) as Float32Array,
+        };
+        setPCM(cacheKey, shaped);
+        return shaped;
+      }
+      if (soundSet.startsWith("custom-")) return undefined;
+      getClickPCM(
+        cacheKey,
+        signal => p.getClickPCMs(soundSet as SoundSet, signal, toneSnapshot),
+      )
+        .catch(() => {});
+      return undefined;
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [p.getClickPCMs, toneAtRender],
@@ -280,14 +290,12 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
       const soundRole = beatTypeToWebClickRole(event.type as VertexBeatType);
       const toneSnapshot = activePlaybackPlanRef.current?.tone ?? toneAtRender;
       const tone = readAudioToneSnapshot(toneSnapshot, event.soundSet);
-      const cacheKey = `${event.soundSet}:${tone.position.x}:${tone.position.y}`;
+       const cacheKey = `polygon:${event.soundSet}:${JSON.stringify(toneSnapshot)}`;
       let cached = Platform.OS === "web"
-        ? polygonPCMCacheRef.current.get(cacheKey)
-          ?? (!tone.active ? p.clickPCMCacheRef.current[event.soundSet] : undefined)
+        ? peekPCM<ClickPCMs>(cacheKey)
         : undefined;
       if (Platform.OS === "web" && !cached) {
-        ensurePCM(event.soundSet, toneSnapshot);
-        cached = polygonPCMCacheRef.current.get(cacheKey);
+        cached = requestClickPCM(event.soundSet, toneSnapshot);
       }
       if (
         Platform.OS === "web"
@@ -306,7 +314,7 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
         channel: "both",
         pools: p.allPlayersRef.current,
       });
-      if (!cached && Platform.OS === "web") ensurePCM(event.soundSet, toneSnapshot);
+      if (!cached && Platform.OS === "web") requestClickPCM(event.soundSet, toneSnapshot);
       if (played) p.recordAudioActivity();
       setActiveVertices((prev) =>
         prev[event.layerId] === event.vertex ? prev : { ...prev, [event.layerId]: event.vertex },
@@ -317,8 +325,8 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
   // enabled=true 시 / 레이어 사운드셋 변경 시 PCM 선제 로드
   useEffect(() => {
     if (!p.enabled || Platform.OS !== "web") return;
-    layers.forEach((l) => ensurePCM(l.soundSet, toneAtRender));
-  }, [p.enabled, layers, ensurePCM, toneVersion]);
+    layers.forEach((l) => requestClickPCM(l.soundSet, toneAtRender));
+  }, [p.enabled, layers, requestClickPCM, toneVersion]);
 
   // ── 재생 중단 → absoluteBeat 리셋 ──────────────────────────────────────
   // 엔진이 멈추면 더 이상 콜백이 오지 않으므로 카운터만 초기화한다.
@@ -419,7 +427,7 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
       isPlayingRef.current = false;
     };
   // enabled가 변경될 때만 핸들러를 재등록한다.
-  // layers/bpm/beatsPerMeasure/ensurePCM은 ref로 읽으므로 의존성 불필요.
+   // layers/bpm/beatsPerMeasure/requestClickPCM은 ref로 읽으므로 의존성 불필요.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [p.enabled, p.isPlaying, p.engineBeatCallbackRef]);
 
@@ -442,11 +450,13 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
     layersRef.current = [...layersRef.current, newLayer];
     replaceActivePlaybackPlan(layersRef.current);
     setEditingLayerId(id);
-    ensurePCM(newLayer.soundSet);
-  }, [layers, ensurePCM, replaceActivePlaybackPlan]);
+    requestClickPCM(newLayer.soundSet);
+  }, [layers, requestClickPCM, replaceActivePlaybackPlan]);
 
   const handleDeleteLayer = useCallback((id: string) => {
     runnerRef.current?.cancelLayer(sessionIdRef.current, id);
+    invalidatePCMCache(`polygon-raw:custom-${id}`);
+    invalidatePCMCachePrefix(`polygon:custom-${id}:`);
     // layersRef를 즉시 갱신 — effect 실행 전에 엔진 비트가 오면 삭제된
     // 레이어를 다시 읽어 슬롯을 재예약하는 경쟁 조건 방지
     layersRef.current = layersRef.current.filter((l) => l.id !== id);
@@ -480,6 +490,15 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
       // 재생 중 편집: 옛 데이터로 예약된 이 레이어의 잔여 이벤트를 취소.
       // 남은 비트는 침묵하고 다음 비트부터 새 설정으로 발화한다.
       runnerRef.current?.cancelLayer(sessionIdRef.current, id);
+      const currentSoundSet = layersRef.current.find(layer => layer.id === id)?.soundSet;
+      if (
+        patch.soundSet
+        && patch.soundSet !== currentSoundSet
+        && currentSoundSet?.startsWith("custom-")
+      ) {
+        invalidatePCMCache(`polygon-raw:${currentSoundSet}`);
+        invalidatePCMCachePrefix(`polygon:${currentSoundSet}:`);
+      }
       applyLayerMutation((prev) =>
         prev.map((l) => {
           if (l.id !== id) return l;
@@ -510,9 +529,9 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
           return updated;
         }),
       );
-      if (patch.soundSet) ensurePCM(patch.soundSet);
+      if (patch.soundSet) requestClickPCM(patch.soundSet);
     },
-    [ensurePCM, applyLayerMutation],
+    [requestClickPCM, applyLayerMutation],
   );
 
   const handleSetOffset = useCallback(
@@ -557,10 +576,10 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
     (layerId: string, pcms: ClickPCMs) => {
       const customKey = `custom-${layerId}`;
       const toneSnapshot = activePlaybackPlanRef.current?.tone ?? toneAtRender;
-      const tone = readAudioToneSnapshot(toneSnapshot, customKey);
-      const cacheKey = `${customKey}:${tone.position.x}:${tone.position.y}`;
-      polygonRawPCMRef.current.set(customKey, pcms);
-      polygonPCMCacheRef.current.set(cacheKey, {
+      const cacheKey = `polygon:${customKey}:${JSON.stringify(toneSnapshot)}`;
+      invalidatePCMCachePrefix(`polygon:${customKey}:`);
+      setPCM(`polygon-raw:${customKey}`, pcms, { pinned: true });
+      setPCM(cacheKey, {
         strong: applyAudioToneSnapshot(pcms.strong, toneSnapshot, customKey) as Float32Array,
         high: applyAudioToneSnapshot(pcms.high, toneSnapshot, customKey) as Float32Array,
         low: applyAudioToneSnapshot(pcms.low, toneSnapshot, customKey) as Float32Array,

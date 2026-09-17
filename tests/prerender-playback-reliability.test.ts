@@ -157,6 +157,8 @@ import {
   useAudioPipeline,
 } from "../hooks/useAudioPipeline";
 import { usePlaybackControl } from "../hooks/usePlaybackControl";
+import { peekPCM, resetPCMCacheForTests } from "../lib/pcm-cache";
+import { isPCMCancelled } from "../lib/pcm-loader";
 
 const clickPCMs = {
   strong: new Float32Array([0.5]),
@@ -203,6 +205,7 @@ function makeEngine() {
 
 describe("pre-rendered playback reliability", () => {
   beforeEach(() => {
+    resetPCMCacheForTests();
     mockSetPoolsVolume.mockClear();
     jest.clearAllMocks();
     (Platform as unknown as { OS: string }).OS = "ios";
@@ -665,7 +668,7 @@ describe("pre-rendered playback reliability", () => {
     const staleWarmup = result.current.getSamplePCMs(noteSamplesRef.current);
     result.current.invalidateSamplePCMCache();
     resolveDecode(new Float32Array([0.1]));
-    await staleWarmup;
+    await staleWarmup.catch(error => expect(isPCMCancelled(error)).toBe(true));
     await result.current.getSamplePCMs(noteSamplesRef.current);
 
     expect(mockDecodeSampleFile).toHaveBeenCalledTimes(2);
@@ -709,8 +712,31 @@ describe("pre-rendered playback reliability", () => {
     const staleWarmup = result.current.getSamplePCMs(noteSamplesRef.current);
     unmount();
     resolveDecode(new Float32Array([0.1]));
-    await staleWarmup;
+    await expect(staleWarmup).rejects.toMatchObject({ kind: "cancelled" });
 
+    expect(result.current.samplePCMCacheRef.current.size).toBe(0);
+    expect(peekPCM("sample:file:///late.wav")).toBeUndefined();
+  });
+
+  it("propagates caller cancellation without reporting it as a decode failure", async () => {
+    const engine = makeEngine();
+    const controller = new AbortController();
+    let resolveDecode!: (pcm: Float32Array<ArrayBuffer>) => void;
+    mockDecodeSampleFile.mockImplementationOnce(
+      () => new Promise<Float32Array<ArrayBuffer>>((resolve) => { resolveDecode = resolve; }),
+    );
+    const params = makePipelineParams(engine);
+    params.noteSamplesRef.current = { "0-0": "file:///cancelled.wav" };
+    const { result } = renderHook(() => useAudioPipeline(params as any));
+
+    const preparation = result.current.getSamplePCMs(
+      params.noteSamplesRef.current,
+      controller.signal,
+    );
+    controller.abort();
+    resolveDecode(new Float32Array([0.1]));
+
+    await expect(preparation).rejects.toMatchObject({ kind: "cancelled" });
     expect(result.current.samplePCMCacheRef.current.size).toBe(0);
   });
 

@@ -69,3 +69,4 @@
 - [Bar subdivision drag verification](bar-subdivision-drag-verification.md) — first Bar visit has zero rows by design; the measured list itself must remain a valid pattern-drop target.
 - [Backup image asset identity](backup-image-asset-identity.md) — key embedded images by source URI, then detect format from decoded bytes; filenames and blob URLs are not reliable identities.
 - [Restartable producer callbacks](restartable-producer-callbacks.md) — boolean gates do not reject callbacks from an older lifetime after restart; each installed producer needs an immutable generation.
+- [Shared PCM cancellation](shared-pcm-cancellation.md) — caller abort detaches one waiter; cancel shared decode only after the last waiter leaves, and never publish invalidated completions.

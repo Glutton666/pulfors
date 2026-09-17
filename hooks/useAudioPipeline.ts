@@ -4,8 +4,6 @@ import type { AudioPlayer as ExpoAudioPlayer } from "expo-audio";
 import { soundSets } from "@/lib/metronome-engine";
 import type { MetronomeEngine } from "@/lib/metronome-engine";
 import {
-  decodeSampleFile,
-  loadAssetPCM,
   parseTrimInfo,
   renderMeasure,
   saveRenderedWav,
@@ -15,6 +13,9 @@ import {
   isRenderAborted,
   renderMeasureAbortable,
 } from "@/lib/audio-renderer";
+import { loadPCM, isPCMCancelled } from "@/lib/pcm-loader";
+import { createAudioWarmup } from "@/lib/audio-warmup";
+import { getPCM, getClickPCM, getDecodedPCM, peekPCM, invalidatePCMCache } from "@/lib/pcm-cache";
 import {
   createAudioRenderLifecycle,
   type AudioRenderLifecycle,
@@ -72,6 +73,9 @@ import {
   AudioTimingDiagnostics,
 } from "@/lib/audio-clock";
 
+/** Compatibility export for callers that size their note-sample aliases. */
+export const NOTE_SAMPLE_PCM_CACHE_LIMIT = 16;
+
 /** Narrow callback type for audio-specific settings persistence. */
 export type PersistAudioSettingsFn = (s: Partial<{
   backgroundPlay: boolean;
@@ -79,7 +83,6 @@ export type PersistAudioSettingsFn = (s: Partial<{
   autoResumeAfterInterruption: boolean;
 }>) => void;
 
-export const NOTE_SAMPLE_PCM_CACHE_LIMIT = 8;
 
 export interface UseAudioPipelineParams {
   engineRef: React.MutableRefObject<MetronomeEngine | null>;
@@ -237,6 +240,8 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
     outputOwnerRef.current = createAudioOutputOwner();
   }
   const outputOwner = outputOwnerRef.current;
+  const audioWarmupRef = useRef<ReturnType<typeof createAudioWarmup> | null>(null);
+  if (!audioWarmupRef.current) audioWarmupRef.current = createAudioWarmup();
 
   // ── Player pool ownership (moved from useMetronomeScreen) ───────────────────
   // allPlayersRef, soundSetRef, highToggle/lowToggle/strongToggle are now owned
@@ -358,8 +363,8 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
   const samplePCMUriRef = useRef<Map<string, string>>(new Map());
   // URI ownership is independent from beat-cell keys. Note queue look-ahead
   // can safely warm this cache without replacing the current entry's key map.
-  const samplePCMByUriRef = useRef<Map<string, SamplePCMEntry>>(new Map());
   const samplePCMCacheGenerationRef = useRef(0);
+  const pcmPreparationOwnerRef = useRef(new AbortController());
   const audioRenderLifecycleRef = useRef<AudioRenderLifecycle | null>(null);
   if (!audioRenderLifecycleRef.current) {
     audioRenderLifecycleRef.current = createAudioRenderLifecycle();
@@ -467,6 +472,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
     audioRenderLifecycle.activate();
     return () => {
       audioRenderLifecycle.dispose();
+      audioWarmupRef.current?.dispose();
       clearRealtimeWebAudio();
       if (reRenderTimerRef.current) {
         clearTimeout(reRenderTimerRef.current);
@@ -474,15 +480,6 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
       }
     };
   }, [audioRenderLifecycle, clearRealtimeWebAudio]);
-
-  // ── Web click-buffer preload (re-runs on soundSet change) ───────────────────
-  useEffect(() => {
-    if (Platform.OS !== "web") return;
-    const src = soundSets[soundSet as keyof typeof soundSets] || soundSets.classic;
-    ensureWebClickBuffers(src as any)
-      .then((ok) => { if (ok) webClickReadyRef.current = true; })
-      .catch(() => {});
-  }, [soundSet, webClickReadyRef]);
 
   // ── PCM helpers ─────────────────────────────────────────────────────────────
   const trimPCM = useCallback((decoded: DecodedSample, durationSec: number): DecodedSample => {
@@ -496,23 +493,6 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
     return { pcm: trimmed, trimStartSamples: decoded.trimStartSamples, trimLenSamples: Math.min(decoded.trimLenSamples, maxSamples) };
   }, []);
 
-  const touchSamplePCMByUri = useCallback((uri: string, entry: SamplePCMEntry) => {
-    const uriCache = samplePCMByUriRef.current;
-    uriCache.delete(uri);
-    uriCache.set(uri, entry);
-
-    while (uriCache.size > NOTE_SAMPLE_PCM_CACHE_LIMIT) {
-      const oldestUri = uriCache.keys().next().value as string | undefined;
-      if (!oldestUri) break;
-      uriCache.delete(oldestUri);
-      for (const [key, cachedUri] of samplePCMUriRef.current) {
-        if (cachedUri === oldestUri) {
-          samplePCMUriRef.current.delete(key);
-          samplePCMCacheRef.current.delete(key);
-        }
-      }
-    }
-  }, []);
 
   const getClickPCMs = useCallback(async (
     set: SoundSet,
@@ -520,7 +500,6 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
     toneSnapshot?: AudioToneSnapshot,
     customConfigOverride?: Readonly<CustomSoundSetConfig> | null,
   ): Promise<ClickPCMs> => {
-    if (!toneSnapshot && clickPCMCacheRef.current[set]) return clickPCMCacheRef.current[set];
     const snapshot = toneSnapshot ?? createAudioToneSnapshot({
       volume: volumeRef.current,
       defaultSoundSet: soundSetRef.current,
@@ -533,17 +512,21 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
       ? customSoundSetsRef.current[set]
       : customConfigOverride ?? undefined;
     if (customCfg) {
-      const loadSample = async (cfg: any) => {
+      const loadSample = async (cfg: any, preparationSignal: AbortSignal) => {
         if (cfg.type === "custom" && cfg.sampleUri) {
           try {
-            const pcm = await decodeSampleFile(cfg.sampleUri, signal);
+            const pcm = await getDecodedPCM(
+              `raw:${cfg.sampleUri}`,
+              loadSignal => loadPCM(cfg.sampleUri, loadSignal),
+              preparationSignal,
+            );
             if (pcm) {
               const trimmed = trimPCM({ pcm, trimStartSamples: 0, trimLenSamples: pcm.length }, cfg.duration);
               return trimmed.pcm;
             }
             captureBreadcrumb({ category: "custom-sound", message: "Decode returned null", level: "warning", data: { sampleUri: cfg.sampleUri } });
           } catch (e) {
-            if (isRenderAborted(e)) throw e;
+            if (isRenderAborted(e) || isPCMCancelled(e)) throw e;
             captureBreadcrumb({ category: "custom-sound", message: "Failed to decode custom sample", level: "warning", data: { error: String(e) } });
           }
         }
@@ -551,67 +534,99 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
         const srcRole = cfg.sourceRole || "strong";
         const src = (soundSets as Record<string, typeof soundSets.classic>)[srcSet] ?? soundSets.classic;
         const asset = srcRole === "strong" ? src.strong : srcRole === "high" ? src.high : src.low;
-        const raw = await loadAssetPCM(asset, signal);
+        const raw = await getDecodedPCM(
+          `raw:asset:${String(asset)}`,
+          loadSignal => loadPCM({ kind: "asset", source: asset }, loadSignal),
+          preparationSignal,
+        );
         const trimmed = trimPCM({ pcm: raw, trimStartSamples: 0, trimLenSamples: raw.length }, cfg.duration);
         return trimmed.pcm;
       };
-      const [strong, high, low] = await Promise.all([loadSample(customCfg.strong), loadSample(customCfg.accent), loadSample(customCfg.normal)]);
-       const result: ClickPCMs = { strong: shape(strong), high: shape(high), low: shape(low) };
-      if (!toneSnapshot) clickPCMCacheRef.current[set] = result;
-      return result;
+      const key = `click:${set}:${JSON.stringify(customCfg)}:${JSON.stringify(snapshot)}`;
+      return getClickPCM(key, async (preparationSignal) => {
+        const [strong, high, low] = await Promise.all([
+          loadSample(customCfg.strong, preparationSignal),
+          loadSample(customCfg.accent, preparationSignal),
+          loadSample(customCfg.normal, preparationSignal),
+        ]);
+        return { strong: shape(strong), high: shape(high), low: shape(low) };
+      }, signal);
     }
     const src = soundSets[set as keyof typeof soundSets] || soundSets.classic;
-    const [strong, high, low] = await Promise.all([loadAssetPCM(src.strong, signal), loadAssetPCM(src.high, signal), loadAssetPCM(src.low, signal)]);
-    const result: ClickPCMs = { strong: shape(strong), high: shape(high), low: shape(low) };
-    if (!toneSnapshot) clickPCMCacheRef.current[set] = result;
-    return result;
+    const key = `click:${set}:${JSON.stringify(snapshot)}`;
+    return getClickPCM(key, async (preparationSignal) => {
+      const [strong, high, low] = await Promise.all([
+        getDecodedPCM(`raw:asset:${String(src.strong)}`, loadSignal => loadPCM({ kind: "asset", source: src.strong }, loadSignal), preparationSignal),
+        getDecodedPCM(`raw:asset:${String(src.high)}`, loadSignal => loadPCM({ kind: "asset", source: src.high }, loadSignal), preparationSignal),
+        getDecodedPCM(`raw:asset:${String(src.low)}`, loadSignal => loadPCM({ kind: "asset", source: src.low }, loadSignal), preparationSignal),
+      ]);
+      return { strong: shape(strong), high: shape(high), low: shape(low) };
+    }, signal);
   }, [clickPCMCacheRef, customSoundSetsRef, soundSetRef, tonePositionRef, tonePositionsRef, trimPCM, volumeRef]);
+
+  // Warm only decoded/shaped PCM. Playback-owned WebAudio buffers are created
+  // later at the explicit playback-start boundary.
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+    void audioWarmupRef.current!.warm(
+      `web-click-pcm:${soundSet}`,
+      signal => getClickPCMs(soundSet, signal),
+    ).catch(() => {});
+  }, [getClickPCMs, soundSet]);
 
   const getSamplePCMs = useCallback(async (samples: NoteSampleMap, signal?: AbortSignal): Promise<Map<string, SamplePCMEntry>> => {
     const map = new Map<string, SamplePCMEntry>();
     const entries = Object.entries(samples);
     if (entries.length === 0) return map;
+    const ownerSignal = pcmPreparationOwnerRef.current.signal;
+    const preparationController = new AbortController();
+    const abortPreparation = () => preparationController.abort();
+    const linkedSignals = [ownerSignal, signal].filter((value): value is AbortSignal => Boolean(value));
+    for (const linkedSignal of linkedSignals) {
+      if (linkedSignal.aborted) {
+        abortPreparation();
+      } else {
+        linkedSignal.addEventListener("abort", abortPreparation, { once: true });
+      }
+    }
     const cacheGeneration = samplePCMCacheGenerationRef.current;
-    await Promise.all(entries.map(async ([key, uri]) => {
-      const cached = samplePCMCacheRef.current.get(key);
-      if (cached && samplePCMUriRef.current.get(key) === uri) {
-        touchSamplePCMByUri(uri, cached);
-        map.set(key, cached);
-        return;
-      }
-      const cachedByUri = samplePCMByUriRef.current.get(uri);
-      if (cachedByUri) {
-        touchSamplePCMByUri(uri, cachedByUri);
-        map.set(key, cachedByUri);
-        if (noteSamplesRef.current[key] === uri) {
-          samplePCMCacheRef.current.set(key, cachedByUri);
-          samplePCMUriRef.current.set(key, uri);
+    try {
+      await Promise.all(entries.map(async ([key, uri]) => {
+        const canonicalKey = `sample:${uri}`;
+        const cached = peekPCM<SamplePCMEntry>(canonicalKey);
+        if (cached) {
+          map.set(key, cached);
+          return;
         }
-        return;
-      }
-      try {
-        const pcm = await decodeSampleFile(uri, signal);
-        if (
-          pcm &&
-          mountedRef.current &&
-          cacheGeneration === samplePCMCacheGenerationRef.current
-        ) {
-          const { trimStartMs, trimDurationMs } = parseTrimInfo(uri);
-          const entry: SamplePCMEntry = { pcm, trimStartMs, trimDurationMs };
-          map.set(key, entry);
-          touchSamplePCMByUri(uri, entry);
-          if (noteSamplesRef.current[key] === uri) {
-            samplePCMCacheRef.current.set(key, entry);
-            samplePCMUriRef.current.set(key, uri);
+        try {
+          const pcm = await getPCM(canonicalKey, async (preparationSignal) => {
+            const decoded = await loadPCM(uri, preparationSignal);
+            const { trimStartMs, trimDurationMs } = parseTrimInfo(uri);
+            return { pcm: decoded, trimStartMs, trimDurationMs };
+          }, preparationController.signal);
+          if (
+            pcm &&
+            mountedRef.current &&
+            cacheGeneration === samplePCMCacheGenerationRef.current
+          ) {
+            const entry = pcm;
+            map.set(key, entry);
+            if (noteSamplesRef.current[key] === uri) {
+              samplePCMUriRef.current.set(key, uri);
+            }
           }
+        } catch (e) {
+          if (isRenderAborted(e) || isPCMCancelled(e)) throw e;
+          captureBreadcrumb({ category: "pre-render", message: "Failed to decode sample", level: "warning", data: { key, error: String(e) } });
         }
-      } catch (e) {
-        if (isRenderAborted(e)) throw e;
-        captureBreadcrumb({ category: "pre-render", message: "Failed to decode sample", level: "warning", data: { key, error: String(e) } });
+      }));
+      return map;
+    } finally {
+      for (const linkedSignal of linkedSignals) {
+        linkedSignal.removeEventListener("abort", abortPreparation);
       }
-    }));
-    return map;
-  }, [noteSamplesRef, touchSamplePCMByUri]);
+    }
+  }, [noteSamplesRef]);
 
   const getLayerClickPCMsForSchedule = useCallback(async (
     ticks: TickInfo[],
@@ -971,13 +986,13 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
     samplePCMCacheGenerationRef.current += 1;
     if (key) {
       const uri = samplePCMUriRef.current.get(key);
+      if (uri) invalidatePCMCache(`sample:${uri}`);
       samplePCMCacheRef.current.delete(key);
       samplePCMUriRef.current.delete(key);
-      if (uri) samplePCMByUriRef.current.delete(uri);
     } else {
+      invalidatePCMCache();
       samplePCMCacheRef.current.clear();
       samplePCMUriRef.current.clear();
-      samplePCMByUriRef.current.clear();
     }
   }, [audioRenderLifecycle]);
 
@@ -1331,12 +1346,12 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
     // render/preload continuation from publishing a resource after unmount.
     mountedRef.current = false;
     samplePCMCacheGenerationRef.current += 1;
+    pcmPreparationOwnerRef.current.abort();
     stopPlaybackAudio();
     cleanupNoteSampleResources(true);
     outputOwner.dispose();
     samplePCMCacheRef.current.clear();
     samplePCMUriRef.current.clear();
-    samplePCMByUriRef.current.clear();
     samplePreloadKeysRef.current.clear();
   }, [
     cleanupNoteSampleResources,
@@ -1346,6 +1361,9 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
 
   useEffect(() => {
     mountedRef.current = true;
+    if (pcmPreparationOwnerRef.current.signal.aborted) {
+      pcmPreparationOwnerRef.current = new AbortController();
+    }
     outputOwner.activate();
     // A StrictMode effect replay is a new producer lifetime even though the
     // hook refs are preserved between the two effect setups.

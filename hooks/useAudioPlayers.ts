@@ -3,6 +3,8 @@ import type { AudioPlayer as ExpoAudioPlayer, AudioSource } from "expo-audio";
 import { soundSets } from "@/lib/metronome-engine";
 import type { SoundSet } from "@/lib/storage";
 import { createAudioOutputOwner, type AudioOutputOwner } from "@/lib/audio-output-owner";
+import { loadPCM } from "@/lib/pcm-loader";
+import { getDecodedPCM } from "@/lib/pcm-cache";
 
 /**
  * 빌트인 사운드셋 플레이어 풀 크기 (역할당 인스턴스 수).
@@ -180,14 +182,24 @@ export function useAudioPlayers(
   // requested pool instead of one beat of the previous instrument.
   const soundSetRef = playbackSoundSetRef ?? internalSoundSetRef;
 
-  // soundSet 변경(또는 최초 마운트) 시:
-  //   1. soundSetRef 동기화
-  //   2. 새 세트를 미리 생성(warm-up) — 첫 틱에서 즉시 재생 가능
+  // Playback resources remain synchronously lazy for first-tick safety.
   useEffect(() => {
     playerOwner.activate();
     soundSetRef.current = soundSet;
     getOrCreate(soundSet);
   }, [soundSet, getOrCreate, playerOwner]);
+
+  // PCM preparation is deliberately separate from pool creation and gain.
+  useEffect(() => {
+    const source = soundSets[soundSet as keyof typeof soundSets]?.strong;
+    void (typeof source !== "number"
+      ? Promise.resolve()
+      : getDecodedPCM(
+          `raw:asset:${String(source)}`,
+          signal => loadPCM({ kind: "asset", source }, signal),
+        ))
+      .catch(() => undefined);
+  }, [soundSet]);
 
   // 언마운트 시 모든 캐시된 플레이어 해제
   useEffect(() => {

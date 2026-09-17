@@ -213,13 +213,26 @@ function callsAndConsumesImportedBinding(
       && ts.isIdentifier(node.expression)
       && node.expression.text === binding
       && checker.getSymbolAtLocation(node.expression) === imported
-      && enclosingFunctionName(node) === within
+       && (enclosingFunctionName(node) === within || isNestedWithinNamedFunction(node, within))
       && callResultIsConsumed(node)
     ) {
       consumed = true;
     }
   });
   return consumed;
+}
+
+function isNestedWithinNamedFunction(node: ts.Node, name: string): boolean {
+  let current: ts.Node | undefined = node.parent;
+  while (current) {
+    if (
+      (ts.isFunctionDeclaration(current) || ts.isFunctionExpression(current) || ts.isArrowFunction(current))
+      && ((current.name && ts.isIdentifier(current.name) && current.name.text === name)
+        || (ts.isVariableDeclaration(current.parent) && ts.isIdentifier(current.parent.name) && current.parent.name.text === name))
+    ) return true;
+    current = current.parent;
+  }
+  return false;
 }
 
 function callsIdentifier(source: ts.SourceFile, callee: string): boolean {
