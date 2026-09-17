@@ -24,7 +24,9 @@
     "server:build": "tsc --project tsconfig.server.json",
     "server:prod": "node dist/server/index.js",
     "expo:dev": "expo start --tunnel",
-    "expo:static:build": "expo export --platform web --output-dir static-build"
+    "expo:static:build": "expo export --platform web --output-dir static-build",
+    "audio:benchmark": "tsx --require ./tests/_stubs/setup.cjs scripts/benchmark-audio-renderer.ts",
+    "audio:migration:verify": "tsx scripts/verify-audio-migration-stage.ts"
   },
   "dependencies": {
     "@breezystack/lamejs": "^1.2.7",
