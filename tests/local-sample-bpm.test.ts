@@ -14,7 +14,7 @@ test("sample BPM measurement is manual and never posts audio to the server", () 
   const modal = fs.readFileSync(path.resolve(process.cwd(), "components/NoteRecorderModal.tsx"), "utf8");
   const routes = fs.readFileSync(path.resolve(process.cwd(), "server/routes.ts"), "utf8");
 
-  assert.ok(modal.includes("BPM 측정"));
+  assert.ok(modal.includes('t("noteRecorder", "bpmMeasure")'));
   assert.ok(!modal.includes("/api/analyze-audio"));
   assert.ok(!routes.includes("analyze-audio"));
   assert.ok(!routes.includes("ffmpeg"));

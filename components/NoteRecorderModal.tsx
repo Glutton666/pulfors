@@ -50,6 +50,7 @@ import { decodeSampleFile, getRenderSampleRate } from "@/lib/audio-renderer";
 import { adjustBpmCandidatesForPlaybackSpeed, detectBpmCandidatesOnDevice } from "@/lib/onset-bpm-detect";
 import { motionDuration, useReducedMotion } from "@/hooks/useReducedMotion";
 import type { RecorderKeyboardActions } from "@/lib/keyboard-bindings";
+import { registerSampleTempoTap } from "@/lib/sample-tap-tempo";
 
 type Phase = "idle" | "countdown" | "recording" | "trimming" | "loading";
 
@@ -171,6 +172,7 @@ export function NoteRecorderModal({
   const [waveformPeaks, setWaveformPeaks] = useState<number[]>([]);
   const bpmDetectTokenRef = useRef(0);
   const userAdjustedBpmRef = useRef(false);
+  const tempoTapTimesRef = useRef<number[]>([]);
 
   const recorder = useAudioRecorder(RECORDER_OPTIONS);
   const recorderRef = useRef(recorder);
@@ -310,6 +312,22 @@ export function NoteRecorderModal({
     }
   }, []);
 
+  const resetTempoTaps = useCallback(() => {
+    tempoTapTimesRef.current = [];
+  }, []);
+
+  const handleSampleTempoTap = useCallback(() => {
+    const result = registerSampleTempoTap(tempoTapTimesRef.current, Date.now());
+    tempoTapTimesRef.current = result.tapTimes;
+    if (result.bpm !== null) {
+      userAdjustedBpmRef.current = true;
+      setLocalBpm(result.bpm);
+    }
+    if (Platform.OS !== "web") {
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+  }, []);
+
   useEffect(() => {
     if (!visible) {
       // Skip cleanup() if handleClose already ran it — calling it twice would
@@ -330,16 +348,19 @@ export function NoteRecorderModal({
       setSampleName("");
       previewStereoCacheRef.current = {};
       previewTokenRef.current += 1;
+      resetTempoTaps();
     } else {
       setSampleName(existingName || "");
       setLocalBpm(bpm);
+      resetTempoTaps();
     }
-  }, [visible, cleanup, existingName, bpm]);
+  }, [visible, cleanup, existingName, bpm, resetTempoTaps]);
 
   useEffect(() => {
     // recordedUri 변경 시 채널별 stereo 캐시 무효화.
     previewStereoCacheRef.current = {};
-  }, [recordedUri]);
+    resetTempoTaps();
+  }, [recordedUri, resetTempoTaps]);
 
   const prepareRecording = useCallback(async () => {
     let acquired = false;
@@ -1268,7 +1289,7 @@ export function NoteRecorderModal({
 
               {metronomeChannel !== "off" && (
                 <>
-                  <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: Spacing.sm, marginTop: Spacing.sm }}>
+                  <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "center", gap: Spacing.sm, marginTop: Spacing.sm }}>
                     <Text style={{ color: C.textSecondary, fontSize: FontSize.small }}>{t("noteRecorder", "previewBpm")}</Text>
                     <Pressable
                       onPress={() => { userAdjustedBpmRef.current = true; setLocalBpm((v) => Math.max(30, v - 1)); }}
@@ -1287,7 +1308,35 @@ export function NoteRecorderModal({
                     >
                       <Ionicons name="add" size={16} color={C.text} />
                     </Pressable>
+                    <Pressable
+                      onPress={handleSampleTempoTap}
+                      accessibilityRole="button"
+                      accessibilityLabel={t("noteRecorder", "tapTempoAccessibility")}
+                      accessibilityHint={t("noteRecorder", "tapTempoHint")}
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: 6,
+                        minHeight: 36,
+                        paddingHorizontal: Spacing.md,
+                        paddingVertical: Spacing.xs,
+                        borderRadius: Radius.md,
+                        backgroundColor: C.accentDim,
+                        borderWidth: 1,
+                        borderColor: C.accent,
+                      }}
+                      hitSlop={6}
+                    >
+                      <Ionicons name="finger-print-outline" size={17} color={C.accent} />
+                      <Text style={{ color: C.accent, fontSize: FontSize.small, fontWeight: "600" as const }}>
+                        {t("noteRecorder", "tapTempo")}
+                      </Text>
+                    </Pressable>
                   </View>
+                  <Text style={{ color: C.textTertiary, fontSize: FontSize.caption, textAlign: "center", marginTop: Spacing.xs, paddingHorizontal: Spacing.sm }}>
+                    {t("noteRecorder", "tapTempoHint")}
+                  </Text>
 
                   <Pressable
                     onPress={measureBpm}
@@ -1305,11 +1354,11 @@ export function NoteRecorderModal({
                       borderWidth: 1,
                       borderColor: isFetchingBpm ? C.border : C.accent,
                     }}
-                    accessibilityLabel="Measure BPM from selected sample"
+                    accessibilityLabel={t("noteRecorder", "bpmMeasureAccessibility")}
                   >
                     <Ionicons name="speedometer-outline" size={16} color={isFetchingBpm ? C.textSecondary : C.accent} />
                     <Text style={{ color: isFetchingBpm ? C.textSecondary : C.accent, fontSize: FontSize.small, fontWeight: "600" as const }}>
-                      BPM 측정
+                      {t("noteRecorder", "bpmMeasure")}
                     </Text>
                   </Pressable>
 
