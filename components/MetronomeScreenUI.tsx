@@ -84,6 +84,7 @@ export function MetronomeScreenUI(props: Props) {
   const modeSwitcherDialRef = useRef<ModeSwitcherDialHandle>(null);
   const modeDialTriggerRef = useRef<View>(null);
   const [isModeDialOpen, setIsModeDialOpen] = useState(false);
+  const [showLabMenu, setShowLabMenu] = useState(false);
 
   const {
     styles, C, S, t, themeMode, language, insets, webTopInset, webBottomInset,
@@ -587,8 +588,11 @@ export function MetronomeScreenUI(props: Props) {
         <Animated.View style={[StyleSheet.absoluteFillObject, { zIndex: 400 }, modeSlideStyle]}>
           <MenuScreen
             topInset={insets.top || webTopInset}
+            showLab={showLabMenu}
+            onShowLabChange={setShowLabMenu}
             onOpenDial={openModeDial}
             onClose={() => {
+              setShowLabMenu(false);
               clearMenuItemReturn();
               setActiveModal(null);
             }}
@@ -1576,7 +1580,13 @@ export function MetronomeScreenUI(props: Props) {
       >
       <StageModeOverlay
         visible={stageModeActive}
-        onOpenDial={() => modeSwitcherDialRef.current?.open()}
+        onOpenDial={() => {
+          // Choosing another mode is an explicit navigation action, not an
+          // exit back to the Lab menu.
+          setShowLabMenu(false);
+          clearMenuItemReturn();
+          modeSwitcherDialRef.current?.open();
+        }}
         bpm={currentBarConfig.bpm}
         flashOpacity={flashOpacity}
         beatProgress={beatProgress}

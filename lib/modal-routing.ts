@@ -53,6 +53,27 @@ export function getMenuItemCloseTarget(openedFromMenu: boolean): ActiveModal {
   return openedFromMenu ? "menu" : null;
 }
 
+export interface MenuReturnLease {
+  openedFromMenu: boolean;
+  generation: number;
+}
+
+/**
+ * Finishes asynchronous Stage cleanup without allowing an older exit to
+ * overwrite a newer navigation decision.
+ */
+export async function exitStageWithMenuReturn(
+  lease: MenuReturnLease,
+  exitStage: () => Promise<void>,
+  getGeneration: () => number,
+  reopenMenu: () => void,
+): Promise<void> {
+  await exitStage();
+  if (lease.openedFromMenu && lease.generation === getGeneration()) {
+    reopenMenu();
+  }
+}
+
 /** 현재 visible=true 인 모달 수를 반환한다. */
 export function countVisibleModals(
   flags: ReturnType<typeof deriveModalFlags>,

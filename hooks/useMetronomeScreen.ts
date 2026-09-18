@@ -82,6 +82,7 @@ import {
   type ActiveModal,
   type SgTgState,
   deriveModalFlags,
+  exitStageWithMenuReturn,
   getMenuItemCloseTarget,
   openTuningGuideFromSignalGen,
   closeTuningGuide,
@@ -574,14 +575,18 @@ export function useMetronomeScreen() {
   // This lives in the screen hook (rather than a UI component) so Android's
   // hardware-back handler follows the same return path as on-screen close buttons.
   const menuItemReturnRef = useRef(false);
+  const menuItemReturnGenerationRef = useRef(0);
   const markMenuItemReturn = useCallback(() => {
+    menuItemReturnGenerationRef.current += 1;
     menuItemReturnRef.current = true;
   }, []);
   const clearMenuItemReturn = useCallback(() => {
+    menuItemReturnGenerationRef.current += 1;
     menuItemReturnRef.current = false;
   }, []);
   const closeMenuItem = useCallback(() => {
     const target = getMenuItemCloseTarget(menuItemReturnRef.current);
+    menuItemReturnGenerationRef.current += 1;
     menuItemReturnRef.current = false;
     setActiveModal(target);
   }, []);
@@ -2577,6 +2582,14 @@ export function useMetronomeScreen() {
     enterStageMode();
   }, [enterStageMode]);
   const exitStageModeForPlayback = useCallback(async () => {
+    // Consume a revocable destination lease before awaiting Stage cleanup.
+    // Any newer navigation calls clearMenuItemReturn(), advancing the
+    // generation so this older completion cannot reopen the menu.
+    const returnLease = {
+      openedFromMenu: menuItemReturnRef.current,
+      generation: menuItemReturnGenerationRef.current,
+    };
+    menuItemReturnRef.current = false;
     playbackModeRef.current = activeModeRef.current;
     setSettingsMode(
       activeModeRef.current === "bar"
@@ -2585,11 +2598,13 @@ export function useMetronomeScreen() {
           ? "note"
           : "beat",
     );
-    await exitStageMode();
-    if (menuItemReturnRef.current) {
-      closeMenuItem();
-    }
-  }, [exitStageMode, closeMenuItem]);
+    await exitStageWithMenuReturn(
+      returnLease,
+      exitStageMode,
+      () => menuItemReturnGenerationRef.current,
+      () => setActiveModal(getMenuItemCloseTarget(true)),
+    );
+  }, [exitStageMode]);
   useEffect(() => {
     playbackModeRef.current = stageModeActive
       ? "stage"

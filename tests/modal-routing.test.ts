@@ -17,6 +17,7 @@ import { join } from "node:path";
 import {
   type ActiveModal,
   deriveModalFlags,
+  exitStageWithMenuReturn,
   getMenuItemCloseTarget,
   countVisibleModals,
   openTuningGuideFromSignalGen,
@@ -44,6 +45,42 @@ test("modal-routing: 메뉴 밖에서 연 항목을 닫으면 기본 화면으�
   const target = getMenuItemCloseTarget(false);
   assert.equal(target, null);
   assert.equal(countVisibleModals(deriveModalFlags(target)), 0);
+});
+
+test("stage menu return: 종료 정리가 끝나면 실험실 메뉴를 다시 연다", async () => {
+  let generation = 4;
+  let reopened = false;
+
+  await exitStageWithMenuReturn(
+    { openedFromMenu: true, generation },
+    async () => {},
+    () => generation,
+    () => { reopened = true; },
+  );
+
+  assert.equal(reopened, true);
+});
+
+test("stage menu return: 종료 중 새 탐색이 시작되면 오래된 완료가 메뉴를 다시 열지 않는다", async () => {
+  let generation = 7;
+  let reopened = false;
+  let finishExit!: () => void;
+  const deferredExit = new Promise<void>((resolve) => {
+    finishExit = resolve;
+  });
+
+  const pending = exitStageWithMenuReturn(
+    { openedFromMenu: true, generation },
+    () => deferredExit,
+    () => generation,
+    () => { reopened = true; },
+  );
+
+  generation += 1;
+  finishExit();
+  await pending;
+
+  assert.equal(reopened, false);
 });
 
 test("menu return: 메뉴 진입·직접 진입의 종료 대상이 모든 메뉴 항목에서 일관된다", () => {
@@ -445,6 +482,31 @@ test("source: MenuScreen — 실험실에 악보·펄스 폴리곤·드럼킷을
   const removedHandler = ["on", "Stem", "Sep"].join("");
   assert.ok(!labItems.includes(removedItemId), "제거된 음원분리 메뉴 항목이 실험실에 남아 있다");
   assert.ok(!labItems.includes(removedHandler), "제거된 음원분리 핸들러가 실험실에 남아 있다");
+});
+
+test("source: 실험실 하위 화면 상태를 메뉴 재마운트 밖에서 보존한다", () => {
+  const menu = readFileSync(join(process.cwd(), "components/MenuScreen.tsx"), "utf-8");
+  const ui = readFileSync(join(process.cwd(), "components/MetronomeScreenUI.tsx"), "utf-8");
+
+  assert.match(menu, /showLab: boolean/);
+  assert.match(menu, /onShowLabChange: \(visible: boolean\) => void/);
+  assert.ok(!menu.includes("React.useState(false)"), "실험실 상태가 MenuScreen 내부에 남아 있다");
+  assert.match(ui, /const \[showLabMenu, setShowLabMenu\] = useState\(false\)/);
+  assert.match(ui, /<MenuScreen[\s\S]*?showLab=\{showLabMenu\}[\s\S]*?onShowLabChange=\{setShowLabMenu\}/);
+});
+
+test("source: 모든 실험실 항목은 공통 복귀 경로를 사용한다", () => {
+  const ui = readFileSync(join(process.cwd(), "components/MetronomeScreenUI.tsx"), "utf-8");
+
+  assert.match(ui, /onStage=\{\(\) => \{[\s\S]*?openMenuItem\(/);
+  assert.match(ui, /onScore=\{\(\) => \{[\s\S]*?openMenuItem\(/);
+  assert.match(ui, /onPolygon=\{\(\) => \{[\s\S]*?openMenuItem\(/);
+  assert.match(ui, /onAssistant=\{\(\) => openMenuItem\(/);
+  assert.match(ui, /onDrumKit=\{\(\) => openMenuItem\(/);
+  assert.match(ui, /<AssistantModal visible=\{showAssistant\} onClose=\{closeMenuItem\}/);
+  assert.match(ui, /<DrumKitModal[\s\S]*?onClose=\{closeMenuItem\}/);
+  assert.match(ui, /<PolygonModeView[\s\S]*?onClose=\{closeMenuItem\}/);
+  assert.match(ui, /onClose=\{closeScoreMode\}/);
 });
 
 test("source: MenuScreen — 드럼킷 메뉴 라벨과 모달 진입·닫기 흐름이 연결된다", () => {

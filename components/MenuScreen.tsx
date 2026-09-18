@@ -13,6 +13,8 @@ import { useScale } from "@/lib/scale";
 
 interface MenuScreenProps {
   topInset: number;
+  showLab: boolean;
+  onShowLabChange: (visible: boolean) => void;
   onClose: () => void;
   onOpenDial: () => void;
   onSettings: () => void;
@@ -29,6 +31,8 @@ interface MenuScreenProps {
 
 export function MenuScreen({
   topInset,
+  showLab,
+  onShowLabChange,
   onClose,
   onOpenDial,
   onSettings,
@@ -45,8 +49,6 @@ export function MenuScreen({
   const { colors: C } = useTheme();
   const { t } = useLanguage();
   const S = useScale();
-  const [showLab, setShowLab] = React.useState(false);
-
   const ITEM_H = S.ms(64, 0.4);
   const ICON_SIZE = S.ms(22, 0.4);
 
@@ -80,7 +82,7 @@ export function MenuScreen({
     ...(labUnlocked ? [{
       icon: <Ionicons name="flask-outline" size={ICON_SIZE} color={C.accent} />,
       label: t("main", "menuLab"),
-      onPress: () => setShowLab(true),
+      onPress: () => onShowLabChange(true),
       testID: "menu-lab",
     }] : []),
   ];
@@ -132,7 +134,7 @@ export function MenuScreen({
       ]}
     >
       <Pressable
-        onPress={showLab ? () => setShowLab(false) : onOpenDial}
+        onPress={showLab ? () => onShowLabChange(false) : onOpenDial}
         style={{
           flexDirection: "row",
           alignItems: "center",

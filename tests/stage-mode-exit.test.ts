@@ -180,7 +180,7 @@ describe("handleStageModeBackPress — 안드로이드 백 버튼 우선순위",
   });
 });
 
-// ─── 경로 A: 상단 타이틀 → onOpenDial 연결 확인 (정적 분석) ────────────────
+// ─── 경로 A: 상단 나가기와 타이틀 다이얼 연결 확인 (정적 분석) ───────────
 
 describe("경로 A: 상단 '무대 모드' 텍스트가 onOpenDial에 연결됨", () => {
   const fs = require("node:fs") as typeof import("fs");
@@ -194,6 +194,14 @@ describe("경로 A: 상단 '무대 모드' 텍스트가 onOpenDial에 연결됨"
     );
   });
 
+  test("StageModeOverlay 상단에 종료 확인창을 여는 나가기 버튼이 있음", () => {
+    const src = fs.readFileSync("components/StageModeOverlay.tsx", "utf8");
+    assert.match(
+      src,
+      /testID="stage-exit-button"[\s\S]*?onPress=\{\(\) => setConfirmExit\(true\)\}/,
+    );
+  });
+
   test("chevron-down 종료 버튼이 제거되었음", () => {
     const src = fs.readFileSync("components/StageModeOverlay.tsx", "utf8");
     assert.ok(
@@ -202,12 +210,19 @@ describe("경로 A: 상단 '무대 모드' 텍스트가 onOpenDial에 연결됨"
     );
   });
 
-  test("MetronomeScreenUI가 StageModeOverlay에 modeSwitcherDialRef.open을 onOpenDial로 전달", () => {
+  test("무대 모드 다이얼을 열면 실험실 복귀 상태를 먼저 해제함", () => {
     const src = fs.readFileSync("components/MetronomeScreenUI.tsx", "utf8");
-    // The wiring: onOpenDial={() => modeSwitcherDialRef.current?.open()}
-    assert.ok(
-      src.includes("onOpenDial={() => modeSwitcherDialRef.current?.open()}"),
-      "MetronomeScreenUI must pass onOpenDial that calls modeSwitcherDialRef.current?.open()",
+    assert.match(
+      src,
+      /<StageModeOverlay[\s\S]*?onOpenDial=\{\(\) => \{[\s\S]*?setShowLabMenu\(false\);[\s\S]*?clearMenuItemReturn\(\);[\s\S]*?modeSwitcherDialRef\.current\?\.open\(\);/,
+    );
+  });
+
+  test("무대 모드 종료는 취소 가능한 실험실 복귀 lease를 사용함", () => {
+    const src = fs.readFileSync("hooks/useMetronomeScreen.ts", "utf8");
+    assert.match(
+      src,
+      /const returnLease = \{[\s\S]*?openedFromMenu: menuItemReturnRef\.current,[\s\S]*?generation: menuItemReturnGenerationRef\.current,[\s\S]*?await exitStageWithMenuReturn\(/,
     );
   });
 

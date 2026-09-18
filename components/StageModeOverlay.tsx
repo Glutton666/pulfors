@@ -940,7 +940,15 @@ export function StageModeOverlay({
 
       {/* 상단 바 */}
       <View style={[styles.topBar, { paddingTop: topPad }]}>
-        <View style={{ minWidth: 44 }} />
+        <Pressable
+          testID="stage-exit-button"
+          style={({ pressed }) => [styles.topBarBtn, { minWidth: 44 }, pressed && { opacity: 0.6 }]}
+          onPress={() => setConfirmExit(true)}
+          accessibilityRole="button"
+          accessibilityLabel={t("stageMode", "exitConfirm")}
+        >
+          <Ionicons name="arrow-back" size={22} color={faint} />
+        </Pressable>
 
         <Pressable
           onPress={onOpenDial}
