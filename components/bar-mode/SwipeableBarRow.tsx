@@ -71,6 +71,15 @@ export function getBarRightRailLayout(blockEnd: boolean, blockRepeatText?: strin
   };
 }
 
+export const BAR_SAMPLE_COVERAGE_LAYOUT = {
+  top: 1,
+  height: 3,
+} as const;
+
+export function getBarSampleCoverageLineWidth(kind: SampleCellCoverage["kind"]): number {
+  return kind === "direct" ? 3 : 2;
+}
+
 export function SwipeableBarRow({
   beat, beatType, subdivisions, repeat, isCurrentBeat, isEditingBeat,
   activeSubNote = -1,
@@ -157,7 +166,10 @@ export function SwipeableBarRow({
     : [{ translateX }];
 
   return (
-    <View style={{ position: "relative", overflow: isDragging ? "visible" : "hidden" }}>
+    <View
+      testID={`bar-row-clip-container-${beat}`}
+      style={{ position: "relative", overflow: isDragging ? "visible" : "hidden" }}
+    >
       {showDropLineAbove && (
         <View style={{ height: 2, backgroundColor: "#5b9cf6", borderRadius: 1, marginHorizontal: 4 }} />
       )}
@@ -334,9 +346,10 @@ export function SwipeableBarRow({
 
             {/* Keep sample coverage as a line above the cells so beat accents
                 remain the only source of cell background color. */}
-            <View
+            {sampleCellCoverage.some(Boolean) && <View
               testID={`bar-sample-coverage-overlay-${beat}`}
-              style={[styles.barSampleCoverageOverlay, { pointerEvents: "none" }]}
+              pointerEvents="none"
+              style={styles.barSampleCoverageOverlay}
             >
               {cells.map((_, ci) => {
                 const coverage = sampleCellCoverage[ci];
@@ -350,17 +363,18 @@ export function SwipeableBarRow({
                 return (
                   <View
                     key={ci}
+                    testID={`bar-sample-coverage-segment-${beat}-${ci}`}
                     style={[
                       styles.barSampleCoverageSegment,
                       {
-                        borderTopWidth: coverage.kind === "direct" ? 3 : 1,
-                        borderTopColor: sampleColor + (coverage.kind === "direct" ? "D9" : "8C"),
+                        borderTopWidth: getBarSampleCoverageLineWidth(coverage.kind),
+                        borderTopColor: sampleColor + (coverage.kind === "direct" ? "D9" : "A6"),
                       },
                     ]}
                   />
                 );
               })}
-            </View>
+            </View>}
 
             {/* 오른쪽 고정 2단 박자/템포 정보 */}
             <View style={[styles.barCellOverlay, { right: infoRight }]} pointerEvents="none">
@@ -522,10 +536,12 @@ const styles = StyleSheet.create({
   },
   barSampleCoverageOverlay: {
     position: "absolute",
-    top: -2,
+    // Keep the line inside the clipped row. A negative top offset is cut off
+    // by the swipe container whenever the row is not being dragged.
+    top: BAR_SAMPLE_COVERAGE_LAYOUT.top,
     left: 0,
     right: 0,
-    height: 4,
+    height: BAR_SAMPLE_COVERAGE_LAYOUT.height,
     flexDirection: "row",
     zIndex: 5,
   },

@@ -4,6 +4,8 @@ import type { FC, ReactNode } from "react";
 import { fireEvent, render } from "@testing-library/react";
 
 import {
+  BAR_SAMPLE_COVERAGE_LAYOUT,
+  getBarSampleCoverageLineWidth,
   getBarRightRailLayout,
   SwipeableBarRow,
 } from "@/components/bar-mode/SwipeableBarRow";
@@ -181,7 +183,17 @@ describe("SwipeableBarRow block editing", () => {
 
     expect(getByTestId("bar-sample-cell-1-1")).toBeTruthy();
     expect(getByTestId("bar-sample-coverage-cell-1-2")).toBeTruthy();
-    expect(getByTestId("bar-sample-coverage-overlay-1")).toBeTruthy();
+    const clipContainer = getByTestId("bar-row-clip-container-1") as HTMLElement;
+    const overlay = getByTestId("bar-sample-coverage-overlay-1") as HTMLElement;
+    const direct = getByTestId("bar-sample-coverage-segment-1-1") as HTMLElement;
+    const continued = getByTestId("bar-sample-coverage-segment-1-2") as HTMLElement;
+    expect(clipContainer.contains(overlay)).toBe(true);
+    expect(BAR_SAMPLE_COVERAGE_LAYOUT.top).toBeGreaterThanOrEqual(0);
+    expect(BAR_SAMPLE_COVERAGE_LAYOUT.height).toBe(3);
+    expect(getBarSampleCoverageLineWidth("direct")).toBe(3);
+    expect(getBarSampleCoverageLineWidth("continued")).toBe(2);
+    expect(direct).toBeTruthy();
+    expect(continued).toBeTruthy();
     fireEvent.click(getByTestId("bar-row-1"));
     expect(onPress).toHaveBeenCalledWith(1);
   });
@@ -225,7 +237,7 @@ describe("SwipeableBarRow block editing", () => {
 
     const overlay = getByTestId("bar-sample-coverage-overlay-1") as HTMLElement;
     expect(overlay.children).toHaveLength(4);
-    expect(overlay.querySelectorAll("[data-testid]").length).toBe(0);
+    expect(overlay.querySelectorAll("[data-testid]").length).toBe(2);
   });
 
   it("centers real note glyphs, renders mute as a rest, and stacks meter above tempo", () => {
@@ -358,6 +370,39 @@ describe("SwipeableBarRow block editing", () => {
     expect(getByTestId("bar-rhythm-beam-0").getAttribute("stroke")).toBe(colors.accent);
     expect(getByTestId("bar-tuplet-number-3").getAttribute("fill")).toBe(colors.accent);
     expect(getByTestId("bar-note-normal-0").querySelector("ellipse")?.getAttribute("stroke")).toBe(colors.accent);
+  });
+
+  it("does not render sample markers or a coverage overlay for an empty row", () => {
+    const { queryByTestId } = render(
+      <SwipeableBarRow
+        beat={2}
+        beatType="normal"
+        subdivisions={["normal", "normal"]}
+        repeat={null}
+        isCurrentBeat={false}
+        isEditingBeat={false}
+        blockDepth={0}
+        blockStart={false}
+        blockEnd={false}
+        symbolBadges={[]}
+        isPlaying={false}
+        bpm={120}
+        meterNumerator={2}
+        meterDenominator={4}
+        beatsPerMeasure={2}
+        onPress={jest.fn()}
+        onSwipeLeft={jest.fn()}
+        onSwipeRight={jest.fn()}
+        onLongPress={jest.fn()}
+        colors={colors}
+        ms={(value) => value}
+        sampleCellCoverage={[undefined, undefined]}
+      />,
+    );
+
+    expect(queryByTestId("bar-sample-coverage-overlay-2")).toBeNull();
+    expect(queryByTestId("bar-sample-start-marker-2-0")).toBeNull();
+    expect(queryByTestId("bar-sample-start-marker-2-1")).toBeNull();
   });
 
   it.each([
