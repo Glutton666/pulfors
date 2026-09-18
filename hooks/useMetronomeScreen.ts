@@ -142,7 +142,7 @@ import {
   type PlaybackMode,
 } from "@/lib/playback-context";
 import { PracticeSessionTracker, loadLoggingEnabled, saveLoggingEnabled, addActivityLog, loadActivityLogs, loadGoals, saveGoals } from "@/lib/activity-log";
-import { loadNoteSamples, saveNoteSamples, setNoteSample, removeNoteSample, hasNoteSample, loadNoteSampleNames, saveNoteSampleNames, setNoteSampleName, removeNoteSampleName, loadNoteSampleSources, saveNoteSampleSources, setNoteSampleSource, removeNoteSampleSource, loadNoteSampleChannels, saveNoteSampleChannels, setNoteSampleChannel, removeNoteSampleChannel, loadNoteSampleVolumes, setNoteSampleVolume, removeNoteSampleVolume, loadNoteSampleSpeeds, setNoteSampleSpeed, removeNoteSampleSpeed, loadNoteSampleMetroChannels, saveNoteSampleMetroChannels, setNoteSampleMetroChannel, removeNoteSampleMetroChannel } from "@/lib/note-samples";
+import { loadNoteSamples, saveNoteSamples, setNoteSample, removeNoteSample, hasNoteSample, sampleSlotKeys, loadNoteSampleNames, saveNoteSampleNames, setNoteSampleName, removeNoteSampleName, loadNoteSampleSources, saveNoteSampleSources, setNoteSampleSource, removeNoteSampleSource, loadNoteSampleChannels, saveNoteSampleChannels, setNoteSampleChannel, removeNoteSampleChannel, loadNoteSampleVolumes, saveNoteSampleVolumes, setNoteSampleVolume, removeNoteSampleVolume, loadNoteSampleSpeeds, saveNoteSampleSpeeds, setNoteSampleSpeed, removeNoteSampleSpeed, loadNoteSampleMetroChannels, saveNoteSampleMetroChannels, setNoteSampleMetroChannel, removeNoteSampleMetroChannel } from "@/lib/note-samples";
 import type { NoteSampleMap, NoteSampleNameMap, NoteSampleSourceMap, NoteSampleChannelMap, NoteSampleVolumeMap, NoteSampleSpeedMap, NoteSampleMetroChannelMap, SampleSource } from "@/lib/note-samples";
 import type { SampleChannel, MetroChannel } from "@/lib/stereo-channel";
 import { AudioModule, createAudioPlayer } from "expo-audio";
@@ -699,7 +699,7 @@ export function useMetronomeScreen() {
   // barMetronomeChannel/barCellOpacity/barRowHeight → useSettings 소유
   const [noteSampleMetroChannels, setNoteSampleMetroChannels] = useState<NoteSampleMetroChannelMap>({});
   const noteSampleMetroChannelsRef = useRef<NoteSampleMetroChannelMap>({});
-  const [recorderTarget, setRecorderTarget] = useState<{ beat: number; sub: number } | null>(null);
+  const [recorderTarget, setRecorderTarget] = useState<{ beat: number; sub: number; slot?: 0 | 1 | 2 } | null>(null);
 
   const { engineRef } = useMetronomeEngine();
   // The engine resets `currentBeat` when it stops. Keep the last main-bar
@@ -1386,12 +1386,14 @@ export function useMetronomeScreen() {
       }
     }).catch(() => {});
 
-    const sampleTimingCacheRef = { current: new Map<string, { startMs: number; durationMs: number }>() };
+    const sampleTimingCacheRef = {
+      current: new Map<string, { uri: string; startMs: number; durationMs: number }>(),
+    };
 
     const parseSampleTiming = (key: string): { startMs: number; durationMs: number } => {
-      const cached = sampleTimingCacheRef.current.get(key);
-      if (cached) return cached;
       const sampleUri = noteSamplesRef.current[key] || "";
+      const cached = sampleTimingCacheRef.current.get(key);
+      if (cached?.uri === sampleUri) return cached;
       const hashParts = sampleUri.split("#t=")[1];
       let startMs = 0;
       let endMs = 0;
@@ -1401,7 +1403,7 @@ export function useMetronomeScreen() {
         if (parts.length > 1 && !isNaN(parts[1])) endMs = parts[1];
       }
       const durationMs = endMs > startMs ? endMs - startMs : 0;
-      const result = { startMs, durationMs };
+      const result = { uri: sampleUri, startMs, durationMs };
       sampleTimingCacheRef.current.set(key, result);
       return result;
     };
@@ -1409,19 +1411,19 @@ export function useMetronomeScreen() {
     engine.setCustomSampleCallback((beat: number, subBeat: number) => {
       if (fadeOutMutedRef.current) return false;
       if (!barModeRef.current) return false;
-      const key = `${beat}-${subBeat}`;
-      const player = noteSampleSoundsRef.current[key];
-      if (player) {
-        if (samplePlayStateRef.current[key]?.playing) return true;
+      const keys = sampleSlotKeys(beat, subBeat);
+      let played = false;
+      for (const key of keys) {
+        const player = noteSampleSoundsRef.current[key];
+        if (!player || samplePlayStateRef.current[key]?.playing) continue;
         // Keep a saved per-sample level independent from the global sample master.
-        // This also updates retained players after a metadata-only edit.
         player.volume = Math.max(0, Math.min(1, sampleVolumeRef.current * (noteSampleVolumesRef.current[key] ?? 1)));
         player.playbackRate = noteSampleSpeedsRef.current[key] ?? 1;
         player.shouldCorrectPitch = false;
         const { startMs, durationMs } = parseSampleTiming(key);
-        return queueNoteSamplePlayback(key, player, startMs, durationMs);
+        played = queueNoteSamplePlayback(key, player, startMs, durationMs) || played;
       }
-      return false;
+      return played;
     });
 
     loadLoggingEnabled().then((val) => setLoggingEnabled(val));
@@ -1450,8 +1452,17 @@ export function useMetronomeScreen() {
   }, []);
 
 
-  const handleNoteRecordRequest = useCallback((beatIndex: number, subIndex: number) => {
-    setRecorderTarget({ beat: beatIndex, sub: subIndex });
+  const handleNoteRecordRequest = useCallback((beatIndex: number, subIndex: number, slot: 0 | 1 | 2 = 0) => {
+    // A new tap never replaces an existing take: select the first free slot.
+    // Passing an explicit slot is used by the recorder's slot picker for edits.
+    const keys = sampleSlotKeys(beatIndex, subIndex);
+    const selected = slot === 0
+      ? (keys.findIndex((key) => !noteSamplesRef.current[key]) as 0 | 1 | 2)
+      : slot;
+    // When all three slots are occupied, open slot 1 instead of doing
+    // nothing. The 3/3 indicator makes the limit clear and keeps every
+    // existing take editable.
+    setRecorderTarget({ beat: beatIndex, sub: subIndex, slot: selected >= 0 ? selected : 0 });
   }, []);
 
   const handleNoteRecordSave = useCallback(async (uri: string, name: string, source: SampleSource, channel: SampleChannel, metronomeChannel: MetroChannel, sampleGain = 1, sampleSpeed = 1) => {
@@ -1459,24 +1470,32 @@ export function useMetronomeScreen() {
     const targetConfig = barModeRef.current
       ? barConfigRef.current
       : dialConfigRef.current;
-    const key = `${recorderTarget.beat}-${recorderTarget.sub}`;
+    const baseKey = `${recorderTarget.beat}-${recorderTarget.sub}`;
+    const key = recorderTarget.slot ? `${baseKey}~${recorderTarget.slot}` : baseKey;
     invalidateSamplePCMCache(key);
-    const updated = await setNoteSample(recorderTarget.beat, recorderTarget.sub, uri, noteSamplesRef.current);
+    const updated = { ...noteSamplesRef.current, [key]: uri };
+    await saveNoteSamples(updated);
     setNoteSamples(updated);
     noteSamplesRef.current = updated;
-    const updatedNames = await setNoteSampleName(recorderTarget.beat, recorderTarget.sub, name, noteSampleNamesRef.current);
+    const updatedNames = { ...noteSampleNamesRef.current, [key]: name };
+    await saveNoteSampleNames(updatedNames);
     setNoteSampleNames(updatedNames);
     noteSampleNamesRef.current = updatedNames;
-    const updatedSources = await setNoteSampleSource(recorderTarget.beat, recorderTarget.sub, source, noteSampleSourcesRef.current);
+    const updatedSources = { ...noteSampleSourcesRef.current, [key]: source };
+    await saveNoteSampleSources(updatedSources);
     setNoteSampleSources(updatedSources);
     noteSampleSourcesRef.current = updatedSources;
-    const updatedChannels = await setNoteSampleChannel(recorderTarget.beat, recorderTarget.sub, channel, noteSampleChannelsRef.current);
+    const updatedChannels = { ...noteSampleChannelsRef.current };
+    if (channel === "both") delete updatedChannels[key]; else updatedChannels[key] = channel;
+    await saveNoteSampleChannels(updatedChannels);
     setNoteSampleChannels(updatedChannels);
     noteSampleChannelsRef.current = updatedChannels;
-    const updatedVolumes = await setNoteSampleVolume(recorderTarget.beat, recorderTarget.sub, sampleGain, noteSampleVolumesRef.current);
+    const updatedVolumes = { ...noteSampleVolumesRef.current, [key]: Math.max(0, Math.min(1, sampleGain)) };
+    await saveNoteSampleVolumes(updatedVolumes);
     setNoteSampleVolumes(updatedVolumes);
     noteSampleVolumesRef.current = updatedVolumes;
-    const updatedSpeeds = await setNoteSampleSpeed(recorderTarget.beat, recorderTarget.sub, sampleSpeed, noteSampleSpeedsRef.current);
+    const updatedSpeeds = { ...noteSampleSpeedsRef.current, [key]: Math.max(0.5, Math.min(2, sampleSpeed)) };
+    await saveNoteSampleSpeeds(updatedSpeeds);
     setNoteSampleSpeeds(updatedSpeeds);
     noteSampleSpeedsRef.current = updatedSpeeds;
     Object.assign(targetConfig, {
@@ -1509,24 +1528,37 @@ export function useMetronomeScreen() {
     const targetConfig = barModeRef.current
       ? barConfigRef.current
       : dialConfigRef.current;
-    const key = `${recorderTarget.beat}-${recorderTarget.sub}`;
+    const baseKey = `${recorderTarget.beat}-${recorderTarget.sub}`;
+    const key = recorderTarget.slot ? `${baseKey}~${recorderTarget.slot}` : baseKey;
     invalidateSamplePCMCache(key);
-    const updated = await removeNoteSample(recorderTarget.beat, recorderTarget.sub, noteSamplesRef.current);
+    const updated = { ...noteSamplesRef.current };
+    delete updated[key];
+    await saveNoteSamples(updated);
     setNoteSamples(updated);
     noteSamplesRef.current = updated;
-    const updatedNames = await removeNoteSampleName(recorderTarget.beat, recorderTarget.sub, noteSampleNamesRef.current);
+    const updatedNames = { ...noteSampleNamesRef.current };
+    delete updatedNames[key];
+    await saveNoteSampleNames(updatedNames);
     setNoteSampleNames(updatedNames);
     noteSampleNamesRef.current = updatedNames;
-    const updatedSources = await removeNoteSampleSource(recorderTarget.beat, recorderTarget.sub, noteSampleSourcesRef.current);
+    const updatedSources = { ...noteSampleSourcesRef.current };
+    delete updatedSources[key];
+    await saveNoteSampleSources(updatedSources);
     setNoteSampleSources(updatedSources);
     noteSampleSourcesRef.current = updatedSources;
-    const updatedChannels = await removeNoteSampleChannel(recorderTarget.beat, recorderTarget.sub, noteSampleChannelsRef.current);
+    const updatedChannels = { ...noteSampleChannelsRef.current };
+    delete updatedChannels[key];
+    await saveNoteSampleChannels(updatedChannels);
     setNoteSampleChannels(updatedChannels);
     noteSampleChannelsRef.current = updatedChannels;
-    const updatedVolumes = await removeNoteSampleVolume(recorderTarget.beat, recorderTarget.sub, noteSampleVolumesRef.current);
+    const updatedVolumes = { ...noteSampleVolumesRef.current };
+    delete updatedVolumes[key];
+    await saveNoteSampleVolumes(updatedVolumes);
     setNoteSampleVolumes(updatedVolumes);
     noteSampleVolumesRef.current = updatedVolumes;
-    const updatedSpeeds = await removeNoteSampleSpeed(recorderTarget.beat, recorderTarget.sub, noteSampleSpeedsRef.current);
+    const updatedSpeeds = { ...noteSampleSpeedsRef.current };
+    delete updatedSpeeds[key];
+    await saveNoteSampleSpeeds(updatedSpeeds);
     setNoteSampleSpeeds(updatedSpeeds);
     noteSampleSpeedsRef.current = updatedSpeeds;
     Object.assign(targetConfig, {

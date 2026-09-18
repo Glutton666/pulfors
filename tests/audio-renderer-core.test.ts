@@ -514,6 +514,24 @@ test("renderMeasure: samplePCMs — repeatIteration=0, barRepeatIteration=0이�
   assert.ok(peakAt(buf, 0) > 0.5, `repeatIteration=0 → 샘플 렌더돼야 함, peak=${peakAt(buf, 0)}`);
 });
 
+test("renderMeasure: 같은 셀의 세 샘플을 같은 시점에 함께 믹스", () => {
+  const samplePCMs = new Map<string, SamplePCMEntry>([
+    ["0-0", { pcm: new Float32Array(64).fill(0.1), trimStartMs: 0, trimDurationMs: 0 }],
+    ["0-0~1", { pcm: new Float32Array(64).fill(0.1), trimStartMs: 0, trimDurationMs: 0 }],
+    ["0-0~2", { pcm: new Float32Array(64).fill(0.1), trimStartMs: 0, trimDurationMs: 0 }],
+  ]);
+  const result = renderMeasure({
+    schedule: [makeTick()],
+    measureDurationMs: 500,
+    clickPCMs: makeClicks(0),
+    samplePCMs,
+    clickVolume: 0,
+    sampleVolume: 1,
+  });
+  const buffer = result instanceof Float32Array ? result : result.left;
+  assert.ok(Math.abs(buffer[0] - 0.3) < 1e-5, `세 샘플 합산값이 예상과 다름: ${buffer[0]}`);
+});
+
 test("renderMeasure: per-sample volume multiplies the global sample master", () => {
   const samplePCMs = new Map<string, SamplePCMEntry>([
     ["0-0", { pcm: new Float32Array(64).fill(0.8), trimStartMs: 0, trimDurationMs: 0 }],

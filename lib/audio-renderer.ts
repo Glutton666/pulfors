@@ -502,7 +502,7 @@ export function renderMeasure(params: RenderMeasureParams): Float32Array | { lef
         if (shouldAbort?.()) throw new Error("EXPORT_ABORTED");
         if (tick.type === "mute") continue;
         const offsetSamples = copyOffset + Math.round((tick.time / 1000) * RENDER_SR);
-        const key = `${tick.beat}-${tick.subBeat}`;
+        const cellKey = `${tick.beat}-${tick.subBeat}`;
 
         const isLayerTick = (tick.layerIndex ?? 0) > 0;
         let effectiveClickPCMs = clickPCMs;
@@ -526,23 +526,26 @@ export function renderMeasure(params: RenderMeasureParams): Float32Array | { lef
           }
         }
 
-        if (tick.repeatIteration === 0 && tick.barRepeatIteration === 0 && samplePCMs.has(key)) {
-          const sample = samplePCMs.get(key)!;
-          const trimStart = Math.round((sample.trimStartMs / 1000) * RENDER_SR);
-          const trimLen =
-            sample.trimDurationMs > 0
-              ? Math.round((sample.trimDurationMs / 1000) * RENDER_SR)
-              : sample.pcm.length - trimStart;
-          const trimmed = sample.pcm.subarray(
-            trimStart,
-            Math.min(trimStart + trimLen, sample.pcm.length),
-          );
-          const speedAdjusted = resampleForPlaybackSpeed(trimmed, sampleSpeeds[key] ?? 1);
-          if (right) {
-            const ch = sampleChannels[key] ?? "both";
-            mixToChannel(left, right, speedAdjusted, offsetSamples, sampleVolume * (sampleVolumes[key] ?? 1), ch);
-          } else {
-            mixInto(left, speedAdjusted, offsetSamples, sampleVolume * (sampleVolumes[key] ?? 1), shouldAbort);
+        if (tick.repeatIteration === 0 && tick.barRepeatIteration === 0) {
+          for (const key of [cellKey, `${cellKey}~1`, `${cellKey}~2`]) {
+            if (!samplePCMs.has(key)) continue;
+            const sample = samplePCMs.get(key)!;
+            const trimStart = Math.round((sample.trimStartMs / 1000) * RENDER_SR);
+            const trimLen =
+              sample.trimDurationMs > 0
+                ? Math.round((sample.trimDurationMs / 1000) * RENDER_SR)
+                : sample.pcm.length - trimStart;
+            const trimmed = sample.pcm.subarray(
+              trimStart,
+              Math.min(trimStart + trimLen, sample.pcm.length),
+            );
+            const speedAdjusted = resampleForPlaybackSpeed(trimmed, sampleSpeeds[key] ?? 1);
+            if (right) {
+              const ch = sampleChannels[key] ?? "both";
+              mixToChannel(left, right, speedAdjusted, offsetSamples, sampleVolume * (sampleVolumes[key] ?? 1), ch);
+            } else {
+              mixInto(left, speedAdjusted, offsetSamples, sampleVolume * (sampleVolumes[key] ?? 1), shouldAbort);
+            }
           }
         }
       }
@@ -668,7 +671,7 @@ export async function renderMeasureAbortable(
         await renderYield(signal);
         if (tick.type === "mute") continue;
         const offsetSamples = copyOffset + Math.round((tick.time / 1000) * RENDER_SR);
-        const key = `${tick.beat}-${tick.subBeat}`;
+        const cellKey = `${tick.beat}-${tick.subBeat}`;
         const isLayerTick = (tick.layerIndex ?? 0) > 0;
         let effectiveClickPCMs = clickPCMs;
         if (isLayerTick && layerClickPCMs) {
@@ -690,18 +693,21 @@ export async function renderMeasureAbortable(
             await mixIntoAbortable(left, clickPCM, offsetSamples, clickVolume, signal);
           }
         }
-        if (tick.repeatIteration === 0 && tick.barRepeatIteration === 0 && samplePCMs.has(key)) {
-          const sample = samplePCMs.get(key)!;
-          const trimStart = Math.round((sample.trimStartMs / 1000) * RENDER_SR);
-          const trimLen = sample.trimDurationMs > 0
-            ? Math.round((sample.trimDurationMs / 1000) * RENDER_SR)
-            : sample.pcm.length - trimStart;
-          const trimmed = sample.pcm.subarray(trimStart, Math.min(trimStart + trimLen, sample.pcm.length));
-          const speedAdjusted = resampleForPlaybackSpeed(trimmed, sampleSpeeds[key] ?? 1);
-          if (right) {
-            await mixToChannel(left, right, speedAdjusted, offsetSamples, sampleVolume * (sampleVolumes[key] ?? 1), sampleChannels[key] ?? "both");
-          } else {
-            await mixIntoAbortable(left, speedAdjusted, offsetSamples, sampleVolume * (sampleVolumes[key] ?? 1), signal);
+        if (tick.repeatIteration === 0 && tick.barRepeatIteration === 0) {
+          for (const key of [cellKey, `${cellKey}~1`, `${cellKey}~2`]) {
+            if (!samplePCMs.has(key)) continue;
+            const sample = samplePCMs.get(key)!;
+            const trimStart = Math.round((sample.trimStartMs / 1000) * RENDER_SR);
+            const trimLen = sample.trimDurationMs > 0
+              ? Math.round((sample.trimDurationMs / 1000) * RENDER_SR)
+              : sample.pcm.length - trimStart;
+            const trimmed = sample.pcm.subarray(trimStart, Math.min(trimStart + trimLen, sample.pcm.length));
+            const speedAdjusted = resampleForPlaybackSpeed(trimmed, sampleSpeeds[key] ?? 1);
+            if (right) {
+              await mixToChannel(left, right, speedAdjusted, offsetSamples, sampleVolume * (sampleVolumes[key] ?? 1), sampleChannels[key] ?? "both");
+            } else {
+              await mixIntoAbortable(left, speedAdjusted, offsetSamples, sampleVolume * (sampleVolumes[key] ?? 1), signal);
+            }
           }
         }
       }

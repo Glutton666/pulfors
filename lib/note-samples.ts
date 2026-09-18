@@ -104,6 +104,8 @@ export type NoteSampleVolumeMap = Record<string, number>;
 /** Per-sample playback rate (0.5–2). Missing values deliberately mean 100%. */
 export type NoteSampleSpeedMap = Record<string, number>;
 export type NoteSampleMetroChannelMap = Record<string, MetroChannel>;
+export type NoteSampleSlot = 0 | 1 | 2;
+export const MAX_NOTE_SAMPLES_PER_CELL = 3;
 
 /**
  * Exposes the aggregate storage health of all note-sample maps. UI code polls
@@ -144,8 +146,20 @@ export function subscribeNoteSamplePersistenceStatus(
   return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
 }
 
-function sampleKey(beatIndex: number, subIndex: number): string {
+/**
+ * Stable storage key for a sample slot in a cell. Slot zero deliberately
+ * keeps the historic key so existing saves remain readable.
+ */
+function sampleKey(beatIndex: number, subIndex: number, slot: NoteSampleSlot = 0): string {
+  return `${beatIndex}-${subIndex}${slot > 0 ? `~${slot}` : ""}`;
+}
+
+export function sampleCellKey(beatIndex: number, subIndex: number): string {
   return `${beatIndex}-${subIndex}`;
+}
+
+export function sampleSlotKeys(beatIndex: number, subIndex: number): string[] {
+  return ([0, 1, 2] as const).map((slot) => sampleKey(beatIndex, subIndex, slot));
 }
 
 export async function loadNoteSamples(): Promise<NoteSampleMap> {
@@ -194,9 +208,10 @@ export async function setNoteSampleSource(
   beatIndex: number,
   subIndex: number,
   source: SampleSource,
-  existing: NoteSampleSourceMap
+  existing: NoteSampleSourceMap,
+  slot: NoteSampleSlot = 0,
 ): Promise<NoteSampleSourceMap> {
-  const updated = { ...existing, [sampleKey(beatIndex, subIndex)]: source };
+  const updated = { ...existing, [sampleKey(beatIndex, subIndex, slot)]: source };
   await saveNoteSampleSources(updated);
   return updated;
 }
@@ -204,9 +219,10 @@ export async function setNoteSampleSource(
 export async function removeNoteSampleSource(
   beatIndex: number,
   subIndex: number,
-  existing: NoteSampleSourceMap
+  existing: NoteSampleSourceMap,
+  slot: NoteSampleSlot = 0,
 ): Promise<NoteSampleSourceMap> {
-  const key = sampleKey(beatIndex, subIndex);
+  const key = sampleKey(beatIndex, subIndex, slot);
   if (!(key in existing)) return existing;
   const updated = { ...existing };
   delete updated[key];
@@ -218,9 +234,10 @@ export async function setNoteSample(
   beatIndex: number,
   subIndex: number,
   uri: string,
-  existing: NoteSampleMap
+  existing: NoteSampleMap,
+  slot: NoteSampleSlot = 0,
 ): Promise<NoteSampleMap> {
-  const updated = { ...existing, [sampleKey(beatIndex, subIndex)]: uri };
+  const updated = { ...existing, [sampleKey(beatIndex, subIndex, slot)]: uri };
   await saveNoteSamples(updated);
   return updated;
 }
@@ -229,9 +246,10 @@ export async function setNoteSampleName(
   beatIndex: number,
   subIndex: number,
   name: string,
-  existing: NoteSampleNameMap
+  existing: NoteSampleNameMap,
+  slot: NoteSampleSlot = 0,
 ): Promise<NoteSampleNameMap> {
-  const key = sampleKey(beatIndex, subIndex);
+  const key = sampleKey(beatIndex, subIndex, slot);
   if (name.trim()) {
     const updated = { ...existing, [key]: name.trim() };
     await saveNoteSampleNames(updated);
@@ -247,9 +265,10 @@ export async function setNoteSampleName(
 export async function removeNoteSample(
   beatIndex: number,
   subIndex: number,
-  existing: NoteSampleMap
+  existing: NoteSampleMap,
+  slot: NoteSampleSlot = 0,
 ): Promise<NoteSampleMap> {
-  const key = sampleKey(beatIndex, subIndex);
+  const key = sampleKey(beatIndex, subIndex, slot);
   if (!(key in existing)) return existing;
   const updated = { ...existing };
   delete updated[key];
@@ -260,9 +279,10 @@ export async function removeNoteSample(
 export async function removeNoteSampleName(
   beatIndex: number,
   subIndex: number,
-  existing: NoteSampleNameMap
+  existing: NoteSampleNameMap,
+  slot: NoteSampleSlot = 0,
 ): Promise<NoteSampleNameMap> {
-  const key = sampleKey(beatIndex, subIndex);
+  const key = sampleKey(beatIndex, subIndex, slot);
   if (!(key in existing)) return existing;
   const updated = { ...existing };
   delete updated[key];
@@ -298,8 +318,9 @@ export async function setNoteSampleChannel(
   subIndex: number,
   channel: SampleChannel,
   existing: NoteSampleChannelMap,
+  slot: NoteSampleSlot = 0,
 ): Promise<NoteSampleChannelMap> {
-  const key = sampleKey(beatIndex, subIndex);
+  const key = sampleKey(beatIndex, subIndex, slot);
   const updated: NoteSampleChannelMap = { ...existing };
   if (channel === "both") {
     delete updated[key];
@@ -314,8 +335,9 @@ export async function removeNoteSampleChannel(
   beatIndex: number,
   subIndex: number,
   existing: NoteSampleChannelMap,
+  slot: NoteSampleSlot = 0,
 ): Promise<NoteSampleChannelMap> {
-  const key = sampleKey(beatIndex, subIndex);
+  const key = sampleKey(beatIndex, subIndex, slot);
   if (!(key in existing)) return existing;
   const updated = { ...existing };
   delete updated[key];
@@ -353,8 +375,9 @@ export async function setNoteSampleVolume(
   subIndex: number,
   volume: number,
   existing: NoteSampleVolumeMap,
+  slot: NoteSampleSlot = 0,
 ): Promise<NoteSampleVolumeMap> {
-  const key = sampleKey(beatIndex, subIndex);
+  const key = sampleKey(beatIndex, subIndex, slot);
   const updated = { ...existing, [key]: Math.max(0, Math.min(1, volume)) };
   await saveNoteSampleVolumes(updated);
   return updated;
@@ -364,8 +387,9 @@ export async function removeNoteSampleVolume(
   beatIndex: number,
   subIndex: number,
   existing: NoteSampleVolumeMap,
+  slot: NoteSampleSlot = 0,
 ): Promise<NoteSampleVolumeMap> {
-  const key = sampleKey(beatIndex, subIndex);
+  const key = sampleKey(beatIndex, subIndex, slot);
   if (!(key in existing)) return existing;
   const updated = { ...existing };
   delete updated[key];
@@ -403,8 +427,9 @@ export async function setNoteSampleSpeed(
   subIndex: number,
   speed: number,
   existing: NoteSampleSpeedMap,
+  slot: NoteSampleSlot = 0,
 ): Promise<NoteSampleSpeedMap> {
-  const key = sampleKey(beatIndex, subIndex);
+  const key = sampleKey(beatIndex, subIndex, slot);
   const updated = { ...existing, [key]: Math.max(0.5, Math.min(2, speed)) };
   await saveNoteSampleSpeeds(updated);
   return updated;
@@ -414,8 +439,9 @@ export async function removeNoteSampleSpeed(
   beatIndex: number,
   subIndex: number,
   existing: NoteSampleSpeedMap,
+  slot: NoteSampleSlot = 0,
 ): Promise<NoteSampleSpeedMap> {
-  const key = sampleKey(beatIndex, subIndex);
+  const key = sampleKey(beatIndex, subIndex, slot);
   if (!(key in existing)) return existing;
   const updated = { ...existing };
   delete updated[key];
@@ -427,8 +453,9 @@ export function getNoteSampleChannel(
   beatIndex: number,
   subIndex: number,
   channels: NoteSampleChannelMap,
+  slot: NoteSampleSlot = 0,
 ): SampleChannel {
-  return channels[sampleKey(beatIndex, subIndex)] ?? "both";
+  return channels[sampleKey(beatIndex, subIndex, slot)] ?? "both";
 }
 
 export async function loadNoteSampleMetroChannels(): Promise<NoteSampleMetroChannelMap> {
@@ -487,15 +514,16 @@ export function hasNoteSample(
   subIndex: number,
   samples: NoteSampleMap
 ): boolean {
-  return sampleKey(beatIndex, subIndex) in samples;
+  return sampleSlotKeys(beatIndex, subIndex).some((key) => key in samples);
 }
 
 export function getNoteSampleUri(
   beatIndex: number,
   subIndex: number,
-  samples: NoteSampleMap
+  samples: NoteSampleMap,
+  slot: NoteSampleSlot = 0,
 ): string | null {
-  return samples[sampleKey(beatIndex, subIndex)] || null;
+  return samples[sampleKey(beatIndex, subIndex, slot)] || null;
 }
 
 /**

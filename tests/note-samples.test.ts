@@ -2,6 +2,7 @@ import { test, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import {
   sampleKey,
+  sampleSlotKeys,
   hasNoteSample,
   getNoteSampleUri,
   setNoteSample,
@@ -35,16 +36,21 @@ beforeEach(() => {
 test("sampleKey: beat-sub 형식", () => {
   assert.equal(sampleKey(0, 0), "0-0");
   assert.equal(sampleKey(3, 2), "3-2");
+  assert.equal(sampleKey(3, 2, 1), "3-2~1");
+  assert.equal(sampleKey(3, 2, 2), "3-2~2");
+  assert.deepEqual(sampleSlotKeys(3, 2), ["3-2", "3-2~1", "3-2~2"]);
 });
 
 test("hasNoteSample: 키 존재 여부", () => {
   assert.equal(hasNoteSample(0, 0, { "0-0": "uri" }), true);
+  assert.equal(hasNoteSample(0, 0, { "0-0~1": "uri" }), true);
   assert.equal(hasNoteSample(1, 0, { "0-0": "uri" }), false);
   assert.equal(hasNoteSample(0, 0, {}), false);
 });
 
 test("getNoteSampleUri: URI 반환 또는 null", () => {
   assert.equal(getNoteSampleUri(0, 0, { "0-0": "file:///a.wav" }), "file:///a.wav");
+  assert.equal(getNoteSampleUri(0, 0, { "0-0~2": "file:///c.wav" }, 2), "file:///c.wav");
   assert.equal(getNoteSampleUri(1, 0, {}), null);
   assert.equal(getNoteSampleUri(0, 0, { "0-0": "" }), null);
 });
@@ -56,6 +62,33 @@ test("setNoteSample: 추가 후 새 객체 반환 + AsyncStorage 저장", async 
   assert.notEqual(after, before);
   const stored = JSON.parse((await AsyncStorage.getItem("@note_samples"))!);
   assert.deepEqual(stored, after);
+});
+
+test("setNoteSample: 같은 셀의 세 슬롯을 서로 덮어쓰지 않고 저장", async () => {
+  const first = await setNoteSample(0, 0, "file:///one.wav", {});
+  const second = await setNoteSample(0, 0, "file:///two.wav", first, 1);
+  const third = await setNoteSample(0, 0, "file:///three.wav", second, 2);
+  assert.deepEqual(third, {
+    "0-0": "file:///one.wav",
+    "0-0~1": "file:///two.wav",
+    "0-0~2": "file:///three.wav",
+  });
+  const withoutSecond = await removeNoteSample(0, 0, third, 1);
+  assert.deepEqual(withoutSecond, {
+    "0-0": "file:///one.wav",
+    "0-0~2": "file:///three.wav",
+  });
+});
+
+test("metadata setters keep settings independent for each sample slot", async () => {
+  const names = await setNoteSampleName(2, 1, "Layer 3", {}, 2);
+  const sources = await setNoteSampleSource(2, 1, "import", {}, 2);
+  const volumes = await setNoteSampleVolume(2, 1, 0.4, {}, 2);
+  const speeds = await setNoteSampleSpeed(2, 1, 1.5, {}, 2);
+  assert.equal(names["2-1~2"], "Layer 3");
+  assert.equal(sources["2-1~2"], "import");
+  assert.equal(volumes["2-1~2"], 0.4);
+  assert.equal(speeds["2-1~2"], 1.5);
 });
 
 test("removeNoteSample: 존재 시 삭제, 미존재 시 동일 객체", async () => {

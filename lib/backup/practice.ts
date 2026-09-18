@@ -10,14 +10,14 @@ import { captureBreadcrumb } from "../error-tracking";
 import {
   MAX_IMPORT_JSON_CHARS,
   type PracticeShareFile,
-  collectUrisFromSampleMap,
+  collectAudioUrisFromEntry,
   collectImageUrisFromEntry,
   downloadJsonWeb,
   pickFileWeb,
   readAllAudioFiles,
   readAllImageFiles,
   readStringFromFile,
-  remapSampleMap,
+  remapEntryAudioUris,
   remapEntryImageUris,
   restoreAudioFiles,
   restoreImageFiles,
@@ -44,13 +44,7 @@ export async function sharePracticeEntry(entry: PracticeEntry): Promise<boolean>
       entry = { ...entry, noteQueueEntries: queueEntries };
     }
 
-    const entryUris = collectUrisFromSampleMap(entry.noteSamples);
-    if (entry.noteQueueEntries) {
-      for (const qe of entry.noteQueueEntries) {
-        const qeUris = collectUrisFromSampleMap(qe.noteSamples);
-        for (const [k, v] of qeUris) entryUris.set(k, v);
-      }
-    }
+    const entryUris = collectAudioUrisFromEntry(entry);
     const audioFiles = await readAllAudioFiles(entryUris);
     const imageFiles = await readAllImageFiles(collectImageUrisFromEntry(entry));
 
@@ -194,15 +188,7 @@ async function parsePracticeJson(
 
     if (data.audioFiles && Object.keys(data.audioFiles).length > 0 && Platform.OS !== "web") {
       const uriMapping = await restoreAudioFiles(data.audioFiles);
-      if (uriMapping.size > 0 && sanitized.noteSamples) {
-        sanitized.noteSamples = remapSampleMap(sanitized.noteSamples, uriMapping);
-      }
-      if (uriMapping.size > 0 && sanitized.noteQueueEntries) {
-        sanitized.noteQueueEntries = sanitized.noteQueueEntries.map((qe) => ({
-          ...qe,
-          noteSamples: qe.noteSamples ? remapSampleMap(qe.noteSamples, uriMapping) : qe.noteSamples,
-        }));
-      }
+      if (uriMapping.size > 0) sanitized = remapEntryAudioUris(sanitized, uriMapping);
     }
     if (data.imageFiles && Object.keys(data.imageFiles).length > 0) {
       const imageMapping = await restoreImageFiles(data.imageFiles);

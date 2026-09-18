@@ -179,6 +179,36 @@ describe("bar editor control values", () => {
     expect(coverage.get("1-2")).toBeUndefined();
   });
 
+  test("unions coverage from all three sample slots in one cell", () => {
+    const coverage = getSampleCellCoverage({
+      bpm: 120,
+      beatsPerMeasure: 2,
+      beatSubdivisions: {
+        "0": ["normal", "normal", "normal", "normal"],
+        "1": ["normal", "normal", "normal", "normal"],
+      },
+      barRepeats: {},
+      noteSamples: {
+        "0-1": "file:///short.wav#t=0,125",
+        "0-1~1": "file:///medium.wav#t=0,375",
+        "0-1~2": "file:///long.wav#t=0,625",
+      },
+      noteSampleSources: {
+        "0-1": "import",
+        "0-1~1": "recording",
+        "0-1~2": "import",
+      },
+      beatDenominator: 4,
+    });
+
+    expect(coverage.get("0-1")).toEqual({ source: "recording", kind: "direct" });
+    expect(coverage.get("0-2")).toBeDefined();
+    expect(coverage.get("0-3")).toBeDefined();
+    expect(coverage.get("1-0")).toBeDefined();
+    expect(coverage.get("1-1")).toBeDefined();
+    expect(coverage.get("1-2")).toBeUndefined();
+  });
+
   test("duration always displays as zero-padded mm:ss", () => {
     assert.equal(formatBarDuration(30), "00:30");
     assert.equal(formatBarDuration(65), "01:05");

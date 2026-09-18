@@ -12,6 +12,7 @@ import {
   concatFloat32Abortable,
   EXPORT_ABORTED,
   applyLinearFadeOut,
+  makeSampleRenderSettings,
 } from "../lib/audio-export-pure";
 
 test("clampRepeats: 1..99 floor, NaN→1", () => {
@@ -33,6 +34,15 @@ test("clampFadeOutSec: 0..60 clamp", () => {
   assert.equal(clampFadeOutSec(60), 60);
   assert.equal(clampFadeOutSec(120), 60);
   assert.equal(clampFadeOutSec(NaN), 0);
+});
+
+test("sample render settings preserve independent volume and speed for all three slots", () => {
+  const volumes = { "0-0": 0.25, "0-0~1": 0.5, "0-0~2": 0.75 };
+  const speeds = { "0-0": 0.75, "0-0~1": 1.25, "0-0~2": 2 };
+  assert.deepEqual(makeSampleRenderSettings(volumes, speeds), {
+    sampleVolumes: volumes,
+    sampleSpeeds: speeds,
+  });
 });
 
 test("repeatAndFadeMono: length = loop * repeats, no fade is identity-tile", () => {

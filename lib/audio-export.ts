@@ -27,6 +27,7 @@ import {
   concatFloat32Abortable as _concatFloat32Abortable,
   EXPORT_ABORTED,
   safeFilename as _safeFilename,
+  makeSampleRenderSettings,
 } from "./audio-export-pure";
 
 const clampRepeats = _clampRepeats;
@@ -191,7 +192,7 @@ async function renderSingleEntryLoopPCM(
     samplePCMs,
     clickVolume: 1.0,
     sampleVolume: samplePCMs.size > 0 ? 1.0 : 0,
-    sampleVolumes: entry.noteSampleVolumes,
+    ...makeSampleRenderSettings(entry.noteSampleVolumes, entry.noteSampleSpeeds),
     metronomeChannel: "both",
     layerClickPCMs: layerClickPCMs.size > 0 ? layerClickPCMs : undefined,
   }, signal);

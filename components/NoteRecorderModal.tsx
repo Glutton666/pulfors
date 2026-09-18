@@ -61,6 +61,11 @@ interface NoteRecorderModalProps {
   beatIndex: number;
   subIndex: number;
   hasExisting: boolean;
+  slotIndex?: 0 | 1 | 2;
+  slotHasSample?: (slot: 0 | 1 | 2) => boolean;
+  onSelectSlot?: (slot: 0 | 1 | 2) => void;
+  existingUri?: string;
+  existingSource?: SampleSource;
   existingName?: string;
   existingChannel?: SampleChannel;
   existingVolume?: number;
@@ -112,6 +117,11 @@ export function NoteRecorderModal({
   beatIndex,
   subIndex,
   hasExisting,
+  slotIndex = 0,
+  slotHasSample,
+  onSelectSlot,
+  existingUri,
+  existingSource = "recording",
   existingName,
   existingChannel = "both",
   existingVolume = 1,
@@ -419,6 +429,34 @@ export function NoteRecorderModal({
       }, 80);
     });
   }, []);
+
+  const handleEditExisting = useCallback(async () => {
+    if (!existingUri) return;
+    const [rawUri, trimFragment] = existingUri.split("#t=");
+    setPhase("loading");
+    setLoadingMessage(t("noteRecorder", "loadingAudio"));
+    const durationSec = await probeDurationSec(rawUri);
+    if (durationSec <= 0) {
+      Alert.alert(t("noteRecorder", "error"), t("noteRecorder", "loadError"));
+      setPhase("idle");
+      setLoadingMessage("");
+      return;
+    }
+    let startMs = 0;
+    let endMs = durationSec * 1000;
+    if (trimFragment) {
+      const [savedStart, savedEnd] = trimFragment.split(",").map(Number);
+      if (Number.isFinite(savedStart) && savedStart >= 0) startMs = savedStart;
+      if (Number.isFinite(savedEnd) && savedEnd > startMs) endMs = savedEnd;
+    }
+    sourceTypeRef.current = existingSource;
+    setRecordedUri(rawUri);
+    setAudioDuration(durationSec);
+    setTrimStart(Math.max(0, Math.min(1, startMs / (durationSec * 1000))));
+    setTrimEnd(Math.max(0, Math.min(1, endMs / (durationSec * 1000))));
+    setLoadingMessage("");
+    setPhase("trimming");
+  }, [existingSource, existingUri, probeDurationSec, t]);
 
   const stopRecording = useCallback(async () => {
     stopMetronomeClicks();
@@ -882,11 +920,36 @@ export function NoteRecorderModal({
                 <Ionicons name="close" size={22} color={C.textSecondary} />
               </Pressable>
             </View>
+            {onSelectSlot && phase === "idle" && (
+              <View style={{ paddingHorizontal: 16, paddingBottom: Spacing.sm }}>
+                <Text style={{ color: C.textSecondary, fontSize: FontSize.caption, marginBottom: 5 }}>{t("noteRecorder", "sampleSlots").replace("{0}", String([0, 1, 2].filter((slot) => slotHasSample?.(slot as 0 | 1 | 2)).length))}</Text>
+                <View style={{ flexDirection: "row", gap: 6 }}>
+                {[0, 1, 2].map((slot) => {
+                  const s = slot as 0 | 1 | 2;
+                  const occupied = slotHasSample?.(s) ?? false;
+                  return (
+                    <Pressable
+                      key={s}
+                      onPress={() => onSelectSlot(s)}
+                      accessibilityLabel={(occupied
+                        ? t("noteRecorder", "sampleSlotSaved")
+                        : t("noteRecorder", "sampleSlotEmpty")).replace("{0}", String(s + 1))}
+                      style={{ flex: 1, paddingVertical: Spacing.sm, borderRadius: Radius.sm, alignItems: "center", backgroundColor: s === slotIndex ? C.accent : C.surfaceLight, borderWidth: 1, borderColor: s === slotIndex ? C.accent : C.border }}
+                    >
+                      <Text style={{ color: s === slotIndex ? onAccentColor(C.accent) : C.text, fontWeight: "600", fontSize: FontSize.caption }}>
+                        {s + 1}{occupied ? " ✓" : ""}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+                </View>
+              </View>
+            )}
             <ScrollView showsVerticalScrollIndicator={false} bounces={false} contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
 
           {phase === "idle" && (
             <View style={styles.content}>
-              <View style={styles.sourceRow}>
+              {!hasExisting && <View style={styles.sourceRow}>
                 <Pressable
                   style={[
                     styles.sourceButton,
@@ -915,12 +978,18 @@ export function NoteRecorderModal({
                   <Ionicons name="musical-notes" size={24} color={keyboardSourceIndex === 1 ? onAccentColor(C.accent) : C.text} />
                   <Text style={[styles.sourceButtonText, { color: keyboardSourceIndex === 1 ? onAccentColor(C.accent) : C.text }]}>{t("noteRecorder", "import")}</Text>
                 </Pressable>
-              </View>
+              </View>}
               {hasExisting && (
-                <Pressable style={styles.deleteButton} onPress={handleDelete}>
-                  <Ionicons name="trash-outline" size={18} color="#FF6B6B" />
-                  <Text style={[styles.deleteText]}>{t("noteRecorder", "removeSample")}</Text>
-                </Pressable>
+                <>
+                  <Pressable style={[styles.sourceButton, { width: "100%", borderColor: C.border, borderWidth: 1 }]} onPress={handleEditExisting}>
+                    <Ionicons name="create-outline" size={20} color={C.text} />
+                    <Text style={[styles.sourceButtonText, { color: C.text }]}>{t("noteRecorder", "editSample")}</Text>
+                  </Pressable>
+                  <Pressable style={styles.deleteButton} onPress={handleDelete}>
+                    <Ionicons name="trash-outline" size={18} color="#FF6B6B" />
+                    <Text style={[styles.deleteText]}>{t("noteRecorder", "removeSample")}</Text>
+                  </Pressable>
+                </>
               )}
             </View>
           )}

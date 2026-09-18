@@ -5,6 +5,7 @@ import {
   extractBaseUri,
   extractFragment,
   filenameFromUri,
+  audioAssetKey,
   sanitizeAudioFilename,
   sanitizeNoteSampleUris,
   sanitizeNoteSampleChannelMap,
@@ -101,6 +102,24 @@ test("sanitizeNoteSampleUris: 안전한 스킴만 통과", () => {
   assert.equal(out!.f, undefined);
 });
 
+test("sanitize/remap keeps all three sample-slot keys", () => {
+  const samples = {
+    "0-0": "file:///old/one.wav#t=0,100",
+    "0-0~1": "file:///old/two.wav#t=0,200",
+    "0-0~2": "file:///old/three.wav#t=0,300",
+  };
+  assert.deepEqual(sanitizeNoteSampleUris(samples), samples);
+  assert.deepEqual(remapSampleMap(samples, new Map([
+    ["one.wav", "file:///new/one.wav"],
+    ["two.wav", "file:///new/two.wav"],
+    ["three.wav", "file:///new/three.wav"],
+  ])), {
+    "0-0": "file:///new/one.wav#t=0,100",
+    "0-0~1": "file:///new/two.wav#t=0,200",
+    "0-0~2": "file:///new/three.wav#t=0,300",
+  });
+});
+
 test("sanitizeNoteSampleUris: undefined 그대로 반환", () => {
   assert.equal(sanitizeNoteSampleUris(undefined), undefined);
 });
@@ -172,8 +191,8 @@ test("collectUrisFromSampleMap: filename → baseUri 매핑", () => {
     a: "file:///dir/x.wav#v=1",
     b: "file:///dir/y.mp3",
   });
-  assert.equal(m.get("x.wav"), "file:///dir/x.wav");
-  assert.equal(m.get("y.mp3"), "file:///dir/y.mp3");
+  assert.equal(m.get(audioAssetKey("file:///dir/x.wav")), "file:///dir/x.wav");
+  assert.equal(m.get(audioAssetKey("file:///dir/y.mp3")), "file:///dir/y.mp3");
 });
 
 test("collectUrisFromSampleMap: undefined 빈 map", () => {
@@ -187,8 +206,25 @@ test("collectAllAudioUris: notes + practice_book 병합", () => {
       { id: "1", noteSamples: { b: "file:///dir/y.wav" } },
     ]),
   });
-  assert.equal(m.get("x.wav"), "file:///dir/x.wav");
-  assert.equal(m.get("y.wav"), "file:///dir/y.wav");
+  assert.equal(m.get(audioAssetKey("file:///dir/x.wav")), "file:///dir/x.wav");
+  assert.equal(m.get(audioAssetKey("file:///dir/y.wav")), "file:///dir/y.wav");
+});
+
+test("collectAllAudioUris keeps same-named files from different sample slots", () => {
+  const first = "file:///recordings/a/take.wav";
+  const second = "file:///recordings/b/take.wav";
+  const third = "file:///recordings/c/take.wav";
+  const m = collectAllAudioUris({
+    "@note_samples": JSON.stringify({
+      "0-0": first,
+      "0-0~1": second,
+      "0-0~2": third,
+    }),
+  });
+  assert.equal(m.size, 3);
+  assert.equal(m.get(audioAssetKey(first)), first);
+  assert.equal(m.get(audioAssetKey(second)), second);
+  assert.equal(m.get(audioAssetKey(third)), third);
 });
 
 test("collectAllAudioUris: 손상된 JSON은 무시", () => {
@@ -245,6 +281,9 @@ test("formatDateForFilename: YYYYMMDD_HHmm 형식", () => {
 
 test("ALL_KEYS: @note_sample_channels 포함", () => {
   assert.ok(ALL_KEYS.includes("@note_sample_channels"));
+  assert.ok(ALL_KEYS.includes("@note_sample_volumes"));
+  assert.ok(ALL_KEYS.includes("@note_sample_speeds"));
+  assert.ok(ALL_KEYS.includes("@note_sample_metro_channels_beat"));
 });
 
 test("ALL_KEYS: 페이드아웃과 컨트롤 패드 설정도 백업 대상", () => {

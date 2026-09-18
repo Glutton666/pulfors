@@ -3,7 +3,12 @@ import { Platform } from "react-native";
 import type { PracticeEntry } from "../storage";
 import type { ScoreDocument } from "../score-types";
 import { logger } from "../logger";
-import { normalizeSampleChannel, type SampleChannel } from "../stereo-channel";
+import {
+  normalizeMetroChannel,
+  normalizeSampleChannel,
+  type MetroChannel,
+  type SampleChannel,
+} from "../stereo-channel";
 import { normalizeNoteImageCrop } from "../note-image-crop";
 
 export const ALL_KEYS = [
@@ -24,6 +29,9 @@ export const ALL_KEYS = [
   "@note_sample_names",
   "@note_sample_sources",
   "@note_sample_channels",
+  "@note_sample_volumes",
+  "@note_sample_speeds",
+  "@note_sample_metro_channels_beat",
   "metronome_onboarding_done",
   // 악보 모드 인덱스 (개별 악보는 SCORE_KEY_PREFIX + id 형태로 동적 관리)
   "metronome_scores_v1",
@@ -183,6 +191,16 @@ export function imageAssetKey(uri: string): string {
   return `image_${(hash >>> 0).toString(36)}_${filename}`;
 }
 
+export function audioAssetKey(uri: string): string {
+  const baseUri = extractBaseUri(uri);
+  let hash = 2166136261;
+  for (let i = 0; i < baseUri.length; i++) {
+    hash ^= baseUri.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `audio_${(hash >>> 0).toString(36)}_${filenameFromUri(baseUri)}`;
+}
+
 export async function ensureSamplesDir(): Promise<string> {
   const dir = FileSystem.documentDirectory + SAMPLES_DIR;
   const info = await FileSystem.getInfoAsync(dir);
@@ -326,6 +344,30 @@ export function sanitizeNoteSampleVolumeMap(
   return out;
 }
 
+export function sanitizeNoteSampleSpeedMap(
+  speeds: Record<string, unknown> | undefined,
+): Record<string, number> | undefined {
+  if (!speeds) return speeds;
+  const out: Record<string, number> = {};
+  for (const [key, value] of Object.entries(speeds)) {
+    if (typeof value === "number" && Number.isFinite(value)) {
+      out[key] = Math.max(0.5, Math.min(2, value));
+    }
+  }
+  return out;
+}
+
+export function sanitizeNoteSampleMetroChannelMap(
+  channels: Record<string, unknown> | undefined,
+): Record<string, MetroChannel> | undefined {
+  if (!channels) return channels;
+  const out: Record<string, MetroChannel> = {};
+  for (const [key, value] of Object.entries(channels)) {
+    out[key] = normalizeMetroChannel(value);
+  }
+  return out;
+}
+
 export function sanitizeCustomSoundSetsJson(json: string): string {
   try {
     const parsed: unknown = JSON.parse(json);
@@ -414,6 +456,7 @@ export function sanitizePracticeEntry(raw: unknown, depth = 0): PracticeEntry | 
     noteSamples: sanitizeNoteSampleUris(entry.noteSamples),
     noteSampleChannels: sanitizeNoteSampleChannelMap(entry.noteSampleChannels),
     noteSampleVolumes: sanitizeNoteSampleVolumeMap(entry.noteSampleVolumes),
+    noteSampleSpeeds: sanitizeNoteSampleSpeedMap(entry.noteSampleSpeeds),
     imageUri: sanitizeImageUri(entry.imageUri),
     imageCrop: sanitizeImageUri(entry.imageUri)
       ? normalizeNoteImageCrop(entry.imageCrop)
@@ -454,6 +497,22 @@ export function sanitizeBackupData(
     try {
       const volumes: Record<string, unknown> = JSON.parse(result["@note_sample_volumes"]!);
       result["@note_sample_volumes"] = JSON.stringify(sanitizeNoteSampleVolumeMap(volumes) ?? {});
+    } catch {}
+  }
+
+  if (result["@note_sample_speeds"]) {
+    try {
+      const speeds: Record<string, unknown> = JSON.parse(result["@note_sample_speeds"]!);
+      result["@note_sample_speeds"] = JSON.stringify(sanitizeNoteSampleSpeedMap(speeds) ?? {});
+    } catch {}
+  }
+
+  if (result["@note_sample_metro_channels_beat"]) {
+    try {
+      const channels: Record<string, unknown> = JSON.parse(result["@note_sample_metro_channels_beat"]!);
+      result["@note_sample_metro_channels_beat"] = JSON.stringify(
+        sanitizeNoteSampleMetroChannelMap(channels) ?? {},
+      );
     } catch {}
   }
 
@@ -569,9 +628,21 @@ export function collectUrisFromSampleMap(
   if (!samples) return uris;
   for (const uri of Object.values(samples)) {
     if (uri) {
-      const fname = filenameFromUri(uri);
-      uris.set(fname, extractBaseUri(uri));
+      uris.set(audioAssetKey(uri), extractBaseUri(uri));
     }
+  }
+  return uris;
+}
+
+export function collectAudioUrisFromEntry(
+  entry: PracticeEntry,
+  uris: Map<string, string> = new Map(),
+): Map<string, string> {
+  for (const [key, uri] of collectUrisFromSampleMap(entry.noteSamples)) {
+    uris.set(key, uri);
+  }
+  for (const child of entry.noteQueueEntries ?? []) {
+    collectAudioUrisFromEntry(child, uris);
   }
   return uris;
 }
@@ -587,8 +658,7 @@ export function collectAllAudioUris(
       const samples: Record<string, string> = JSON.parse(samplesJson);
       for (const [, uri] of Object.entries(samples)) {
         if (uri) {
-          const fname = filenameFromUri(uri);
-          uris.set(fname, extractBaseUri(uri));
+          uris.set(audioAssetKey(uri), extractBaseUri(uri));
         }
       }
     } catch {}
@@ -599,14 +669,7 @@ export function collectAllAudioUris(
     try {
       const entries: PracticeEntry[] = JSON.parse(bookJson);
       for (const entry of entries) {
-        if (entry.noteSamples) {
-          for (const [, uri] of Object.entries(entry.noteSamples)) {
-            if (uri) {
-              const fname = filenameFromUri(uri);
-              uris.set(fname, extractBaseUri(uri));
-            }
-          }
-        }
+        collectAudioUrisFromEntry(entry, uris);
       }
     } catch {}
   }
@@ -681,7 +744,7 @@ export async function readAllImageFiles(uris: Map<string, string>): Promise<Reco
 
 export function remapUri(oldUri: string, uriMapping: Map<string, string>): string {
   const fname = filenameFromUri(oldUri);
-  const newBase = uriMapping.get(fname);
+  const newBase = uriMapping.get(audioAssetKey(oldUri)) ?? uriMapping.get(fname);
   if (newBase) {
     return newBase + extractFragment(oldUri);
   }
@@ -697,6 +760,21 @@ export function remapSampleMap(
     result[key] = remapUri(uri, uriMapping);
   }
   return result;
+}
+
+export function remapEntryAudioUris(
+  entry: PracticeEntry,
+  uriMapping: Map<string, string>,
+): PracticeEntry {
+  return {
+    ...entry,
+    noteSamples: entry.noteSamples
+      ? remapSampleMap(entry.noteSamples, uriMapping)
+      : entry.noteSamples,
+    noteQueueEntries: entry.noteQueueEntries?.map((child) =>
+      remapEntryAudioUris(child, uriMapping),
+    ),
+  };
 }
 
 export async function restoreAudioFiles(
@@ -807,12 +885,9 @@ export function remapDataUris(
   if (result["practice_book"]) {
     try {
       const entries: PracticeEntry[] = JSON.parse(result["practice_book"]!);
-      for (const entry of entries) {
-        if (entry.noteSamples && Object.keys(entry.noteSamples).length > 0) {
-          entry.noteSamples = remapSampleMap(entry.noteSamples, uriMapping);
-        }
-      }
-      result["practice_book"] = JSON.stringify(entries);
+      result["practice_book"] = JSON.stringify(
+        entries.map((entry) => remapEntryAudioUris(entry, uriMapping)),
+      );
     } catch {}
   }
 

@@ -771,11 +771,20 @@ export function MetronomeScreenUI(props: Props) {
         onApplyPreviewBpm={handleNoteRecordApplyPreviewBpm}
         beatIndex={recorderTarget?.beat ?? 0}
         subIndex={recorderTarget?.sub ?? 0}
-        hasExisting={recorderTarget ? hasNoteSample(recorderTarget.beat, recorderTarget.sub, noteSamples) : false}
-        existingName={recorderTarget ? (noteSampleNames[`${recorderTarget.beat}-${recorderTarget.sub}`] || "") : ""}
-        existingChannel={recorderTarget ? (noteSampleChannels[`${recorderTarget.beat}-${recorderTarget.sub}`] ?? "both") : "both"}
-        existingVolume={recorderTarget ? (noteSampleVolumes[`${recorderTarget.beat}-${recorderTarget.sub}`] ?? 1) : 1}
-        existingSpeed={recorderTarget ? (noteSampleSpeeds[`${recorderTarget.beat}-${recorderTarget.sub}`] ?? 1) : 1}
+        slotIndex={recorderTarget?.slot ?? 0}
+        onSelectSlot={(slot) => setRecorderTarget((target) => target ? { ...target, slot } : target)}
+        slotHasSample={(slot) => {
+          const base = `${recorderTarget?.beat ?? 0}-${recorderTarget?.sub ?? 0}`;
+          const key = slot === 0 ? base : `${base}~${slot}`;
+          return Boolean(noteSamples[key]);
+        }}
+        hasExisting={recorderTarget ? Boolean(noteSamples[`${recorderTarget.beat}-${recorderTarget.sub}${recorderTarget.slot ? `~${recorderTarget.slot}` : ""}`]) : false}
+        existingUri={recorderTarget ? noteSamples[`${recorderTarget.beat}-${recorderTarget.sub}${recorderTarget.slot ? `~${recorderTarget.slot}` : ""}`] : undefined}
+        existingSource={recorderTarget ? noteSampleSources[`${recorderTarget.beat}-${recorderTarget.sub}${recorderTarget.slot ? `~${recorderTarget.slot}` : ""}`] : undefined}
+        existingName={recorderTarget ? (noteSampleNames[`${recorderTarget.beat}-${recorderTarget.sub}${recorderTarget.slot ? `~${recorderTarget.slot}` : ""}`] || "") : ""}
+        existingChannel={recorderTarget ? (noteSampleChannels[`${recorderTarget.beat}-${recorderTarget.sub}${recorderTarget.slot ? `~${recorderTarget.slot}` : ""}`] ?? "both") : "both"}
+        existingVolume={recorderTarget ? (noteSampleVolumes[`${recorderTarget.beat}-${recorderTarget.sub}${recorderTarget.slot ? `~${recorderTarget.slot}` : ""}`] ?? 1) : 1}
+        existingSpeed={recorderTarget ? (noteSampleSpeeds[`${recorderTarget.beat}-${recorderTarget.sub}${recorderTarget.slot ? `~${recorderTarget.slot}` : ""}`] ?? 1) : 1}
         existingMetronomeChannel={noteSampleMetroChannels[String(recorderTarget?.beat ?? 0)] ?? "both"}
         bpm={bpm}
         beatsPerMeasure={beatsPerMeasure}

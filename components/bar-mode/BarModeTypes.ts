@@ -272,7 +272,8 @@ export function getSampleCellCoverage(options: SampleCoverageOptions): SampleCel
   if (!options.noteSamples) return covered;
 
   for (const [key, uri] of Object.entries(options.noteSamples)) {
-    const match = /^(\d+)-(\d+)$/.exec(key);
+    // Slot zero is the legacy beat-sub key; additional recordings use ~1/~2.
+    const match = /^(\d+)-(\d+)(?:~[012])?$/.exec(key);
     if (!match || typeof uri !== "string") continue;
 
     const beat = Number(match[1]);
@@ -288,7 +289,10 @@ export function getSampleCellCoverage(options: SampleCoverageOptions): SampleCel
     if (!timing || cell >= timing.cellCount) continue;
 
     const source = normalizeSampleSource(options.noteSampleSources?.[key]);
-    markCoveredCell(covered, key, source, "direct");
+    // All slots belong to the same displayed cell.  The coverage map is a
+    // cell-level union, while the persisted key retains its slot suffix.
+    const cellKey = `${beat}-${cell}`;
+    markCoveredCell(covered, cellKey, source, "direct");
     if (durationMs <= 0) continue;
 
     const startMs = (cell * timing.baseDurationMs) / timing.cellCount;

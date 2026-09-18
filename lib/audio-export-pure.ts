@@ -2,6 +2,16 @@ export type ExportFormat = "wav" | "mp3";
 
 export const EXPORT_ABORTED = "EXPORT_ABORTED";
 
+export function makeSampleRenderSettings(
+  sampleVolumes?: Record<string, number>,
+  sampleSpeeds?: Record<string, number>,
+): {
+  sampleVolumes?: Record<string, number>;
+  sampleSpeeds?: Record<string, number>;
+} {
+  return { sampleVolumes, sampleSpeeds };
+}
+
 function throwIfAborted(signal?: AbortSignal): void {
   if (signal?.aborted) throw new Error(EXPORT_ABORTED);
 }
