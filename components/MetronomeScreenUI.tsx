@@ -71,6 +71,7 @@ import type { useMetronomeScreen } from "@/hooks/useMetronomeScreen";
 import { onAccentColor } from "@/lib/color-contrast";
 import { appendRapidTap, isChordEasterEggTitle, type PitchQuizMode } from "@/lib/pitch-quiz";
 import { stopAllScoreNotes } from "@/lib/score-audio";
+import { invalidatePCMCachePrefix } from "@/lib/pcm-cache";
 import * as Haptics from "expo-haptics";
 import { useEasterEggGesture } from "@/hooks/useEasterEggGesture";
 import { usesSharedEasterEggGesture } from "@/lib/easter-egg-gesture";
@@ -91,7 +92,7 @@ export function MetronomeScreenUI(props: Props) {
     barScrollOffsetRef, beatStaffCellRectsRef, engineRef, togglePlayPauseRef, updateBpmRef, beatDenominatorRef,
     seamlessNextEntryRef, tuningGuideOnSelectRef, reopenSignalGenAfterTuningGuideRef,
     settingsReturnModalRef, featureStartRef, practiceStartRef, discardPracticeSession, startOrResumePracticeSession,
-    handleNoteTogglePlayRef, clickPCMCacheRef,
+    handleNoteTogglePlayRef,
     bpm, beatsPerMeasure, beatDenominator, beatTypes, subdivisionPattern, beatSubdivisions,
     isPlaying, isPreparing, audioLifecycle, retryAudioRecovery, currentBeat, measureCount, activeSubNote, progressInfo,
     layerProgressMap, halfTime,
@@ -310,7 +311,6 @@ export function MetronomeScreenUI(props: Props) {
     bpm,
     beatsPerMeasure,
     allPlayersRef,
-    clickPCMCacheRef,
     getClickPCMs,
     captureAudioToneSnapshot,
     recordAudioActivity,
@@ -946,9 +946,7 @@ export function MetronomeScreenUI(props: Props) {
         onSoundSetChange={updateSoundSet}
         layerSoundSets={layerSoundSets}
         onLayerSoundSetsChange={(val) => {
-          for (const ss of Object.values(val)) {
-            delete clickPCMCacheRef.current[ss];
-          }
+          for (const ss of Object.values(val)) invalidatePCMCachePrefix(`click:${ss}:`);
           setLayerSoundSets(val);
           layerSoundSetsRef.current = val;
           persistSettings({ layerSoundSets: val });
@@ -981,9 +979,7 @@ export function MetronomeScreenUI(props: Props) {
         customSoundSets={customSoundSets}
         onCustomSoundSetsChange={(configs) => {
           setCustomSoundSets(configs);
-          for (const key of Object.keys(clickPCMCacheRef.current)) {
-            if (key.startsWith("custom")) delete clickPCMCacheRef.current[key];
-          }
+          invalidatePCMCachePrefix("click:");
         }}
         landscapeReversed={landscapeReversed}
         onLandscapeReversedChange={(val) => {
@@ -1240,9 +1236,7 @@ export function MetronomeScreenUI(props: Props) {
             layerSoundSets={layerSoundSets as Record<number, string>}
             onLayerSoundSetsChange={(val) => {
               const typed = val as Record<number, SoundSet>;
-              for (const ss of Object.values(typed)) {
-                delete clickPCMCacheRef.current[ss];
-              }
+              for (const ss of Object.values(typed)) invalidatePCMCachePrefix(`click:${ss}:`);
               setLayerSoundSets(typed);
               layerSoundSetsRef.current = typed;
               persistSettings({ layerSoundSets: typed });
@@ -1251,9 +1245,7 @@ export function MetronomeScreenUI(props: Props) {
             customSoundSets={customSoundSets}
             onCustomSoundSetsChange={(configs) => {
               setCustomSoundSets(configs);
-              for (const key of Object.keys(clickPCMCacheRef.current)) {
-                if (key.startsWith("custom")) delete clickPCMCacheRef.current[key];
-              }
+              invalidatePCMCachePrefix("click:");
             }}
             barCellOpacity={barCellOpacity}
             barRowHeight={barRowHeight}

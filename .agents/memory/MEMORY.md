@@ -70,3 +70,4 @@
 - [Backup image asset identity](backup-image-asset-identity.md) — key embedded images by source URI, then detect format from decoded bytes; filenames and blob URLs are not reliable identities.
 - [Restartable producer callbacks](restartable-producer-callbacks.md) — boolean gates do not reject callbacks from an older lifetime after restart; each installed producer needs an immutable generation.
 - [Shared PCM cancellation](shared-pcm-cancellation.md) — caller abort detaches one waiter; cancel shared decode only after the last waiter leaves, and never publish invalidated completions.
+- [Audio output ownership scope](audio-output-ownership-scope.md) — metronome and Polygon share one owner; score playback remains a separate session architecture until explicitly migrated.

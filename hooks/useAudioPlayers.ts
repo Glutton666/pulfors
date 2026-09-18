@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useCallback } from "react";
 import type { AudioPlayer as ExpoAudioPlayer, AudioSource } from "expo-audio";
 import { soundSets } from "@/lib/metronome-engine";
 import type { SoundSet } from "@/lib/storage";
-import { createAudioOutputOwner, type AudioOutputOwner } from "@/lib/audio-output-owner";
+import type { AudioOutputOwner } from "@/lib/audio-output-owner";
 import { loadPCM } from "@/lib/pcm-loader";
 import { getDecodedPCM } from "@/lib/pcm-cache";
 
@@ -90,15 +90,11 @@ type SoundSetDef = { high: AudioSource; low: AudioSource; strong: AudioSource };
  */
 export function useAudioPlayers(
   soundSet: SoundSet,
-  playbackSoundSetRef?: React.MutableRefObject<SoundSet>,
-  owner?: AudioOutputOwner,
+  playbackSoundSetRef: React.MutableRefObject<SoundSet>,
+  owner: AudioOutputOwner,
 ): AudioPlayersHook {
-  const fallbackOwnerRef = useRef<AudioOutputOwner | null>(null);
-  if (!fallbackOwnerRef.current) {
-    fallbackOwnerRef.current = createAudioOutputOwner();
-  }
-  const playerOwner = owner ?? fallbackOwnerRef.current;
-  const playerOutput = playerOwner.nativeAdapter;
+  const playerOwner = owner;
+  const playerOutput = owner.nativeAdapter;
   // soundset key → SoundSetPlayers 캐시
   const cacheRef = useRef<Map<string, SoundSetPlayers>>(new Map());
   // Tracks the last volume set via setPoolsVolume so newly created pools
@@ -176,11 +172,10 @@ export function useAudioPlayers(
   const highToggle   = useRef(0);
   const lowToggle    = useRef(0);
   const strongToggle = useRef(0);
-  const internalSoundSetRef = useRef<SoundSet>(soundSet);
   // useSettings can receive a sound-set change before React has rendered the
   // pipeline again. Sharing its ref lets the very next engine tick select the
   // requested pool instead of one beat of the previous instrument.
-  const soundSetRef = playbackSoundSetRef ?? internalSoundSetRef;
+  const soundSetRef = playbackSoundSetRef;
 
   // Playback resources remain synchronously lazy for first-tick safety.
   useEffect(() => {
@@ -204,12 +199,9 @@ export function useAudioPlayers(
   // 언마운트 시 모든 캐시된 플레이어 해제
   useEffect(() => {
     return () => {
-      if (!owner) {
-        fallbackOwnerRef.current?.dispose();
-      }
       cacheRef.current.clear();
     };
-  }, [owner]);
+  }, []);
 
   return { allPlayers, allPlayersRef, soundSetRef, highToggle, lowToggle, strongToggle, setPoolsVolume };
 }

@@ -153,11 +153,14 @@ jest.mock("@/lib/index.helpers", () => ({
 }));
 
 import {
-  NOTE_SAMPLE_PCM_CACHE_LIMIT,
   useAudioPipeline,
 } from "../hooks/useAudioPipeline";
 import { usePlaybackControl } from "../hooks/usePlaybackControl";
-import { peekPCM, resetPCMCacheForTests } from "../lib/pcm-cache";
+import {
+  PCM_CACHE_MAX_ENTRIES,
+  peekPCM,
+  resetPCMCacheForTests,
+} from "../lib/pcm-cache";
 import { isPCMCancelled } from "../lib/pcm-loader";
 
 const clickPCMs = {
@@ -271,7 +274,6 @@ describe("pre-rendered playback reliability", () => {
       volume: 0.35,
       volumeRef: { current: 0.35 },
       sampleVolumeRef: { current: 0.7 },
-      clickPCMCacheRef: { current: { classic: clickPCMs } },
       webClickReadyRef: { current: false },
       noteSampleSoundsRef: { current: {} },
       renderGenerationRef: { current: 0 },
@@ -362,7 +364,6 @@ describe("pre-rendered playback reliability", () => {
       volumeRef: { current: 0.4 },
       tonePositionRef: { current: { x: 0, y: 0 } },
       sampleVolumeRef: { current: 0.6 },
-      clickPCMCacheRef: { current: {} },
       webClickReadyRef: { current: false },
       noteSampleSoundsRef: { current: {} },
       renderGenerationRef: { current: 0 },
@@ -453,7 +454,6 @@ describe("pre-rendered playback reliability", () => {
       volume: 0.4,
       volumeRef: { current: 0.4 },
       sampleVolumeRef: { current: 0.6 },
-      clickPCMCacheRef: { current: {} },
       webClickReadyRef: { current: false },
       noteSampleSoundsRef: { current: {} },
       renderGenerationRef: { current: 0 },
@@ -519,7 +519,6 @@ describe("pre-rendered playback reliability", () => {
       volume: 0.35,
       volumeRef: { current: 0.35 },
       sampleVolumeRef: { current: 0.7 },
-      clickPCMCacheRef: { current: { classic: clickPCMs } },
       webClickReadyRef: { current: false },
       noteSampleSoundsRef: { current: {} },
       renderGenerationRef: { current: 0 },
@@ -562,7 +561,6 @@ describe("pre-rendered playback reliability", () => {
       volume: 0.35,
       volumeRef: { current: 0.35 },
       sampleVolumeRef: { current: 0.7 },
-      clickPCMCacheRef: { current: { classic: clickPCMs } },
       webClickReadyRef: { current: false },
       noteSampleSoundsRef: { current: {} },
       renderGenerationRef: { current: 0 },
@@ -601,7 +599,6 @@ describe("pre-rendered playback reliability", () => {
       volume: 0.35,
       volumeRef: { current: 0.35 },
       sampleVolumeRef: { current: 0.7 },
-      clickPCMCacheRef: { current: { classic: clickPCMs } },
       webClickReadyRef: { current: false },
       noteSampleSoundsRef: { current: {} },
       renderGenerationRef: { current: 0 },
@@ -614,7 +611,7 @@ describe("pre-rendered playback reliability", () => {
     const { result } = renderHook(() => useAudioPipeline(params));
 
     await result.current.getSamplePCMs(noteSamplesRef.current);
-    for (let index = 0; index < NOTE_SAMPLE_PCM_CACHE_LIMIT; index += 1) {
+    for (let index = 0; index < PCM_CACHE_MAX_ENTRIES; index += 1) {
       await result.current.getSamplePCMs({ "0-0": `file:///queued-${index}.wav` });
     }
     await result.current.getSamplePCMs(noteSamplesRef.current);
@@ -653,7 +650,6 @@ describe("pre-rendered playback reliability", () => {
       volume: 0.35,
       volumeRef: { current: 0.35 },
       sampleVolumeRef: { current: 0.7 },
-      clickPCMCacheRef: { current: { classic: clickPCMs } },
       webClickReadyRef: { current: false },
       noteSampleSoundsRef: { current: {} },
       renderGenerationRef: { current: 0 },
@@ -697,7 +693,6 @@ describe("pre-rendered playback reliability", () => {
       volume: 0.35,
       volumeRef: { current: 0.35 },
       sampleVolumeRef: { current: 0.7 },
-      clickPCMCacheRef: { current: { classic: clickPCMs } },
       webClickReadyRef: { current: false },
       noteSampleSoundsRef: { current: {} },
       renderGenerationRef: { current: 0 },
@@ -770,7 +765,6 @@ describe("pre-rendered playback reliability", () => {
       volume: 0.35,
       volumeRef: { current: 0.35 },
       sampleVolumeRef: { current: 0.7 },
-      clickPCMCacheRef: { current: { classic: clickPCMs } },
       webClickReadyRef: { current: false },
       noteSampleSoundsRef: { current: {} },
       renderGenerationRef: { current: 0 },
@@ -823,7 +817,6 @@ describe("pre-rendered playback reliability", () => {
       volume: 0.35,
       volumeRef: { current: 0.35 },
       sampleVolumeRef: { current: 0.7 },
-      clickPCMCacheRef: { current: { classic: clickPCMs } },
       webClickReadyRef: { current: true },
       noteSampleSoundsRef: { current: {} },
       renderGenerationRef: { current: 0 },
@@ -877,7 +870,6 @@ describe("pre-rendered playback reliability", () => {
       volume: 0.35,
       volumeRef: { current: 0.35 },
       sampleVolumeRef: { current: 0.7 },
-      clickPCMCacheRef: { current: { classic: clickPCMs } },
       webClickReadyRef: { current: true },
       noteSampleSoundsRef: { current: {} },
       renderGenerationRef: { current: 0 },
@@ -1249,7 +1241,6 @@ describe("pre-rendered playback reliability", () => {
       volume: 0.35,
       volumeRef: { current: 0.35 },
       sampleVolumeRef: { current: 0.7 },
-      clickPCMCacheRef: { current: { classic: clickPCMs } },
       webClickReadyRef: { current: false },
       noteSampleSoundsRef: { current: { "0-0": notePlayer } },
       renderGenerationRef: { current: 0 },
@@ -1327,7 +1318,6 @@ describe("pre-rendered playback reliability", () => {
       volume: 0.35,
       volumeRef: { current: 0.35 },
       sampleVolumeRef: { current: 0.7 },
-      clickPCMCacheRef: { current: { classic: clickPCMs } },
       webClickReadyRef: { current: true },
       noteSampleSoundsRef: { current: { "0-0": notePlayer } },
       renderGenerationRef: { current: 0 },
@@ -1465,7 +1455,6 @@ describe("pre-rendered playback reliability", () => {
       volume: 0.35,
       volumeRef: { current: 0.35 },
       sampleVolumeRef: { current: 0.7 },
-      clickPCMCacheRef: { current: { classic: clickPCMs } },
       webClickReadyRef: { current: false },
       noteSampleSoundsRef: { current: { "0-0": notePlayer } },
       renderGenerationRef: { current: 0 },
@@ -1603,7 +1592,6 @@ describe("pre-rendered playback reliability", () => {
       volume: 0.35,
       volumeRef: { current: 0.35 },
       sampleVolumeRef: { current: 0.7 },
-      clickPCMCacheRef: { current: { classic: clickPCMs } },
       webClickReadyRef: { current: false },
       noteSampleSoundsRef: { current: {} },
       renderGenerationRef: { current: 0 },
@@ -1664,7 +1652,6 @@ describe("pre-rendered playback reliability", () => {
       volume: 0.35,
       volumeRef: { current: 0.35 },
       sampleVolumeRef: { current: 0.7 },
-      clickPCMCacheRef: { current: { classic: clickPCMs } },
       webClickReadyRef: { current: false },
       noteSampleSoundsRef: { current: {} },
       renderGenerationRef: { current: 0 },
@@ -2359,7 +2346,6 @@ function makePipelineParams(
     volume: 0.35,
     volumeRef: { current: 0.35 },
     sampleVolumeRef: { current: 0.7 },
-    clickPCMCacheRef: { current: { classic: clickPCMs } },
     webClickReadyRef: { current: true },
     noteSampleSoundsRef: { current: noteSampleSounds },
     renderGenerationRef: { current: 0 },

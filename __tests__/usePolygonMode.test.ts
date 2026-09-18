@@ -76,7 +76,6 @@ function makeParams(
     bpm: 120,
     beatsPerMeasure: 4,
     allPlayersRef: { current: {} as any },
-    clickPCMCacheRef: { current: {} },
     getClickPCMs: jest.fn().mockResolvedValue({ strong: new Float32Array(), high: new Float32Array(), low: new Float32Array() }),
     recordAudioActivity: jest.fn(() => true),
     outputOwner: createAudioOutputOwner(),
@@ -630,12 +629,12 @@ describe("usePolygonMode — engine callback driven", () => {
       high: new Float32Array([5]),
       low: new Float32Array([6]),
     };
+    setPCM("polygon-raw:classic", classic);
     const params = makeParams({
       captureAudioToneSnapshot: () => createAudioToneSnapshot({
         volume: 0.6,
         defaultSoundSet: "classic",
       }),
-      clickPCMCacheRef: { current: { classic } },
     });
     const { result } = renderHook(() => usePolygonMode(params));
     act(() => { result.current.handleAddLayer(); });
@@ -662,11 +661,6 @@ describe("usePolygonMode — engine callback driven", () => {
         volume: 0.4,
         defaultSoundSet: "classic",
       }),
-      clickPCMCacheRef: { current: { classic: {
-        strong: new Float32Array([1]),
-        high: new Float32Array([1]),
-        low: new Float32Array([1]),
-      } } },
     });
     const { result } = renderHook(() => usePolygonMode(params));
     act(() => { result.current.handleUpdateLayer(result.current.layers[0].id, { role: "strong", volume: 0.5 }); });
@@ -718,15 +712,6 @@ describe("usePolygonMode — engine callback driven", () => {
     });
     const params = makeParams({
       captureAudioToneSnapshot: () => snapshot,
-      clickPCMCacheRef: {
-        current: {
-          classic: {
-            strong: new Float32Array([0.2]),
-            high: new Float32Array([0.2]),
-            low: new Float32Array([0.2]),
-          },
-        },
-      },
     });
     const { result, rerender } = renderHook(() => usePolygonMode(params));
     act(() => { result.current.handleAddLayer(); });

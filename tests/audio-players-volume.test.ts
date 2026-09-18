@@ -27,6 +27,7 @@ jest.mock("@/lib/metronome-engine", () => ({
 }));
 
 import { useAudioPlayers } from "../hooks/useAudioPlayers";
+import { createAudioOutputOwner } from "@/lib/audio-output-owner";
 
 // ── helper ───────────────────────────────────────────────────────────────────
 function poolVolumes(allPlayersRef: React.MutableRefObject<any>, key: string): number[] {
@@ -42,13 +43,20 @@ function poolVolumes(allPlayersRef: React.MutableRefObject<any>, key: string): n
 // ────────────────────────────────────────────────────────────────────────────
 
 describe("useAudioPlayers — setPoolsVolume", () => {
+  const renderAudioPlayers = () => {
+    const soundSetRef = { current: "classic" as const };
+    const owner = createAudioOutputOwner();
+    const rendered = renderHook(() => useAudioPlayers("classic", soundSetRef, owner));
+    return { ...rendered, owner };
+  };
+
   beforeEach(() => {
     const { createAudioPlayer } = require("expo-audio") as { createAudioPlayer: jest.Mock };
     createAudioPlayer.mockImplementation(() => mockMakePlayer());
   });
 
   it("updates all 12 players in an already-created pool", () => {
-    const { result } = renderHook(() => useAudioPlayers("classic"));
+    const { result } = renderAudioPlayers();
 
     // Trigger lazy creation of the "classic" pool.
     act(() => { void result.current.allPlayersRef.current["classic"]; });
@@ -60,7 +68,7 @@ describe("useAudioPlayers — setPoolsVolume", () => {
   });
 
   it("a pool created AFTER setPoolsVolume inherits the stored volume", () => {
-    const { result } = renderHook(() => useAudioPlayers("classic"));
+    const { result } = renderAudioPlayers();
 
     // Set volume before "woodblock" pool exists.
     act(() => { result.current.setPoolsVolume(0.25); });
@@ -72,7 +80,7 @@ describe("useAudioPlayers — setPoolsVolume", () => {
   });
 
   it("clamps over-drive values to 1 and negative values to 0", () => {
-    const { result } = renderHook(() => useAudioPlayers("classic"));
+    const { result } = renderAudioPlayers();
     act(() => { void result.current.allPlayersRef.current["classic"]; });
 
     act(() => { result.current.setPoolsVolume(1.8); });

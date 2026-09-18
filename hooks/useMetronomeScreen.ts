@@ -154,7 +154,6 @@ import {
   renderMeasure,
   saveRenderedWav,
   ensureWebClickBuffers,
-  playWebClick,
   clearWebClickBuffers,
   playWebRenderedLoop,
   getWebAudioContext,
@@ -162,6 +161,7 @@ import {
   previewClickOnWeb,
 } from "@/lib/audio-renderer";
 import { syncStereoArtifact } from "@/lib/sample-cache";
+import { invalidatePCMCache } from "@/lib/pcm-cache";
 import type { ClickPCMs, SamplePCMEntry, TickInfo, DecodedSample } from "@/lib/audio-renderer";
 import type { ActivityLog, Goal } from "@/lib/activity-log";
 import {
@@ -711,10 +711,7 @@ export function useMetronomeScreen() {
 
   // ── Refs shared between useSettings and useAudioPipeline ─────────────────────
   // Created here so both hooks can receive them as params.
-  // clickPCMCacheRef / webClickReadyRef / noteSampleSoundsRef were previously
-  // owned by useAudioPipeline; they now live here so useSettings (called first)
-  // can also access them in updateSoundSet / updateSampleVolume.
-  const clickPCMCacheRef = useRef<Record<string, import("@/lib/audio-renderer").ClickPCMs>>({});
+  // These refs are shared with settings and the audio pipeline.
   const webClickReadyRef = useRef(false);
   const noteSampleSoundsRef = useRef<Record<string, import("expo-audio").AudioPlayer>>({});
   // Shared by the settings control and the engine's audio callbacks.  It is
@@ -777,7 +774,6 @@ export function useMetronomeScreen() {
     sampleVolumeRef,
     beatDenominatorRef,
     noteSampleSoundsRef,
-    clickPCMCacheRef,
     webClickReadyRef,
     soundSetRef,
     tonePositionRef,
@@ -800,7 +796,7 @@ export function useMetronomeScreen() {
       if (settings.landscapeContentType) setLandscapeContentType(settings.landscapeContentType);
       loadCustomSoundSets().then(setCustomSoundSets);
       setSettingsLoadError(null);
-      // PCM warmup for the loaded sound-set — pre-populates clickPCMCacheRef via
+      // PCM warmup for the loaded sound-set — uses canonical pcm-cache storage via
       // getClickPCMs' own caching so the first Play doesn't pay asset-load +
       // tone-shaping cost inline inside startPreparedPlayback's 8s deadline.
       // Keep the preparation surface up until this basic click path is ready.
@@ -891,7 +887,7 @@ export function useMetronomeScreen() {
     engineRef, soundSet, soundSetRef, volume, customSoundSetsRef,
     layerSoundSetsRef, noteSamplesRef, noteSampleChannelsRef, noteSampleVolumesRef, noteSampleSpeedsRef, barModeRef,
     barMetronomeChannelRef, noteSampleMetroChannelsRef, volumeRef, sampleVolumeRef,
-    clickPCMCacheRef, webClickReadyRef, noteSampleSoundsRef, tonePositionRef, tonePositionsRef,
+    webClickReadyRef, noteSampleSoundsRef, tonePositionRef, tonePositionsRef,
     isPlayingRef, isPreparingRef, bpmRef, t, showRecoveryToast, persistAudioSettingsCallbackRef,
     fatalRenderFailureRef,
   });
@@ -1209,6 +1205,14 @@ export function useMetronomeScreen() {
     const recordAudibleTick = (epoch = getAudioStartupEpoch()) => {
       recordAudioActivity(epoch);
     };
+    const playOwnedWebClick = (
+      role: "strong" | "high" | "low",
+      channel: SampleChannel | "off",
+    ) => {
+      const atPerformanceTime =
+        typeof performance !== "undefined" ? performance.now() : Date.now();
+      return scheduleRealtimeWebClick(role, channel, atPerformanceTime);
+    };
 
     engine.setRealtimeAudioScheduler(
       Platform.OS === "web"
@@ -1232,7 +1236,7 @@ export function useMetronomeScreen() {
           const ch = barModeRef.current
             ? (noteSampleMetroChannelsRef.current[String(engine.getCurrentBeat())] ?? barMetronomeChannelRef.current)
             : "both";
-          if (playWebClick("high", ch)) recordAudibleTick();
+          if (playOwnedWebClick("high", ch)) recordAudibleTick();
           return;
         }
         try {
@@ -1247,7 +1251,7 @@ export function useMetronomeScreen() {
           const ch = barModeRef.current
             ? (noteSampleMetroChannelsRef.current[String(engine.getCurrentBeat())] ?? barMetronomeChannelRef.current)
             : "both";
-          if (playWebClick("low", ch)) recordAudibleTick();
+          if (playOwnedWebClick("low", ch)) recordAudibleTick();
           return;
         }
         try {
@@ -1262,7 +1266,7 @@ export function useMetronomeScreen() {
           const ch = barModeRef.current
             ? (noteSampleMetroChannelsRef.current[String(engine.getCurrentBeat())] ?? barMetronomeChannelRef.current)
             : "both";
-          if (playWebClick("strong", ch)) recordAudibleTick();
+          if (playOwnedWebClick("strong", ch)) recordAudibleTick();
           return;
         }
         try {
@@ -1284,7 +1288,7 @@ export function useMetronomeScreen() {
         const ch = barModeRef.current
           ? (noteSampleMetroChannelsRef.current[String(engine.getCurrentBeat())] ?? barMetronomeChannelRef.current)
           : "both";
-        if (playWebClick(role === "strong" ? "strong" : role === "high" ? "high" : "low", ch)) {
+        if (playOwnedWebClick(role === "strong" ? "strong" : role === "high" ? "high" : "low", ch)) {
           recordAudibleTick();
         }
         return;
@@ -1324,7 +1328,7 @@ export function useMetronomeScreen() {
         const ch = barModeRef.current
           ? (noteSampleMetroChannelsRef.current[String(engine.getCurrentBeat())] ?? barMetronomeChannelRef.current)
           : "both";
-        if (playWebClick(role === "strong" ? "strong" : role === "high" ? "high" : "low", ch)) {
+        if (playOwnedWebClick(role === "strong" ? "strong" : role === "high" ? "high" : "low", ch)) {
           recordAudibleTick();
         }
         return;
@@ -1810,7 +1814,7 @@ export function useMetronomeScreen() {
       setSoundSetTonePositions({});
       tonePositionRef.current = { ...NEUTRAL };
       tonePositionsRef.current = {};
-      clickPCMCacheRef.current = {};
+      invalidatePCMCache();
       setBarMode(false);
       setBarStartBeat(null);
       setBarLoopMode("once");
@@ -4476,7 +4480,6 @@ export function useMetronomeScreen() {
     getPlaybackContext,
     discardRoomTracking,
     handleNoteTogglePlayRef,
-    clickPCMCacheRef,
     allPlayersRef,
     outputOwner,
     volumeRef,

@@ -74,8 +74,6 @@ export interface UsePolygonModeParams {
   beatsPerMeasure: number;
   /** 내장 오디오 플레이어 ref (native) */
   allPlayersRef: React.MutableRefObject<BuiltinPlayers>;
-  /** 전역 PCM 캐시 ref (read-only) */
-  clickPCMCacheRef: React.MutableRefObject<Record<string, ClickPCMs>>;
   /** PCM 로더 콜백 (web에서 레이어별 사운드셋 비동기 로드) */
   getClickPCMs: (
     set: SoundSet,
@@ -248,13 +246,7 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
       const ready = peekPCM<ClickPCMs>(cacheKey);
       if (ready) return ready;
       const rawKey = `polygon-raw:${soundSet}`;
-      let base = peekPCM<ClickPCMs>(rawKey);
-      if (!base && p.clickPCMCacheRef.current[soundSet]) {
-        // Adopt a legacy compatibility entry into the canonical owner, then
-        // release the duplicate strong reference.
-        base = setPCM(rawKey, p.clickPCMCacheRef.current[soundSet]);
-        delete p.clickPCMCacheRef.current[soundSet];
-      }
+      const base = peekPCM<ClickPCMs>(rawKey);
       if (base) {
         const shaped = {
           strong: applyAudioToneSnapshot(base.strong, toneSnapshot, soundSet) as Float32Array,

@@ -73,9 +73,6 @@ import {
   AudioTimingDiagnostics,
 } from "@/lib/audio-clock";
 
-/** Compatibility export for callers that size their note-sample aliases. */
-export const NOTE_SAMPLE_PCM_CACHE_LIMIT = 16;
-
 /** Narrow callback type for audio-specific settings persistence. */
 export type PersistAudioSettingsFn = (s: Partial<{
   backgroundPlay: boolean;
@@ -106,8 +103,6 @@ export interface UseAudioPipelineParams {
   tonePositionRef?: React.MutableRefObject<TonePosition>;
   tonePositionsRef?: React.MutableRefObject<Partial<Record<SoundSet, TonePosition>>>;
   sampleVolumeRef: React.MutableRefObject<number>;
-  /** PCM cache — created in useMetronomeScreen, shared with useSettings. */
-  clickPCMCacheRef: React.MutableRefObject<Record<string, ClickPCMs>>;
   /** Web click-ready flag — created in useMetronomeScreen, shared with useSettings. */
   webClickReadyRef: React.MutableRefObject<boolean>;
   /** Per-note sample players — created in useMetronomeScreen, shared with useSettings. */
@@ -249,8 +244,8 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
   const { allPlayersRef, soundSetRef, highToggle, lowToggle, strongToggle, setPoolsVolume } =
     useAudioPlayers(soundSet, params.soundSetRef, outputOwner);
 
-  // 3 refs now live in useMetronomeScreen (shared with useSettings)
-  const { clickPCMCacheRef, webClickReadyRef, noteSampleSoundsRef } = params;
+  // Playback-owned refs remain local to this pipeline.
+  const { webClickReadyRef, noteSampleSoundsRef } = params;
   const initialToneSnapshot = createAudioToneSnapshot({
     volume: volumeRef.current,
     defaultSoundSet: soundSetRef.current,
@@ -562,7 +557,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
       ]);
       return { strong: shape(strong), high: shape(high), low: shape(low) };
     }, signal);
-  }, [clickPCMCacheRef, customSoundSetsRef, soundSetRef, tonePositionRef, tonePositionsRef, trimPCM, volumeRef]);
+  }, [customSoundSetsRef, soundSetRef, tonePositionRef, tonePositionsRef, trimPCM, volumeRef]);
 
   // Warm only decoded/shaped PCM. Playback-owned WebAudio buffers are created
   // later at the explicit playback-start boundary.

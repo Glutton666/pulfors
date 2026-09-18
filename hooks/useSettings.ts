@@ -11,7 +11,7 @@
  *
  * Receives as params (refs/callbacks that live elsewhere):
  *   - engineRef, baseBpmRef, volumeRef, sampleVolumeRef, beatDenominatorRef
- *   - noteSampleSoundsRef, clickPCMCacheRef, webClickReadyRef
+ *   - noteSampleSoundsRef, webClickReadyRef
  *   - scheduleReRenderCallbackRef, applyAudioSettingsCallbackRef
  *   - onSettingsLoaded  — called at end of settings load for extra init
  *   - onSettingsLoadError — called when startup settings cannot be read
@@ -26,7 +26,7 @@ import {
   type PersisterStatus,
 } from "@/lib/persist";
 import { clearWebClickBuffers } from "@/lib/audio-renderer";
-import type { ClickPCMs } from "@/lib/audio-renderer";
+import { invalidatePCMCachePrefix } from "@/lib/pcm-cache";
 import { defaultBeatTypes } from "@/lib/index.helpers";
 import type { MetronomeEngine, BeatType } from "@/lib/metronome-engine";
 import type { SampleChannel } from "@/lib/stereo-channel";
@@ -57,8 +57,6 @@ export interface UseSettingsParams {
   beatDenominatorRef: React.MutableRefObject<2 | 4 | 8>;
   /** Per-note sample players — volume synced in updateSampleVolume. */
   noteSampleSoundsRef: React.MutableRefObject<Record<string, ExpoAudioPlayer>>;
-  /** PCM cache — entry cleared in updateSoundSet. */
-  clickPCMCacheRef: React.MutableRefObject<Record<string, ClickPCMs>>;
   /** Web click-ready flag — reset in updateSoundSet. */
   webClickReadyRef: React.MutableRefObject<boolean>;
   /** Playback reads this ref from engine callbacks, so it must change synchronously with the UI setting. */
@@ -201,7 +199,7 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
     mode = "beat",
     engineRef, baseBpmRef,
     volumeRef, sampleVolumeRef, beatDenominatorRef,
-    noteSampleSoundsRef, clickPCMCacheRef, webClickReadyRef, soundSetRef,
+    noteSampleSoundsRef, webClickReadyRef, soundSetRef,
     scheduleReRenderCallbackRef, applyAudioSettingsCallbackRef, tonePositionRef, tonePositionsRef,
     onSettingsLoaded,
     onSettingsLoadError,
@@ -539,7 +537,7 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
       setSoundSetTonePositions(profile.soundSetTonePositions);
       tonePositionsRef.current = profile.soundSetTonePositions;
       tonePositionRef.current = sanitizeTonePosition(profile.soundSetTonePositions[profile.soundSet ?? soundSetRef.current]);
-      clickPCMCacheRef.current = {};
+      invalidatePCMCachePrefix(`click:${profile.soundSet ?? soundSetRef.current}:`);
     }
     if (profile.layerSoundSets) setLayerSoundSets(profile.layerSoundSets);
     if (profile.flashMode) {
@@ -607,7 +605,7 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
 
   const updateSoundSet = useCallback(
     (value: SoundSet) => {
-      delete clickPCMCacheRef.current[value];
+      invalidatePCMCachePrefix(`click:${value}:`);
       clearWebClickBuffers();
       webClickReadyRef.current = false;
       // Engine callbacks read this ref, not React state. Update it before the
@@ -628,10 +626,10 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
     setSoundSetTonePositions(next);
     tonePositionsRef.current = next;
     tonePositionRef.current = nextPosition;
-    delete clickPCMCacheRef.current[soundSet];
+    invalidatePCMCachePrefix(`click:${soundSet}:`);
     persistSettings({ soundSetTonePositions: next });
     scheduleReRenderCallbackRef.current();
-  }, [clickPCMCacheRef, persistSettings, scheduleReRenderCallbackRef, soundSet, soundSetTonePositions, tonePositionRef, tonePositionsRef]);
+  }, [persistSettings, scheduleReRenderCallbackRef, soundSet, soundSetTonePositions, tonePositionRef, tonePositionsRef]);
 
   const updateFlashMode = useCallback(
     (value: FlashMode) => {
