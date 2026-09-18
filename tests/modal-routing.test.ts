@@ -146,7 +146,7 @@ test("menu return: 메뉴 화면의 각 항목 진입이 메뉴 복귀 상태를
   }
 });
 
-test("source: 시그널 전용 BPM 분석은 제거되고 샘플 편집 BPM 분석은 유지된다", () => {
+test("source: 시그널 및 샘플 편집의 자동 BPM 분석은 제거된다", () => {
   const signal = readFileSync(join(process.cwd(), "components/SignalGeneratorModal.tsx"), "utf-8");
   const ui = readFileSync(join(process.cwd(), "components/MetronomeScreenUI.tsx"), "utf-8");
   const routing = readFileSync(join(process.cwd(), "lib/modal-routing.ts"), "utf-8");
@@ -158,9 +158,9 @@ test("source: 시그널 전용 BPM 분석은 제거되고 샘플 편집 BPM 분�
   assert.doesNotMatch(routing, /"bpmDetect"|showBpmDetect/);
   assert.doesNotMatch(translations, /^\s*bpmDetect:\s*\{/m);
 
-  assert.match(recorder, /detectBpmCandidatesOnDevice/);
-  assert.match(recorder, /onSuggestBpm/);
-  assert.match(translations, /^\s*bpmDetecting:\s*\{/m);
+  assert.doesNotMatch(recorder, /detectBpmCandidatesOnDevice|onSuggestBpm|bpmMeasure/);
+  assert.match(recorder, /registerSampleTempoTap|onApplyPreviewBpm/);
+  assert.doesNotMatch(translations, /^\s*bpmDetecting:\s*\{/m);
 });
 
 test("modal-routing: 각 activeModal 값은 정확히 해당 show* 플래그만 true로 만든다", () => {

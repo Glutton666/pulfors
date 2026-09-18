@@ -158,7 +158,7 @@ export function MetronomeScreenUI(props: Props) {
     handleNoteLoadPracticeSources, handleNoteSourceSelectionChange,
     noteSamples, noteSampleNames, noteSampleSources, noteSampleChannels, noteSampleVolumes, noteSampleSpeeds, noteSampleMetroChannels,
     recorderTarget, setRecorderTarget, recorderKeyboardActionsRef,
-    handleNoteRecordRequest, handleNoteRecordSave, handleNoteRecordDelete, handleNoteRecordSuggestBpm,
+    handleNoteRecordRequest, handleNoteRecordSave, handleNoteRecordDelete, handleNoteRecordApplyPreviewBpm,
     scoreMode, setScoreMode, scoreEditorDoc, setScoreEditorDoc, scorePracticeBookRef,
     handleLinkedEntryChange,
     handleLoadPracticeEntry, handleSetPracticeNoteGoal,
@@ -768,7 +768,7 @@ export function MetronomeScreenUI(props: Props) {
         onClose={() => setRecorderTarget(null)}
         onSave={handleNoteRecordSave}
         onDelete={handleNoteRecordDelete}
-        onSuggestBpm={handleNoteRecordSuggestBpm}
+        onApplyPreviewBpm={handleNoteRecordApplyPreviewBpm}
         beatIndex={recorderTarget?.beat ?? 0}
         subIndex={recorderTarget?.sub ?? 0}
         hasExisting={recorderTarget ? hasNoteSample(recorderTarget.beat, recorderTarget.sub, noteSamples) : false}

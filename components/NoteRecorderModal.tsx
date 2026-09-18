@@ -46,8 +46,7 @@ import { soundSets } from "@/lib/metronome-engine";
 import type { BuiltinSoundSet } from "@/lib/storage";
 import { safePlay } from "@/lib/audio-utils";
 import { captureBreadcrumb } from "@/lib/error-tracking";
-import { decodeSampleFile, getRenderSampleRate } from "@/lib/audio-renderer";
-import { adjustBpmCandidatesForPlaybackSpeed, detectBpmCandidatesOnDevice } from "@/lib/onset-bpm-detect";
+import { decodeSampleFile } from "@/lib/audio-renderer";
 import { motionDuration, useReducedMotion } from "@/hooks/useReducedMotion";
 import type { RecorderKeyboardActions } from "@/lib/keyboard-bindings";
 import { registerSampleTempoTap } from "@/lib/sample-tap-tempo";
@@ -70,7 +69,7 @@ interface NoteRecorderModalProps {
   bpm: number;
   beatsPerMeasure?: number;
   soundSet?: BuiltinSoundSet;
-  onSuggestBpm?: (bpm: number) => void;
+  onApplyPreviewBpm?: (bpm: number) => void;
   keyboardActionsRef?: React.MutableRefObject<RecorderKeyboardActions | null>;
 }
 
@@ -121,7 +120,7 @@ export function NoteRecorderModal({
   bpm,
   beatsPerMeasure = 4,
   soundSet = "classic",
-  onSuggestBpm,
+  onApplyPreviewBpm,
   keyboardActionsRef,
 }: NoteRecorderModalProps) {
   const { colors: C } = useTheme();
@@ -166,12 +165,7 @@ export function NoteRecorderModal({
   const previewTokenRef = useRef(0);
   const [loadingMessage, setLoadingMessage] = useState("");
   const [loadingProgress, setLoadingProgress] = useState(0);
-  const [suggestedBpms, setSuggestedBpms] = useState<number[]>([]);
-  const [isFetchingBpm, setIsFetchingBpm] = useState(false);
-  const [bpmError, setBpmError] = useState<string | null>(null);
   const [waveformPeaks, setWaveformPeaks] = useState<number[]>([]);
-  const bpmDetectTokenRef = useRef(0);
-  const userAdjustedBpmRef = useRef(false);
   const tempoTapTimesRef = useRef<number[]>([]);
 
   const recorder = useAudioRecorder(RECORDER_OPTIONS);
@@ -221,73 +215,14 @@ export function NoteRecorderModal({
     try {
       await releaseAudioSession("noteRecorderModal");
     } catch {}
-    bpmDetectTokenRef.current += 1;
     if (toastTimerRef.current) {
       clearTimeout(toastTimerRef.current);
       toastTimerRef.current = null;
     }
-    setSuggestedBpms([]);
-    setIsFetchingBpm(false);
-    setBpmError(null);
     setPressToast(null);
   }, []);
 
-  const applyDetectionResult = useCallback((candidates: number[]) => {
-    setSuggestedBpms(candidates);
-    if (candidates.length > 0 && !userAdjustedBpmRef.current) {
-      setLocalBpm(candidates[0]);
-    }
-  }, []);
-
-  // Fully local: works from a trimmed slice of decoded PCM, with no network fallback.
-  const runOnDeviceDetection = useCallback(async (uri: string, trimStartRatio: number, trimEndRatio: number) => {
-    const token = ++bpmDetectTokenRef.current;
-    setSuggestedBpms([]);
-    setBpmError(null);
-    setIsFetchingBpm(true);
-    try {
-      const pcm = await decodeSampleFile(uri);
-      if (token !== bpmDetectTokenRef.current) return;
-      if (!pcm || pcm.length === 0) {
-        setBpmError(t("noteRecorder", "bpmFailDecode"));
-        captureBreadcrumb({ category: "noteRecorder", message: "onDeviceBpm decode failed", level: "warning", data: { uri: uri.slice(0, 80) } });
-        return;
-      }
-      const sr = getRenderSampleRate();
-      const startIdx = Math.max(0, Math.floor(trimStartRatio * pcm.length));
-      const endIdx = Math.min(pcm.length, Math.floor(trimEndRatio * pcm.length));
-      const slice = pcm.subarray(startIdx, Math.max(startIdx + 1, endIdx));
-      const result = detectBpmCandidatesOnDevice(slice, sr);
-      if (token !== bpmDetectTokenRef.current) return;
-      if (result.candidates.length === 0) {
-        setBpmError(t("noteRecorder", "bpmNotDetected"));
-        captureBreadcrumb({ category: "noteRecorder", message: "onDeviceBpm no candidates", level: "info", data: { reason: result.failureReason ?? "unknown" } });
-        return;
-      }
-      const speedAdjusted = adjustBpmCandidatesForPlaybackSpeed(result.candidates, sampleSpeed);
-      if (speedAdjusted.length === 0) {
-        setBpmError(t("noteRecorder", "bpmNotDetected"));
-        return;
-      }
-      applyDetectionResult(speedAdjusted);
-    } catch (e) {
-      if (token !== bpmDetectTokenRef.current) return;
-      setBpmError(t("noteRecorder", "bpmFailGeneric"));
-      captureBreadcrumb({ category: "noteRecorder", message: "onDeviceBpm exception", level: "error", data: { error: String(e) } });
-    } finally {
-      if (token === bpmDetectTokenRef.current) setIsFetchingBpm(false);
-    }
-  }, [applyDetectionResult, sampleSpeed, t]);
-
-  const measureBpm = useCallback(() => {
-    if (!recordedUri) return;
-    void runOnDeviceDetection(recordedUri, trimStart, trimEnd);
-  }, [recordedUri, trimStart, trimEnd, runOnDeviceDetection]);
-
   const updateSampleSpeed = useCallback((next: number) => {
-    bpmDetectTokenRef.current += 1;
-    setSuggestedBpms([]);
-    setBpmError(null);
     setSampleSpeed(Math.max(0.5, Math.min(2, Math.round(next * 20) / 20)));
   }, []);
 
@@ -320,7 +255,6 @@ export function NoteRecorderModal({
     const result = registerSampleTempoTap(tempoTapTimesRef.current, Date.now());
     tempoTapTimesRef.current = result.tapTimes;
     if (result.bpm !== null) {
-      userAdjustedBpmRef.current = true;
       setLocalBpm(result.bpm);
     }
     if (Platform.OS !== "web") {
@@ -507,7 +441,6 @@ export function NoteRecorderModal({
           setTrimEnd(1);
         }
         setPhase("trimming");
-        userAdjustedBpmRef.current = false;
         if (Platform.OS !== "web") {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         }
@@ -690,7 +623,7 @@ export function NoteRecorderModal({
 
       if (Platform.OS === "web") {
         const apply = window.confirm(`${bpmTitle}\n\n${bpmMsg}`);
-        if (apply && onSuggestBpm) onSuggestBpm(localBpm);
+        if (apply && onApplyPreviewBpm) onApplyPreviewBpm(localBpm);
         proceedWithChannel();
         return;
       }
@@ -700,7 +633,7 @@ export function NoteRecorderModal({
         {
           text: applyText,
           onPress: () => {
-            if (onSuggestBpm) onSuggestBpm(localBpm);
+            if (onApplyPreviewBpm) onApplyPreviewBpm(localBpm);
             proceedWithChannel();
           },
         },
@@ -709,7 +642,7 @@ export function NoteRecorderModal({
     }
 
     proceedWithChannel();
-  }, [recordedUri, metronomeChannel, existingMetronomeChannel, doSave, t, localBpm, bpm, onSuggestBpm]);
+  }, [recordedUri, metronomeChannel, existingMetronomeChannel, doSave, t, localBpm, bpm, onApplyPreviewBpm]);
 
   const MAX_DURATION_SEC = 600;
   const MAX_FILE_SIZE_MB = 50;
@@ -777,7 +710,6 @@ export function NoteRecorderModal({
         setPhase("trimming");
         setLoadingMessage("");
         setLoadingProgress(0);
-        userAdjustedBpmRef.current = false;
         if (Platform.OS !== "web") {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         }
@@ -1292,8 +1224,8 @@ export function NoteRecorderModal({
                   <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "center", gap: Spacing.sm, marginTop: Spacing.sm }}>
                     <Text style={{ color: C.textSecondary, fontSize: FontSize.small }}>{t("noteRecorder", "previewBpm")}</Text>
                     <Pressable
-                      onPress={() => { userAdjustedBpmRef.current = true; setLocalBpm((v) => Math.max(30, v - 1)); }}
-                      onLongPress={() => { userAdjustedBpmRef.current = true; setLocalBpm((v) => Math.max(30, v - 5)); }}
+                      onPress={() => setLocalBpm((v) => Math.max(30, v - 1))}
+                      onLongPress={() => setLocalBpm((v) => Math.max(30, v - 5))}
                       hitSlop={8}
                       style={{ width: 28, height: 28, borderRadius: Radius.sm, backgroundColor: C.surfaceLight, alignItems: "center", justifyContent: "center" }}
                     >
@@ -1301,8 +1233,8 @@ export function NoteRecorderModal({
                     </Pressable>
                     <Text style={{ color: C.text, fontSize: FontSize.body, fontWeight: "600" as const, minWidth: 36, textAlign: "center" }}>{localBpm}</Text>
                     <Pressable
-                      onPress={() => { userAdjustedBpmRef.current = true; setLocalBpm((v) => Math.min(300, v + 1)); }}
-                      onLongPress={() => { userAdjustedBpmRef.current = true; setLocalBpm((v) => Math.min(300, v + 5)); }}
+                      onPress={() => setLocalBpm((v) => Math.min(300, v + 1))}
+                      onLongPress={() => setLocalBpm((v) => Math.min(300, v + 5))}
                       hitSlop={8}
                       style={{ width: 28, height: 28, borderRadius: Radius.sm, backgroundColor: C.surfaceLight, alignItems: "center", justifyContent: "center" }}
                     >
@@ -1338,76 +1270,6 @@ export function NoteRecorderModal({
                     {t("noteRecorder", "tapTempoHint")}
                   </Text>
 
-                  <Pressable
-                    onPress={measureBpm}
-                    disabled={isFetchingBpm}
-                    style={{
-                      alignSelf: "center",
-                      flexDirection: "row",
-                      alignItems: "center",
-                      gap: 6,
-                      marginTop: Spacing.sm,
-                      paddingHorizontal: Spacing.md,
-                      paddingVertical: Spacing.sm,
-                      borderRadius: Radius.md,
-                      backgroundColor: isFetchingBpm ? C.surfaceLight : C.accentDim,
-                      borderWidth: 1,
-                      borderColor: isFetchingBpm ? C.border : C.accent,
-                    }}
-                    accessibilityLabel={t("noteRecorder", "bpmMeasureAccessibility")}
-                  >
-                    <Ionicons name="speedometer-outline" size={16} color={isFetchingBpm ? C.textSecondary : C.accent} />
-                    <Text style={{ color: isFetchingBpm ? C.textSecondary : C.accent, fontSize: FontSize.small, fontWeight: "600" as const }}>
-                      {t("noteRecorder", "bpmMeasure")}
-                    </Text>
-                  </Pressable>
-
-                  {isFetchingBpm && (
-                    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, marginTop: Spacing.sm }}>
-                      <ActivityIndicator size="small" color={C.accent} />
-                      <Text style={{ color: C.textSecondary, fontSize: FontSize.small }}>{t("noteRecorder", "bpmDetecting")}</Text>
-                    </View>
-                  )}
-                  {!isFetchingBpm && suggestedBpms.length > 0 && (
-                    <View style={{ marginTop: Spacing.sm, alignItems: "center", gap: 6 }}>
-                      <Text style={{ color: C.textSecondary, fontSize: FontSize.small }}>
-                        {t("noteRecorder", "bpmCandidatesLabel")}
-                      </Text>
-                      <View style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 6 }}>
-                        {suggestedBpms.map((bpm) => (
-                          <Pressable
-                            key={bpm}
-                            onPress={() => {
-                              userAdjustedBpmRef.current = true;
-                              setLocalBpm(bpm);
-                              if (onSuggestBpm) onSuggestBpm(bpm);
-                              setSuggestedBpms([]);
-                            }}
-                            style={{
-                              paddingHorizontal: Spacing.sm,
-                              paddingVertical: Spacing.xs,
-                              borderRadius: Radius.sm,
-                              backgroundColor: C.accentDim,
-                              borderWidth: 1,
-                              borderColor: C.accent,
-                            }}
-                            hitSlop={8}
-                          >
-                            <Text style={{ color: C.accent, fontSize: FontSize.small, fontWeight: "600" as const }}>
-                              {bpm} BPM
-                            </Text>
-                          </Pressable>
-                        ))}
-                      </View>
-                    </View>
-                  )}
-                  {!isFetchingBpm && bpmError && (
-                    <View style={{ marginTop: Spacing.sm, alignItems: "center" }}>
-                      <Text style={{ color: "#E07070", fontSize: FontSize.small, textAlign: "center" }}>
-                        {bpmError}
-                      </Text>
-                    </View>
-                  )}
                 </>
               )}
 

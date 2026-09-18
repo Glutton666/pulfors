@@ -1498,8 +1498,8 @@ export function useMetronomeScreen() {
     setRecorderTarget(null);
   }, [recorderTarget, preloadNoteSampleSounds, invalidateSamplePCMCache, scheduleReRender]);
 
-  const handleNoteRecordSuggestBpm = useCallback((detectedBpm: number) => {
-    const clamped = Math.max(20, Math.min(300, Math.round(detectedBpm)));
+  const handleNoteRecordApplyPreviewBpm = useCallback((previewBpm: number) => {
+    const clamped = Math.max(20, Math.min(300, Math.round(previewBpm)));
     if (barModeRef.current) handleBarBpmChangeRef.current(clamped);
     else updateBpmRef.current(clamped);
   }, []);
@@ -4713,7 +4713,7 @@ export function useMetronomeScreen() {
     handleNoteRecordRequest,
     handleNoteRecordSave,
     handleNoteRecordDelete,
-    handleNoteRecordSuggestBpm,
+    handleNoteRecordApplyPreviewBpm,
     // Score mode
     scoreMode,
     setScoreMode,
