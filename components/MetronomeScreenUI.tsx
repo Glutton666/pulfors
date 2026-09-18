@@ -307,6 +307,7 @@ export function MetronomeScreenUI(props: Props) {
   const polygonMode = usePolygonMode({
     enabled: showPolygon,
     isPlaying,
+    isPreparing,
     engineBeatCallbackRef: polygonOnBeatRef,
     bpm,
     beatsPerMeasure,

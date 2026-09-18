@@ -63,6 +63,11 @@ export interface UsePolygonModeParams {
    */
   isPlaying: boolean;
   /**
+   * 첫 발음을 확인하기 전의 시작 준비 상태. Polygon은 이 단계에서 producer를
+   * 등록해야 첫 오디오 활동을 만들 수 있고, 그 뒤 isPlaying으로 전환된다.
+   */
+  isPreparing: boolean;
+  /**
    * 엔진 오디오 콜백이 매 비트마다 호출하는 ref.
    * useMetronomeScreen이 engine.setAudioCallbacks 내부에서 이 ref를 호출한다.
    * usePolygonMode는 enabled=true이면 자신의 핸들러를 이 ref에 등록한다.
@@ -131,6 +136,7 @@ const INITIAL_LAYERS: PolygonLayer[] = [
 ];
 
 export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
+  const playbackActive = p.isPlaying || p.isPreparing;
   const playPolygonOutput = playPolygonAudioOutput(p.outputOwner);
   const toneAtRender = p.captureAudioToneSnapshot();
   const defaultToneAtRender = readAudioToneSnapshot(toneAtRender);
@@ -165,8 +171,8 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
 
   const enabledRef = useRef(p.enabled);
   enabledRef.current = p.enabled;
-  const isPlayingRef = useRef(p.isPlaying);
-  isPlayingRef.current = p.isPlaying;
+  const isPlayingRef = useRef(playbackActive);
+  isPlayingRef.current = playbackActive;
   const activePlaybackPlanRef = useRef<PolygonPlaybackPlan | null>(null);
   // Keep the required production call at the hook boundary; active playback
   // still replaces this snapshot only at explicit lifecycle/edit boundaries.
@@ -175,7 +181,7 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
     beatsPerMeasure: p.beatsPerMeasure,
   });
   const activeScheduleRef = useRef<PolygonSchedule | null>(
-    p.isPlaying ? initialSchedule : null,
+    playbackActive ? initialSchedule : null,
   );
   const sessionIdRef = useRef(0);
   const producerGenerationRef = useRef(0);
@@ -204,7 +210,7 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
     runnerRef.current?.cancelSession(sessionIdRef.current);
     sessionIdRef.current += 1;
     absoluteBeatRef.current = 0;
-    activePlaybackPlanRef.current = p.isPlaying
+    activePlaybackPlanRef.current = playbackActive
       ? buildPolygonPlaybackPlan({
           platform: Platform.OS === "web" ? "web" : "native",
           bpm: p.bpm,
@@ -213,13 +219,13 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
           tone: toneAtRender,
         })
       : null;
-    activeScheduleRef.current = p.isPlaying
+    activeScheduleRef.current = playbackActive
       ? buildPolygonSchedule({ layers, beatsPerMeasure: p.beatsPerMeasure })
       : null;
     // Playback starts from one complete snapshot. Live edits replace that
     // snapshot atomically at the same boundary that clears old timers.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [p.isPlaying]);
+  }, [playbackActive]);
 
   useEffect(() => {
     if (!activePlaybackPlanRef.current) return;
@@ -324,14 +330,14 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
   // 엔진이 멈추면 더 이상 콜백이 오지 않으므로 카운터만 초기화한다.
   // 비주얼 리셋(setActiveVertices)은 enabled가 false가 될 때 처리한다.
   useEffect(() => {
-    if (!p.isPlaying) {
+    if (!playbackActive) {
       runnerRef.current?.cancelSession(sessionIdRef.current);
       sessionIdRef.current += 1;
       activePlaybackPlanRef.current = null;
       activeScheduleRef.current = null;
       absoluteBeatRef.current = 0;
     }
-  }, [p.isPlaying]);
+  }, [playbackActive]);
 
   // ── BPM 변경 → 예약된 슬롯 취소 (다음 비트부터 새 BPM 적용) ────────────
   // BPM이 바뀌면 현재 마디에서 아직 발화되지 않은 슬롯을 취소한다.
@@ -369,8 +375,8 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
   useEffect(() => {
     const producerGeneration = ++producerGenerationRef.current;
     enabledRef.current = p.enabled;
-    isPlayingRef.current = p.isPlaying;
-    if (!p.enabled || !p.isPlaying) {
+    isPlayingRef.current = playbackActive;
+    if (!p.enabled || !playbackActive) {
       // 엔진 콜백 해제 및 재생 상태 초기화.
       // 레이어 설정(layers, editingLayerId)은 보존한다:
       // 사용자가 폴리곤 모드를 닫았다 다시 열어도 설정한 레이어가 남아 있어야 한다.
@@ -421,7 +427,7 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
   // enabled가 변경될 때만 핸들러를 재등록한다.
    // layers/bpm/beatsPerMeasure/requestClickPCM은 ref로 읽으므로 의존성 불필요.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [p.enabled, p.isPlaying, p.engineBeatCallbackRef]);
+  }, [p.enabled, playbackActive, p.engineBeatCallbackRef]);
 
   // ── 레이어 관리 ─────────────────────────────────────────────────────────
 

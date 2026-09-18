@@ -72,6 +72,7 @@ function makeParams(
   return {
     enabled: true,
     isPlaying: true,
+    isPreparing: false,
     engineBeatCallbackRef,
     bpm: 120,
     beatsPerMeasure: 4,
@@ -131,6 +132,21 @@ describe("usePolygonMode — engine callback driven", () => {
 
     fireBeat(params.engineBeatCallbackRef);
 
+    expect(params.recordAudioActivity).toHaveBeenCalledTimes(1);
+  });
+
+  it("registers the producer while startup is preparing its first audible click", () => {
+    Platform.OS = "web";
+    const { playWebClick } = jest.requireMock("@/lib/audio-renderer") as {
+      playWebClick: jest.Mock;
+    };
+    playWebClick.mockReturnValue(true);
+    const params = makeParams({ isPlaying: false, isPreparing: true });
+
+    renderHook(() => usePolygonMode(params));
+    expect(params.engineBeatCallbackRef.current).not.toBeNull();
+
+    fireBeat(params.engineBeatCallbackRef);
     expect(params.recordAudioActivity).toHaveBeenCalledTimes(1);
   });
 
