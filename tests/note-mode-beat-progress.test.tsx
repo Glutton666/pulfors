@@ -100,7 +100,7 @@ jest.mock("@/lib/scale", () => ({
   }),
 }));
 
-import { NoteModeView } from "@/components/NoteModeView";
+import { NOTE_SOURCE_HEADER_LAYOUT, NoteModeView } from "@/components/NoteModeView";
 import { ImageFramingModal } from "@/components/NoteModeModals";
 
 const getLastPanResponderConfig = (
@@ -292,6 +292,47 @@ describe("Note mode play gestures and actions", () => {
     expect(nextHandlers.onOpenSettings).toHaveBeenCalledTimes(1);
     expect(nextHandlers.onSave).toHaveBeenCalledTimes(1);
     expect(require("@/lib/confirm").confirmDestructive).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("Note mode source header", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockDimensions = { width: 320, height: 700, scale: 1, fontScale: 1 };
+  });
+
+  afterEach(() => {
+    mockDimensions = { width: 390, height: 844, scale: 1, fontScale: 1 };
+  });
+
+  it("keeps space below the responsive header and preserves both actions", async () => {
+    const onLoadPracticeSources = jest.fn().mockResolvedValue([entry]);
+    const { getByTestId, queryByTestId } = render(
+      <NoteModeView
+        {...handlers}
+        queue={[entry]}
+        barEntries={[entry]}
+        playMode="once"
+        currentIndex={0}
+        isPlaying={false}
+        currentBeat={-1}
+        activeSubNote={-1}
+        onLoadPracticeSources={onLoadPracticeSources}
+      />,
+    );
+
+    expect(NOTE_SOURCE_HEADER_LAYOUT.gap).toBeGreaterThan(0);
+    expect(NOTE_SOURCE_HEADER_LAYOUT.bottomGap).toBeGreaterThan(0);
+    expect(getByTestId("note-source-section-header")).toBeTruthy();
+    expect(getByTestId("note-queue-source")).toBeTruthy();
+
+    fireEvent.click(getByTestId("toggle-note-source-section"));
+    expect(queryByTestId("note-queue-source")).toBeNull();
+
+    await act(async () => {
+      fireEvent.click(getByTestId("load-note-practice-sources"));
+    });
+    expect(onLoadPracticeSources).toHaveBeenCalledTimes(1);
   });
 });
 

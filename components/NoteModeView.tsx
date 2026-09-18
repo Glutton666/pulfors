@@ -60,6 +60,11 @@ interface NoteModeViewProps {
   onOpenSettings?: () => void;
 }
 
+export const NOTE_SOURCE_HEADER_LAYOUT = {
+  gap: 6,
+  bottomGap: 6,
+} as const;
+
 const BEAT_COLORS: Record<BeatType, string> = {
   accent: "#D4A846",
   normal: "#8B949E",
@@ -833,27 +838,33 @@ export function NoteModeView({
 
   const renderSourceSection = () => (
     <>
-      <View style={styles.sourceSectionTop}>
-      <Pressable
-        style={[styles.sectionHeader, isLandscape && { marginBottom: Spacing.xxs }]}
-        onPress={() => setSourceCollapsed(prev => !prev)}
-      >
-        <View style={styles.sectionHeaderLeft}>
-          <Ionicons
-            name={sourceCollapsed ? "chevron-forward" : "chevron-down"}
-            size={S.ms(14, 0.4)}
-            color={C.textSecondary}
-          />
-          <Text style={[styles.sectionTitle, { color: C.text }]}>{t("noteMode", "source")}</Text>
-          {barEntries.length > 0 && (
-            <Text style={[styles.sectionCount, { color: C.textTertiary }]}>{barEntries.length}</Text>
-          )}
-        </View>
-      </Pressable>
-      <Pressable onPress={openSourcePicker} style={[styles.loadSourcesButton, { borderColor: C.accent }]} accessibilityRole="button">
-        <Ionicons name="library-outline" size={S.ms(15, 0.4)} color={C.accent} />
-        <Text style={{ color: C.accent, fontWeight: "700" }}>{t("noteMode", "loadSources")}</Text>
-      </Pressable>
+      <View testID="note-source-section-header" style={styles.sourceSectionTop}>
+        <Pressable
+          testID="toggle-note-source-section"
+          style={styles.sectionHeader}
+          onPress={() => setSourceCollapsed(prev => !prev)}
+        >
+          <View style={styles.sectionHeaderLeft}>
+            <Ionicons
+              name={sourceCollapsed ? "chevron-forward" : "chevron-down"}
+              size={S.ms(14, 0.4)}
+              color={C.textSecondary}
+            />
+            <Text style={[styles.sectionTitle, { color: C.text }]}>{t("noteMode", "source")}</Text>
+            {barEntries.length > 0 && (
+              <Text style={[styles.sectionCount, { color: C.textTertiary }]}>{barEntries.length}</Text>
+            )}
+          </View>
+        </Pressable>
+        <Pressable
+          testID="load-note-practice-sources"
+          onPress={openSourcePicker}
+          style={[styles.loadSourcesButton, { borderColor: C.accent }]}
+          accessibilityRole="button"
+        >
+          <Ionicons name="library-outline" size={S.ms(15, 0.4)} color={C.accent} />
+          <Text style={styles.loadSourcesButtonText}>{t("noteMode", "loadSources")}</Text>
+        </Pressable>
       </View>
       {!sourceCollapsed && (
         <View style={[styles.sourceContainer, isLandscape && { flex: 1 }]} testID="note-queue-source">
@@ -1203,7 +1214,8 @@ const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: S.ms(6, 0.3),
+    flexShrink: 1,
+    minWidth: 0,
   },
   sectionHeaderLeft: {
     flexDirection: "row",
@@ -1441,15 +1453,28 @@ const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    flexWrap: "wrap",
+    columnGap: S.ms(NOTE_SOURCE_HEADER_LAYOUT.gap, 0.3),
+    rowGap: S.ms(NOTE_SOURCE_HEADER_LAYOUT.gap, 0.3),
+    marginBottom: S.ms(NOTE_SOURCE_HEADER_LAYOUT.bottomGap, 0.3),
   },
   loadSourcesButton: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 1,
+    maxWidth: "100%",
     gap: S.ms(5, 0.3),
     borderWidth: 1,
     borderRadius: 10,
     paddingHorizontal: S.ms(9, 0.3),
     paddingVertical: S.ms(6, 0.3),
+  },
+  loadSourcesButtonText: {
+    color: C.accent,
+    fontWeight: "700",
+    flexShrink: 1,
+    textAlign: "center",
   },
   sourceInvite: {
     flexDirection: "row",
