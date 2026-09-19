@@ -47,6 +47,7 @@ interface PracticeBookModalProps {
   username?: string;
   onOpenScore?: (scoreId: string) => void;
   fixedFilter?: PracticeBookMode;
+  embedded?: boolean;
 }
 
 const BEAT_COLORS: Record<BeatType, string> = {
@@ -531,6 +532,7 @@ export function PracticeBookModal({
   username,
   onOpenScore,
   fixedFilter,
+  embedded = false,
 }: PracticeBookModalProps) {
   const insets = useSafeAreaInsets();
   const { colors: C } = useTheme();
@@ -722,27 +724,24 @@ export function PracticeBookModal({
     />
   );
 
-  return (
-    <AnimatedSlideModal
-      visible={visible}
-      presentationStyle="pageSheet"
-      onRequestClose={onClose}
-    >
+  const content = (
       <View
+        testID={embedded ? "embedded-practice-book" : undefined}
         style={[
           styles.container,
           {
-            paddingTop: (insets.top || webTopInset) + 8,
-            paddingBottom: (insets.bottom || webBottomInset) + 8,
-            backgroundColor: C.background,
+            paddingTop: embedded ? 0 : (insets.top || webTopInset) + 8,
+            paddingBottom: embedded ? 0 : (insets.bottom || webBottomInset) + 8,
+            backgroundColor: embedded ? C.surface : C.background,
           },
         ]}
       >
         <View style={styles.header}>
           <Pressable
             onPress={onOpenDial}
+            disabled={!onOpenDial}
             style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: S.ms(8, 0.3) }}
-            accessibilityRole="button"
+            accessibilityRole={onOpenDial ? "button" : undefined}
           >
             <MaterialCommunityIcons
               name="notebook-outline"
@@ -948,6 +947,17 @@ export function PracticeBookModal({
           </View>
         )}
       </View>
+  );
+
+  if (embedded) return content;
+
+  return (
+    <AnimatedSlideModal
+      visible={visible}
+      presentationStyle="pageSheet"
+      onRequestClose={onClose}
+    >
+      {content}
     </AnimatedSlideModal>
   );
 }

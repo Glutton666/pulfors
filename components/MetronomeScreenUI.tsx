@@ -87,7 +87,7 @@ export function MetronomeScreenUI(props: Props) {
   const [isModeDialOpen, setIsModeDialOpen] = useState(false);
   const [showLabMenu, setShowLabMenu] = useState(false);
   const [practiceBookFilter, setPracticeBookFilter] = useState<PracticeBookMode | undefined>(undefined);
-  const practiceBookReturnRef = useRef<"settings" | "score" | null>(null);
+  const practiceBookReturnRef = useRef<"score" | null>(null);
 
   const {
     styles, C, S, t, themeMode, language, insets, webTopInset, webBottomInset,
@@ -308,12 +308,19 @@ export function MetronomeScreenUI(props: Props) {
 
   const openScopedPracticeBook = useCallback((
     filter: PracticeBookMode,
-    returnTo: "settings" | "score",
+    returnTo: "score",
   ) => {
     practiceBookReturnRef.current = returnTo;
     setPracticeBookFilter(filter);
     setActiveModal("practiceBook");
   }, [setActiveModal]);
+
+  const closeSettings = useCallback(() => {
+    const returnTo = settingsReturnModalRef.current;
+    settingsReturnModalRef.current = null;
+    setSettingsScope("global");
+    setActiveModal(returnTo);
+  }, [setActiveModal, settingsReturnModalRef]);
 
   const openModeDial = () => {
     // 사용자가 다이얼에서 새 모드를 고르면 메뉴 복귀 흐름을 벗어난다.
@@ -863,9 +870,7 @@ export function MetronomeScreenUI(props: Props) {
           const returnTo = practiceBookReturnRef.current;
           practiceBookReturnRef.current = null;
           setPracticeBookFilter(undefined);
-          if (returnTo === "settings") {
-            setActiveModal("settings");
-          } else if (returnTo === "score") {
+          if (returnTo === "score") {
             setActiveModal(null);
           } else {
             closeMenuItem();
@@ -971,17 +976,26 @@ export function MetronomeScreenUI(props: Props) {
       <SettingsModal
         visible={showSettings}
         scope={settingsScope}
-        onOpenPracticeBook={
+        practiceBookContent={
           settingsScope === "beat" || settingsScope === "bar" || settingsScope === "note"
-            ? () => openScopedPracticeBook(settingsScope, "settings")
+            ? (
+              <PracticeBookModal
+                embedded
+                visible={showSettings}
+                fixedFilter={settingsScope}
+                onClose={closeSettings}
+                onLoad={(entry) => {
+                  handleLoadPracticeEntry(entry);
+                  recordTutorialAction("practice_load");
+                }}
+                onSetGoal={handleSetPracticeNoteGoal}
+                currentConfig={currentBarConfig}
+                username={username}
+              />
+            )
             : undefined
         }
-        onClose={() => {
-          const returnTo = settingsReturnModalRef.current;
-          settingsReturnModalRef.current = null;
-          setSettingsScope("global");
-          setActiveModal(returnTo);
-        }}
+        onClose={closeSettings}
         volume={volume}
         onVolumeChange={updateVolume}
         tonePosition={tonePosition}

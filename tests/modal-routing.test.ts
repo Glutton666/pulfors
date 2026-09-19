@@ -513,7 +513,7 @@ test("source: 모든 실험실 항목은 공통 복귀 경로를 사용한다", 
   assert.match(ui, /onClose=\{closeScoreToLab\}/);
 });
 
-test("source: 모드 설정과 악보 화면에서 필터 고정 연습장을 열고 원래 화면으로 복귀한다", () => {
+test("source: 모드 설정은 연습장을 내부에 표시하고 악보는 기존 별도 화면을 유지한다", () => {
   const ui = readFileSync(join(process.cwd(), "components/MetronomeScreenUI.tsx"), "utf-8");
   const settings = readFileSync(join(process.cwd(), "components/SettingsModal.tsx"), "utf-8");
   const scoreList = readFileSync(join(process.cwd(), "components/ScoreListScreen.tsx"), "utf-8");
@@ -521,7 +521,10 @@ test("source: 모드 설정과 악보 화면에서 필터 고정 연습장을 �
 
   assert.match(settings, /scope === "beat" \|\| scope === "bar" \|\| scope === "note"/);
   assert.match(settings, /key: "practice" as SettingsTab/);
-  assert.match(settings, /if \(tab === "practice"\) \{\s*onOpenPracticeBook\?\.\(\);/);
+  assert.match(settings, /case "practice":\s*return practiceBookContent \?\? null;/);
+  assert.doesNotMatch(settings, /onOpenPracticeBook/);
+  assert.match(settings, /scrollEnabled=\{activeTab !== "practice"\}/);
+  assert.match(ui, /practiceBookContent=\{[\s\S]*?<PracticeBookModal[\s\S]*?embedded[\s\S]*?fixedFilter=\{settingsScope\}/);
   assert.match(ui, /fixedFilter=\{practiceBookFilter\}/);
   const practiceBook = readFileSync(join(process.cwd(), "components/PracticeBookModal.tsx"), "utf-8");
   assert.match(
@@ -529,7 +532,7 @@ test("source: 모드 설정과 악보 화면에서 필터 고정 연습장을 �
     /const canSaveCurrent = !!currentConfig[\s\S]*?currentConfig\.mode === fixedFilter/,
   );
   assert.match(practiceBook, /\{canSaveCurrent && currentConfig && \(/);
-  assert.match(ui, /returnTo === "settings"[\s\S]*?setActiveModal\("settings"\)/);
+  assert.doesNotMatch(ui, /returnTo === "settings"/);
   assert.match(ui, /returnTo === "score"[\s\S]*?setActiveModal\(null\)/);
   assert.match(ui, /onOpenPracticeBook=\{\(\) => openScopedPracticeBook\("score", "score"\)\}/);
   assert.match(scoreList, /testID="score-list-practice-book"/);

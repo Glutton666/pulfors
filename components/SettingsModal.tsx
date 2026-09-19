@@ -92,7 +92,7 @@ interface SettingsModalProps {
   stageSettings?: import("@/lib/storage").StageSettings;
   stagePracticeBook?: import("@/lib/storage").PracticeEntry[];
   onStageSettingsChange?: (patch: Partial<import("@/lib/storage").StageSettings>) => void;
-  onOpenPracticeBook?: () => void;
+  practiceBookContent?: React.ReactNode;
 }
 
 export function SettingsModal({
@@ -158,7 +158,7 @@ export function SettingsModal({
   stageSettings,
   stagePracticeBook,
   onStageSettingsChange,
-  onOpenPracticeBook,
+  practiceBookContent,
 }: SettingsModalProps) {
   const { colors: C } = useTheme();
   const S = useScale();
@@ -182,10 +182,15 @@ export function SettingsModal({
   }, [visible]);
 
   useEffect(() => {
-    if (scope === "stage" && activeTab === "keyboard") {
+    const practiceAvailable = !!practiceBookContent
+      && (scope === "beat" || scope === "bar" || scope === "note");
+    if (
+      (scope === "stage" && activeTab === "keyboard")
+      || (activeTab === "practice" && !practiceAvailable)
+    ) {
       setActiveTab("theme");
     }
-  }, [scope, activeTab]);
+  }, [scope, activeTab, practiceBookContent]);
 
   const playSoundPreview = useCallback((set: SoundSet) => {
     soundPreviewRef.current?.playSoundPreview(set);
@@ -204,37 +209,40 @@ export function SettingsModal({
   const isLandscape = S.isLandscape;
   const isTablet = S.isTablet;
   const cardMaxWidth = isTablet ? 600 : (isLandscape ? Math.min(winW * 0.92, 900) : 540);
-  const maxSheetHeight = isLandscape ? winH * 0.96 : winH * 0.9;
+  const sheetTopMargin = (insets.top || webTopInset) + 16;
+  const maxSheetHeight = isLandscape
+    ? Math.min(winH * 0.96, Math.max(160, winH - sheetTopMargin - 16))
+    : winH * 0.9;
 
   const switchTab = useCallback((tab: SettingsTab) => {
-    if (tab === "practice") {
-      onOpenPracticeBook?.();
-      return;
-    }
     if (activeTab === tab) return;
     if (Platform.OS !== "web") Haptics.selectionAsync();
-    const tabs: SettingsTab[] = ["theme", "sound", "keyboard"];
+    const tabs: SettingsTab[] = ["theme", "sound", "practice", "keyboard"];
     const currentIdx = tabs.indexOf(activeTab);
     const nextIdx = tabs.indexOf(tab);
     const slideDir = nextIdx > currentIdx ? 1 : -1;
     const nativeDriver = Platform.OS !== "web";
+    setActiveTab(tab);
+    if (
+      typeof tabFadeAnim.setValue !== "function"
+      || typeof tabSlideAnim.setValue !== "function"
+      || typeof Animated.parallel !== "function"
+      || typeof Animated.timing !== "function"
+    ) {
+      return;
+    }
+    tabFadeAnim.setValue(0);
+    tabSlideAnim.setValue(slideDir * 30);
     Animated.parallel([
-      Animated.timing(tabFadeAnim, { toValue: 0, duration: 100, useNativeDriver: nativeDriver }),
-      Animated.timing(tabSlideAnim, { toValue: slideDir * 30, duration: 100, useNativeDriver: nativeDriver }),
-    ]).start(() => {
-      setActiveTab(tab);
-      tabSlideAnim.setValue(-slideDir * 30);
-      Animated.parallel([
-        Animated.timing(tabFadeAnim, { toValue: 1, duration: 180, useNativeDriver: nativeDriver }),
-        Animated.timing(tabSlideAnim, { toValue: 0, duration: 180, useNativeDriver: nativeDriver }),
-      ]).start();
-    });
-  }, [activeTab, onOpenPracticeBook, tabFadeAnim, tabSlideAnim]);
+      Animated.timing(tabFadeAnim, { toValue: 1, duration: 180, useNativeDriver: nativeDriver }),
+      Animated.timing(tabSlideAnim, { toValue: 0, duration: 180, useNativeDriver: nativeDriver }),
+    ]).start();
+  }, [activeTab, tabFadeAnim, tabSlideAnim]);
 
   const TAB_ITEMS: { key: SettingsTab; icon: string; label: string }[] = [
     { key: "theme", icon: "color-palette-outline", label: t("settings", "themeTab") },
     { key: "sound", icon: "musical-notes-outline", label: t("settings", "soundTab") },
-    ...(scope === "beat" || scope === "bar" || scope === "note"
+    ...(practiceBookContent && (scope === "beat" || scope === "bar" || scope === "note")
       ? [{ key: "practice" as SettingsTab, icon: "book-outline", label: t("settings", "practiceTab") }]
       : []),
     ...(Platform.OS === "web" && scope !== "stage" ? [{ key: "keyboard" as SettingsTab, icon: "keypad-outline", label: t("keyboard", "tabLabel") }] : []),
@@ -315,7 +323,7 @@ export function SettingsModal({
           />
         );
       case "practice":
-        return null;
+        return practiceBookContent ?? null;
     }
   };
 
@@ -328,7 +336,7 @@ export function SettingsModal({
     >
       <Pressable style={styles.overlay} onPress={onClose}>
         <ScrollView
-          style={{ marginTop: (insets.top || webTopInset) + 16 }}
+          style={{ marginTop: sheetTopMargin }}
           contentContainerStyle={[
             styles.scrollContent,
             {
@@ -340,10 +348,16 @@ export function SettingsModal({
           ]}
           showsVerticalScrollIndicator={false}
           bounces={false}
+          scrollEnabled={activeTab !== "practice"}
           onStartShouldSetResponder={() => true}
         >
           <Pressable
-            style={[styles.sheet, { backgroundColor: C.surface, borderColor: C.border }, isLandscape && { maxHeight: maxSheetHeight }]}
+            style={[
+              styles.sheet,
+              { backgroundColor: C.surface, borderColor: C.border },
+              isLandscape && { maxHeight: maxSheetHeight },
+              activeTab === "practice" && { height: maxSheetHeight, maxHeight: maxSheetHeight },
+            ]}
             onPress={(e) => e.stopPropagation()}
           >
             {isLandscape ? (
@@ -372,16 +386,24 @@ export function SettingsModal({
                   </View>
                 </View>
                 <View style={[styles.verticalDivider, { backgroundColor: C.border }]} />
-                <ScrollView
-                  style={{ flex: 1 }}
-                  contentContainerStyle={{ paddingLeft: 16, paddingBottom: 16 }}
-                  showsVerticalScrollIndicator={false}
-                  bounces={false}
-                >
-                  <Animated.View style={{ opacity: tabFadeAnim, transform: [{ translateY: tabSlideAnim }] }}>
-                    {renderTabContent()}
-                  </Animated.View>
-                </ScrollView>
+                {activeTab === "practice" ? (
+                  <View style={{ flex: 1, minHeight: 0 }}>
+                    <Animated.View style={{ flex: 1, minHeight: 0, paddingLeft: 16, paddingBottom: 16, opacity: tabFadeAnim, transform: [{ translateY: tabSlideAnim }] }}>
+                      {renderTabContent()}
+                    </Animated.View>
+                  </View>
+                ) : (
+                  <ScrollView
+                    style={{ flex: 1 }}
+                    contentContainerStyle={{ paddingLeft: 16, paddingBottom: 16 }}
+                    showsVerticalScrollIndicator={false}
+                    bounces={false}
+                  >
+                    <Animated.View style={{ opacity: tabFadeAnim, transform: [{ translateY: tabSlideAnim }] }}>
+                      {renderTabContent()}
+                    </Animated.View>
+                  </ScrollView>
+                )}
               </View>
             ) : (
               <>
@@ -411,7 +433,10 @@ export function SettingsModal({
                   ))}
                 </View>
                 <View style={[styles.divider, { backgroundColor: C.border }]} />
-                <Animated.View style={{ opacity: tabFadeAnim, transform: [{ translateX: tabSlideAnim }] }}>
+                <Animated.View style={[
+                  activeTab === "practice" && { flex: 1, minHeight: 0 },
+                  { opacity: tabFadeAnim, transform: [{ translateX: tabSlideAnim }] },
+                ]}>
                   {renderTabContent()}
                 </Animated.View>
               </>

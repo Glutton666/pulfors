@@ -1,6 +1,6 @@
 /** @jest-environment jsdom */
 import React from "react";
-import { act, cleanup, fireEvent, render } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 
 import { ModeTutorialModal } from "@/components/ModeTutorialModal";
 import { SettingsModal } from "@/components/SettingsModal";
@@ -319,6 +319,38 @@ describe("rendered mode tutorial quests", () => {
 });
 
 describe("tutorial replay and reset settings", () => {
+  test("mode practice tab keeps settings open and renders its content in place", async () => {
+    const onClose = jest.fn();
+    const embeddedBook = <div data-testid="embedded-book">book</div>;
+    const view = render(
+      <SettingsModal
+        {...settingsProps({
+          scope: "beat",
+          onClose,
+          practiceBookContent: embeddedBook,
+        })}
+      />,
+    );
+
+    fireEvent.click(view.getByRole("button", { name: "practiceTab" }));
+
+    await waitFor(() => expect(view.getByTestId("embedded-book")).toBeTruthy());
+    expect(view.getByText("Settings")).toBeTruthy();
+    expect(onClose).not.toHaveBeenCalled();
+
+    view.rerender(
+      <SettingsModal
+        {...settingsProps({
+          scope: "global",
+          onClose,
+        })}
+      />,
+    );
+
+    await waitFor(() => expect(view.getByTestId("theme-tab-global")).toBeTruthy());
+    expect(view.queryByTestId("embedded-book")).toBeNull();
+  });
+
   test.each(["global", "beat"] as const)("does not render disabled tutorial controls in %s settings", (scope) => {
     const view = render(
       <SettingsModal
