@@ -35,9 +35,10 @@ export interface ScoreListScreenProps {
   onClose: () => void;
   onOpenEditor: (doc: ScoreDocument) => void;
   onTitleSubmit?: (title: string) => boolean;
+  onOpenPracticeBook: () => void;
 }
 
-export function ScoreListScreen({ defaultBpm, onClose, onOpenEditor, onTitleSubmit }: ScoreListScreenProps) {
+export function ScoreListScreen({ defaultBpm, onClose, onOpenEditor, onTitleSubmit, onOpenPracticeBook }: ScoreListScreenProps) {
   const { colors: C } = useTheme();
   const { t } = useLanguage();
   const insets = useSafeAreaInsets();
@@ -230,6 +231,16 @@ export function ScoreListScreen({ defaultBpm, onClose, onOpenEditor, onTitleSubm
           </Text>
         </View>
         <View style={{ flex: 1 }} pointerEvents="none" />
+        <Pressable
+          style={({ pressed }) => [styles.backBtn, pressed && { opacity: 0.6 }]}
+          onPress={onOpenPracticeBook}
+          hitSlop={10}
+          accessibilityRole="button"
+          accessibilityLabel={t("practiceBook", "title")}
+          testID="score-list-practice-book"
+        >
+          <Ionicons name="book-outline" size={S.ms(20, 0.4)} color={C.text} />
+        </Pressable>
         <Pressable
           style={({ pressed }) => [styles.importBtn, { borderColor: C.border }, pressed && { opacity: 0.7 }]}
           onPress={handleImport}

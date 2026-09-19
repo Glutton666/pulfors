@@ -39,6 +39,7 @@ export interface ScoreEditorToolbarProps {
   onToggleMute: () => void;
   onOpenShare: () => void;
   onOpenMoreMenu: () => void;
+  onOpenPracticeBook: () => void;
   onSave: () => void;
   onSelectPart: (idx: number) => void;
   onLayout: (height: number) => void;
@@ -64,6 +65,7 @@ export function ScoreEditorToolbar({
   onToggleMute,
   onOpenShare,
   onOpenMoreMenu,
+  onOpenPracticeBook,
   onSave,
   onSelectPart,
   onLayout,
@@ -234,6 +236,17 @@ export function ScoreEditorToolbar({
           testID="score-editor-share"
         >
           <Ionicons name="share-social-outline" size={S.ms(20, 0.4)} color={C.text} />
+        </Pressable>
+
+        <Pressable
+          style={({ pressed }) => [styles.iconBtn, pressed && { opacity: 0.6 }]}
+          onPress={onOpenPracticeBook}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel={t("practiceBook", "title")}
+          testID="score-editor-practice-book"
+        >
+          <Ionicons name="book-outline" size={S.ms(20, 0.4)} color={C.text} />
         </Pressable>
 
         {/* ⋯ 더 보기 메뉴 */}

@@ -77,6 +77,7 @@ import { useEasterEggGesture } from "@/hooks/useEasterEggGesture";
 import { usesSharedEasterEggGesture } from "@/lib/easter-egg-gesture";
 import { saveModeKeyBindings } from "@/lib/keyboard-bindings";
 import { MODE_TUTORIALS_ENABLED } from "@/lib/tutorial-config";
+import type { PracticeBookMode } from "@/lib/practice-book-filter";
 
 type Props = ReturnType<typeof useMetronomeScreen>;
 
@@ -85,6 +86,8 @@ export function MetronomeScreenUI(props: Props) {
   const modeDialTriggerRef = useRef<View>(null);
   const [isModeDialOpen, setIsModeDialOpen] = useState(false);
   const [showLabMenu, setShowLabMenu] = useState(false);
+  const [practiceBookFilter, setPracticeBookFilter] = useState<PracticeBookMode | undefined>(undefined);
+  const practiceBookReturnRef = useRef<"settings" | "score" | null>(null);
 
   const {
     styles, C, S, t, themeMode, language, insets, webTopInset, webBottomInset,
@@ -303,6 +306,15 @@ export function MetronomeScreenUI(props: Props) {
     openExclusive("settings");
   }, [openExclusive, settingsReturnModalRef]);
 
+  const openScopedPracticeBook = useCallback((
+    filter: PracticeBookMode,
+    returnTo: "settings" | "score",
+  ) => {
+    practiceBookReturnRef.current = returnTo;
+    setPracticeBookFilter(filter);
+    setActiveModal("practiceBook");
+  }, [setActiveModal]);
+
   const openModeDial = () => {
     // 사용자가 다이얼에서 새 모드를 고르면 메뉴 복귀 흐름을 벗어난다.
     clearMenuItemReturn();
@@ -377,6 +389,7 @@ export function MetronomeScreenUI(props: Props) {
             defaultBpm={bpm}
             onClose={closeScoreToLab}
             onTitleSubmit={handleScoreTitleSubmit}
+            onOpenPracticeBook={() => openScopedPracticeBook("score", "score")}
             onOpenEditor={(doc) => {
               setScoreEditorDoc(doc);
               setScoreMode("editor");
@@ -390,6 +403,7 @@ export function MetronomeScreenUI(props: Props) {
             doc={scoreEditorDoc}
             onBack={() => setScoreMode("list")}
             onClose={closeScoreToLab}
+            onOpenPracticeBook={() => openScopedPracticeBook("score", "score")}
             onSaved={(updatedDoc) => {
               setScoreEditorDoc(updatedDoc);
               // 연습장 캐시 무효화 (저장된 연결 항목 반영)
@@ -837,13 +851,25 @@ export function MetronomeScreenUI(props: Props) {
       {showPracticeBook && (
       <PracticeBookModal
         visible={showPracticeBook}
+        fixedFilter={practiceBookFilter}
         onOpenDial={() => {
+          practiceBookReturnRef.current = null;
+          setPracticeBookFilter(undefined);
           clearMenuItemReturn();
           setActiveModal(null);
           setTimeout(() => modeSwitcherDialRef.current?.open(), 100);
         }}
         onClose={() => {
-          closeMenuItem();
+          const returnTo = practiceBookReturnRef.current;
+          practiceBookReturnRef.current = null;
+          setPracticeBookFilter(undefined);
+          if (returnTo === "settings") {
+            setActiveModal("settings");
+          } else if (returnTo === "score") {
+            setActiveModal(null);
+          } else {
+            closeMenuItem();
+          }
           if (loggingEnabled && featureStartRef.current?.name === "practice_note") {
             const dur = Math.round((Date.now() - featureStartRef.current.start) / 1000);
             if (dur >= 2) addActivityLog({ type: "feature_usage", data: { feature: "practice_note", duration: dur } });
@@ -858,6 +884,8 @@ export function MetronomeScreenUI(props: Props) {
         currentConfig={currentBarConfig}
         username={username}
         onOpenScore={(scoreId) => {
+          practiceBookReturnRef.current = null;
+          setPracticeBookFilter(undefined);
           setActiveModal(null);
           import("@/lib/score-storage").then(({ loadScore }) => {
             loadScore(scoreId).then((scoreDoc) => {
@@ -943,6 +971,11 @@ export function MetronomeScreenUI(props: Props) {
       <SettingsModal
         visible={showSettings}
         scope={settingsScope}
+        onOpenPracticeBook={
+          settingsScope === "beat" || settingsScope === "bar" || settingsScope === "note"
+            ? () => openScopedPracticeBook(settingsScope, "settings")
+            : undefined
+        }
         onClose={() => {
           const returnTo = settingsReturnModalRef.current;
           settingsReturnModalRef.current = null;

@@ -513,6 +513,29 @@ test("source: 모든 실험실 항목은 공통 복귀 경로를 사용한다", 
   assert.match(ui, /onClose=\{closeScoreToLab\}/);
 });
 
+test("source: 모드 설정과 악보 화면에서 필터 고정 연습장을 열고 원래 화면으로 복귀한다", () => {
+  const ui = readFileSync(join(process.cwd(), "components/MetronomeScreenUI.tsx"), "utf-8");
+  const settings = readFileSync(join(process.cwd(), "components/SettingsModal.tsx"), "utf-8");
+  const scoreList = readFileSync(join(process.cwd(), "components/ScoreListScreen.tsx"), "utf-8");
+  const scoreToolbar = readFileSync(join(process.cwd(), "components/score-editor/ScoreEditorToolbar.tsx"), "utf-8");
+
+  assert.match(settings, /scope === "beat" \|\| scope === "bar" \|\| scope === "note"/);
+  assert.match(settings, /key: "practice" as SettingsTab/);
+  assert.match(settings, /if \(tab === "practice"\) \{\s*onOpenPracticeBook\?\.\(\);/);
+  assert.match(ui, /fixedFilter=\{practiceBookFilter\}/);
+  const practiceBook = readFileSync(join(process.cwd(), "components/PracticeBookModal.tsx"), "utf-8");
+  assert.match(
+    practiceBook,
+    /const canSaveCurrent = !!currentConfig[\s\S]*?currentConfig\.mode === fixedFilter/,
+  );
+  assert.match(practiceBook, /\{canSaveCurrent && currentConfig && \(/);
+  assert.match(ui, /returnTo === "settings"[\s\S]*?setActiveModal\("settings"\)/);
+  assert.match(ui, /returnTo === "score"[\s\S]*?setActiveModal\(null\)/);
+  assert.match(ui, /onOpenPracticeBook=\{\(\) => openScopedPracticeBook\("score", "score"\)\}/);
+  assert.match(scoreList, /testID="score-list-practice-book"/);
+  assert.match(scoreToolbar, /testID="score-editor-practice-book"/);
+});
+
 test("source: MenuScreen — 드럼킷 메뉴 라벨과 모달 진입·닫기 흐름이 연결된다", () => {
   const menu = readFileSync(join(process.cwd(), "components/MenuScreen.tsx"), "utf-8");
   const ui = readFileSync(join(process.cwd(), "components/MetronomeScreenUI.tsx"), "utf-8");

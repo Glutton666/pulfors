@@ -36,6 +36,7 @@ export const translations = {
     title: { ko: "설정", en: "Settings" },
     themeTab: { ko: "테마", en: "Theme" },
     soundTab: { ko: "사운드", en: "Sound" },
+    practiceTab: { ko: "연습장", en: "Practice" },
     profileTab: { ko: "프로필", en: "Profile" },
     themeMode: { ko: "화면 모드", en: "Display Mode" },
     nightMode: { ko: "밤", en: "Night" },

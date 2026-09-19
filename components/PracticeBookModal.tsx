@@ -31,6 +31,11 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useScale } from "@/lib/scale";
 import { ExportEntryModal } from "@/components/ExportEntryModal";
 import { onAccentColor } from "@/lib/color-contrast";
+import {
+  filterPracticeBookEntries,
+  type PracticeBookFilter,
+  type PracticeBookMode,
+} from "@/lib/practice-book-filter";
 
 interface PracticeBookModalProps {
   visible: boolean;
@@ -41,6 +46,7 @@ interface PracticeBookModalProps {
   currentConfig: Omit<PracticeEntry, "id" | "label" | "createdAt"> | null;
   username?: string;
   onOpenScore?: (scoreId: string) => void;
+  fixedFilter?: PracticeBookMode;
 }
 
 const BEAT_COLORS: Record<BeatType, string> = {
@@ -524,6 +530,7 @@ export function PracticeBookModal({
   currentConfig,
   username,
   onOpenScore,
+  fixedFilter,
 }: PracticeBookModalProps) {
   const insets = useSafeAreaInsets();
   const { colors: C } = useTheme();
@@ -540,12 +547,7 @@ export function PracticeBookModal({
   const [goalMinutes, setGoalMinutes] = useState("10");
   const [openItemId, setOpenItemId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"list" | "grid">("list");
-  const [filterMode, setFilterMode] = useState<"all" | "beat" | "bar" | "note" | "score">("all");
-
-  /** True for entries that are linked to a score document (new mode:"score" and
-   * legacy mode:"beat" entries that carry a scoreId). */
-  const isScoreEntry = (e: PracticeEntry) =>
-    e.mode === "score" || (!!(e.scoreId) && (!e.mode || e.mode === "beat"));
+  const [filterMode, setFilterMode] = useState<PracticeBookFilter>("all");
   const saveInputRef = useRef<TextInput>(null);
   const editInputRef = useRef<TextInput | null>(null);
 
@@ -566,11 +568,12 @@ export function PracticeBookModal({
   useEffect(() => {
     if (visible) {
       loadPracticeBook().then(setEntries);
+      setFilterMode(fixedFilter ?? "all");
       setShowSaveInput(false);
       setEditingId(null);
       setOpenItemId(null);
     }
-  }, [visible]);
+  }, [visible, fixedFilter]);
 
   const handleSave = useCallback(async () => {
     if (!currentConfig || !saveLabel.trim()) return;
@@ -681,21 +684,16 @@ export function PracticeBookModal({
     }
   }, []);
 
-  const filteredEntries = filterMode === "all"
-    ? entries
-    : filterMode === "score"
-      ? entries.filter(isScoreEntry)
-      : filterMode === "beat"
-        // Beat tab excludes score-linked entries (they appear under Score tab)
-        ? entries.filter(e => (!e.mode || e.mode === "beat") && !e.scoreId)
-        : entries.filter(e => e.mode === filterMode);
+  const filteredEntries = filterPracticeBookEntries(entries, fixedFilter ?? filterMode);
+  const canSaveCurrent = !!currentConfig
+    && (!fixedFilter || currentConfig.mode === fixedFilter);
 
   const modeCounts = {
     all: entries.length,
-    beat: entries.filter(e => (!e.mode || e.mode === "beat") && !e.scoreId).length,
-    bar: entries.filter(e => e.mode === "bar").length,
-    note: entries.filter(e => e.mode === "note").length,
-    score: entries.filter(isScoreEntry).length,
+    beat: filterPracticeBookEntries(entries, "beat").length,
+    bar: filterPracticeBookEntries(entries, "bar").length,
+    note: filterPracticeBookEntries(entries, "note").length,
+    score: filterPracticeBookEntries(entries, "score").length,
   };
 
   const webTopInset = Platform.OS === "web" ? 67 : 0;
@@ -768,7 +766,7 @@ export function PracticeBookModal({
           </Pressable>
         </View>
 
-        {currentConfig && (
+        {canSaveCurrent && currentConfig && (
           <View style={styles.saveSection}>
             {showSaveInput ? (
               <View style={styles.saveInputRow}>
@@ -825,7 +823,7 @@ export function PracticeBookModal({
           </View>
         )}
 
-        {entries.length > 0 && (
+        {entries.length > 0 && !fixedFilter && (
           <View style={styles.tabBar}>
             {(["all", "beat", "bar", "note", "score"] as const).map((mode) => {
               const isActive = filterMode === mode;

@@ -24,7 +24,7 @@ import { SettingsThemeTab } from "./settings/SettingsThemeTab";
 import { SettingsSoundTab } from "./settings/SettingsSoundTab";
 import { SettingsKeyboardTab } from "./settings/SettingsKeyboardTab";
 
-type SettingsTab = "theme" | "sound" | "keyboard";
+type SettingsTab = "theme" | "sound" | "keyboard" | "practice";
 export type SettingsScope = "global" | "beat" | "bar" | "note" | "stage";
 
 interface SettingsModalProps {
@@ -92,6 +92,7 @@ interface SettingsModalProps {
   stageSettings?: import("@/lib/storage").StageSettings;
   stagePracticeBook?: import("@/lib/storage").PracticeEntry[];
   onStageSettingsChange?: (patch: Partial<import("@/lib/storage").StageSettings>) => void;
+  onOpenPracticeBook?: () => void;
 }
 
 export function SettingsModal({
@@ -157,6 +158,7 @@ export function SettingsModal({
   stageSettings,
   stagePracticeBook,
   onStageSettingsChange,
+  onOpenPracticeBook,
 }: SettingsModalProps) {
   const { colors: C } = useTheme();
   const S = useScale();
@@ -205,6 +207,10 @@ export function SettingsModal({
   const maxSheetHeight = isLandscape ? winH * 0.96 : winH * 0.9;
 
   const switchTab = useCallback((tab: SettingsTab) => {
+    if (tab === "practice") {
+      onOpenPracticeBook?.();
+      return;
+    }
     if (activeTab === tab) return;
     if (Platform.OS !== "web") Haptics.selectionAsync();
     const tabs: SettingsTab[] = ["theme", "sound", "keyboard"];
@@ -223,11 +229,14 @@ export function SettingsModal({
         Animated.timing(tabSlideAnim, { toValue: 0, duration: 180, useNativeDriver: nativeDriver }),
       ]).start();
     });
-  }, [activeTab, tabFadeAnim, tabSlideAnim]);
+  }, [activeTab, onOpenPracticeBook, tabFadeAnim, tabSlideAnim]);
 
   const TAB_ITEMS: { key: SettingsTab; icon: string; label: string }[] = [
     { key: "theme", icon: "color-palette-outline", label: t("settings", "themeTab") },
     { key: "sound", icon: "musical-notes-outline", label: t("settings", "soundTab") },
+    ...(scope === "beat" || scope === "bar" || scope === "note"
+      ? [{ key: "practice" as SettingsTab, icon: "book-outline", label: t("settings", "practiceTab") }]
+      : []),
     ...(Platform.OS === "web" && scope !== "stage" ? [{ key: "keyboard" as SettingsTab, icon: "keypad-outline", label: t("keyboard", "tabLabel") }] : []),
   ];
 
@@ -305,6 +314,8 @@ export function SettingsModal({
             scope={scope}
           />
         );
+      case "practice":
+        return null;
     }
   };
 

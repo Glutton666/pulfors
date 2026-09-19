@@ -226,6 +226,14 @@ describe("경로 A: 상단 '무대 모드' 텍스트가 onOpenDial에 연결됨"
     );
   });
 
+  test("모든 무대 진입 경로에서 통합 연습장을 다시 불러옴", () => {
+    const src = fs.readFileSync("hooks/useMetronomeScreen.ts", "utf8");
+    assert.match(
+      src,
+      /useEffect\(\(\) => \{\s*if \(!stageModeActive\) return;[\s\S]*?loadPracticeBook\(\)[\s\S]*?setStagePracticeEntries\(entries\);[\s\S]*?\}, \[stageModeActive\]\);/,
+    );
+  });
+
   test("ModeSwitcherDial이 tutorialSwitchToMode를 통해 switchToMode로 연결됨", () => {
     const src = fs.readFileSync("components/MetronomeScreenUI.tsx", "utf8");
     assert.ok(

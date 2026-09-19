@@ -99,6 +99,7 @@ export interface ScoreEditorScreenProps {
   onBack: () => void;
   onClose: () => void;
   onSaved: (doc: ScoreDocument) => void;
+  onOpenPracticeBook: () => void;
   onLinkedEntryChange?: (
     entryId: string | undefined,
     scoreDefaults: { bpm: number; beatsPerMeasure: number },
@@ -112,6 +113,7 @@ export function ScoreEditorScreen({
   onBack,
   onClose,
   onSaved,
+  onOpenPracticeBook,
   onLinkedEntryChange,
 }: ScoreEditorScreenProps) {
   const { colors: C } = useTheme();
@@ -1728,6 +1730,7 @@ export function ScoreEditorScreen({
         }}
         onOpenShare={() => setShowShareModal(true)}
         onOpenMoreMenu={() => setShowMoreMenu(true)}
+        onOpenPracticeBook={onOpenPracticeBook}
         onSave={handleSave}
         onSelectPart={setSelectedPartIdx}
         onLayout={setTopBarHeight}

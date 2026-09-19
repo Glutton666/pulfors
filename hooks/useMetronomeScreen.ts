@@ -2618,6 +2618,18 @@ export function useMetronomeScreen() {
   }, [coreMode, stageModeActive, showPolygon]);
   /** 무대 모드 셋 리스트 — 진입 시 연습장에서 로드 */
   const [stagePracticeEntries, setStagePracticeEntries] = useState<PracticeEntry[]>([]);
+  useEffect(() => {
+    if (!stageModeActive) return;
+    let active = true;
+    loadPracticeBook()
+      .then((entries) => {
+        if (active) setStagePracticeEntries(entries);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [stageModeActive]);
   /** 셋 리스트에서 현재 선택/적용된 항목 ID */
   const [activeStagePracticeEntryId, setActiveStagePracticeEntryId] = useState<string | undefined>(undefined);
 
