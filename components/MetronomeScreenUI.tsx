@@ -287,6 +287,11 @@ export function MetronomeScreenUI(props: Props) {
     return true;
   }, [enterPitchQuiz, setScoreMode]);
 
+  const closeScoreToLab = useCallback(() => {
+    setShowLabMenu(true);
+    closeScoreMode();
+  }, [closeScoreMode]);
+
   const openMenuItem = (open: () => void) => {
     markMenuItemReturn();
     open();
@@ -370,7 +375,7 @@ export function MetronomeScreenUI(props: Props) {
         <Animated.View style={[StyleSheet.absoluteFillObject, { zIndex: 500, backgroundColor: C.background }, modeSlideStyle]}>
           <ScoreListScreen
             defaultBpm={bpm}
-            onClose={closeScoreMode}
+            onClose={closeScoreToLab}
             onTitleSubmit={handleScoreTitleSubmit}
             onOpenEditor={(doc) => {
               setScoreEditorDoc(doc);
@@ -384,7 +389,7 @@ export function MetronomeScreenUI(props: Props) {
           <ScoreEditorScreen
             doc={scoreEditorDoc}
             onBack={() => setScoreMode("list")}
-            onClose={closeScoreMode}
+            onClose={closeScoreToLab}
             onSaved={(updatedDoc) => {
               setScoreEditorDoc(updatedDoc);
               // 연습장 캐시 무효화 (저장된 연결 항목 반영)
@@ -1129,7 +1134,12 @@ export function MetronomeScreenUI(props: Props) {
               : { flex: 5, justifyContent: "center" as const, alignItems: "center" as const, transform: [{ translateY: windowHeight > 400 || S.isTablet ? S.ms(8, 0.3) : 0 }] }
             : barMode
               ? { flex: 5, justifyContent: "flex-start" as const, alignItems: "stretch" as const }
-              : { flex: 5, justifyContent: "center" as const, alignItems: "center" as const, transform: [{ translateY: windowHeight > 600 || S.isTablet ? S.ms(12, 0.3) : 0 }] }
+              : {
+                  flex: 5,
+                  justifyContent: "center" as const,
+                  alignItems: "center" as const,
+                  transform: [{ translateY: windowHeight > 600 || S.isTablet ? -S.ms(4, 0.3) : 0 }],
+                }
         }>
           <BeatIndicator
             beatsPerMeasure={beatsPerMeasure}
@@ -1509,7 +1519,7 @@ export function MetronomeScreenUI(props: Props) {
           </View>
         )}
         {!isLandscape && !barMode && (
-        <View style={[styles.bpmSection, { flex: 2 }]}>
+        <View style={[styles.bpmSection, { flex: 2, width: "100%" }]}>
           {easterEggActive ? (
             <EasterEggQuiz
               onGuess={handleEasterEggGuess}

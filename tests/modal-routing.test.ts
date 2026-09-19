@@ -159,10 +159,14 @@ test("Android BackHandler가 모든 active modal 종료 경로를 가진다", ()
 test("score close: 목록과 편집기의 X는 문서 상태를 비우고 실험실 메뉴로 돌아간다", () => {
   const ui = readFileSync(join(process.cwd(), "components/MetronomeScreenUI.tsx"), "utf-8");
   const hook = readFileSync(join(process.cwd(), "hooks/useMetronomeScreen.ts"), "utf-8");
-  assert.match(ui, /onClose=\{closeScoreMode\}/);
+  assert.match(
+    ui,
+    /const closeScoreToLab = useCallback\(\(\) => \{\s*setShowLabMenu\(true\);\s*closeScoreMode\(\);/,
+  );
+  assert.equal((ui.match(/onClose=\{closeScoreToLab\}/g) ?? []).length, 2);
   assert.match(
     hook,
-    /const closeScoreMode = useCallback\(\(\) => \{\s*setScoreEditorDoc\(null\);\s*setScoreMode\(null\);[\s\S]*?closeMenuItem\(\);/,
+    /const closeScoreMode = useCallback\(\(\) => \{\s*setScoreEditorDoc\(null\);\s*setScoreMode\(null\);[\s\S]*?clearMenuItemReturn\(\);[\s\S]*?setActiveModal\("menu"\);/,
   );
   assert.match(hook, /if \(coreMode === "score"\) \{\s*closeScoreMode\(\);/);
 });
@@ -506,7 +510,7 @@ test("source: 모든 실험실 항목은 공통 복귀 경로를 사용한다", 
   assert.match(ui, /<AssistantModal visible=\{showAssistant\} onClose=\{closeMenuItem\}/);
   assert.match(ui, /<DrumKitModal[\s\S]*?onClose=\{closeMenuItem\}/);
   assert.match(ui, /<PolygonModeView[\s\S]*?onClose=\{closeMenuItem\}/);
-  assert.match(ui, /onClose=\{closeScoreMode\}/);
+  assert.match(ui, /onClose=\{closeScoreToLab\}/);
 });
 
 test("source: MenuScreen — 드럼킷 메뉴 라벨과 모달 진입·닫기 흐름이 연결된다", () => {

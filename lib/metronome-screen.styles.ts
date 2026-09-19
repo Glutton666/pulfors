@@ -6,7 +6,9 @@ export const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.crea
   screen: { flex: 1 },
   content: {
     flex: 1,
-    paddingHorizontal: S.isTablet ? 40 : 24,
+    // Phones intentionally use nearly edge-to-edge controls. The old 24px
+    // inset made both the dial and BPM card feel undersized on tall screens.
+    paddingHorizontal: S.isTablet ? 32 : 8,
     maxWidth: S.contentMaxWidth,
     alignSelf: S.isTablet ? "center" as const : undefined,
     width: S.isTablet ? "100%" as any : undefined,
@@ -36,7 +38,7 @@ export const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.crea
   bpmSection: {
     alignItems: "center",
     justifyContent: "flex-end",
-    gap: S.ms(4, 0.3),
+    gap: S.ms(2, 0.3),
   },
   tempoLabel: {
     fontFamily: "SpaceGrotesk_500Medium",

@@ -594,10 +594,12 @@ export function useMetronomeScreen() {
   const closeScoreMode = useCallback(() => {
     setScoreEditorDoc(null);
     setScoreMode(null);
-    // Score is opened from the Lab menu. Its X should close the score surface
-    // and return to that menu, matching the other Lab tools.
-    closeMenuItem();
-  }, [closeMenuItem, setScoreMode]);
+    // Score always belongs to Lab. Do not depend on the transient menu-return
+    // lease here: editor navigation or async mode transitions may invalidate
+    // that lease before the user presses X.
+    clearMenuItemReturn();
+    setActiveModal("menu");
+  }, [clearMenuItemReturn, setScoreMode]);
 
   const closeAllModals = useCallback(() => {
     tuningGuideOnSelectRef.current = null;

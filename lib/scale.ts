@@ -70,14 +70,17 @@ export function useScale(): ScaleValues {
         height * 0.7
       );
     } else {
-      const fixedMiddle = 80;
+      // Portrait is the primary interaction surface. Keep only the space that
+      // is actually needed by hints/controls and let the dial consume almost
+      // the full available width instead of surrounding it with dead space.
+      const fixedMiddle = 56;
       const flexArea = availH - fixedMiddle;
       const dialAreaH = flexArea * 5 / 7;
       dialSize = Math.min(
-        width - 48,
-        ms(300),
+        width - 16,
+        ms(350),
         dialAreaH,
-        height * 0.45
+        height * 0.49
       );
     }
     dialSize = Math.max(dialSize, 120);
