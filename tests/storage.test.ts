@@ -10,6 +10,7 @@ import {
   saveCustomSoundSets,
   loadPracticeBook,
   savePracticeBook,
+  subscribePracticeBook,
   createPracticeEntry,
   loadTutorialState,
   saveTutorialState,
@@ -247,6 +248,41 @@ test("savePracticeBook/loadPracticeBook: 라운드트립", async () => {
   ];
   await savePracticeBook(entries);
   assert.deepEqual(await loadPracticeBook(), entries);
+});
+
+test("savePracticeBook: 저장 성공 뒤 구독자에게 최신 스냅샷 전달", async () => {
+  const received: unknown[] = [];
+  const unsubscribe = subscribePracticeBook((entries) => received.push(entries));
+  const entries = [
+    createPracticeEntry("Live", {
+      bpm: 120,
+      beatsPerMeasure: 4,
+      beatTypes: ["strong", "normal", "normal", "normal"],
+      beatSubdivisions: {},
+      barRepeats: {},
+      subdivisionPattern: ["strong"],
+      barLoopMode: "loop",
+    }),
+  ];
+
+  await savePracticeBook(entries);
+  unsubscribe();
+  entries[0]!.label = "Changed after save";
+  entries[0]!.beatTypes[0] = "mute";
+
+  assert.equal(received.length, 1);
+  assert.equal((received[0] as typeof entries)[0]!.label, "Live");
+  assert.equal((received[0] as typeof entries)[0]!.beatTypes[0], "strong");
+});
+
+test("savePracticeBook: 구독 해제 뒤에는 변경 알림을 보내지 않음", async () => {
+  let notifications = 0;
+  const unsubscribe = subscribePracticeBook(() => { notifications += 1; });
+  unsubscribe();
+
+  await savePracticeBook([]);
+
+  assert.equal(notifications, 0);
 });
 
 test("savePracticeBook/loadPracticeBook: 노트 큐 항목별 사진 URI 라운드트립", async () => {

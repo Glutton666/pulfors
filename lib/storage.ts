@@ -12,6 +12,7 @@ import { TUNING_DATA } from "./tuning-data";
 
 const SETTINGS_KEY = "metronome_settings";
 const PRACTICE_BOOK_KEY = "practice_book";
+const practiceBookListeners = new Set<(entries: PracticeEntry[]) => void>();
 const FADE_OUT_KEY = "metronome_fade_out";
 export const LEGACY_STAGE_SETTINGS_KEY = "stage_settings_v1";
 
@@ -766,10 +767,26 @@ export async function loadPracticeBook(): Promise<PracticeEntry[]> {
 
 export async function savePracticeBook(entries: PracticeEntry[]): Promise<void> {
   try {
-    await AsyncStorage.setItem(PRACTICE_BOOK_KEY, JSON.stringify(entries));
+    const serialized = JSON.stringify(entries);
+    await AsyncStorage.setItem(PRACTICE_BOOK_KEY, serialized);
+    const snapshot = JSON.parse(serialized) as PracticeEntry[];
+    for (const listener of practiceBookListeners) {
+      try {
+        listener(snapshot);
+      } catch (e) {
+        logger.warn("Practice book listener failed:", e);
+      }
+    }
   } catch (e) {
     logger.warn("Failed to save practice book:", e);
   }
+}
+
+export function subscribePracticeBook(
+  listener: (entries: PracticeEntry[]) => void,
+): () => void {
+  practiceBookListeners.add(listener);
+  return () => practiceBookListeners.delete(listener);
 }
 
 export async function runStorageMigrations(): Promise<void> {

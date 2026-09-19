@@ -55,6 +55,10 @@ import { handleStageModeBackPress, type StageModeBackState } from "@/lib/stage-m
 import { withAlpha } from "@/lib/color-contrast";
 import type { AudioLifecycleSnapshot } from "@/lib/audio-lifecycle";
 import { getStageNoteImageUri } from "@/lib/stage-note-image";
+import {
+  loadCurrentStageSetlist,
+  reconcileStageSetlist,
+} from "@/lib/stage-practice-sync";
 
 // ─── 스테이지 설정 타입 ──────────────────────────────────────────────
 const STAGE_SETLIST_KEY  = "stage_setlist_v1";
@@ -87,21 +91,6 @@ function getEntryMode(e: PracticeEntry): string {
 // 슬롯은 중복 추가를 위해 원본 ID 뒤에 "__slot__..."를 붙인다. 무대
 // 셋리스트에는 당시의 PracticeEntry 스냅샷도 저장되므로, 연습장에 사진을
 // 추가하거나 바꾼 뒤 다시 진입할 때는 최신 원본을 슬롯 ID에 맞춰 반영한다.
-function getOriginalEntryId(id: string) {
-  return id.includes("__slot__") ? id.split("__slot__")[0]! : id;
-}
-
-function refreshSetlistFromPracticeBook(
-  saved: PracticeEntry[],
-  practiceBook: PracticeEntry[],
-): PracticeEntry[] {
-  if (practiceBook.length === 0) return saved;
-  return saved.flatMap((slot) => {
-    const latest = practiceBook.find((entry) => entry.id === getOriginalEntryId(slot.id));
-    return latest ? [{ ...latest, id: slot.id }] : [];
-  });
-}
-
 // ─── 빈 셋리스트 전용 비트 편집기 ─────────────────────────────────────
 const BEAT_TYPE_ORDER: BeatType[] = ["strong", "accent", "normal", "mute"];
 
@@ -288,6 +277,7 @@ export interface StageModeOverlayProps {
   onBeatTypesChange?:  (types: BeatType[]) => void;
   /** 연습장 전체 목록 (셋 리스트 추가 피커에서 사용) */
   practiceBook?: PracticeEntry[];
+  practiceBookReady?: boolean;
   /** 현재 활성(하이라이트) 셋 리스트 항목 ID */
   activeEntryId?: string;
   /** 노트 셋리스트 항목에서 현재 재생 중인 큐 자식 인덱스 */
@@ -341,6 +331,7 @@ export function StageModeOverlay({
   onHapticModeChange,
   onBeatTypesChange,
   practiceBook = [],
+  practiceBookReady = false,
   activeEntryId,
   noteCurrentIndex = -1,
   onSelectEntry,
@@ -378,6 +369,8 @@ export function StageModeOverlay({
 
   const practiceBookRef = useRef<PracticeEntry[]>([]);
   useEffect(() => { practiceBookRef.current = practiceBook; }, [practiceBook]);
+  const practiceBookReadyRef = useRef(practiceBookReady);
+  useEffect(() => { practiceBookReadyRef.current = practiceBookReady; }, [practiceBookReady]);
   const setlistRef = useRef<PracticeEntry[]>([]);
   useEffect(() => { setlistRef.current = setlist; }, [setlist]);
   const onSelectEntryRef = useRef(onSelectEntry);
@@ -414,12 +407,12 @@ export function StageModeOverlay({
   }, [activeEntryId]);
 
   // ── practiceBook 변경 시 셋리스트 재검증 ────────────────────────
-  // book이 비어 있으면 아직 로딩 중이므로 건너뜀 (visible 효과에서 이미 defer 처리)
   useEffect(() => {
-    if (!visible || practiceBook.length === 0) return;
+    if (!visible || !practiceBookReady) return;
     const current = setlistRef.current;
     if (current.length === 0) return;
-    const refreshed = refreshSetlistFromPracticeBook(current, practiceBook);
+    const protectedSlotId = isPlaying ? activeEntryId : undefined;
+    const refreshed = reconcileStageSetlist(current, practiceBook, protectedSlotId);
     if (
       refreshed.length !== current.length ||
       refreshed.some((entry, index) => JSON.stringify(entry) !== JSON.stringify(current[index]))
@@ -427,23 +420,23 @@ export function StageModeOverlay({
       setSetlist(refreshed);
       saveStageSetlist(refreshed).catch(() => {});
     }
-  }, [practiceBook, visible]);
+  }, [practiceBook, practiceBookReady, visible, isPlaying, activeEntryId]);
 
   // ── 마운트 시 로드 ────────────────────────────────────────────────
   useEffect(() => {
     if (!visible) return;
-    loadStageSetlist().then((saved) => {
-      // 방어: practiceBook에 없는 ID 항목 제거
-      // book이 비어 있으면 아직 비동기 로딩 중이므로 필터링/저장 건너뜀 (데이터 유실 방지)
-      // 나중에 practiceBook이 로드되면 아래 revalidation 효과가 자동으로 정리
-      const book = practiceBookRef.current;
-      const list = refreshSetlistFromPracticeBook(saved, book);
+    let cancelled = false;
+    loadCurrentStageSetlist(loadStageSetlist, () => ({
+      practiceBook: practiceBookRef.current,
+      practiceBookReady: practiceBookReadyRef.current,
+      protectedSlotId: isPlayingRef.current ? activeEntryRef.current?.id : undefined,
+    })).then((list) => {
+      if (cancelled) return;
+      // 방어: 연습장 로드가 셋리스트보다 먼저 끝나도 완료 시점의 최신
+      // practiceBook/ref를 사용해 수정·삭제 항목을 즉시 반영한다.
       if (
-        book.length > 0 &&
-        (
-          list.length !== saved.length ||
-          list.some((entry, index) => JSON.stringify(entry) !== JSON.stringify(saved[index]))
-        )
+        practiceBookReadyRef.current &&
+        JSON.stringify(list) !== JSON.stringify(setlistRef.current)
       ) {
         saveStageSetlist(list).catch(() => {});
       }
@@ -457,6 +450,7 @@ export function StageModeOverlay({
     setConfirmExit(false);
     setPickerOpen(false);
     setContextEntryId(null);
+    return () => { cancelled = true; };
   }, [visible]);
 
   // ── BT 키보드 캡처 입력창 포커스 — 소프트 키보드 없이 ────────────

@@ -234,6 +234,20 @@ describe("경로 A: 상단 '무대 모드' 텍스트가 onOpenDial에 연결됨"
     );
   });
 
+  test("무대 모드 전환 함수가 연습장 초기 로드를 중복 시작하지 않음", () => {
+    const src = fs.readFileSync("hooks/useMetronomeScreen.ts", "utf8");
+    const switchStart = src.indexOf("const switchToMode = useCallback");
+    const switchEnd = src.indexOf("const MODE_CYCLE", switchStart);
+    assert.ok(switchStart >= 0 && switchEnd > switchStart);
+    const switchSource = src.slice(switchStart, switchEnd);
+
+    assert.doesNotMatch(
+      switchSource,
+      /if \(mode === "stage"\) \{[\s\S]{0,500}?loadPracticeBook\(/,
+      "switchToMode must not start a second practice-book load",
+    );
+  });
+
   test("ModeSwitcherDial이 tutorialSwitchToMode를 통해 switchToMode로 연결됨", () => {
     const src = fs.readFileSync("components/MetronomeScreenUI.tsx", "utf8");
     assert.ok(

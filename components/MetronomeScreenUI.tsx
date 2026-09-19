@@ -167,7 +167,7 @@ export function MetronomeScreenUI(props: Props) {
     handleLinkedEntryChange,
     handleLoadPracticeEntry, handleSetPracticeNoteGoal,
     stageModeActive, enterStageMode, exitStageMode,
-    stagePracticeEntries, setStagePracticeEntries,
+    stagePracticeEntries, stagePracticeEntriesReady, setStagePracticeEntries,
     activeStagePracticeEntryId, setActiveStagePracticeEntryId,
     fadeOutPhase, fadeOutStatusText,
     fadeOutSessionRef, fadeOutMutedRef, fadeOutMeasureCountRef,
@@ -1717,6 +1717,7 @@ export function MetronomeScreenUI(props: Props) {
           />
         )}
         practiceBook={stagePracticeEntries}
+        practiceBookReady={stagePracticeEntriesReady}
         activeEntryId={activeStagePracticeEntryId}
         noteCurrentIndex={noteCurrentIndex}
         onOpenScheduledStart={() => openExclusive("scheduledStart")}

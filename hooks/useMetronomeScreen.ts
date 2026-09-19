@@ -66,7 +66,7 @@ import {
   type BarRandomConfig,
   type BarRandomSession,
 } from "@/lib/bar-random-session";
-import { loadSettings, saveSettings, loadCustomSoundSets, saveCustomSoundSets, loadPracticeBook, savePracticeBook, createPracticeEntry, runStorageMigrations, clearAllAppStorage, loadTutorialState, saveTutorialState, resetTutorialState, TUTORIAL_CONTENT_VERSION, DEFAULT_TUTORIAL_STATE, type MetronomeSettings, type TutorialAction, type TutorialMode, type TutorialState } from "@/lib/storage";
+import { loadSettings, saveSettings, loadCustomSoundSets, saveCustomSoundSets, loadPracticeBook, savePracticeBook, subscribePracticeBook, createPracticeEntry, runStorageMigrations, clearAllAppStorage, loadTutorialState, saveTutorialState, resetTutorialState, TUTORIAL_CONTENT_VERSION, DEFAULT_TUTORIAL_STATE, type MetronomeSettings, type TutorialAction, type TutorialMode, type TutorialState } from "@/lib/storage";
 import { MODE_TUTORIALS_ENABLED } from "@/lib/tutorial-config";
 import { NEUTRAL, type TonePosition } from "@/lib/metronome-tone-dsp";
 import type { FlashMode, HapticMode, SoundSet, BuiltinSoundSet, CustomSoundSetConfig, CustomSoundSample, FadeOutSettings, PracticeEntry, MetronomeMode } from "@/lib/storage";
@@ -117,6 +117,7 @@ import { useGoalPopups } from "@/hooks/useGoalPopups";
 import { usePracticeRoomTracking } from "@/hooks/usePracticeRoomTracking";
 import { loadLabUnlocked } from "@/lib/practice-room";
 import { useStageMode } from "@/hooks/useStageMode";
+import { pruneStageKeyMappings } from "@/lib/stage-practice-sync";
 import { useBeatTypeControls } from "@/hooks/useBeatTypeControls";
 import { applySwitchToMode, type ModeSwitchState, type ModeSwitchCallbacks } from "@/lib/stage-mode-logic";
 import { findBeatStaffCellTarget, type BeatStaffCellRects } from "@/lib/beat-staff-logic";
@@ -2618,18 +2619,48 @@ export function useMetronomeScreen() {
   }, [coreMode, stageModeActive, showPolygon]);
   /** 무대 모드 셋 리스트 — 진입 시 연습장에서 로드 */
   const [stagePracticeEntries, setStagePracticeEntries] = useState<PracticeEntry[]>([]);
+  const [stagePracticeEntriesReady, setStagePracticeEntriesReady] = useState(false);
+  const stagePracticeEventVersionRef = useRef(0);
   useEffect(() => {
     if (!stageModeActive) return;
     let active = true;
+    const loadVersion = stagePracticeEventVersionRef.current;
     loadPracticeBook()
       .then((entries) => {
-        if (active) setStagePracticeEntries(entries);
+        if (active && stagePracticeEventVersionRef.current === loadVersion) {
+          setStagePracticeEntries(entries);
+          setStagePracticeEntriesReady(true);
+        }
       })
       .catch(() => {});
     return () => {
       active = false;
     };
   }, [stageModeActive]);
+  useEffect(() => {
+    if (!stageModeActive) setStagePracticeEntriesReady(false);
+  }, [stageModeActive]);
+  useEffect(() => {
+    if (!stageModeActive) return;
+    return subscribePracticeBook((entries) => {
+      stagePracticeEventVersionRef.current += 1;
+      setStagePracticeEntries(entries);
+      setStagePracticeEntriesReady(true);
+    });
+  }, [stageModeActive]);
+  useEffect(() => {
+    if (!stageModeActive || !stagePracticeEntriesReady) return;
+    const keyMappings = pruneStageKeyMappings(stageSettings.keyMappings, stagePracticeEntries);
+    if (Object.keys(keyMappings).length !== Object.keys(stageSettings.keyMappings).length) {
+      updateStageSettings({ keyMappings });
+    }
+  }, [
+    stageModeActive,
+    stagePracticeEntries,
+    stagePracticeEntriesReady,
+    stageSettings.keyMappings,
+    updateStageSettings,
+  ]);
   /** 셋 리스트에서 현재 선택/적용된 항목 ID */
   const [activeStagePracticeEntryId, setActiveStagePracticeEntryId] = useState<string | undefined>(undefined);
 
@@ -4056,15 +4087,11 @@ export function useMetronomeScreen() {
       modeTransitionCoordinatorRef.current.finish(transitionGeneration);
       return;
     }
-    // Load practice entries after entering stage mode (side-effect kept in hook)
+    // Stage practice entries are loaded by the stageModeActive effect above.
+    // Starting another load here can resolve after a live save event and
+    // overwrite the subscription's newer snapshot.
     if (mode === "stage") {
-      loadPracticeBook().then((entries) => {
-        if (modeTransitionCoordinatorRef.current.isCurrent(transitionGeneration)) {
-          setStagePracticeEntries(entries);
-        }
-      }).catch(() => {}).finally(() => {
-        modeTransitionCoordinatorRef.current.finish(transitionGeneration);
-      });
+      modeTransitionCoordinatorRef.current.finish(transitionGeneration);
       return;
     }
     const tutorialTarget = mode === "beat" || mode === "bar" || mode === "note" || mode === "practice"
@@ -4776,6 +4803,7 @@ export function useMetronomeScreen() {
     enterStageMode: enterStageModeForPlayback,
     exitStageMode: exitStageModeForPlayback,
     stagePracticeEntries,
+    stagePracticeEntriesReady,
     setStagePracticeEntries,
     activeStagePracticeEntryId,
     setActiveStagePracticeEntryId,
