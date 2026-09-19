@@ -59,6 +59,11 @@ const mockPrepareDrum = scoreAudio.prepareDrumAudio as jest.MockedFunction<
 
 // ── Subject under test ───────────────────────────────────────────────────────
 import { useScorePlayback } from "../hooks/useScorePlayback";
+import {
+  _resetAudioSessionForTests,
+  notifyInterruptionBegin,
+  notifyInterruptionEnd,
+} from "../lib/audio-session";
 
 // ── ScoreDocument fixture ────────────────────────────────────────────────────
 // Minimal valid document with one measure containing quarter-note C4 (MIDI 60).
@@ -122,6 +127,7 @@ const flushMicrotasks = async () => {
 let rafSpy: jest.SpyInstance;
 
 beforeEach(() => {
+  _resetAudioSessionForTests();
   mockPrepare.mockClear();
   mockPrepare.mockReset();
   mockPrepare.mockResolvedValue(undefined);
@@ -143,6 +149,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  _resetAudioSessionForTests();
   rafSpy.mockRestore();
   (Platform as unknown as { OS: string }).OS = "ios";
 });
@@ -892,5 +899,47 @@ describe("useScorePlayback — pause/resume (H15)", () => {
     expect(mockPrepare).toHaveBeenCalledTimes(1);
     // RAF fired a second time (resume)
     expect(rafSpy).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("useScorePlayback — OS interruption recovery", () => {
+  it("does not resurrect Score after explicit stop during an interruption", async () => {
+    const { result } = renderHook(() => useScorePlayback(DOC_WITH_NOTES));
+    await act(async () => {
+      result.current.play();
+      await flushMicrotasks();
+    });
+    expect(result.current.isPlaying).toBe(true);
+    expect(mockPrepare).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      notifyInterruptionBegin();
+      result.current.stop();
+      notifyInterruptionEnd();
+    });
+
+    expect(result.current.isPlaying).toBe(false);
+    expect(result.current.isPreparing).toBe(false);
+    expect(mockPrepare).toHaveBeenCalledTimes(1);
+  });
+
+  it("restarts pending preparation across a synchronous interruption begin/end", () => {
+    mockPrepare.mockImplementation(() => new Promise<void>(() => {}));
+    const { result } = renderHook(() => useScorePlayback(DOC_WITH_NOTES));
+
+    act(() => { result.current.play(); });
+    expect(result.current.isPreparing).toBe(true);
+    expect(mockPrepare).toHaveBeenCalledTimes(1);
+
+    // Keep begin/end in one React act so recovery cannot depend on a rerender
+    // committing setIsPreparing(false) between the two callbacks.
+    act(() => {
+      notifyInterruptionBegin();
+      notifyInterruptionEnd();
+    });
+
+    expect(result.current.isPreparing).toBe(true);
+    expect(result.current.isPlaying).toBe(false);
+    expect(mockPrepare).toHaveBeenCalledTimes(2);
   });
 });

@@ -48,6 +48,14 @@ jest.mock("expo-audio", () => ({
   createAudioPlayer: (source: unknown) => mockCreateAudioPlayer(source),
 }));
 
+jest.mock("@/lib/background-playback-lease", () => ({
+  beginBackgroundPlaybackLease: () => ({
+    token: Symbol("test-background-playback"),
+    ready: Promise.resolve(true),
+  }),
+  endBackgroundPlaybackLease: jest.fn(),
+}));
+
 jest.mock("@/lib/audio-renderer", () => ({
   decodeSampleFile: (uri: string) => mockDecodeSampleFile(uri),
   loadAssetPCM: jest.fn(async () => new Float32Array([0.5])),

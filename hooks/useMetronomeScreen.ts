@@ -2538,6 +2538,8 @@ export function useMetronomeScreen() {
 
   stopIfPlayingRef.current = stopMetronome;
   fatalRenderFailureRef.current = stopMetronome;
+  const stopMetronomeRef = useRef(stopMetronome);
+  stopMetronomeRef.current = stopMetronome;
   const completePracticeSessionRef = useRef(completePracticeSession);
   useEffect(() => { completePracticeSessionRef.current = completePracticeSession; }, [completePracticeSession]);
 
@@ -3017,12 +3019,7 @@ export function useMetronomeScreen() {
           setFadeOutPhase(null);
           setFadeOutMeasureInPhase(0);
           setTimeout(() => {
-            stopPlaybackAudio();
-            setIsPreparing(false);
-            setIsPlaying(false);
-            resetPlaybackVisuals();
-             markAudioStopped();
-             completePracticeSessionRef.current("fade_out");
+            stopMetronomeRef.current("fade_out");
             const playback = getPlaybackContext();
             showPausedNotification(playback.bpm, playback.modeLabel, languageRef.current);
           }, 0);
@@ -3145,13 +3142,7 @@ export function useMetronomeScreen() {
           }, 0);
           return;
         }
-        stopPlaybackAudio();
-        setIsPreparing(false);
-        setIsPlaying(false);
-        resetPlaybackVisuals();
-        finishRandomBarPlay();
-         markAudioStopped();
-         completePracticeSessionRef.current("measure_complete");
+        stopMetronomeRef.current("measure_complete");
         const playback = getPlaybackContext();
         showPausedNotification(playback.bpm, playback.modeLabel, languageRef.current);
       }
@@ -3165,18 +3156,13 @@ export function useMetronomeScreen() {
     const engine = engineRef.current;
     if (!engine) return;
     if (timerStopModeRef.current === "immediate") {
-      stopPlaybackAudio();
-      setIsPreparing(false);
-      setIsPlaying(false);
-      resetPlaybackVisuals();
-      markAudioStopped();
-      completePracticeSession("timer");
+      stopMetronomeRef.current("timer");
       const playback = getPlaybackContext();
       showPausedNotification(playback.bpm, playback.modeLabel, languageRef.current);
     } else {
       engine.requestStopAfterMeasure();
     }
-  }, [completePracticeSession]);
+  }, []);
 
   // updateTimerStopMode / updateUsername → useSettings 소유
 

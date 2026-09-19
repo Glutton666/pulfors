@@ -5,8 +5,6 @@ import { logger } from "./logger";
 import {
   holdForegroundForPausedNotification,
   releasePausedNotificationHold,
-  requestForegroundPlayback,
-  relinquishForegroundPlayback,
 } from "./android-foreground-service";
 import {
   arePlaybackNotificationsEnabled,
@@ -164,11 +162,9 @@ export async function showPlayingNotification(
     if (!isSetup) return;
   }
 
-  // Android: AudioControlsService(foreground service)가 백그라운드에서
-  // 오디오를 유지하도록 AudioModule을 설정합니다.
-  // 알림 표시와 병렬로 실행해 지연을 최소화합니다.
+  // Detailed notification state is optional. The actual playback lifecycle
+  // owns the mandatory foreground MediaSession notification independently.
   releasePausedNotificationHold();
-  void requestForegroundPlayback();
 
   const N = await getNotifications();
   if (!N) return;
@@ -250,7 +246,6 @@ export async function showPausedNotification(
       getPlaybackNotificationsRevision() !== preferenceRevision
     ) {
       releasePausedNotificationHold();
-      relinquishForegroundPlayback();
       return;
     }
 
@@ -261,7 +256,6 @@ export async function showPausedNotification(
     });
   } catch (e) {
     releasePausedNotificationHold();
-    relinquishForegroundPlayback();
     logger.warn("Show paused notification error:", e);
   }
 }
@@ -270,7 +264,6 @@ export async function dismissNotification() {
   if (Platform.OS === "web") return;
   if (isExpoGo) return;
   releasePausedNotificationHold();
-  relinquishForegroundPlayback();
 
   const N = await getNotifications();
   if (!N) return;

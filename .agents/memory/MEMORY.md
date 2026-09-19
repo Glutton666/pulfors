@@ -72,3 +72,5 @@
 - [Restartable producer callbacks](restartable-producer-callbacks.md) — boolean gates do not reject callbacks from an older lifetime after restart; each installed producer needs an immutable generation.
 - [Shared PCM cancellation](shared-pcm-cancellation.md) — caller abort detaches one waiter; cancel shared decode only after the last waiter leaves, and never publish invalidated completions.
 - [Audio output ownership scope](audio-output-ownership-scope.md) — metronome and Polygon share one owner; score playback remains a separate session architecture until explicitly migrated.
+- [Expo Audio foreground MediaSession controls](expo-audio-foreground-mediasession-controls.md) — setActiveForLockScreen starts Android’s media service but also exposes play/pause; bridge those events to the real transport.
+- [Supplemental interruption ownership](supplemental-interruption-ownership.md) — Score-only recovery must not resume the global metronome; explicit stop cancels deferred supplemental resume.

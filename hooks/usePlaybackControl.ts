@@ -51,6 +51,11 @@ import {
   markAudioRecovering,
   markAudioStopped,
 } from "@/lib/audio-lifecycle";
+import {
+  beginBackgroundPlaybackLease,
+  endBackgroundPlaybackLease,
+  type BackgroundPlaybackLease,
+} from "@/lib/background-playback-lease";
 
 type Ref<T> = { current: T };
 
@@ -150,6 +155,15 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
   const seamlessRef = p.seamlessNextEntryRef ?? seamlessNextEntryRef;
   const startAttemptRef = useRef(0);
   const scheduledStartTokenRef = useRef<symbol | null>(null);
+  const backgroundLeaseRef = useRef<BackgroundPlaybackLease | null>(null);
+  const togglePlayPauseRef = useRef<() => Promise<boolean | undefined>>(
+    async () => undefined,
+  );
+
+  const releaseBackgroundLease = useCallback(() => {
+    endBackgroundPlaybackLease(backgroundLeaseRef.current);
+    backgroundLeaseRef.current = null;
+  }, []);
 
   useEffect(() => () => {
     // A focus/buffer/scheduled-start await may resolve after the owning screen
@@ -159,7 +173,8 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
     startAttemptRef.current += 1;
     p.preparingCancelledRef.current = true;
     p.invalidateAudioStartupProbe();
-  }, [p.invalidateAudioStartupProbe, p.preparingCancelledRef]);
+    releaseBackgroundLease();
+  }, [p.invalidateAudioStartupProbe, p.preparingCancelledRef, releaseBackgroundLease]);
 
   const startOrResumePracticeSession = useCallback(() => {
     if (!p.loggingEnabled) return;
@@ -351,7 +366,8 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
     markAudioStopped();
     completePracticeSession(endReason);
     p.onPlaybackStopped?.();
-  }, [completePracticeSession, p]);
+    releaseBackgroundLease();
+  }, [completePracticeSession, p, releaseBackgroundLease]);
 
   const cancelPlaybackAttempt = useCallback((
     notifyFailure = false,
@@ -370,7 +386,8 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
     if (!preserveLifecycle) markAudioStopped();
     if (notifyFailure) p.showPlaybackStartFailure();
     p.onPlaybackStopped?.();
-  }, [p]);
+    releaseBackgroundLease();
+  }, [p, releaseBackgroundLease]);
 
   const startPreparedPlayback = useCallback(async (
     engine: MetronomeEngine,
@@ -482,6 +499,21 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
     }
 
     try {
+      releaseBackgroundLease();
+      const backgroundLease = beginBackgroundPlaybackLease({
+        isPlaying: () => p.isPlayingRef.current || p.isPreparingRef.current,
+        pause: () => togglePlayPauseRef.current(),
+        resume: () => togglePlayPauseRef.current(),
+      });
+      backgroundLeaseRef.current = backgroundLease.token;
+      // Audio startup must not wait on the keepalive helper. The baseline
+      // audio mode is already applied from settings; this lease strengthens
+      // process priority in parallel without delaying the first audible beat.
+      void backgroundLease.ready;
+      if (cancelled()) {
+        releaseBackgroundLease();
+        return false;
+      }
       if (Platform.OS === "android" && androidProbeReady) {
         await awaitWithin(androidProbeReady, "Android audio focus");
       }
@@ -667,18 +699,22 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
       p.resetPlaybackVisuals();
       const interrupted = ["interrupted", "recovering"].includes(getAudioLifecycleSnapshot().phase);
       if (!interrupted) markAudioStopped();
-      p.showPausedNotification(playback.bpm, playback.modeLabel, p.languageRef.current);
+      // An OS interruption owns the pause. Do not create the separate
+      // paused-notification silent player while the OS is withholding audio.
+      if (!interrupted) {
+        p.showPausedNotification(playback.bpm, playback.modeLabel, p.languageRef.current);
+      }
       pausePracticeSession(interrupted);
       p.onPlaybackStopped?.();
+      releaseBackgroundLease();
       return;
     }
 
     const androidProbeReady = p.notifyUserToggle();
     const startBeat = p.barModeRef.current ? p.barStartBeatRef.current : undefined;
     return startPreparedPlayback(engine, startBeat ?? undefined, androidProbeReady);
-  }, [cancelPlaybackAttempt, p, pausePracticeSession, seamlessRef, startPreparedPlayback]);
+  }, [cancelPlaybackAttempt, p, pausePracticeSession, releaseBackgroundLease, seamlessRef, startPreparedPlayback]);
 
-  const togglePlayPauseRef = useRef(togglePlayPause);
   useEffect(() => { togglePlayPauseRef.current = togglePlayPause; }, [togglePlayPause]);
 
   const startMetronome = useCallback(async () => {
@@ -722,6 +758,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
       p.showPausedNotification(playback.bpm, playback.modeLabel, p.languageRef.current);
       pausePracticeSession(false);
       p.onPlaybackStopped?.();
+      releaseBackgroundLease();
     } else if (p.isPreparingRef.current) {
       cancelPlaybackAttempt(false);
     }
@@ -741,7 +778,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
         scheduledStartTokenRef.current = null;
       }
     }
-  }, [cancelPlaybackAttempt, p, pausePracticeSession, startPreparedPlayback]);
+  }, [cancelPlaybackAttempt, p, pausePracticeSession, releaseBackgroundLease, startPreparedPlayback]);
 
   const cancelScheduledMetronome = useCallback(() => {
     if (!scheduledStartTokenRef.current) return;

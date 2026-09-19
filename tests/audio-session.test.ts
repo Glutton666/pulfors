@@ -4,6 +4,7 @@ import {
   acquireAudioSession,
   releaseAudioSession,
   registerMetronomeBridge,
+  registerSupplementalPlaybackInterruptionHandler,
   withAudioSession,
   notifyUserMetronomeToggle,
   notifyInterruptionBegin,
@@ -241,6 +242,73 @@ test("interruption begin pauses metronome and end resumes it", async () => {
   assert.equal(state.running, true);
   await Promise.resolve();
   assert.deepEqual(getAudioLifecycleSnapshot(), { phase: "playing", reason: null });
+});
+
+test("interruption pauses and resumes supplemental score playback", () => {
+  _resetAudioSessionForTests();
+  let running = true;
+  let pauses = 0;
+  let finishes: boolean[] = [];
+  registerSupplementalPlaybackInterruptionHandler({
+    isRunning: () => running,
+    pauseForInterruption: () => {
+      pauses += 1;
+      running = false;
+    },
+    finishInterruption: (shouldResume) => {
+      finishes.push(shouldResume);
+      running = shouldResume;
+    },
+  });
+
+  notifyInterruptionBegin();
+  assert.equal(pauses, 1);
+  assert.equal(running, false);
+  assert.deepEqual(getAudioLifecycleSnapshot(), { phase: "interrupted", reason: "interruption" });
+  notifyInterruptionEnd();
+  assert.deepEqual(finishes, [true]);
+  assert.equal(running, true);
+  assert.deepEqual(getAudioLifecycleSnapshot(), { phase: "playing", reason: null });
+});
+
+test("score-only interruption does not start an idle metronome bridge", () => {
+  _resetAudioSessionForTests();
+  const { state, bridge } = makeBridge(false);
+  registerMetronomeBridge(bridge);
+  let scoreRunning = true;
+  registerSupplementalPlaybackInterruptionHandler({
+    isRunning: () => scoreRunning,
+    pauseForInterruption: () => { scoreRunning = false; },
+    finishInterruption: (shouldResume) => { scoreRunning = shouldResume; },
+  });
+
+  notifyInterruptionBegin();
+  notifyInterruptionEnd();
+
+  assert.equal(scoreRunning, true);
+  assert.equal(state.resumeCount, 0, "Score recovery must not start the idle metronome");
+  assert.equal(state.running, false);
+});
+
+test("disabled interruption auto-resume leaves supplemental playback paused", () => {
+  _resetAudioSessionForTests();
+  let running = true;
+  const finishes: boolean[] = [];
+  registerSupplementalPlaybackInterruptionHandler({
+    isRunning: () => running,
+    pauseForInterruption: () => { running = false; },
+    finishInterruption: (shouldResume) => {
+      finishes.push(shouldResume);
+      running = shouldResume;
+    },
+  });
+  setAutoResumeAfterInterruption(false);
+
+  notifyInterruptionBegin();
+  notifyInterruptionEnd();
+  assert.deepEqual(finishes, [false]);
+  assert.equal(running, false);
+  assert.deepEqual(getAudioLifecycleSnapshot(), { phase: "idle", reason: null });
 });
 
 test("interruption begin is idempotent", async () => {

@@ -31,7 +31,10 @@ import type { AudioPlayer } from "expo-audio";
  * 중복 호출 시 setAudioModeAsync 재실행을 방지합니다.
  */
 let isForegroundActive = false;
+const foregroundOwners = new Set<string>();
+let activationPromise: Promise<void> | null = null;
 let pausedNotificationPlayer: AudioPlayer | null = null;
+const PAUSED_NOTIFICATION_OWNER = "paused-notification";
 
 /**
  * 정지 알림의 재생 액션을 앱 화면 없이 받을 수 있도록 무음 AudioPlayer로
@@ -40,7 +43,7 @@ let pausedNotificationPlayer: AudioPlayer | null = null;
  */
 export async function holdForegroundForPausedNotification(): Promise<void> {
   if (Platform.OS !== "android" || pausedNotificationPlayer) return;
-  await requestForegroundPlayback();
+  await requestForegroundPlayback(PAUSED_NOTIFICATION_OWNER);
   let player: AudioPlayer | null = null;
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -58,7 +61,7 @@ export async function holdForegroundForPausedNotification(): Promise<void> {
   } catch (e) {
     try { player?.pause(); } catch {}
     try { player?.release(); } catch {}
-    relinquishForegroundPlayback();
+    relinquishForegroundPlayback(PAUSED_NOTIFICATION_OWNER);
     logger.warn("[foreground-service] paused notification hold failed:", e);
   }
 }
@@ -69,6 +72,7 @@ export function releasePausedNotificationHold(): void {
   if (!player) return;
   try { player.pause(); } catch {}
   try { player.release(); } catch {}
+  relinquishForegroundPlayback(PAUSED_NOTIFICATION_OWNER);
   logger.info("[foreground-service] paused notification hold released");
 }
 
@@ -77,11 +81,14 @@ export function releasePausedNotificationHold(): void {
  * Android에서 expo-audio의 AudioControlsService(foreground service)가
  * 백그라운드에서도 오디오를 유지하도록 AudioModule을 설정합니다.
  */
-export async function requestForegroundPlayback(): Promise<void> {
+export async function requestForegroundPlayback(owner = "legacy"): Promise<void> {
   if (Platform.OS !== "android") return;
+  foregroundOwners.add(owner);
   if (isForegroundActive) return;
+  if (activationPromise) return activationPromise;
 
-  try {
+  activationPromise = (async () => {
+   try {
     // shouldPlayInBackground: true → AudioModule.kt의 staysActiveInBackground 플래그를 설정.
     // OnActivityEntersBackground 콜백에서 AudioPlayer를 정지하지 않게 되어,
     // AudioControlsService가 MediaSessionService로서 startForeground()를 유지합니다.
@@ -107,8 +114,13 @@ export async function requestForegroundPlayback(): Promise<void> {
     isForegroundActive = true;
     logger.info("[foreground-service] Android foreground audio activated");
   } catch (e) {
+    foregroundOwners.delete(owner);
     logger.warn("[foreground-service] requestForegroundPlayback failed:", e);
+  } finally {
+    activationPromise = null;
   }
+  })();
+  return activationPromise;
 }
 
 /**
@@ -117,8 +129,10 @@ export async function requestForegroundPlayback(): Promise<void> {
  * 해제하므로 JS 레벨에서 추가 작업이 필요하지 않습니다.
  * 상태를 초기화해 다음 재생 시 재설정이 가능하도록 합니다.
  */
-export function relinquishForegroundPlayback(): void {
+export function relinquishForegroundPlayback(owner = "legacy"): void {
   if (Platform.OS !== "android") return;
+  foregroundOwners.delete(owner);
+  if (foregroundOwners.size > 0) return;
   if (!isForegroundActive) return;
 
   // AudioPlayer가 정지되면 AudioControlsService.clearSession()이 자동으로 호출되어
@@ -126,4 +140,12 @@ export function relinquishForegroundPlayback(): void {
   // JS 레벨에서는 상태만 초기화합니다.
   isForegroundActive = false;
   logger.info("[foreground-service] Android foreground audio released");
+}
+
+export function _foregroundPlaybackDebugState() {
+  return {
+    isForegroundActive,
+    owners: [...foregroundOwners],
+    activationPending: activationPromise !== null,
+  };
 }

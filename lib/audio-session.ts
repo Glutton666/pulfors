@@ -41,6 +41,12 @@ export interface AndroidFocusProbeController {
   stop: () => void;
 }
 
+export interface SupplementalPlaybackInterruptionHandler {
+  isRunning: () => boolean;
+  pauseForInterruption: () => void;
+  finishInterruption: (shouldResume: boolean) => void;
+}
+
 const activeCallers: Map<string, SessionMode> = new Map();
 let bridge: MetronomeBridge | null = null;
 let pausedByUs = false;
@@ -55,6 +61,10 @@ let suppressUserToggle = 0;
 // 우리가 일시정지했는지 추적. 모달 caller 경로(`pausedByUs`)와 독립적으로
 // 동작하므로, 인터럽션과 모달이 겹쳐도 양쪽이 모두 종료된 뒤에만 자동 재개한다.
 let pausedByInterruption = false;
+// The globally registered bridge can be idle while supplemental Score playback
+// is active. Track bridge ownership separately so a Score-only interruption
+// never starts the main metronome.
+let metronomeWasInterrupted = false;
 // 인터럽션 도중 사용자가 직접 메트로놈을 토글했는지. 인터럽션이 끝났을 때
 // 사용자의 의도를 존중해 자동 재개를 건너뛰는 데 사용한다.
 let userToggledDuringInterruption = false;
@@ -64,6 +74,9 @@ let userToggledDuringInterruption = false;
 // stopAndroidFocusProbe 를 registerAndroidFocusProbeController 로 주입한다.
 // 메트로놈이 실제로 재생될 때만 프로브를 실행해 오디오 포커스를 점유한다.
 let androidProbe: AndroidFocusProbeController | null = null;
+const supplementalPlaybackHandlers = new Set<SupplementalPlaybackInterruptionHandler>();
+let supplementalPlaybackWasInterrupted = false;
+let deferredSupplementalInterruptionEnd = false;
 let backgroundPlayEnabled = true;
 
 // 인터럽션(전화/Siri/알람 등)이 끝났을 때 메트로놈을 자동으로 재개할지 여부.
@@ -109,6 +122,32 @@ export function registerMetronomeBridge(b: MetronomeBridge | null) {
   bridge = b;
 }
 
+export function registerSupplementalPlaybackInterruptionHandler(
+  handler: SupplementalPlaybackInterruptionHandler,
+): () => void {
+  supplementalPlaybackHandlers.add(handler);
+  return () => supplementalPlaybackHandlers.delete(handler);
+}
+
+function pauseSupplementalPlayback(): boolean {
+  let pausedAny = false;
+  for (const handler of supplementalPlaybackHandlers) {
+    if (!handler.isRunning()) continue;
+    handler.pauseForInterruption();
+    pausedAny = true;
+  }
+  supplementalPlaybackWasInterrupted = pausedAny;
+  return pausedAny;
+}
+
+function finishSupplementalInterruption(shouldResume: boolean): void {
+  if (!supplementalPlaybackWasInterrupted) return;
+  supplementalPlaybackWasInterrupted = false;
+  for (const handler of supplementalPlaybackHandlers) {
+    handler.finishInterruption(shouldResume);
+  }
+}
+
 function needsRecordingCategory(): boolean {
   for (const m of activeCallers.values()) {
     if (m === "recording" || m === "mic") return true;
@@ -135,6 +174,15 @@ export function setAudioSessionBackgroundPlay(enabled: boolean): void {
   }
 }
 
+export function isBackgroundPlaybackEnabled(): boolean {
+  return backgroundPlayEnabled;
+}
+
+export async function ensureBackgroundPlaybackAudioMode(): Promise<void> {
+  if (!backgroundPlayEnabled) return;
+  await applyMode(false, true);
+}
+
 export async function acquireAudioSession(callerId: string, mode: SessionMode): Promise<void> {
   // 새 세션이 시작될 때 (이전에 활성 caller가 없었다면) 사용자 토글 추적 리셋.
   if (activeCallers.size === 0) userToggledDuringSession = false;
@@ -152,8 +200,11 @@ export async function releaseAudioSession(callerId: string): Promise<void> {
     if (activeCallers.size === 0 && pausedByUs) {
       pausedByUs = false;
       try {
-        if (bridge) settleAutomaticResume(bridge.resume(), "session");
-        androidProbe?.start();
+        if (metronomeWasInterrupted && bridge) {
+          metronomeWasInterrupted = false;
+          settleAutomaticResume(bridge.resume(), "session");
+          androidProbe?.start();
+        }
     } catch (e) {
       markAudioRecoveryFailed("session");
       logger.warn("[audioSession] resume failed:", e);
@@ -166,7 +217,9 @@ export async function releaseAudioSession(callerId: string): Promise<void> {
   await applyMode(needsRecordingCategory(), remaining === 0);
   if (remaining === 0 && pausedByUs) {
     const wasUserToggled = userToggledDuringSession;
+    const resumesMetronome = metronomeWasInterrupted;
     pausedByUs = false;
+    metronomeWasInterrupted = false;
     userToggledDuringSession = false;
     // 모달 안에서 사용자가 직접 메트로놈을 토글했다면 (켰다가 다시 끔, 또는
     // 켠 채 둠) 그 의도를 존중하여 자동 resume을 건너뛴다. 사용자가 손대지
@@ -175,7 +228,13 @@ export async function releaseAudioSession(callerId: string): Promise<void> {
     // 재개하지 않는다 — 인터럽션이 끝나는 시점에 notifyInterruptionEnd가
     // 일관되게 처리한다.
     try {
-      if (!wasUserToggled && !pausedByInterruption && bridge && !bridge.isRunning()) {
+      if (
+        resumesMetronome &&
+        !wasUserToggled &&
+        !pausedByInterruption &&
+        bridge &&
+        !bridge.isRunning()
+      ) {
         markAudioRecovering("session");
         suppressUserToggle++;
         try {
@@ -183,6 +242,16 @@ export async function releaseAudioSession(callerId: string): Promise<void> {
           androidProbe?.start();
         } finally {
           suppressUserToggle--;
+        }
+      }
+      if (deferredSupplementalInterruptionEnd && !pausedByInterruption) {
+        deferredSupplementalInterruptionEnd = false;
+        if (!wasUserToggled && autoResumeAfterInterruption) {
+          markAudioRecovering("interruption");
+        }
+        finishSupplementalInterruption(!wasUserToggled && autoResumeAfterInterruption);
+        if (!wasUserToggled && autoResumeAfterInterruption && !resumesMetronome) {
+          markAudioRecoverySucceeded();
         }
       }
     } catch (e) {
@@ -227,11 +296,9 @@ export function notifyUserMetronomeToggle(): Promise<void> | undefined {
  */
 export function notifyInterruptionBegin(): void {
   if (pausedByInterruption) return;
-  // bridge가 아직 등록되지 않았으면 우리가 멈출 수 있는 게 없으므로 추적도
-  // 하지 않는다. (앱 부팅 직후 상태)
-  if (!bridge) return;
   try {
-    if (bridge.isRunning()) {
+    const pausedSupplemental = pauseSupplementalPlayback();
+    if (bridge?.isRunning()) {
       markAudioInterrupted("interruption");
       suppressUserToggle++;
       try {
@@ -243,6 +310,7 @@ export function notifyInterruptionBegin(): void {
         suppressUserToggle--;
       }
       pausedByInterruption = true;
+      metronomeWasInterrupted = true;
       userToggledDuringInterruption = false;
       logger.info("[audioSession] interruption begin → metronome paused");
     } else if (activeCallers.size > 0) {
@@ -253,6 +321,11 @@ export function notifyInterruptionBegin(): void {
       pausedByInterruption = true;
       userToggledDuringInterruption = false;
       logger.info("[audioSession] interruption begin → already paused by modal, flagged");
+    } else if (pausedSupplemental) {
+      markAudioInterrupted("interruption");
+      pausedByInterruption = true;
+      userToggledDuringInterruption = false;
+      logger.info("[audioSession] interruption begin → supplemental playback paused");
     } else {
       // 메트로놈이 꺼져 있고 모달도 없는 상태 → 추적할 게 없다.
       logger.info("[audioSession] interruption begin → metronome already off, no-op");
@@ -273,6 +346,8 @@ export function notifyInterruptionEnd(): void {
   pausedByInterruption = false;
   userToggledDuringInterruption = false;
   if (wasUserToggled) {
+    metronomeWasInterrupted = false;
+    finishSupplementalInterruption(false);
     markAudioStopped();
     logger.info("[audioSession] interruption end → user toggled during interruption, skipping auto-resume");
     return;
@@ -281,18 +356,25 @@ export function notifyInterruptionEnd(): void {
   // 이전한다 (인터럽션 동안 모달이 새로 열린 경우에도 release에서 정상
   // 재개되도록 pausedByUs를 켠다).
   if (activeCallers.size > 0) {
-    pausedByUs = true;
+    pausedByUs = metronomeWasInterrupted || supplementalPlaybackWasInterrupted;
+    deferredSupplementalInterruptionEnd = supplementalPlaybackWasInterrupted;
     logger.info("[audioSession] interruption end → modal still open, ownership transferred to modal release");
     return;
   }
-  if (!bridge) return;
   if (!autoResumeAfterInterruption) {
+    metronomeWasInterrupted = false;
+    finishSupplementalInterruption(false);
     markAudioStopped();
     logger.info("[audioSession] interruption end → auto-resume disabled by user setting, skipping resume");
     return;
   }
   try {
-    if (!bridge.isRunning()) {
+    const resumesMetronome = metronomeWasInterrupted;
+    metronomeWasInterrupted = false;
+    const resumesSupplemental = supplementalPlaybackWasInterrupted;
+    if (resumesSupplemental) markAudioRecovering("interruption");
+    finishSupplementalInterruption(true);
+    if (resumesMetronome && bridge && !bridge.isRunning()) {
       markAudioRecovering("interruption");
       suppressUserToggle++;
       try {
@@ -304,8 +386,11 @@ export function notifyInterruptionEnd(): void {
         suppressUserToggle--;
       }
       logger.info("[audioSession] interruption end → metronome resumed");
-    } else {
+    } else if (resumesMetronome && bridge) {
       logger.info("[audioSession] interruption end → metronome already running, no-op");
+    } else if (resumesSupplemental) {
+      markAudioRecoverySucceeded();
+      logger.info("[audioSession] interruption end → supplemental playback resumed");
     }
   } catch (e) {
     markAudioRecoveryFailed("interruption");
@@ -335,8 +420,13 @@ export function _resetAudioSessionForTests() {
   userToggledDuringSession = false;
   suppressUserToggle = 0;
   pausedByInterruption = false;
+  metronomeWasInterrupted = false;
   userToggledDuringInterruption = false;
   androidProbe = null;
+  supplementalPlaybackHandlers.clear();
+  supplementalPlaybackWasInterrupted = false;
+  deferredSupplementalInterruptionEnd = false;
+  backgroundPlayEnabled = true;
   autoResumeAfterInterruption = true;
   _resetAudioModeCacheForTests();
 }

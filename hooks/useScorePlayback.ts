@@ -16,6 +16,12 @@ import {
   scheduleMeasureNotes,
   stopAllScoreNotes,
 } from "@/lib/score-audio";
+import {
+  beginBackgroundPlaybackLease,
+  endBackgroundPlaybackLease,
+  type BackgroundPlaybackLease,
+} from "@/lib/background-playback-lease";
+import { registerSupplementalPlaybackInterruptionHandler } from "@/lib/audio-session";
 
 // RAF는 ~16ms마다 실행되므로 50ms 이내 지각 음표는 즉시 발음 허용
 const LATE_THRESHOLD_MS = 50;
@@ -51,6 +57,7 @@ export function useScorePlayback(doc: ScoreDocument): ScorePlaybackState {
   const timelineRef = useRef<PlayEvent[]>([]);
   const activePlanRef = useRef<ScorePlaybackPlan | null>(null);
   const isPlayingRef = useRef(false);
+  const isPreparingRef = useRef(false);
   const startWallRef = useRef(0);     // Date.now() at play/resume
   const resumeOffsetRef = useRef(0);  // elapsed ms at pause
   const rafRef = useRef<number | null>(null);
@@ -67,6 +74,18 @@ export function useScorePlayback(doc: ScoreDocument): ScorePlaybackState {
   const startRafRef = useRef<(() => void) | null>(null);
   // prepare 완료 후 true — pause→play 시 재준비 건너뜀. stop()/doc 변경 시 리셋.
   const isAudioReadyRef = useRef(false);
+  const resumeAfterInterruptionRef = useRef(false);
+  const playTransportRef = useRef<() => void>(() => {});
+  const pauseTransportRef = useRef<() => void>(() => {});
+  const backgroundLeaseRef = useRef<BackgroundPlaybackLease | null>(null);
+  const releaseBackgroundLease = useCallback(() => {
+    endBackgroundPlaybackLease(backgroundLeaseRef.current);
+    backgroundLeaseRef.current = null;
+  }, []);
+  const updatePreparing = useCallback((value: boolean) => {
+    isPreparingRef.current = value;
+    setIsPreparing(value);
+  }, []);
 
   // 오디오: 마디 변경 감지용 seqIdx 추적
   const lastSeqIdxRef = useRef(-1);
@@ -88,6 +107,7 @@ export function useScorePlayback(doc: ScoreDocument): ScorePlaybackState {
       setPlayheadFraction(0);
       setCurrentLinkedEntryId(undefined);
       resumeOffsetRef.current = 0;
+      releaseBackgroundLease();
       return;
     }
 
@@ -120,7 +140,7 @@ export function useScorePlayback(doc: ScoreDocument): ScorePlaybackState {
     }
 
     rafRef.current = requestAnimationFrame(tick);
-  }, []);
+  }, [releaseBackgroundLease]);
 
   /** 내부 prepare 헬퍼 — play()와 악기 변경 effect 양쪽에서 호출 */
   const _runPrepare = useCallback((
@@ -134,7 +154,7 @@ export function useScorePlayback(doc: ScoreDocument): ScorePlaybackState {
     // prepareScoreAudio reports the exact total via the progress callback.
     const allMidi = noteInstrumentPairs.map((p) => p.midi);
     const total = [...new Set(allMidi)].filter((m) => m >= 21 && m <= 108).length;
-    setIsPreparing(true);
+    updatePreparing(true);
     setPrepareProgress({ done: 0, total });
     prepareParamsRef.current = { noteInstrumentPairs, drumTypes };
 
@@ -154,7 +174,7 @@ export function useScorePlayback(doc: ScoreDocument): ScorePlaybackState {
       .then(() => {
         if (prepareSessionRef.current !== sessionId) return;
         prepareParamsRef.current = null;
-        setIsPreparing(false);
+        updatePreparing(false);
         setPrepareProgress(null);
         isAudioReadyRef.current = true;
         startRafRef.current?.();
@@ -163,23 +183,24 @@ export function useScorePlayback(doc: ScoreDocument): ScorePlaybackState {
         if (prepareSessionRef.current !== sessionId) return;
         prepareParamsRef.current = null;
         startRafRef.current = null;
-        setIsPreparing(false);
+        updatePreparing(false);
         setPrepareProgress(null);
         // A failed preparation is not a usable cache. In particular, do not
         // start the playhead: doing so makes silent playback look successful.
         isAudioReadyRef.current = false;
         isPlayingRef.current = false;
         stopAllScoreNotes();
+        releaseBackgroundLease();
         captureException(error, { category: "score-playback", operation: "prepare-audio" });
         Alert.alert(
           "재생 오류",
           "악보 오디오를 준비하지 못했습니다. 다시 시도해 주세요.",
         );
       });
-  }, []);
+  }, [releaseBackgroundLease, updatePreparing]);
 
   const play = useCallback(() => {
-    if (isPlayingRef.current || isPreparing) return;
+    if (isPlayingRef.current || isPreparingRef.current) return;
     const plan = buildScorePlaybackPlan({
       documentId: doc.id,
       bpm: doc.bpm,
@@ -189,6 +210,14 @@ export function useScorePlayback(doc: ScoreDocument): ScorePlaybackState {
       muteAudio: doc.playbackSettings?.muteAudio ?? false,
     });
     activePlanRef.current = plan;
+    releaseBackgroundLease();
+    const backgroundLease = beginBackgroundPlaybackLease({
+      isPlaying: () => isPlayingRef.current || prepareParamsRef.current !== null,
+      pause: () => pauseTransportRef.current(),
+      resume: () => playTransportRef.current(),
+    });
+    backgroundLeaseRef.current = backgroundLease.token;
+    void backgroundLease.ready;
     const timeline = [...plan.unit.timeline];
     timelineRef.current = timeline;
     setTotalMs(totalTimelineMs(timeline));
@@ -226,7 +255,7 @@ export function useScorePlayback(doc: ScoreDocument): ScorePlaybackState {
     }
 
     startRaf();
-  }, [doc, tick, isPreparing, _runPrepare]);
+  }, [doc, tick, _runPrepare, releaseBackgroundLease]);
 
   const pause = useCallback(() => {
     if (!isPlayingRef.current) return;
@@ -236,13 +265,17 @@ export function useScorePlayback(doc: ScoreDocument): ScorePlaybackState {
     lastSeqIdxRef.current = -1;
     setIsPlaying(false);
     setCurrentLinkedEntryId(undefined);
+    releaseBackgroundLease();
     if (rafRef.current !== null) {
       cancelAnimationFrame(rafRef.current);
       rafRef.current = null;
     }
-  }, []);
+  }, [releaseBackgroundLease]);
+  playTransportRef.current = play;
+  pauseTransportRef.current = pause;
 
   const stop = useCallback(() => {
+    resumeAfterInterruptionRef.current = false;
     // 진행 중인 prepare 비동기 작업을 무효화
     prepareSessionRef.current++;
     prepareParamsRef.current = null;
@@ -250,7 +283,7 @@ export function useScorePlayback(doc: ScoreDocument): ScorePlaybackState {
     isAudioReadyRef.current = false;
     activePlanRef.current = null;
     timelineRef.current = [];
-    setIsPreparing(false);
+    updatePreparing(false);
     setPrepareProgress(null);
     isPlayingRef.current = false;
     stopAllScoreNotes();
@@ -265,7 +298,32 @@ export function useScorePlayback(doc: ScoreDocument): ScorePlaybackState {
       cancelAnimationFrame(rafRef.current);
       rafRef.current = null;
     }
-  }, []);
+    releaseBackgroundLease();
+  }, [releaseBackgroundLease, updatePreparing]);
+
+  useEffect(() => registerSupplementalPlaybackInterruptionHandler({
+    isRunning: () => isPlayingRef.current || prepareParamsRef.current !== null,
+    pauseForInterruption: () => {
+      resumeAfterInterruptionRef.current =
+        isPlayingRef.current || prepareParamsRef.current !== null;
+      if (isPlayingRef.current) {
+        pause();
+        return;
+      }
+      prepareSessionRef.current += 1;
+      prepareParamsRef.current = null;
+      startRafRef.current = null;
+      updatePreparing(false);
+      setPrepareProgress(null);
+      stopAllScoreNotes();
+      releaseBackgroundLease();
+    },
+    finishInterruption: (shouldResume) => {
+      const shouldRestart = resumeAfterInterruptionRef.current && shouldResume;
+      resumeAfterInterruptionRef.current = false;
+      if (shouldRestart) play();
+    },
+  }), [pause, play, releaseBackgroundLease, updatePreparing]);
 
   // 다른 악보로 전환 시 재생 중지
   const docIdRef = useRef(doc.id);
@@ -359,12 +417,15 @@ export function useScorePlayback(doc: ScoreDocument): ScorePlaybackState {
       // 진행 중인 prepare 비동기 작업 무효화
       prepareSessionRefForCleanup.current++;
       prepareParamsRef.current = null;
+      isPreparingRef.current = false;
+      resumeAfterInterruptionRef.current = false;
       activePlanRef.current = null;
       isPlayingRef.current = false;
       stopAllScoreNotes();
+      releaseBackgroundLease();
       if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
     };
-  }, []);
+  }, [releaseBackgroundLease]);
 
   return { isPlaying, isPreparing, prepareProgress, currentMeasureIdx, playheadFraction, totalMs, currentLinkedEntryId, play, pause, stop };
 }
