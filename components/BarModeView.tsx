@@ -29,6 +29,7 @@ import { FontSize, Spacing } from "@/constants/tokens";
 import {
   BAR_ROW_H,
   SYMBOL_INFO,
+  getBarSelectionAfterPress,
   getSampleCellCoverage,
   nextJumpPairId,
   type BarModeColors,
@@ -404,11 +405,13 @@ export function BarModeView({
       handleSymbolPlacementRef.current(beat);
       return;
     }
-    // A tap always selects the bar, including a loop-block boundary. Block
-    // editing remains available through the symbol workflow; diverting a row
-    // tap here made a boundary bar impossible to edit as an individual bar.
-    onBarStartBeatSelect(beat);
-  }, [isPlaying, placingSymbol, onBarStartBeatSelect]);
+    // Loop-block boundaries remain editable as individual bars. On native,
+    // tapping the selected row again finishes editing; web keeps its existing
+    // click-to-select behavior and uses the configured confirm key to finish.
+    onBarStartBeatSelect(
+      getBarSelectionAfterPress(barStartBeat, beat, Platform.OS !== "web"),
+    );
+  }, [isPlaying, placingSymbol, barStartBeat, onBarStartBeatSelect]);
 
   const handleBarRowLongPress = useCallback((beat: number) => {
     if (isPlaying) return;

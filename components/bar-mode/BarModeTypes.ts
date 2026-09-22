@@ -78,6 +78,14 @@ export type BarDurationPart = "minutes" | "seconds";
 
 // ─── Pure helpers ─────────────────────────────────────────────────────────────
 
+export function getBarSelectionAfterPress(
+  selectedBeat: number | null,
+  pressedBeat: number,
+  toggleSelectedBeat: boolean,
+): number | null {
+  return toggleSelectedBeat && selectedBeat === pressedBeat ? null : pressedBeat;
+}
+
 export function formatBarCenterInfo(
   repeat: BarRepeat | null,
   bpm: number,

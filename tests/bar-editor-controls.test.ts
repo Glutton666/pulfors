@@ -6,6 +6,7 @@ import {
   clampBarBpm,
   clampBarRepeatCount,
   formatBarDuration,
+  getBarSelectionAfterPress,
   getBarSampleCells,
   getSampleCellCoverage,
   getBarRepeatCountHoldIntervalMs,
@@ -13,6 +14,16 @@ import {
 } from "../components/bar-mode/BarModeTypes";
 
 describe("bar editor control values", () => {
+  test("native bar taps deselect the selected row and otherwise move selection", () => {
+    assert.equal(getBarSelectionAfterPress(2, 2, true), null);
+    assert.equal(getBarSelectionAfterPress(2, 3, true), 3);
+    assert.equal(getBarSelectionAfterPress(null, 1, true), 1);
+  });
+
+  test("web bar clicks keep the selected row selected for keyboard confirmation", () => {
+    assert.equal(getBarSelectionAfterPress(2, 2, false), 2);
+  });
+
   test("sample cells expose one flag per bar cell and stay false without samples", () => {
     assert.deepEqual(
       getBarSampleCells(2, 3, { "2-0": "file:///kick.wav", "2-2": "file:///snare.wav" }),
