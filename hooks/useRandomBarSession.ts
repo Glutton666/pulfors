@@ -16,6 +16,7 @@ import { createPracticeEntry, loadPracticeBook, savePracticeBook } from "@/lib/s
 import { captureBreadcrumb } from "@/lib/error-tracking";
 
 type BlockPlayMode = "sequential" | "loop" | "random";
+type PlaybackToggle = () => Promise<boolean | undefined>;
 
 export interface UseRandomBarSessionParams {
   strategy: BarRandomConfig["strategy"];
@@ -68,11 +69,11 @@ export interface UseRandomBarSessionResult {
   updateRandomBarSession: (session: BarRandomSession | null) => void;
   setRandomBarConfig: (config: BarRandomConfig) => void;
   finishRandomBarPlay: () => void;
-  handleRandomBarPlay: (togglePlayPause: () => void) => void;
-  handleReplayRandomBarSession: (togglePlayPause: () => void) => void;
+  handleRandomBarPlay: (togglePlayPause: PlaybackToggle) => Promise<void>;
+  handleReplayRandomBarSession: (togglePlayPause: PlaybackToggle) => Promise<void>;
   handleSaveRandomBarSession: () => Promise<boolean>;
   handleApplyRandomBarSession: () => void;
-  handleReturnToOriginalBarList: (togglePlayPause: () => void) => void;
+  handleReturnToOriginalBarList: (togglePlayPause: PlaybackToggle) => void;
   advanceRandomBarChunk: (engine: MetronomeEngine) => void;
 }
 
@@ -155,7 +156,7 @@ export function useRandomBarSession(
     }
   }, [finishRandomBarPlay, p.isPlaying, p.isPreparing]);
 
-  const handleRandomBarPlay = useCallback((togglePlayPause: () => void) => {
+  const handleRandomBarPlay = useCallback(async (togglePlayPause: PlaybackToggle) => {
     if (!p.barMode || p.isPlaying || p.isPreparing || randomBarPreviousModeRef.current !== null) return;
     const sourceCount = p.barConfigRef.current.beatsPerMeasure;
     if (sourceCount <= 0) return;
@@ -174,10 +175,14 @@ export function useRandomBarSession(
     p.setBlockPlayMode("random");
     p.engineRef.current?.setRandomBarOrder(chunk);
     p.engineRef.current?.setBlockPlayMode("random");
-    togglePlayPause();
-  }, [p.barConfigRef, p.barLoopModeRef, p.barMode, p.blockPlayModeRef, p.engineRef, p.isPlaying, p.isPreparing, p.setBlockPlayMode, randomBarConfig, updateRandomBarSession]);
+    try {
+      if (await togglePlayPause() === false) finishRandomBarPlay();
+    } catch {
+      finishRandomBarPlay();
+    }
+  }, [finishRandomBarPlay, p.barConfigRef, p.barLoopModeRef, p.barMode, p.blockPlayModeRef, p.engineRef, p.isPlaying, p.isPreparing, p.setBlockPlayMode, randomBarConfig, updateRandomBarSession]);
 
-  const handleReplayRandomBarSession = useCallback((togglePlayPause: () => void) => {
+  const handleReplayRandomBarSession = useCallback(async (togglePlayPause: PlaybackToggle) => {
     const previous = randomBarSessionRef.current;
     if (!previous || !previous.order.length || p.isPlaying || p.isPreparing) return;
     if (previous.loopBlocks && JSON.stringify(previous.loopBlocks) !== JSON.stringify(p.barConfigRef.current.loopBlocks)) {
@@ -194,8 +199,12 @@ export function useRandomBarSession(
     p.setBlockPlayMode("random");
     p.engineRef.current?.setRandomBarOrder(session.order);
     p.engineRef.current?.setBlockPlayMode("random");
-    togglePlayPause();
-  }, [p.barConfigRef, p.blockPlayModeRef, p.engineRef, p.isPlaying, p.isPreparing, p.setBlockPlayMode, updateRandomBarSession]);
+    try {
+      if (await togglePlayPause() === false) finishRandomBarPlay();
+    } catch {
+      finishRandomBarPlay();
+    }
+  }, [finishRandomBarPlay, p.barConfigRef, p.blockPlayModeRef, p.engineRef, p.isPlaying, p.isPreparing, p.setBlockPlayMode, updateRandomBarSession]);
 
   const handleSaveRandomBarSession = useCallback(async (): Promise<boolean> => {
     const session = randomBarSessionRef.current;

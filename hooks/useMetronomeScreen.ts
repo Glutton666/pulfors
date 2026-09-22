@@ -122,6 +122,7 @@ import {
 import { useBeatStaffControls } from "@/hooks/useBeatStaffControls";
 import { createDebouncedPersister, type DebouncedPersister } from "@/lib/persist";
 import { createRafBatcher } from "@/lib/raf-batcher";
+import { scheduleOwnedNoteQueueAdvance } from "@/lib/note-queue-transition";
 import type { ModeSlot } from "@/components/ModeSwitcherDial";
 import {
   createModeTransitionCoordinator,
@@ -2631,10 +2632,11 @@ export function useMetronomeScreen() {
           stopRenderedAudio();
           clearSamplePlayStates();
           const completedEntryEpoch = noteEntryTransitionEpochRef.current;
-          setTimeout(() => {
-            if (completedEntryEpoch !== noteEntryTransitionEpochRef.current) return;
-            noteAdvanceQueueRef.current();
-          }, 0);
+          scheduleOwnedNoteQueueAdvance({
+            expectedEpoch: completedEntryEpoch,
+            getCurrentEpoch: () => noteEntryTransitionEpochRef.current,
+            advance: () => noteAdvanceQueueRef.current(),
+          });
           return;
         }
         stopMetronomeRef.current("measure_complete");
