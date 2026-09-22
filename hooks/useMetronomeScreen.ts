@@ -14,7 +14,6 @@ import {
   Alert,
   PanResponder,
   useWindowDimensions,
-  BackHandler,
   AppState,
   type GestureResponderEvent,
   type PanResponderGestureState,
@@ -41,9 +40,7 @@ import { safePlay, safePlayAndConfirm, notifyAudioPoolFallback, detectPoolCutoff
 import { registerMetronomeBridge, notifyUserMetronomeToggle } from "@/lib/audio-session";
 import { captureBreadcrumb } from "@/lib/error-tracking";
 import { sanitizeDeepLinkEntry } from "@/lib/deep-link-import";
-import { normalizeNoteImageCrop } from "@/lib/note-image-crop";
 import type { NoteImageCrop } from "@/lib/storage";
-import { isNoteSourceEntry } from "@/lib/note-mode-sources";
 import * as Haptics from "expo-haptics";
 import * as Crypto from "expo-crypto";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -59,14 +56,9 @@ import { MetronomeEngine, soundSets, toEngineBpm } from "@/lib/metronome-engine"
 import type { BeatType, ProgressInfo } from "@/lib/metronome-engine";
 import {
   appendBarRandomPlaybackChunk,
-  buildBarRandomSourceIndexes,
-  createBarRandomSession,
-  DEFAULT_BAR_RANDOM_CONFIG,
-  getBarRandomCandidateCount,
-  type BarRandomConfig,
   type BarRandomSession,
 } from "@/lib/bar-random-session";
-import { loadSettings, saveSettings, loadCustomSoundSets, saveCustomSoundSets, loadPracticeBook, savePracticeBook, subscribePracticeBook, createPracticeEntry, runStorageMigrations, clearAllAppStorage, loadTutorialState, saveTutorialState, resetTutorialState, TUTORIAL_CONTENT_VERSION, DEFAULT_TUTORIAL_STATE, type MetronomeSettings, type TutorialAction, type TutorialMode, type TutorialState } from "@/lib/storage";
+import { loadSettings, saveSettings, loadCustomSoundSets, saveCustomSoundSets, loadPracticeBook, savePracticeBook, subscribePracticeBook, createPracticeEntry, runStorageMigrations, clearAllAppStorage, loadTutorialState, DEFAULT_TUTORIAL_STATE, type MetronomeSettings, type TutorialAction, type TutorialMode, type TutorialState } from "@/lib/storage";
 import { MODE_TUTORIALS_ENABLED } from "@/lib/tutorial-config";
 import { NEUTRAL, type TonePosition } from "@/lib/metronome-tone-dsp";
 import type { FlashMode, HapticMode, SoundSet, BuiltinSoundSet, CustomSoundSetConfig, CustomSoundSample, FadeOutSettings, PracticeEntry, MetronomeMode } from "@/lib/storage";
@@ -76,14 +68,12 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useDeepLink } from "@/contexts/DeepLinkContext";
 import { useVoiceAssistant } from "@/contexts/VoiceAssistantContext";
 import { make_styles } from "@/lib/index.styles";
-import { defaultBeatTypes, isSafeNoteSampleUri, createInitialDialConfig, createInitialBarConfig, hydrateDialConfigFromSettings, createShuffledIndices as createShuffledIndicesPure, applyQueueInsert, beatSubdivisionCounts as beatSubdivisionCountsPure, selectCurrentBarConfig, computeLandscapeStats, entryToBarConfig, applyEntryToEngine as applyEntryToEngineCore, migrateLayerBlocks, applyLoopBlocksChange } from "@/lib/index.helpers";
+import { defaultBeatTypes, isSafeNoteSampleUri, createInitialDialConfig, createInitialBarConfig, hydrateDialConfigFromSettings, createShuffledIndices as createShuffledIndicesPure, beatSubdivisionCounts as beatSubdivisionCountsPure, selectCurrentBarConfig, computeLandscapeStats, entryToBarConfig, applyEntryToEngine as applyEntryToEngineCore, migrateLayerBlocks, applyLoopBlocksChange } from "@/lib/index.helpers";
 import { serializeNoteQueueEntries } from "@/lib/note-queue-helpers";
 import {
   type ActiveModal,
   type SgTgState,
   deriveModalFlags,
-  exitStageWithMenuReturn,
-  getMenuItemCloseTarget,
   openTuningGuideFromSignalGen,
   closeTuningGuide,
 } from "@/lib/modal-routing";
@@ -116,9 +106,12 @@ import { usePracticeBookLoad } from "@/hooks/usePracticeBookLoad";
 import { useGoalPopups } from "@/hooks/useGoalPopups";
 import { usePracticeRoomTracking } from "@/hooks/usePracticeRoomTracking";
 import { loadLabUnlocked } from "@/lib/practice-room";
-import { useStageMode } from "@/hooks/useStageMode";
-import { pruneStageKeyMappings } from "@/lib/stage-practice-sync";
+import { useStageComposition } from "@/hooks/useStageComposition";
 import { useBeatTypeControls } from "@/hooks/useBeatTypeControls";
+import { useRandomBarSession } from "@/hooks/useRandomBarSession";
+import { useNoteSession } from "@/hooks/useNoteSession";
+import { useSubdivisionEditor } from "@/hooks/useSubdivisionEditor";
+import { useScreenNavigation } from "@/hooks/useScreenNavigation";
 import { applySwitchToMode, type ModeSwitchState, type ModeSwitchCallbacks } from "@/lib/stage-mode-logic";
 import { findBeatStaffCellTarget, type BeatStaffCellRects } from "@/lib/beat-staff-logic";
 import {
@@ -312,27 +305,11 @@ export function useMetronomeScreen() {
   const stopwatchTimerLandscapeRef = useRef<StopwatchTimerHandle>(null);
   const barAreaRef = useRef<View>(null);
   const beatStaffCellRectsRef = useRef<BeatStaffCellRects>({});
-  const barAreaLayoutRef = useRef({ y: 0, height: 0 });
-  const barScrollOffsetRef = useRef(0);
 
   const { dialConfigRef } = useDialConfig();
 
   const [progressInfo, setProgressInfo] = useState<ProgressInfo | null>(null);
   const [layerProgressMap, setLayerProgressMap] = useState<Record<string, number>>({});
-  const [randomBarSession, setRandomBarSession] = useState<BarRandomSession | null>(null);
-  const randomBarSessionRef = useRef<BarRandomSession | null>(null);
-  const randomBarViewportCapacityRef = useRef(4);
-  const randomBarChunkStartRef = useRef(0);
-  const randomBarChunkLengthRef = useRef(0);
-  const randomBarPreparedChunkRef = useRef<{
-    chunk: number[];
-    nextSession: BarRandomSession;
-  } | null>(null);
-  const updateRandomBarSession = useCallback((session: BarRandomSession | null) => {
-    randomBarSessionRef.current = session;
-    setRandomBarSession(session ? { ...session, order: [...session.order] } : null);
-  }, []);
-
   // 악보 서브-모드 ("list" | "editor"); coreMode==="score"일 때만 의미 있음.
   const [scoreSubMode, setScoreSubMode] = useState<"list" | "editor">("list");
   const scoreMode: "list" | "editor" | null = coreMode === "score" ? scoreSubMode : null;
@@ -342,48 +319,24 @@ export function useMetronomeScreen() {
     else { setCoreModeAndRef("score"); setScoreSubMode(m); }
   }, [setCoreModeAndRef]);
   const [scoreEditorDoc, setScoreEditorDoc] = useState<ScoreDocument | null>(null);
-  const [noteQueue, setNoteQueue] = useState<PracticeEntry[]>([]);
-  const noteQueueRef = useRef<PracticeEntry[]>([]);
-  useEffect(() => { noteQueueRef.current = noteQueue; }, [noteQueue]);
-  const [notePlayMode, setNotePlayMode] = useState<"once" | "loop" | "random">("once");
-  const notePlayModeRef = useRef<"once" | "loop" | "random">("once");
-  useEffect(() => { notePlayModeRef.current = notePlayMode; }, [notePlayMode]);
-  const handleNotePlayModeChange = useCallback((mode: "once" | "loop" | "random") => {
-    notePlayModeRef.current = mode;
-    setNotePlayMode(mode);
-  }, []);
-  const [noteCurrentIndex, setNoteCurrentIndex] = useState(-1);
-  const noteCurrentIndexRef = useRef(-1);
-  useEffect(() => { noteCurrentIndexRef.current = noteCurrentIndex; }, [noteCurrentIndex]);
-  const [noteIsPlaying, setNoteIsPlaying] = useState(false);
-  const noteIsPlayingRef = useRef(false);
-  useEffect(() => { noteIsPlayingRef.current = noteIsPlaying; }, [noteIsPlaying]);
-  const [noteMeasureCount, setNoteMeasureCount] = useState(0);
-  const noteMeasureCountRef = useRef(0);
-  const noteFirstBeatFiredRef = useRef(false);
-  // 악보-마디 프리셋 전환: 연습장 캐시 + 버전 카운터 → usePracticeBookLoad 소유
-  const [noteBarEntries, setNoteBarEntries] = useState<PracticeEntry[]>([]);
-  const noteAdvanceQueueRef = useRef<() => void>(() => {});
-  const noteEntryTransitionEpochRef = useRef(0);
-  const noteShuffledIndicesRef = useRef<number[]>([]);
-  const noteShuffledPosRef = useRef(0);
+  const noteStartPlayingEntryRef = useRef<(index: number, shouldPlay?: boolean) => Promise<void>>(async () => {});
+  const finishNoteQueuePlaybackRef = useRef<(reason?: "manual" | "measure_complete") => void>(() => {});
+  const {
+    noteQueue, setNoteQueue, noteQueueRef,
+    notePlayMode, setNotePlayMode, notePlayModeRef, handleNotePlayModeChange,
+    noteCurrentIndex, setNoteCurrentIndex, noteCurrentIndexRef,
+    noteIsPlaying, setNoteIsPlaying, noteIsPlayingRef,
+    noteMeasureCount, setNoteMeasureCount, noteMeasureCountRef, noteFirstBeatFiredRef,
+    noteBarEntries, setNoteBarEntries, noteAdvanceQueueRef,
+    noteEntryTransitionEpochRef, noteShuffledIndicesRef, noteShuffledPosRef,
+    handleNoteAddToQueue, handleNoteRemoveFromQueue, handleNoteReorderQueue,
+    handleNoteQueueItemImageChange, handleNoteInsertNext,
+    handleNoteLoadPracticeSources, handleNoteSourceSelectionChange, resetNoteQueue,
+  } = useNoteSession({
+    noteStartPlayingEntry: (index) => noteStartPlayingEntryRef.current(index),
+    finishNoteQueuePlayback: (reason) => finishNoteQueuePlaybackRef.current(reason),
+  });
 
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragPos, setDragPos] = useState({ x: 0, y: 0 });
-  const [dragPattern, setDragPattern] = useState<BeatType[] | null>(null);
-  const [dropTargetBeat, setDropTargetBeat] = useState<number | null>(null);
-  const dragModeRef = useRef<"bar" | "beat" | null>(null);
-  const dragPatternRef = useRef<BeatType[] | null>(null);
-  const dropTargetBeatRef = useRef<number | null>(null);
-  const clearDragState = useCallback(() => {
-    dragModeRef.current = null;
-    dragPatternRef.current = null;
-    dropTargetBeatRef.current = null;
-    setIsDragging(false);
-    setDragPattern(null);
-    setDragPos({ x: 0, y: 0 });
-    setDropTargetBeat(null);
-  }, []);
   const [isLoaded, setIsLoaded] = useState(false);
   const [settingsLoadError, setSettingsLoadError] = useState<Error | null>(null);
   const [settingsRetryToken, setSettingsRetryToken] = useState(0);
@@ -423,100 +376,6 @@ export function useMetronomeScreen() {
     tutorialModeRef.current = tutorialMode;
   }, [tutorialMode]);
 
-  const tutorialShouldShow = useCallback((mode: TutorialMode, state = tutorialStateRef.current) => {
-    const entry = state[mode];
-    return entry.contentVersion < TUTORIAL_CONTENT_VERSION
-      || (entry.status !== "completed" && entry.status !== "skipped");
-  }, []);
-
-  const openModeTutorial = useCallback((mode: TutorialMode, restart = false) => {
-    if (!MODE_TUTORIALS_ENABLED) return;
-    if (restart) {
-      const next: TutorialState = {
-        ...tutorialStateRef.current,
-        [mode]: {
-          contentVersion: TUTORIAL_CONTENT_VERSION,
-          status: "in_progress",
-          completedSteps: [],
-        },
-      };
-      tutorialStateRef.current = next;
-      setTutorialState(next);
-      void saveTutorialState(next).catch(() => {});
-    }
-    tutorialModeRef.current = mode;
-    setTutorialMode(mode);
-    setTutorialLastAction(null);
-  }, []);
-
-  const recordTutorialAction = useCallback((action: TutorialAction) => {
-    if (!tutorialModeRef.current) return;
-    setTutorialLastAction(action);
-  }, []);
-
-  const completeTutorialStep = useCallback((stepId: string) => {
-    const mode = tutorialModeRef.current;
-    if (!mode) return;
-    const current = tutorialStateRef.current;
-    const next: TutorialState = {
-      ...current,
-      [mode]: {
-        ...current[mode],
-        status: "in_progress",
-        contentVersion: TUTORIAL_CONTENT_VERSION,
-        completedSteps: [...new Set([...current[mode].completedSteps, stepId])],
-      },
-    };
-    tutorialStateRef.current = next;
-    setTutorialState(next);
-    setTutorialLastAction(null);
-    void saveTutorialState(next).catch(() => {});
-  }, []);
-
-  const finishModeTutorial = useCallback(() => {
-    const mode = tutorialModeRef.current;
-    if (!mode) return;
-    const next: TutorialState = {
-      ...tutorialStateRef.current,
-      [mode]: {
-        contentVersion: TUTORIAL_CONTENT_VERSION,
-        status: "completed",
-        completedSteps: [...tutorialStateRef.current[mode].completedSteps],
-      },
-    };
-    tutorialStateRef.current = next;
-    setTutorialState(next);
-    tutorialModeRef.current = null;
-    setTutorialMode(null);
-    setTutorialLastAction(null);
-    void saveTutorialState(next).catch(() => {});
-  }, []);
-
-  const skipModeTutorial = useCallback(() => {
-    const mode = tutorialModeRef.current;
-    if (!mode) return;
-    const next: TutorialState = {
-      ...tutorialStateRef.current,
-      [mode]: {
-        contentVersion: TUTORIAL_CONTENT_VERSION,
-        status: "skipped",
-        completedSteps: [...tutorialStateRef.current[mode].completedSteps],
-      },
-    };
-    tutorialStateRef.current = next;
-    setTutorialState(next);
-    tutorialModeRef.current = null;
-    setTutorialMode(null);
-    setTutorialLastAction(null);
-    void saveTutorialState(next).catch(() => {});
-  }, []);
-
-  const resetModeTutorials = useCallback(async () => {
-    const next = await resetTutorialState();
-    tutorialStateRef.current = next;
-    setTutorialState(next);
-    setTutorialLastAction(null);
-  }, []);
   const {
     showSettings,
      showProfile,
@@ -569,104 +428,9 @@ export function useMetronomeScreen() {
   } = useFadeOutSession(isPlaying, t);
 
 
-  // Tracks which modal opened settings, so we can return there on close
-  const settingsReturnModalRef = useRef<ActiveModal>(null);
-
-  // Tracks whether a full-screen item was opened from the main menu.
-  // This lives in the screen hook (rather than a UI component) so Android's
-  // hardware-back handler follows the same return path as on-screen close buttons.
-  const menuItemReturnRef = useRef(false);
-  const menuItemReturnGenerationRef = useRef(0);
-  const markMenuItemReturn = useCallback(() => {
-    menuItemReturnGenerationRef.current += 1;
-    menuItemReturnRef.current = true;
-  }, []);
-  const clearMenuItemReturn = useCallback(() => {
-    menuItemReturnGenerationRef.current += 1;
-    menuItemReturnRef.current = false;
-  }, []);
-  const closeMenuItem = useCallback(() => {
-    const target = getMenuItemCloseTarget(menuItemReturnRef.current);
-    menuItemReturnGenerationRef.current += 1;
-    menuItemReturnRef.current = false;
-    setActiveModal(target);
-  }, []);
-
-  const closeScoreMode = useCallback(() => {
-    setScoreEditorDoc(null);
-    setScoreMode(null);
-    // Score always belongs to Lab. Do not depend on the transient menu-return
-    // lease here: editor navigation or async mode transitions may invalidate
-    // that lease before the user presses X.
-    clearMenuItemReturn();
-    setActiveModal("menu");
-  }, [clearMenuItemReturn, setScoreMode]);
-
-  const closeAllModals = useCallback(() => {
-    tuningGuideOnSelectRef.current = null;
-    clearMenuItemReturn();
-    setActiveModal(null);
-    setLandscapeImageModalVisible(false);
-    setRecorderTarget(null);
-  }, [clearMenuItemReturn]);
-
-  const openExclusive = useCallback((modal: ActiveModal) => {
-    tuningGuideOnSelectRef.current = null;
-    if (modal === "polygon") playbackModeRef.current = "polygon";
-    setActiveModal(modal);
-  }, []);
   const [customSoundSets, setCustomSoundSets] = useState<Record<string, CustomSoundSetConfig>>({});
   const customSoundSetsRef = useRef<Record<string, CustomSoundSetConfig>>({});
   useEffect(() => { customSoundSetsRef.current = customSoundSets; }, [customSoundSets]);
-
-  useEffect(() => {
-    if (Platform.OS !== "android") return;
-    const onBack = () => {
-      if (showSettings) { setActiveModal(null); return true; }
-      if (showProfile || showAssistant) { closeMenuItem(); return true; }
-      if (showTuningGuide) {
-        tuningGuideOnSelectRef.current = null;
-        // SignalGen에서 진입했었다면 back으로 닫을 때도 재오픈한다.
-        if (reopenSignalGenAfterTuningGuideRef.current) {
-          reopenSignalGenAfterTuningGuideRef.current = false;
-          setActiveModal("signalGen");
-        } else {
-          setActiveModal(null);
-        }
-        return true;
-      }
-      if (showSignalGen) {
-        tuningGuideOnSelectRef.current = null;
-        reopenSignalGenAfterTuningGuideRef.current = false;
-        closeMenuItem();
-        return true;
-      }
-      if (showPracticeBook) { closeMenuItem(); return true; }
-      if (showWorkUp) { closeMenuItem(); return true; }
-      if (showFadeOut) { setActiveModal(null); return true; }
-      if (showScheduledStart) { setActiveModal(null); return true; }
-      if (showDrumKit) { closeMenuItem(); return true; }
-      if (showPolygon) { closeMenuItem(); return true; }
-      if (showMenu) { clearMenuItemReturn(); setActiveModal(null); return true; }
-      if (showOnboarding) { setActiveModal(null); return true; }
-      if (showReboot) { setShowReboot(false); return true; }
-      if (coreMode === "score") {
-        closeScoreMode();
-        return true;
-      }
-      if (barModeRef.current) {
-        handleBarModeChangeRef.current(false);
-        return true;
-      }
-      Alert.alert("앱 종료", "앱을 종료하시겠습니까?", [
-        { text: "취소", style: "cancel" },
-        { text: "종료", style: "destructive", onPress: () => BackHandler.exitApp() },
-      ]);
-      return true;
-    };
-    const sub = BackHandler.addEventListener("hardwareBackPress", onBack);
-    return () => sub.remove();
-  }, [activeModal, showReboot, coreMode, closeScoreMode, closeMenuItem, clearMenuItemReturn, setScoreMode, showProfile, showAssistant]);
 
   useEffect(() => {
     if (Platform.OS === "web") return;
@@ -708,6 +472,53 @@ export function useMetronomeScreen() {
   const [noteSampleMetroChannels, setNoteSampleMetroChannels] = useState<NoteSampleMetroChannelMap>({});
   const noteSampleMetroChannelsRef = useRef<NoteSampleMetroChannelMap>({});
   const [recorderTarget, setRecorderTarget] = useState<{ beat: number; sub: number; slot?: 0 | 1 | 2 } | null>(null);
+  const {
+    settingsReturnModalRef,
+    menuItemReturnRef,
+    menuItemReturnGenerationRef,
+    markMenuItemReturn,
+    clearMenuItemReturn,
+    closeMenuItem,
+    closeScoreMode,
+    openExclusive,
+    tutorialShouldShow,
+    openModeTutorial,
+    recordTutorialAction,
+    completeTutorialStep,
+    finishModeTutorial,
+    skipModeTutorial,
+    resetModeTutorials,
+  } = useScreenNavigation({
+    setActiveModal,
+    showSettings,
+    showProfile,
+    showAssistant,
+    showTuningGuide,
+    showSignalGen,
+    showPracticeBook,
+    showWorkUp,
+    showFadeOut,
+    showScheduledStart,
+    showDrumKit,
+    showPolygon,
+    showMenu,
+    showOnboarding,
+    showReboot,
+    setShowReboot,
+    coreMode,
+    barModeRef,
+    handleBarModeChangeRef,
+    reopenSignalGenAfterTuningGuideRef,
+    tuningGuideOnSelectRef,
+    playbackModeRef,
+    setScoreEditorDoc,
+    setScoreMode,
+    setTutorialState,
+    tutorialModeRef,
+    tutorialStateRef,
+    setTutorialMode,
+    setTutorialLastAction,
+  });
 
   const { engineRef } = useMetronomeEngine();
   // The engine resets `currentBeat` when it stops. Keep the last main-bar
@@ -715,7 +526,6 @@ export function useMetronomeScreen() {
   const activeBarIndexRef = useRef(0);
   const tapTimesRef = useRef<number[]>([]);
   const dialRef = useRef<View>(null);
-  const dialCenterRef = useRef({ x: 0, y: 0 });
 
   // ── Refs shared between useSettings and useAudioPipeline ─────────────────────
   // Created here so both hooks can receive them as params.
@@ -851,17 +661,6 @@ export function useMetronomeScreen() {
     });
     return () => { cancelled = true; };
   }, [settingsMode]);
-
-  const randomBarConfig = useMemo<BarRandomConfig>(
-    () => ({ ...DEFAULT_BAR_RANDOM_CONFIG, strategy: barRandomStrategy }),
-    [barRandomStrategy],
-  );
-  const randomBarConfigRef = useRef(randomBarConfig);
-  useEffect(() => { randomBarConfigRef.current = randomBarConfig; }, [randomBarConfig]);
-  const setRandomBarConfig = useCallback((config: BarRandomConfig) => {
-    setBarRandomStrategy(config.strategy);
-    persistSettings({ barRandomStrategy: config.strategy });
-  }, [persistSettings, setBarRandomStrategy]);
 
   // ── 비트 모드 빠른 저장 ────────────────────────────────────────────────────
   const {
@@ -1001,6 +800,59 @@ export function useMetronomeScreen() {
     persistSettings,
     scheduleReRender,
     t,
+  });
+  const {
+    randomBarSession,
+    randomBarSessionRef,
+    randomBarViewportCapacityRef,
+    randomBarChunkStartRef,
+    randomBarChunkLengthRef,
+    randomBarPreparedChunkRef,
+    randomBarPreviousModeRef,
+    randomBarConfig,
+    randomBarConfigRef,
+    updateRandomBarSession,
+    setRandomBarConfig,
+    finishRandomBarPlay,
+    handleRandomBarPlay: randomBarPlayFromHook,
+    handleReplayRandomBarSession: replayRandomBarFromHook,
+    handleSaveRandomBarSession: saveRandomBarFromHook,
+    handleApplyRandomBarSession: applyRandomBarFromHook,
+    handleReturnToOriginalBarList: returnToOriginalBarFromHook,
+    advanceRandomBarChunk,
+  } = useRandomBarSession({
+    strategy: barRandomStrategy,
+    setStrategy: setBarRandomStrategy,
+    persistSettings,
+    engineRef,
+    blockPlayModeRef,
+    setBlockPlayMode,
+    isPlaying,
+    isPreparing,
+    barMode,
+    barConfigRef,
+    barLoopModeRef,
+    barBpmRef,
+    username,
+    noteSamplesRef,
+    noteSampleNamesRef,
+    noteSampleSourcesRef,
+    noteSampleChannelsRef,
+    noteSampleVolumesRef,
+    noteSampleSpeedsRef,
+    setBeatsPerMeasure,
+    setBeatTypes,
+    setBeatSubdivisions,
+    setBarRepeats,
+    setLoopBlocks,
+    setBarStartBeat,
+    setNoteSamples,
+    setNoteSampleNames,
+    setNoteSampleSources,
+    setNoteSampleChannels,
+    setNoteSampleVolumes,
+    setNoteSampleSpeeds,
+    scheduleReRender,
   });
   const handleBarBpmChangeRef = useRef(handleBarBpmChange);
   handleBarBpmChangeRef.current = handleBarBpmChange;
@@ -1702,7 +1554,7 @@ export function useMetronomeScreen() {
           const nextCursor = randomBarChunkStartRef.current + info.randomSequenceIndex;
           if (nextCursor !== randomSession.cursor) {
             randomSession.cursor = nextCursor;
-            setRandomBarSession({ ...randomSession, order: [...randomSession.order] });
+            updateRandomBarSession({ ...randomSession, order: [...randomSession.order] });
           }
           const prefetchAt = Math.max(
             0,
@@ -2106,38 +1958,24 @@ export function useMetronomeScreen() {
     setBeatsPerMeasure, setBeatTypes, setBeatSubdivisions, persistSettings, scheduleReRender,
   });
 
+  const {
+    barAreaLayoutRef, dialCenterRef, barScrollOffsetRef, isDragging, dragPos,
+    dragPattern, dropTargetBeat, setIsDragging, setDragPos, setDragPattern,
+    setDropTargetBeat, dragModeRef, dragPatternRef, dropTargetBeatRef,
+  } = useSubdivisionEditor({
+    barAreaRef,
+    dialRef,
+    beatStaffCellRectsRef,
+  });
+  const clearDragState = useCallback(() => {
+    dragModeRef.current = null; dragPatternRef.current = null;
+    dropTargetBeatRef.current = null; setIsDragging(false);
+    setDragPattern(null);
+    setDragPos({ x: 0, y: 0 });
+    setDropTargetBeat(null);
+  }, []);
+
   const { notifyPlayState: notifyVoicePlayState } = useVoiceAssistant();
-  const randomBarPreviousModeRef = useRef<"sequential" | "loop" | "random" | null>(null);
-  const finishRandomBarPlay = useCallback(() => {
-    const previousMode = randomBarPreviousModeRef.current;
-    if (previousMode === null) return;
-    randomBarPreviousModeRef.current = null;
-    randomBarPreparedChunkRef.current = null;
-    blockPlayModeRef.current = previousMode;
-    setBlockPlayMode(previousMode);
-    engineRef.current?.setRandomBarOrder(null);
-    engineRef.current?.setBlockPlayMode(previousMode);
-    const session = randomBarSessionRef.current;
-    if (session) {
-      session.active = false;
-      updateRandomBarSession(session);
-    }
-  }, [blockPlayModeRef, engineRef, setBlockPlayMode, updateRandomBarSession]);
-  const randomBarPlaybackBecameActiveRef = useRef(false);
-  useEffect(() => {
-    if (randomBarPreviousModeRef.current === null) {
-      randomBarPlaybackBecameActiveRef.current = false;
-      return;
-    }
-    if (isPlaying || isPreparing) {
-      randomBarPlaybackBecameActiveRef.current = true;
-      return;
-    }
-    if (randomBarPlaybackBecameActiveRef.current) {
-      randomBarPlaybackBecameActiveRef.current = false;
-      finishRandomBarPlay();
-    }
-  }, [finishRandomBarPlay, isPlaying, isPreparing]);
 
   const {
     togglePlayPause,
@@ -2242,303 +2080,6 @@ export function useMetronomeScreen() {
     return () => sub.remove();
   }, [cancelPlaybackAttempt]);
 
-  const handleRandomBarPlay = useCallback(() => {
-    if (
-      !barMode ||
-      isPlaying ||
-      isPreparing ||
-      randomBarPreviousModeRef.current !== null
-    ) return;
-    const sourceCount = barConfigRef.current.beatsPerMeasure;
-    if (sourceCount <= 0) return;
-    const candidateCount = getBarRandomCandidateCount(
-      sourceCount,
-      barConfigRef.current.barRepeats,
-    );
-    const eligibleBlocks = barConfigRef.current.loopBlocks
-      .filter(block => block.startBeat < candidateCount);
-    const session = createBarRandomSession(
-      sourceCount,
-      buildBarRandomSourceIndexes(sourceCount, eligibleBlocks, candidateCount),
-      barConfigRef.current.loopBlocks,
-    );
-    const repeatEnabled = barLoopModeRef.current === "loop";
-    const chunkLength = repeatEnabled
-      ? Math.max(2, randomBarViewportCapacityRef.current * 2)
-      : sourceCount;
-    const chunk = appendBarRandomPlaybackChunk(
-      session,
-      chunkLength,
-      repeatEnabled,
-      randomBarConfig,
-    );
-    if (chunk.length === 0) return;
-    randomBarChunkStartRef.current = 0;
-    randomBarChunkLengthRef.current = chunk.length;
-    randomBarPreparedChunkRef.current = null;
-    updateRandomBarSession(session);
-    randomBarPreviousModeRef.current = blockPlayModeRef.current;
-    blockPlayModeRef.current = "random";
-    setBlockPlayMode("random");
-    engineRef.current?.setRandomBarOrder(chunk);
-    engineRef.current?.setBlockPlayMode("random");
-    void togglePlayPauseRef.current();
-  }, [
-    barMode,
-    barConfigRef,
-    blockPlayModeRef,
-    engineRef,
-    isPlaying,
-    isPreparing,
-    randomBarPreviousModeRef,
-    randomBarConfig,
-    setBlockPlayMode,
-    togglePlayPauseRef,
-    updateRandomBarSession,
-  ]);
-
-  const materializeRandomBarOrder = useCallback((requestedOrder: number[]) => {
-    const source = barConfigRef.current;
-    const order = requestedOrder
-      .filter(index => index >= 0 && index < source.beatsPerMeasure);
-    const remapSamples = <T,>(map: Record<string, T> | undefined): Record<string, T> => {
-      const result: Record<string, T> = {};
-      for (let targetBeat = 0; targetBeat < order.length; targetBeat += 1) {
-        const sourceBeat = order[targetBeat];
-        for (const [key, value] of Object.entries(map ?? {})) {
-          const [beat, ...rest] = key.split("-");
-          if (Number(beat) === sourceBeat) result[[targetBeat, ...rest].join("-")] = value;
-        }
-      }
-      return result;
-    };
-    const nextSubdivisions: Record<string, BeatType[]> = {};
-    const nextRepeats: Record<number, BarRepeat> = {};
-    order.forEach((sourceBeat, targetBeat) => {
-      const subdivisions = source.beatSubdivisions[String(sourceBeat)];
-      if (subdivisions?.length) nextSubdivisions[String(targetBeat)] = [...subdivisions];
-      const repeat = source.barRepeats[sourceBeat];
-      if (repeat) {
-        const {
-          jumpFromId: _jumpFromId,
-          jumpToId: _jumpToId,
-          voltaMax: _voltaMax,
-          isEnd: _isEnd,
-          ...portableRepeat
-        } = repeat;
-        nextRepeats[targetBeat] = {
-          ...portableRepeat,
-          layers: portableRepeat.layers?.map(layer => ({ ...layer })),
-        };
-      }
-    });
-    return {
-      order,
-      beatsPerMeasure: order.length,
-      beatTypes: order.map(index => source.beatTypes[index] ?? "normal"),
-      beatSubdivisions: nextSubdivisions,
-      barRepeats: nextRepeats,
-      noteSamples: remapSamples(source.noteSamples),
-      noteSampleNames: remapSamples(source.noteSampleNames),
-      noteSampleSources: remapSamples(source.noteSampleSources),
-      noteSampleChannels: remapSamples(source.noteSampleChannels),
-      noteSampleVolumes: remapSamples(source.noteSampleVolumes),
-      noteSampleSpeeds: remapSamples(source.noteSampleSpeeds),
-    };
-  }, [barConfigRef]);
-
-  const handleReplayRandomBarSession = useCallback(() => {
-    const previous = randomBarSessionRef.current;
-    if (!previous || previous.order.length === 0 || isPlaying || isPreparing) return;
-    if (
-      previous.loopBlocks &&
-      JSON.stringify(previous.loopBlocks) !== JSON.stringify(barConfigRef.current.loopBlocks)
-    ) {
-      updateRandomBarSession(null);
-      return;
-    }
-    const session = {
-      ...previous,
-      order: [...previous.order],
-      cursor: 0,
-      active: true,
-    };
-    randomBarChunkStartRef.current = 0;
-    randomBarChunkLengthRef.current = session.order.length;
-    randomBarPreparedChunkRef.current = null;
-    updateRandomBarSession(session);
-    randomBarPreviousModeRef.current = blockPlayModeRef.current;
-    blockPlayModeRef.current = "random";
-    setBlockPlayMode("random");
-    engineRef.current?.setRandomBarOrder(session.order);
-    engineRef.current?.setBlockPlayMode("random");
-    void togglePlayPauseRef.current();
-  }, [
-    blockPlayModeRef,
-    engineRef,
-    isPlaying,
-    isPreparing,
-    setBlockPlayMode,
-    togglePlayPauseRef,
-    updateRandomBarSession,
-  ]);
-
-  const handleSaveRandomBarSession = useCallback(async (): Promise<boolean> => {
-    const session = randomBarSessionRef.current;
-    if (!session?.order.length) return false;
-    if (
-      session.loopBlocks &&
-      JSON.stringify(session.loopBlocks) !== JSON.stringify(barConfigRef.current.loopBlocks)
-    ) return false;
-    try {
-      const source = barConfigRef.current;
-      const now = new Date();
-      const entry = createPracticeEntry(
-        `Random ${now.getHours()}:${String(now.getMinutes()).padStart(2, "0")}`,
-        {
-          mode: "bar",
-          bpm: barBpmRef.current,
-          beatsPerMeasure: source.beatsPerMeasure,
-          beatTypes: [...source.beatTypes],
-          beatSubdivisions: { ...source.beatSubdivisions },
-          barRepeats: { ...source.barRepeats },
-          loopBlocks: session.loopBlocks
-            ? session.loopBlocks.map(block => ({ ...block })) as typeof source.loopBlocks
-            : [...source.loopBlocks],
-          blockPlayMode: "random",
-          randomBarOrder: [...session.order],
-          barLoopMode: "once",
-          subdivisionPattern: [...(barConfigRef.current.subdivisionPattern ?? ["accent"])],
-          noteSamples: { ...source.noteSamples },
-          noteSampleNames: { ...source.noteSampleNames },
-          noteSampleSources: { ...source.noteSampleSources },
-          noteSampleChannels: { ...source.noteSampleChannels },
-          noteSampleVolumes: { ...(source.noteSampleVolumes ?? {}) },
-          noteSampleSpeeds: { ...(source.noteSampleSpeeds ?? {}) },
-        },
-        username,
-      );
-      const existing = await loadPracticeBook();
-      await savePracticeBook([entry, ...existing]);
-      if (Platform.OS !== "web") {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      }
-      return true;
-    } catch (error) {
-      captureBreadcrumb({
-        category: "practice-book",
-        message: "Random bar session save error",
-        level: "warning",
-        data: { error: String(error) },
-      });
-      return false;
-    }
-  }, [barBpmRef, username]);
-
-  const handleApplyRandomBarSession = useCallback(() => {
-    const session = randomBarSessionRef.current;
-    if (!session?.order.length || isPlaying || isPreparing) return;
-    const sourceCount = barConfigRef.current.beatsPerMeasure;
-    const randomUnits = new Set(buildBarRandomSourceIndexes(
-      sourceCount,
-      barConfigRef.current.loopBlocks,
-    ));
-    const topLevelByStart = new Map<number, typeof barConfigRef.current.loopBlocks[number]>();
-    barConfigRef.current.loopBlocks.forEach(block => {
-      if (block.layerOf !== undefined || !randomUnits.has(block.startBeat)) return;
-      const existing = topLevelByStart.get(block.startBeat);
-      if (!existing || block.endBeat > existing.endBeat) topLevelByStart.set(block.startBeat, block);
-    });
-    const expandedOrder = session.order.flatMap(index => {
-      const block = topLevelByStart.get(index);
-      if (!block) return [index];
-      return Array.from(
-        { length: Math.min(sourceCount - 1, block.endBeat) - index + 1 },
-        (_, offset) => index + offset,
-      );
-    });
-    const uniqueOrder = Array.from(new Set(expandedOrder))
-      .filter(index => index >= 0 && index < sourceCount);
-    for (let index = 0; index < sourceCount; index += 1) {
-      if (!uniqueOrder.includes(index)) uniqueOrder.push(index);
-    }
-    const next = materializeRandomBarOrder(uniqueOrder);
-    if (next.beatsPerMeasure === 0) return;
-    setBeatsPerMeasure(next.beatsPerMeasure);
-    setBeatTypes(next.beatTypes);
-    setBeatSubdivisions(next.beatSubdivisions);
-    setBarRepeats(next.barRepeats);
-    setLoopBlocks([]);
-    setBarStartBeat(null);
-    setNoteSamples(next.noteSamples);
-    noteSamplesRef.current = next.noteSamples;
-    setNoteSampleNames(next.noteSampleNames);
-    noteSampleNamesRef.current = next.noteSampleNames;
-    setNoteSampleSources(next.noteSampleSources);
-    noteSampleSourcesRef.current = next.noteSampleSources;
-    setNoteSampleChannels(next.noteSampleChannels);
-    noteSampleChannelsRef.current = next.noteSampleChannels;
-    setNoteSampleVolumes(next.noteSampleVolumes);
-    noteSampleVolumesRef.current = next.noteSampleVolumes;
-    setNoteSampleSpeeds(next.noteSampleSpeeds);
-    noteSampleSpeedsRef.current = next.noteSampleSpeeds;
-    barConfigRef.current = {
-      ...barConfigRef.current,
-      ...next,
-      loopBlocks: [],
-      hasBeenConfigured: true,
-    };
-    const engine = engineRef.current;
-    engine?.setRandomBarOrder(null);
-    engine?.setBeatsPerMeasure(next.beatsPerMeasure);
-    engine?.setBeatTypes(next.beatTypes);
-    engine?.setAllBeatSubdivisions(next.beatSubdivisions);
-    engine?.setAllBarRepeats(next.barRepeats);
-    engine?.setLoopBlocks([]);
-    updateRandomBarSession(null);
-    scheduleReRender();
-  }, [
-    engineRef,
-    isPlaying,
-    isPreparing,
-    materializeRandomBarOrder,
-    noteSampleChannelsRef,
-    noteSampleNamesRef,
-    noteSampleSourcesRef,
-    noteSampleSpeedsRef,
-    noteSampleVolumesRef,
-    noteSamplesRef,
-    scheduleReRender,
-    setBarRepeats,
-    setBarStartBeat,
-    setBeatSubdivisions,
-    setBeatTypes,
-    setBeatsPerMeasure,
-    setLoopBlocks,
-    setNoteSampleChannels,
-    setNoteSampleNames,
-    setNoteSampleSources,
-    setNoteSampleSpeeds,
-    setNoteSampleVolumes,
-    setNoteSamples,
-    updateRandomBarSession,
-  ]);
-
-  const handleReturnToOriginalBarList = useCallback(() => {
-    if (isPlaying || isPreparing) {
-      void togglePlayPauseRef.current();
-    }
-    finishRandomBarPlay();
-    randomBarPreparedChunkRef.current = null;
-    updateRandomBarSession(null);
-  }, [
-    finishRandomBarPlay,
-    isPlaying,
-    isPreparing,
-    togglePlayPauseRef,
-    updateRandomBarSession,
-  ]);
-
   stopIfPlayingRef.current = stopMetronome;
   fatalRenderFailureRef.current = stopMetronome;
   const stopMetronomeRef = useRef(stopMetronome);
@@ -2580,89 +2121,27 @@ export function useMetronomeScreen() {
   useEffect(() => { updateBpmRef.current = updateBpm; }, [updateBpm]);
   // bpmRef sync는 useSettings 내부에서 처리
 
-  const { stageModeActive, enterStageMode, exitStageMode } = useStageMode();
-  const enterStageModeForPlayback = useCallback(() => {
-    playbackModeRef.current = "stage";
-    setSettingsMode("stage");
-    enterStageMode();
-  }, [enterStageMode]);
-  const exitStageModeForPlayback = useCallback(async () => {
-    // Consume a revocable destination lease before awaiting Stage cleanup.
-    // Any newer navigation calls clearMenuItemReturn(), advancing the
-    // generation so this older completion cannot reopen the menu.
-    const returnLease = {
-      openedFromMenu: menuItemReturnRef.current,
-      generation: menuItemReturnGenerationRef.current,
-    };
-    menuItemReturnRef.current = false;
-    playbackModeRef.current = activeModeRef.current;
-    setSettingsMode(
-      activeModeRef.current === "bar"
-        ? "bar"
-        : activeModeRef.current === "note" || activeModeRef.current === "score"
-          ? "note"
-          : "beat",
-    );
-    await exitStageWithMenuReturn(
-      returnLease,
-      exitStageMode,
-      () => menuItemReturnGenerationRef.current,
-      () => setActiveModal(getMenuItemCloseTarget(true)),
-    );
-  }, [exitStageMode]);
-  useEffect(() => {
-    playbackModeRef.current = stageModeActive
-      ? "stage"
-      : showPolygon
-      ? "polygon"
-      : activeModeRef.current;
-  }, [coreMode, stageModeActive, showPolygon]);
-  /** 무대 모드 셋 리스트 — 진입 시 연습장에서 로드 */
-  const [stagePracticeEntries, setStagePracticeEntries] = useState<PracticeEntry[]>([]);
-  const [stagePracticeEntriesReady, setStagePracticeEntriesReady] = useState(false);
-  const stagePracticeEventVersionRef = useRef(0);
-  useEffect(() => {
-    if (!stageModeActive) return;
-    let active = true;
-    const loadVersion = stagePracticeEventVersionRef.current;
-    loadPracticeBook()
-      .then((entries) => {
-        if (active && stagePracticeEventVersionRef.current === loadVersion) {
-          setStagePracticeEntries(entries);
-          setStagePracticeEntriesReady(true);
-        }
-      })
-      .catch(() => {});
-    return () => {
-      active = false;
-    };
-  }, [stageModeActive]);
-  useEffect(() => {
-    if (!stageModeActive) setStagePracticeEntriesReady(false);
-  }, [stageModeActive]);
-  useEffect(() => {
-    if (!stageModeActive) return;
-    return subscribePracticeBook((entries) => {
-      stagePracticeEventVersionRef.current += 1;
-      setStagePracticeEntries(entries);
-      setStagePracticeEntriesReady(true);
-    });
-  }, [stageModeActive]);
-  useEffect(() => {
-    if (!stageModeActive || !stagePracticeEntriesReady) return;
-    const keyMappings = pruneStageKeyMappings(stageSettings.keyMappings, stagePracticeEntries);
-    if (Object.keys(keyMappings).length !== Object.keys(stageSettings.keyMappings).length) {
-      updateStageSettings({ keyMappings });
-    }
-  }, [
+  const {
     stageModeActive,
+    enterStageMode: enterStageModeForPlayback,
+    exitStageModeForPlayback,
     stagePracticeEntries,
     stagePracticeEntriesReady,
-    stageSettings.keyMappings,
+    setStagePracticeEntries,
+    activeStagePracticeEntryId,
+    setActiveStagePracticeEntryId,
+  } = useStageComposition({
+    activeModeRef,
+    playbackModeRef,
+    menuItemReturnRef,
+    menuItemReturnGenerationRef,
+    setActiveModal: (modal) => setActiveModal(modal as ActiveModal),
+    setSettingsMode,
+    coreMode,
+    showPolygon,
+    stageSettings,
     updateStageSettings,
-  ]);
-  /** 셋 리스트에서 현재 선택/적용된 항목 ID */
-  const [activeStagePracticeEntryId, setActiveStagePracticeEntryId] = useState<string | undefined>(undefined);
+  });
 
   const updateTimeSignatureRef = useRef(updateTimeSignature);
   useEffect(() => { updateTimeSignatureRef.current = updateTimeSignature; }, [updateTimeSignature]);
@@ -3022,36 +2501,7 @@ export function useMetronomeScreen() {
     if (!engine) return;
     engine.setOnMeasureComplete(() => {
       setMeasureCount(c => c + 1);
-      const randomSession = randomBarSessionRef.current;
-      if (
-        randomSession?.active &&
-        randomBarPreviousModeRef.current !== null &&
-        engine.getIsRunning() &&
-        barLoopModeRef.current === "loop"
-      ) {
-        const nextStart = randomBarChunkStartRef.current + randomBarChunkLengthRef.current;
-        const nextLength = Math.max(2, randomBarViewportCapacityRef.current * 2);
-        const prepared = randomBarPreparedChunkRef.current;
-        let nextChunk: number[];
-        if (prepared) {
-          nextChunk = prepared.chunk;
-          randomSession.order = prepared.nextSession.order;
-          randomSession.remainingShuffleBag = prepared.nextSession.remainingShuffleBag;
-        } else {
-          nextChunk = appendBarRandomPlaybackChunk(
-            randomSession,
-            nextLength,
-            true,
-            randomBarConfigRef.current,
-          );
-        }
-        randomBarPreparedChunkRef.current = null;
-        randomSession.cursor = nextStart;
-        randomBarChunkStartRef.current = nextStart;
-        randomBarChunkLengthRef.current = nextChunk.length;
-        updateRandomBarSession(randomSession);
-        engine.setRandomBarOrder(nextChunk);
-      }
+      advanceRandomBarChunk(engine);
       const sess = fadeOutSessionRef.current;
       if (sess) {
         const elapsed = fadeOutMeasureCountRef.current + 1;
@@ -3847,6 +3297,8 @@ export function useMetronomeScreen() {
     const playback = getPlaybackContext({ mode: "note" });
     showPausedNotification(playback.bpm, playback.modeLabel, languageRef.current);
   }, [cancelNoteSamplePreload, cancelPlaybackAttempt, stopMetronome]);
+  noteStartPlayingEntryRef.current = noteStartPlayingEntry;
+  finishNoteQueuePlaybackRef.current = finishNoteQueuePlayback;
 
   const noteAdvanceQueue = useCallback(() => {
     if (!noteIsPlayingRef.current) return;
@@ -3921,20 +3373,6 @@ export function useMetronomeScreen() {
     setNoteIsPlaying(false);
     setNoteCurrentIndex(-1);
   }, [cancelPlaybackAttempt, stopMetronome]);
-
-  const handleNoteLoadPracticeSources = useCallback(async () => {
-    const book = await loadPracticeBook();
-    return book.filter(isNoteSourceEntry);
-  }, []);
-
-  const handleNoteSourceSelectionChange = useCallback((entries: PracticeEntry[]) => {
-    const seen = new Set<string>();
-    setNoteBarEntries(entries.filter((entry) => {
-      if (!isNoteSourceEntry(entry) || seen.has(entry.id)) return false;
-      seen.add(entry.id);
-      return true;
-    }));
-  }, []);
 
   const handleExitNoteMode = useCallback(() => {
     noteEntryTransitionEpochRef.current += 1;
@@ -4130,105 +3568,6 @@ export function useMetronomeScreen() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentMode, modeSlideX, modeSlideY, modeSlideOpacity]);
 
-  const handleNoteAddToQueue = useCallback((entry: PracticeEntry, insertAt?: number) => {
-    setNoteQueue(prev => {
-      const pos = (typeof insertAt === "number") ? insertAt : prev.length;
-      const result = applyQueueInsert(
-        prev,
-        noteCurrentIndexRef.current,
-        noteShuffledIndicesRef.current,
-        noteShuffledPosRef.current,
-        notePlayModeRef.current,
-        pos,
-        entry,
-      );
-      noteQueueRef.current = result.queue;
-      noteShuffledIndicesRef.current = result.shuffledIndices;
-      if (result.currentIndex !== noteCurrentIndexRef.current) {
-        noteCurrentIndexRef.current = result.currentIndex;
-        setNoteCurrentIndex(result.currentIndex);
-      }
-      return result.queue;
-    });
-  }, []);
-
-
-  const handleNoteRemoveFromQueue = useCallback((index: number) => {
-    const curIdx = noteCurrentIndexRef.current;
-    const wasPlaying = noteIsPlayingRef.current;
-    const updated = noteQueueRef.current.filter((_, i) => i !== index);
-    noteQueueRef.current = updated;
-    setNoteQueue(updated);
-
-    if (curIdx === index && wasPlaying) {
-      const nextIdx = curIdx < updated.length ? curIdx : 0;
-      if (updated.length > 0) {
-        void noteStartPlayingEntry(nextIdx);
-      } else {
-        finishNoteQueuePlayback("manual");
-        setNoteCurrentIndex(-1);
-        noteCurrentIndexRef.current = -1;
-      }
-    } else if (curIdx > index) {
-      setNoteCurrentIndex(curIdx - 1);
-    }
-  }, [finishNoteQueuePlayback, noteStartPlayingEntry]);
-
-  const handleNoteReorderQueue = useCallback((fromIndex: number, toIndex: number) => {
-    if (toIndex < 0 || toIndex >= noteQueueRef.current.length) return;
-    const updated = [...noteQueueRef.current];
-    const [moved] = updated.splice(fromIndex, 1);
-    updated.splice(toIndex, 0, moved);
-    noteQueueRef.current = updated;
-    setNoteQueue(updated);
-    const ci = noteCurrentIndexRef.current;
-    if (ci === fromIndex) {
-      setNoteCurrentIndex(toIndex);
-    } else if (fromIndex < ci && toIndex >= ci) {
-      setNoteCurrentIndex(ci - 1);
-    } else if (fromIndex > ci && toIndex <= ci) {
-      setNoteCurrentIndex(ci + 1);
-    }
-  }, []);
-
-  const handleNoteQueueItemImageChange = useCallback((index: number, imageUri: string | undefined, imageCrop?: NoteImageCrop) => {
-    setNoteQueue(prev => {
-      const updated = [...prev];
-      if (updated[index]) {
-        updated[index] = {
-          ...updated[index],
-          imageUri,
-          imageCrop: imageUri ? normalizeNoteImageCrop(imageCrop) : undefined,
-        };
-      }
-      noteQueueRef.current = updated;
-      return updated;
-    });
-  }, []);
-
-  const handleNoteInsertNext = useCallback((entry: PracticeEntry) => {
-    setNoteQueue(prev => {
-      const ci = noteCurrentIndexRef.current;
-      const pos = Math.max(0, ci + 1);
-      const result = applyQueueInsert(
-        prev,
-        ci,
-        noteShuffledIndicesRef.current,
-        noteShuffledPosRef.current,
-        notePlayModeRef.current,
-        pos,
-        entry,
-      );
-      noteQueueRef.current = result.queue;
-      noteShuffledIndicesRef.current = result.shuffledIndices;
-      if (result.currentIndex !== noteCurrentIndexRef.current) {
-        noteCurrentIndexRef.current = result.currentIndex;
-        setNoteCurrentIndex(result.currentIndex);
-      }
-      return result.queue;
-    });
-  }, []);
-
   const handleNoteTogglePlay = useCallback(() => {
     if (noteIsPlayingRef.current) {
       noteEntryTransitionEpochRef.current += 1;
@@ -4342,14 +3681,6 @@ export function useMetronomeScreen() {
       return false;
     }
   }, [username, t]);
-
-  const handleNoteReset = useCallback(() => {
-    finishNoteQueuePlayback("manual");
-    setNoteQueue([]);
-    noteQueueRef.current = [];
-    setNoteCurrentIndex(-1);
-    noteCurrentIndexRef.current = -1;
-  }, [finishNoteQueuePlayback]);
 
   useEffect(() => {
     if (loopBlocks.length === 0) return;
@@ -4710,11 +4041,11 @@ export function useMetronomeScreen() {
     blockPlayMode,
     setBlockPlayMode,
     blockPlayModeRef,
-    handleRandomBarPlay,
-    handleReplayRandomBarSession,
-    handleSaveRandomBarSession,
-    handleApplyRandomBarSession,
-    handleReturnToOriginalBarList,
+    handleRandomBarPlay: () => randomBarPlayFromHook(togglePlayPauseRef.current),
+    handleReplayRandomBarSession: () => replayRandomBarFromHook(togglePlayPauseRef.current),
+    handleSaveRandomBarSession: saveRandomBarFromHook,
+    handleApplyRandomBarSession: applyRandomBarFromHook,
+    handleReturnToOriginalBarList: () => returnToOriginalBarFromHook(togglePlayPauseRef.current),
     randomBarSession,
     randomBarConfig,
     onRandomBarConfigChange: setRandomBarConfig,
@@ -4769,7 +4100,7 @@ export function useMetronomeScreen() {
     handleNoteManualNext,
     handleNoteManualNextImmediate,
     handleNoteSave,
-    handleNoteReset,
+    handleNoteReset: resetNoteQueue,
     handleNoteQueueItemImageChange,
     handleNoteLoadPracticeSources,
     handleNoteSourceSelectionChange,

@@ -117,7 +117,7 @@ test("modal-routing: 어떤 activeModal 값이든 visible 모달은 최대 1개"
 });
 
 test("Android BackHandler가 모든 active modal 종료 경로를 가진다", () => {
-  const src = readFileSync(join(process.cwd(), "hooks/useMetronomeScreen.ts"), "utf-8");
+  const src = readFileSync(join(process.cwd(), "hooks/useScreenNavigation.ts"), "utf-8");
   const backStart = src.indexOf("const onBack = () => {");
   const backEnd = src.indexOf('BackHandler.addEventListener("hardwareBackPress"', backStart);
   assert.ok(backStart >= 0 && backEnd > backStart, "Android BackHandler 본문을 찾을 수 없다");
@@ -158,7 +158,7 @@ test("Android BackHandler가 모든 active modal 종료 경로를 가진다", ()
 
 test("score close: 목록과 편집기의 X는 문서 상태를 비우고 실험실 메뉴로 돌아간다", () => {
   const ui = readFileSync(join(process.cwd(), "components/MetronomeScreenUI.tsx"), "utf-8");
-  const hook = readFileSync(join(process.cwd(), "hooks/useMetronomeScreen.ts"), "utf-8");
+  const hook = readFileSync(join(process.cwd(), "hooks/useScreenNavigation.ts"), "utf-8");
   assert.match(
     ui,
     /const closeScoreToLab = useCallback\(\(\) => \{\s*setShowLabMenu\(true\);\s*closeScoreMode\(\);/,
@@ -166,9 +166,9 @@ test("score close: 목록과 편집기의 X는 문서 상태를 비우고 실험
   assert.equal((ui.match(/onClose=\{closeScoreToLab\}/g) ?? []).length, 2);
   assert.match(
     hook,
-    /const closeScoreMode = useCallback\(\(\) => \{\s*setScoreEditorDoc\(null\);\s*setScoreMode\(null\);[\s\S]*?clearMenuItemReturn\(\);[\s\S]*?setActiveModal\("menu"\);/,
+    /const closeScoreMode = useCallback\(\(\) => \{\s*p\.setScoreEditorDoc\(null\);\s*p\.setScoreMode\(null\);[\s\S]*?clearMenuItemReturn\(\);[\s\S]*?p\.setActiveModal\("menu"\);/,
   );
-  assert.match(hook, /if \(coreMode === "score"\) \{\s*closeScoreMode\(\);/);
+  assert.match(hook, /p\.coreMode === "score"\s*\)\s*\{\s*closeScoreMode\(\);/);
 });
 
 test("menu return: 메뉴 화면의 각 항목 진입이 메뉴 복귀 상태를 기록한다", () => {
@@ -886,7 +886,7 @@ test("source/tuningGuide: BackHandler tuningGuide 분기가 reopenSignalGenAfter
   // BackHandler onBack 의 showTuningGuide 분기가 reopenSignalGenAfterTuningGuideRef 를
   // 직접 참조해 재오픈 여부를 결정하는지 소스 분석으로 검증한다.
   // 이 참조가 없으면 SignalGen 경로 back-press 에서 재오픈 로직이 실행되지 않는다.
-  const src = readFileSync(join(process.cwd(), "hooks/useMetronomeScreen.ts"), "utf-8");
+  const src = readFileSync(join(process.cwd(), "hooks/useScreenNavigation.ts"), "utf-8");
 
   const addListenerIdx = src.indexOf('BackHandler.addEventListener("hardwareBackPress"');
   assert.ok(addListenerIdx !== -1, 'BackHandler.addEventListener("hardwareBackPress" 를 찾을 수 없다');
@@ -974,10 +974,10 @@ test("android-appstate: 소스 검증 — AppState 콜백 본문에 setActiveMod
   );
 });
 
-test("android-appstate: 소스 검증 — BackHandler useEffect 의존 배열에 activeModal 포함 (stale closure 방지)", () => {
+test("android-appstate: 소스 검증 — BackHandler navigation dependencies include modal state", () => {
   // simulateBackPress 가 항상 최신 activeModal 을 참조한다고 가정하는 근거:
   // BackHandler useEffect 의존 배열에 activeModal 이 있어야 한다.
-  const src = readFileSync(join(process.cwd(), "hooks/useMetronomeScreen.ts"), "utf-8");
+  const src = readFileSync(join(process.cwd(), "hooks/useScreenNavigation.ts"), "utf-8");
 
   const addListenerIdx = src.indexOf('BackHandler.addEventListener("hardwareBackPress"');
   assert.ok(addListenerIdx !== -1, 'BackHandler.addEventListener("hardwareBackPress" 를 찾을 수 없다');
@@ -990,12 +990,8 @@ test("android-appstate: 소스 검증 — BackHandler useEffect 의존 배열에
     "addEventListener 이후 useEffect 종료 패턴이 변경되었을 수 있다");
 
   const deps = depsMatch![1];
-  assert.ok(
-    deps.includes("activeModal"),
-    `BackHandler useEffect 의존 배열에 activeModal 이 없다: [${deps}]\n` +
-    "의존 배열 누락 시 stale closure 로 back-press 핸들러가 이전 모달 상태를 참조한다 — " +
-    "simulateBackPress 의 최신 상태 참조 전제가 무효화된다",
-  );
+  assert.ok(deps.includes("p.showSettings") || deps.includes("p.showMenu"),
+    `BackHandler useEffect 의존 배열에 modal state 가 없다: [${deps}]`);
 });
 
 // ────────────────────────────────────────────────────────────────

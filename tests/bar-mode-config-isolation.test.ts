@@ -6,6 +6,10 @@ describe("Beat and Bar rhythm profile isolation", () => {
     path.join(process.cwd(), "hooks/useMetronomeScreen.ts"),
     "utf8",
   );
+  const navigationSource = fs.readFileSync(
+    path.join(process.cwd(), "hooks/useScreenNavigation.ts"),
+    "utf8",
+  );
   const uiSource = fs.readFileSync(
     path.join(process.cwd(), "components/MetronomeScreenUI.tsx"),
     "utf8",
@@ -64,7 +68,7 @@ describe("Beat and Bar rhythm profile isolation", () => {
   });
 
   test("Android Back and Escape use the profile-aware Bar exit", () => {
-    expect(screenSource).toContain("handleBarModeChangeRef.current(false);");
+    expect(navigationSource).toContain("handleBarModeChangeRef.current(false);");
     expect(keyboardSource).toContain("handleBarModeChangeRef.current(false);");
     expect(keyboardSource).not.toContain("setBarMode(false)");
   });

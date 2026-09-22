@@ -219,15 +219,15 @@ describe("경로 A: 상단 '무대 모드' 텍스트가 onOpenDial에 연결됨"
   });
 
   test("무대 모드 종료는 취소 가능한 실험실 복귀 lease를 사용함", () => {
-    const src = fs.readFileSync("hooks/useMetronomeScreen.ts", "utf8");
+    const src = fs.readFileSync("hooks/useStageComposition.ts", "utf8");
     assert.match(
       src,
-      /const returnLease = \{[\s\S]*?openedFromMenu: menuItemReturnRef\.current,[\s\S]*?generation: menuItemReturnGenerationRef\.current,[\s\S]*?await exitStageWithMenuReturn\(/,
+      /const returnLease = \{[\s\S]*?openedFromMenu: p\.menuItemReturnRef\.current,[\s\S]*?generation: p\.menuItemReturnGenerationRef\.current,[\s\S]*?await exitStageWithMenuReturn\(/,
     );
   });
 
   test("모든 무대 진입 경로에서 통합 연습장을 다시 불러옴", () => {
-    const src = fs.readFileSync("hooks/useMetronomeScreen.ts", "utf8");
+    const src = fs.readFileSync("hooks/useStageComposition.ts", "utf8");
     assert.match(
       src,
       /useEffect\(\(\) => \{\s*if \(!stageModeActive\) return;[\s\S]*?loadPracticeBook\(\)[\s\S]*?setStagePracticeEntries\(entries\);[\s\S]*?\}, \[stageModeActive\]\);/,
