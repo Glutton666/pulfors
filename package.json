@@ -4,7 +4,10 @@
   "version": "1.0.0",
   "expo": {
     "install": {
-      "exclude": ["@sentry/react-native", "react-native-worklets"]
+      "exclude": [
+        "@sentry/react-native",
+        "react-native-worklets"
+      ]
     }
   },
   "scripts": {
@@ -25,6 +28,17 @@
     "server:prod": "node dist/server/index.js",
     "expo:dev": "expo start --tunnel",
     "expo:static:build": "expo export --platform web --output-dir static-build",
+    "release:shared:check": "npm run typecheck && npm run typecheck:server && npm test -- --runInBand",
+    "release:web:build": "npm run expo:static:build && npm run server:build",
+    "release:web:check": "npm run release:shared:check && npm run lint && npm run release:web:build && node scripts/verify-web-release.mjs",
+    "release:native:config": "expo config --type prebuild",
+    "release:native:bundle:ios": "expo export --platform ios --output-dir /tmp/pulfors-ios-export",
+    "release:native:bundle:android": "expo export --platform android --output-dir /tmp/pulfors-android-export",
+    "release:native:check": "npm run release:shared:check && npm run lint && npm run release:native:config && npm run release:native:bundle:ios && npm run release:native:bundle:android",
+    "release:ios": "npm run release:native:check && eas build --platform ios --profile production",
+    "release:android": "npm run release:native:check && eas build --platform android --profile production",
+    "submit:ios": "eas submit --platform ios --profile production",
+    "submit:android": "eas submit --platform android --profile production",
     "audio:benchmark": "tsx --require ./tests/_stubs/setup.cjs scripts/benchmark-audio-renderer.ts",
     "audio:migration:verify": "tsx scripts/verify-audio-migration-stage.ts"
   },
@@ -95,6 +109,7 @@
     "@babel/core": "^7.25.2",
     "@playwright/test": "^1.62.1",
     "@types/react": "~19.1.10",
+    "eas-cli": "20.5.1",
     "babel-plugin-react-compiler": "^19.0.0-beta-e993439-20250117",
     "eslint": "^9.31.0",
     "eslint-config-expo": "~10.0.0",

@@ -21,4 +21,9 @@ describe("server boundary policy", () => {
       assert.ok(!routesSource.includes(removedSurface), `${removedSurface} must not be reachable from routes`);
     }
   });
+
+  test("production server honors the deployment PORT contract", () => {
+    assert.match(indexSource, /process\.env\.PORT/);
+    assert.doesNotMatch(indexSource, /isProd\s*\?\s*8081/);
+  });
 });

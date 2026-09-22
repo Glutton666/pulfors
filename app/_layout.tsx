@@ -4,7 +4,6 @@ import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect, useState, useCallback } from "react";
 import { AppState, Platform } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { KeyboardProvider } from "react-native-keyboard-controller";
 import {
   configureReanimatedLogger,
   ReanimatedLogLevel,
@@ -43,6 +42,7 @@ import {
 
 import { Ionicons, Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import { AppPreparationScreen, type PreparationStage } from "@/components/AppPreparationScreen";
+import { PlatformKeyboardProvider } from "@/components/PlatformKeyboardProvider";
 
 // Reanimated Logger 설정 (한 번만 실행)
 configureReanimatedLogger({
@@ -238,13 +238,13 @@ export default function RootLayout() {
             <DeepLinkProvider>
               <VoiceAssistantProvider>
               <GestureHandlerRootView style={{ flex: 1 }}>
-                <KeyboardProvider>
+                <PlatformKeyboardProvider>
                   <StorageErrorAlert />
                   <Stack screenOptions={{ headerShown: false }}>
                     <Stack.Screen name="index" />
                     <Stack.Screen name="practice" />
                   </Stack>
-                </KeyboardProvider>
+                </PlatformKeyboardProvider>
               </GestureHandlerRootView>
               </VoiceAssistantProvider>
             </DeepLinkProvider>

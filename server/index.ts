@@ -341,10 +341,10 @@ export async function startServer() {
 
   setupErrorHandler(app);
 
-  const isProd = process.env.NODE_ENV === "production";
-  const defaultPort = isProd ? "8081" : "5000";
-  const envPort = process.env.PORT;
-  const port = isProd ? 8081 : parseInt(envPort || defaultPort, 10);
+  const configuredPort = Number.parseInt(process.env.PORT ?? "", 10);
+  const port = Number.isInteger(configuredPort) && configuredPort > 0
+    ? configuredPort
+    : 5000;
   server.listen(
     {
       port,
