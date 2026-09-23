@@ -17,6 +17,7 @@ import {
   stopAndroidFocusProbe,
   _resetAndroidFocusForTests,
   PROBE_PROGRESS_UPDATE_INTERVAL_MS,
+  FOCUS_STABILITY_SAMPLE_COUNT,
 } from "../lib/android-audio-focus";
 import { _resetAudioModeCacheForTests } from "../lib/audio-mode-cache";
 
@@ -64,6 +65,12 @@ function resetAll(os: "android" | "ios") {
   lastAudioMode = null;
   _resetAndroidFocusForTests();
   _resetAudioModeCacheForTests();
+}
+
+function emitStablePlaying(player: MockPlayer, playing: boolean): void {
+  for (let index = 0; index < FOCUS_STABILITY_SAMPLE_COUNT; index += 1) {
+    player._emit({ isLoaded: true, playing });
+  }
 }
 
 // ── 테스트 ──────────────────────────────────────────────────────────────────
@@ -141,7 +148,7 @@ test("playing 이 예기치 않게 false 가 되면 onFocusLoss 가 호출된다
   assert.ok(lastPlayer, "player 있어야 함");
 
   // 시스템이 오디오 포커스를 가져가 playing 이 false 로 전환.
-  lastPlayer!._emit({ isLoaded: true, playing: false });
+  emitStablePlaying(lastPlayer!, false);
   assert.equal(lossCount, 1, "onFocusLoss 가 1회 호출돼야 한다");
   assert.equal(gainCount, 0);
 
@@ -155,10 +162,10 @@ test("playing 이 다시 true 가 되면 onFocusGain 이 호출된다", async ()
   initAndroidFocusCallbacks(() => lossCount++, () => gainCount++);
   await startAndroidFocusProbe();
 
-  lastPlayer!._emit({ isLoaded: true, playing: false });
+  emitStablePlaying(lastPlayer!, false);
   assert.equal(lossCount, 1);
 
-  lastPlayer!._emit({ isLoaded: true, playing: true });
+  emitStablePlaying(lastPlayer!, true);
   assert.equal(gainCount, 1, "onFocusGain 이 1회 호출돼야 한다");
 
   await stopAndroidFocusProbe();
@@ -170,7 +177,7 @@ test("onFocusLoss 는 중복 호출되지 않는다 (멱등)", async () => {
   initAndroidFocusCallbacks(() => lossCount++, () => {});
   await startAndroidFocusProbe();
 
-  lastPlayer!._emit({ isLoaded: true, playing: false });
+  emitStablePlaying(lastPlayer!, false);
   lastPlayer!._emit({ isLoaded: true, playing: false }); // 재전송
   assert.equal(lossCount, 1, "첫 번째 손실 이벤트만 lossCount 를 증가시켜야 한다");
 
@@ -183,8 +190,8 @@ test("onFocusGain 은 중복 호출되지 않는다 (멱등)", async () => {
   initAndroidFocusCallbacks(() => {}, () => gainCount++);
   await startAndroidFocusProbe();
 
-  lastPlayer!._emit({ isLoaded: true, playing: false });
-  lastPlayer!._emit({ isLoaded: true, playing: true });
+  emitStablePlaying(lastPlayer!, false);
+  emitStablePlaying(lastPlayer!, true);
   lastPlayer!._emit({ isLoaded: true, playing: true }); // 중복
   assert.equal(gainCount, 1, "중복 gain 신호는 무시돼야 한다");
 
@@ -237,14 +244,14 @@ test("onFocusLoss 호출 후 프로브가 살아있어 onFocusGain 을 감지할
   await startAndroidFocusProbe();
 
   // 포커스 손실 → onFocusLoss 호출
-  lastPlayer!._emit({ isLoaded: true, playing: false });
+  emitStablePlaying(lastPlayer!, false);
   assert.equal(lossCount, 1, "onFocusLoss 가 호출돼야 한다");
 
   // 프로브가 살아있어야 한다 (probe player 가 아직 있어야 함)
   assert.ok(lastPlayer, "포커스 손실 후에도 probe player 가 남아있어야 한다 (auto-resume 필수)");
 
   // OS 가 포커스를 돌려줌 → probe player 자동 재개 → onFocusGain 호출
-  lastPlayer!._emit({ isLoaded: true, playing: true });
+  emitStablePlaying(lastPlayer!, true);
   assert.equal(gainCount, 1, "probe 가 살아있으므로 onFocusGain 이 호출돼야 한다");
 
   await stopAndroidFocusProbe();
@@ -258,8 +265,8 @@ test("포커스 손실/회복 사이클이 여러 번 반복돼도 정상 동작
   await startAndroidFocusProbe();
 
   for (let i = 0; i < 3; i++) {
-    lastPlayer!._emit({ isLoaded: true, playing: false });
-    lastPlayer!._emit({ isLoaded: true, playing: true });
+    emitStablePlaying(lastPlayer!, false);
+    emitStablePlaying(lastPlayer!, true);
   }
   assert.equal(lossCount, 3, "3 사이클 loss");
   assert.equal(gainCount, 3, "3 사이클 gain");
@@ -267,6 +274,24 @@ test("포커스 손실/회복 사이클이 여러 번 반복돼도 정상 동작
   await stopAndroidFocusProbe();
   // 테스트 종료 후 Platform.OS 복구 (다른 테스트에 영향 없도록).
   (Platform as unknown as Record<string, unknown>).OS = "ios";
+});
+
+test("짧은 false/true 상태 진동은 중단·복구 콜백을 발생시키지 않는다", async () => {
+  resetAll("android");
+  let lossCount = 0;
+  let gainCount = 0;
+  initAndroidFocusCallbacks(() => lossCount++, () => gainCount++);
+  await startAndroidFocusProbe();
+
+  for (let index = 0; index < 50; index += 1) {
+    lastPlayer!._emit({ isLoaded: true, playing: false });
+    lastPlayer!._emit({ isLoaded: true, playing: true });
+  }
+
+  assert.equal(lossCount, 0, "불안정한 false 샘플로 포커스 손실을 선언하면 안 된다");
+  assert.equal(gainCount, 0, "손실이 확정되지 않았는데 복구를 선언하면 안 된다");
+
+  await stopAndroidFocusProbe();
 });
 
 // ── 섹션 B: 우선순위 1 — expo-audio 네이티브 인터럽션 경로 테스트 ─────────

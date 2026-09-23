@@ -54,6 +54,7 @@ import { applyAudioModeIfChanged } from "@/lib/audio-mode-cache";
  * 콜백은 단순 Bundle 읽기 수준이라 50ms 주기로도 배터리/성능 영향은 미미하다.
  */
 export const PROBE_PROGRESS_UPDATE_INTERVAL_MS = 50;
+export const FOCUS_STABILITY_SAMPLE_COUNT = 3;
 
 type FocusCallback = () => void;
 
@@ -61,6 +62,8 @@ interface ProbeState {
   player: AudioPlayer;
   sub: { remove(): void };
   interrupted: boolean;
+  pendingPlaying: boolean | null;
+  pendingCount: number;
 }
 
 let probe: ProbeState | null = null;
@@ -82,6 +85,24 @@ function handlePlaybackStatus(status: AudioStatus): void {
   if (!status.isLoaded) return;
 
   const isPlaying = status.playing;
+  const stablePlaying = !probe.interrupted;
+
+  if (isPlaying === stablePlaying) {
+    probe.pendingPlaying = null;
+    probe.pendingCount = 0;
+    return;
+  }
+
+  if (probe.pendingPlaying === isPlaying) {
+    probe.pendingCount += 1;
+  } else {
+    probe.pendingPlaying = isPlaying;
+    probe.pendingCount = 1;
+  }
+  if (probe.pendingCount < FOCUS_STABILITY_SAMPLE_COUNT) return;
+
+  probe.pendingPlaying = null;
+  probe.pendingCount = 0;
 
   if (!isPlaying && !probe.interrupted) {
     // 우리가 멈추지 않았는데 isPlaying 이 false → audio focus 손실
@@ -228,7 +249,13 @@ export async function startAndroidFocusProbe(): Promise<void> {
     const sub = player.addListener("playbackStatusUpdate", handlePlaybackStatus);
     player.play();
 
-    probe = { player, sub, interrupted: false };
+    probe = {
+      player,
+      sub,
+      interrupted: false,
+      pendingPlaying: null,
+      pendingCount: 0,
+    };
     logger.info("[androidFocus] expo-audio focus probe started");
   } catch (err) {
     logger.warn("[androidFocus] failed to start focus probe:", err);

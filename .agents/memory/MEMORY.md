@@ -74,3 +74,4 @@
 - [Audio output ownership scope](audio-output-ownership-scope.md) — metronome and Polygon share one owner; score playback remains a separate session architecture until explicitly migrated.
 - [Expo Audio foreground MediaSession controls](expo-audio-foreground-mediasession-controls.md) — setActiveForLockScreen starts Android’s media service but also exposes play/pause; bridge those events to the real transport.
 - [Supplemental interruption ownership](supplemental-interruption-ownership.md) — Score-only recovery must not resume the global metronome; explicit stop cancels deferred supplemental resume.
+- [Android focus probe stabilization](android-focus-probe-stabilization.md) — confirm several consecutive status samples before declaring focus loss/gain; single-sample oscillation can create recovery storms.
