@@ -138,6 +138,12 @@ describe("background playback lease", () => {
     lease = beginBackgroundPlaybackLease(controls);
     await lease.ready;
 
+    // A freshly (re)activated keepalive player ignores status flips for a
+    // short grace window (spurious creation-time instability, not a real
+    // remote command — see REMOTE_STATUS_GRACE_MS). Advance past it so this
+    // test exercises a genuine, steady-state remote pause/resume.
+    jest.spyOn(Date, "now").mockReturnValue(Date.now() + 1000);
+
     createdPlayers[0].emitStatus(false);
     expect(controls.pause).toHaveBeenCalledTimes(1);
     expect(_backgroundPlaybackLeaseDebugState().ownerCount).toBe(0);
@@ -146,6 +152,32 @@ describe("background playback lease", () => {
     createdPlayers[0].emitStatus(true);
     expect(controls.resume).toHaveBeenCalledTimes(1);
     expect(_backgroundPlaybackLeaseDebugState().ownerCount).toBe(1);
+    endBackgroundPlaybackLease(lease.token);
+    jest.restoreAllMocks();
+  });
+
+  it("ignores a spurious status flip in the grace window right after activation", async () => {
+    (Platform as unknown as { OS: string }).OS = "android";
+    let playing = true;
+    let lease: ReturnType<typeof beginBackgroundPlaybackLease>;
+    const controls = {
+      isPlaying: () => playing,
+      pause: jest.fn(() => { playing = false; }),
+      resume: jest.fn(() => { playing = true; }),
+    };
+    lease = beginBackgroundPlaybackLease(controls);
+    await lease.ready;
+
+    // No time advance: this simulates the exact real-device failure — a
+    // transient false/true blip from the native player immediately after
+    // creation. It must not toggle real playback, or re-activation of a new
+    // keepalive player for that toggle can itself blip again (the runaway
+    // loop that exhausted heap on-device in ~7s, 2026-09-24).
+    createdPlayers[0].emitStatus(false);
+    expect(controls.pause).not.toHaveBeenCalled();
+    createdPlayers[0].emitStatus(true);
+    expect(controls.resume).not.toHaveBeenCalled();
+
     endBackgroundPlaybackLease(lease.token);
   });
 
