@@ -117,6 +117,7 @@
     "typescript": "~5.9.2"
   },
   "overrides": {
+    "@oclif/plugin-autocomplete": "3.2.40",
     "@isaacs/brace-expansion": ">=5.0.1",
     "minimatch": ">=10.2.3",
     "tar": ">=7.5.10",
