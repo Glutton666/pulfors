@@ -1,8 +1,13 @@
 # Android sparse playback prototype
 
-This module is **not connected to the app or registered for Android autolinking**.
-The native foreground service and clip preparation are incomplete as a playback
-replacement: BPM/Bar schedule changes have not been made atomic between the
-JavaScript engine and native audio, and an Android build or device test has not
-been run. Do not add `expo-module.config.json` or route playback here until those
-gaps are resolved and existing custom/sample-backed patterns are supported.
+This is an Android sparse-playback prototype. It is not registered for Android
+autolinking or connected to app playback. Sparse clip preparation consumes
+final rendered PCM, including custom click and note samples, when each audible
+region fits in a WAV no larger than 1 MiB. It rejects longer continuous regions:
+splitting them across separate SoundPool starts could introduce gaps or clicks.
+Other limits are 256 clip segments, 16 MiB total prepared audio, and a one-hour
+loop period. Limit failures do not fall back to continuous playback.
+
+Native build/runtime validation and an atomic BPM/bar handoff between the
+JavaScript engine and native audio remain unverified. Do not route app playback
+through this prototype until those gaps are addressed and validated.

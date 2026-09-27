@@ -14,3 +14,9 @@ Schedule replacement must be atomic across the engine and native output, includi
 **Why:** A sparse-output prototype passed TypeScript and unit checks but review found that the engine rebuilt immediately while native audio replaced only at a later two-measure boundary, and custom sample configurations could not start. Those are functional regressions even if the foreground service itself is sound.
 
 **How to apply:** Stage both clocks for one acknowledged boundary (or explicitly pause and restart together), then test rapid edits, custom audio, and cancellation before enabling the sparse route in the app. Treat native build plus locked-screen/wired-device tests as required evidence, not a web preview.
+
+Random Bar playback also needs the exact next pass prepared *before* its boundary. The current two-copy rendered loop cannot represent a newly shuffled pass on every measure. Splitting a long continuous sample into several adjacent SoundPool triggers preserves PCM data but cannot guarantee gapless audio.
+
+**Why:** A latest-generation async render only prevents stale results; it does not change when the visual engine commits a random pass or when the native service switches its output. Independent SoundPool starts can add audible gaps at chunk seams.
+
+**How to apply:** Preview/freeze the next random schedule and bind it to a native boundary transaction; use a gapless native output for long tails or explicitly reject them until available. Never treat segment-slice unit tests as proof of seamless playback.

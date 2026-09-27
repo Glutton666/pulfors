@@ -19,8 +19,9 @@ let ownedPreparedWavBytes = 0;
 export interface PrepareSparseClipOptions {
   signal?: AbortSignal;
   /**
-   * Custom samples are not supported by Android sparse playback. The adapter
-   * receives mixed PCM, so callers must identify custom sample configurations.
+   * Kept for source compatibility with callers that identify custom samples.
+   * Preparation operates on the final rendered PCM, so custom samples need no
+   * special handling here.
    */
   hasCustomSamples?: boolean;
 }
@@ -104,9 +105,6 @@ export async function prepareSparseClipFiles(
     throw new RangeError("Stereo PCM channels must have matching lengths");
   }
 
-  if (options.hasCustomSamples) {
-    throw new Error("Android sparse playback does not support custom samples.");
-  }
   if (periodFrames > sampleRate * MAX_PERIOD_SECONDS) {
     throw new Error("This rendered loop exceeds Android sparse playback's one-hour period limit.");
   }
@@ -116,6 +114,8 @@ export async function prepareSparseClipFiles(
   if (intervals.length === 0) return { clipDescriptors: [], periodFrames, dispose() {} };
 
   const preparationId = nextFileNonce++;
+  const bytesPerFrame = channels.length * 2;
+  const maxFramesPerClip = Math.floor((MAX_WAV_BYTES - 44) / bytesPerFrame);
   const parts = intervals.flatMap((interval, index) =>
     descriptorParts(interval, periodFrames, index, preparationId),
   );
@@ -125,8 +125,6 @@ export async function prepareSparseClipFiles(
     );
   }
 
-  const bytesPerFrame = channels.length * 2;
-  const maxFramesPerClip = Math.floor((MAX_WAV_BYTES - 44) / bytesPerFrame);
   let totalWavBytes = 0;
   for (const part of parts) {
     const durationFrames = part.endFrame - part.startFrame;
@@ -135,7 +133,7 @@ export async function prepareSparseClipFiles(
     }
     if (durationFrames > maxFramesPerClip) {
       throw new Error(
-        "An audible region is too long for Android sparse playback's per-file 1 MiB WAV limit. Long or custom sample tails are not supported.",
+        "An audible region is too long for Android sparse playback's per-file 1 MiB WAV limit. Long sample tails are not supported.",
       );
     }
     totalWavBytes += 44 + durationFrames * bytesPerFrame;

@@ -110,6 +110,25 @@ test("cleans completed writes when cancellation arrives during preparation", asy
   expect(releaseMock).toHaveBeenCalledWith("file:///private/cancelled.wav");
 });
 
+test("prepares rendered custom click and note samples without a compatibility fallback", async () => {
+  const rendered = new Float32Array(1000);
+  rendered.set([0.25, -0.5, 0.75], 5);
+  rendered.set([0.125, -0.25], 600);
+
+  const prepared = await prepareSparseClipFiles(rendered, { hasCustomSamples: true });
+
+  assert.deepEqual(prepared.clipDescriptors.map(({ startFrame, durationFrames }) => ({
+    startFrame,
+    durationFrames,
+  })), [
+    { startFrame: 5, durationFrames: 3 },
+    { startFrame: 600, durationFrames: 2 },
+  ]);
+  assert.deepEqual(Array.from(saveMock.mock.calls[0][0] as Float32Array), [0.25, -0.5, 0.75]);
+  assert.deepEqual(Array.from(saveMock.mock.calls[1][0] as Float32Array), [0.125, -0.25]);
+  prepared.dispose();
+});
+
 test("unique filenames isolate concurrently prepared sessions from each other's cleanup", async () => {
   const now = jest.spyOn(Date, "now").mockReturnValue(1234);
   try {
@@ -130,7 +149,7 @@ test("unique filenames isolate concurrently prepared sessions from each other's 
   }
 });
 
-test("rejects native period, per-file, aggregate-byte, custom-sample, and segment-count limits", async () => {
+test("rejects periods, long continuous samples, aggregate bytes, and excess segments", async () => {
   await assert.rejects(
     () => prepareSparseClipFiles(new Float32Array(44100 * 60 * 60 + 1)),
     /one-hour period limit/,
@@ -138,14 +157,11 @@ test("rejects native period, per-file, aggregate-byte, custom-sample, and segmen
 
   const tooLongMonoClip = new Float32Array(524267);
   tooLongMonoClip.fill(0.5);
-  await assert.rejects(() => prepareSparseClipFiles(tooLongMonoClip), /per-file 1 MiB WAV limit/);
-
-  const custom = new Float32Array(100);
-  custom[5] = 1;
   await assert.rejects(
-    () => prepareSparseClipFiles(custom, { hasCustomSamples: true }),
-    /does not support custom samples/,
+    () => prepareSparseClipFiles(tooLongMonoClip, { hasCustomSamples: true }),
+    /per-file 1 MiB WAV limit.*Long sample tails are not supported/,
   );
+  assert.equal(saveMock.mock.calls.length, 0);
 
   const dense = new Float32Array(300000);
   for (let frame = 100; frame < 100 + 257 * 500; frame += 500) dense[frame] = 1;
