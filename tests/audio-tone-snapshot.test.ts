@@ -22,9 +22,25 @@ describe("audio tone snapshots", () => {
     expect(Object.isFrozen(snapshot.defaultTone.position)).toBe(true);
     expect(snapshot.defaultTone.position).toEqual({ x: 0.6, y: -0.2 });
     expect(snapshot.tones.wood.position).toEqual({ x: -1, y: 0 });
-    expect(snapshot.boosted).toBe(true);
+    expect(snapshot.boosted).toBe(false);
     expect(snapshot.outputGain).toBe(1);
-    expect(snapshot.renderGain).toBeCloseTo(4.48);
+    expect(snapshot.volume).toBe(1);
+    expect(snapshot.renderGain).toBeCloseTo(3.6);
+    expect(snapshot.realtimeGain).toBeCloseTo(3.6);
+  });
+
+  it("keeps built-in volume within mute-to-100% semantics", () => {
+    const muted = createAudioToneSnapshot({ volume: 0, defaultSoundSet: "classic" });
+    const negative = createAudioToneSnapshot({ volume: -0.5, defaultSoundSet: "classic" });
+    const legacyBoost = createAudioToneSnapshot({ volume: 1.5, defaultSoundSet: "classic" });
+
+    expect(muted.volume).toBe(0);
+    expect(muted.outputGain).toBe(0);
+    expect(muted.renderGain).toBe(0);
+    expect(muted.realtimeGain).toBe(0);
+    expect(negative.volume).toBe(0);
+    expect(legacyBoost.volume).toBe(1);
+    expect(legacyBoost.boosted).toBe(false);
   });
 
   it("uses exact neutral identity for already-safe PCM without mutation", () => {

@@ -182,6 +182,15 @@ describe("theme settings scope visibility", () => {
 });
 
 describe("sound settings scope visibility", () => {
+  test("built-in volume displays a 0-100% range without boost messaging", () => {
+    const view = render(
+      <SettingsSoundTab scope="global" {...soundProps} volume={1.5} />,
+    );
+
+    expect(view.getByText("100%")).toBeTruthy();
+    expect(view.queryByText("volumeBoostWarning")).toBeNull();
+  });
+
   test("playback popup switch appears only in global settings", () => {
     expect(renderSound("global").getByText("playbackNotifications")).toBeTruthy();
     cleanup();

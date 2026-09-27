@@ -85,7 +85,6 @@ export const translations = {
     loggingHint: { ko: "연습 기록을 분석하여 실력 향상을 도와줍니다", en: "Analyze practice records to help improve your skills" },
     volume: { ko: "볼륨", en: "Volume" },
     volumeWarning: { ko: "⚠️ 너무 큰 볼륨은 청력에 손상을 줄 수 있습니다", en: "⚠️ High volume may damage your hearing" },
-    volumeBoostWarning: { ko: "⚠️ 100% 초과는 시스템 증폭 구간입니다", en: "⚠️ Above 100% uses system amplification" },
     soundFaderTitle: { ko: "사운드 페이더", en: "Sound Fader" },
     toneAttack: { ko: "어택", en: "Attack" },
     toneHigh: { ko: "고음", en: "High" },

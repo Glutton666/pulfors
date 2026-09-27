@@ -109,6 +109,7 @@ export function SettingsSoundTab({
   const trackWidthRef = useRef(0);
   const trackLeftRef = useRef(0);
   const lastHapticRef = useRef(volume);
+  const normalizedVolume = Number.isFinite(volume) ? Math.max(0, Math.min(1, volume)) : 0;
 
   // Sample volume slider state
   const sampleTrackRef = useRef<View>(null);
@@ -157,14 +158,14 @@ export function SettingsSoundTab({
     const w = trackWidthRef.current;
     if (w <= 0) return;
     const relX = pageX - trackLeftRef.current;
-    const newVol = Math.max(0, Math.min(2, (relX / w) * 2));
+    const newVol = Math.max(0, Math.min(1, relX / w));
     const rounded = Math.round(newVol * 100) / 100;
     const step = Math.round(rounded * 10);
     const lastStep = Math.round(lastHapticRef.current * 10);
     if (step !== lastStep) {
       lastHapticRef.current = rounded;
       if (Platform.OS !== "web") {
-        if (rounded === 0 || rounded === 1 || rounded === 2) {
+        if (rounded === 0 || rounded === 1) {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
         } else {
           Haptics.selectionAsync();
@@ -283,8 +284,8 @@ export function SettingsSoundTab({
     document.addEventListener("mouseup", handleUp);
   }, [updateSampleVolumeFromX]);
 
-  const volumeIcon = volume === 0 ? "volume-off" : volume < 0.15 ? "volume-low" : volume < 0.5 ? "volume-medium" : "volume-high";
-  const pct = Math.round(volume * 100);
+  const volumeIcon = normalizedVolume === 0 ? "volume-off" : normalizedVolume < 0.15 ? "volume-low" : normalizedVolume < 0.5 ? "volume-medium" : "volume-high";
+  const pct = Math.round(normalizedVolume * 100);
   const sampleVolPct = Math.round(sampleVolume * 100);
   const sampleVolumeIcon = sampleVolume === 0 ? "volume-off" : sampleVolume < 0.3 ? "volume-low" : sampleVolume < 0.7 ? "volume-medium" : "volume-high";
 
@@ -476,26 +477,19 @@ export function SettingsSoundTab({
             <View
               style={[
                 styles.sliderFill,
-                { width: `${volume * 50}%` as any, backgroundColor: volume > 1.0 ? "#FF4444" : volume >= 0.8 ? "#FF6B35" : C.accent },
+                { width: `${normalizedVolume * 100}%` as any, backgroundColor: normalizedVolume >= 0.8 ? "#FF6B35" : C.accent },
               ]}
             />
           </View>
-          <View style={{ position: "absolute", left: "50%", top: 0, bottom: 0, width: 1.5, backgroundColor: C.textSecondary, opacity: 0.35 }} />
           <View
             style={[
               styles.sliderThumb,
-              { left: `${volume * 50}%` as any, backgroundColor: volume > 1.0 ? "#FF4444" : volume >= 0.8 ? "#FF6B35" : C.accent },
+              { left: `${normalizedVolume * 100}%` as any, backgroundColor: normalizedVolume >= 0.8 ? "#FF6B35" : C.accent },
             ]}
           />
         </View>
-        {volume >= 0.8 && volume <= 1.0 && (
+        {normalizedVolume >= 0.8 && (
           <Text style={[styles.volumeWarning]}>{t("settings", "volumeWarning")}</Text>
-        )}
-        {volume > 1.0 && (
-          <>
-            <Text style={[styles.volumeWarning]}>{t("settings", "volumeWarning")}</Text>
-            <Text style={[styles.volumeWarning, { color: "#FF4444" }]}>{t("settings", "volumeBoostWarning")}</Text>
-          </>
         )}
       </View>
 

@@ -240,7 +240,7 @@ describe("pre-rendered playback reliability", () => {
         defaultSoundSet: "classic",
       }));
     });
-    expect(mockSetPoolsVolume).toHaveBeenCalledWith(expect.closeTo(2.88));
+    expect(mockSetPoolsVolume).toHaveBeenCalledWith(expect.closeTo(3.24));
   });
 
   it("does not replace pool gain while a playback start is still preparing", () => {
@@ -415,7 +415,7 @@ describe("pre-rendered playback reliability", () => {
     await act(async () => { await building; });
 
     expect(mockRenderMeasure).toHaveBeenCalledWith(expect.objectContaining({
-      clickVolume: 3.2,
+      clickVolume: 3.6,
       sampleVolume: 0.6,
       sampleChannels: { "0-0": "left" },
       sampleVolumes: { "0-0": 0.25 },
@@ -1819,15 +1819,19 @@ describe("pre-rendered playback reliability", () => {
     expect(params.showPlaybackStartFailure).not.toHaveBeenCalled();
   });
 
-  it("does not report a startup failure when the rendered player is superseded by another render, even while boosted", async () => {
+  it("does not report a startup failure when the rendered player is superseded by another render, even while tone-shaped", async () => {
     // Regression test: buildRenderedPlayer() collapsed "superseded by another
     // render" (aborted) and "genuinely failed to render" (failed) into the
-    // same null, so a boosted/tone-shaped start racing an unrelated
+    // same null, so a tone-shaped start racing an unrelated
     // stopRenderedAudio() call used to surface a false "startup failed" toast.
     (Platform as unknown as { OS: string }).OS = "android";
     const engine = makeEngine();
     const params = makePlaybackParams(engine, null);
-    params.volumeRef.current = 1.5; // boosted — old code always threw when player was null
+    params.captureAudioToneSnapshot = () => createAudioToneSnapshot({
+      volume: 0.9,
+      defaultSoundSet: "classic",
+      defaultPosition: { x: 0.5, y: 0 },
+    });
     (params as any).prepareRenderedPlayer = jest.fn(async () => ({ status: "superseded" as const }));
     const { result } = renderHook(() => usePlaybackControl(params as any));
 
@@ -1843,11 +1847,15 @@ describe("pre-rendered playback reliability", () => {
     expect(params.setIsPreparing).toHaveBeenCalledWith(false);
   });
 
-  it("still reports a startup failure for a genuine render failure while boosted", async () => {
+  it("still reports a startup failure for a genuine render failure while tone-shaped", async () => {
     (Platform as unknown as { OS: string }).OS = "android";
     const engine = makeEngine();
     const params = makePlaybackParams(engine, null);
-    params.volumeRef.current = 1.5;
+    params.captureAudioToneSnapshot = () => createAudioToneSnapshot({
+      volume: 0.9,
+      defaultSoundSet: "classic",
+      defaultPosition: { x: 0.5, y: 0 },
+    });
     (params as any).prepareRenderedPlayer = jest.fn(async () => ({
       status: "failed" as const,
       error: new Error("render failed"),

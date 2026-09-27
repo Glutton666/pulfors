@@ -63,6 +63,38 @@ test("loadSettings sanitizes per-sound-set tone positions", async () => {
   assert.equal((settings.soundSetTonePositions as Record<string, unknown>).unknown, undefined);
 });
 
+test("loadSettings clamps legacy main and per-mode volumes to 100%", async () => {
+  await AsyncStorage.setItem("metronome_settings", JSON.stringify({
+    volume: 1.75,
+    modeSettings: {
+      beat: { volume: 1.5 },
+      bar: { volume: 0 },
+      note: { volume: -0.5 },
+    },
+  }));
+
+  const settings = await loadSettings();
+  assert.equal(settings.volume, 1);
+  assert.equal(settings.modeSettings?.beat?.volume, 1);
+  assert.equal(settings.modeSettings?.bar?.volume, 0);
+  assert.equal(settings.modeSettings?.note?.volume, 0);
+});
+
+test("saveSettings persists main and per-mode volumes within 0-100%", async () => {
+  await saveSettings({
+    volume: 1.5,
+    modeSettings: {
+      beat: { volume: 2 },
+      bar: { volume: 0 },
+    },
+  } as MetronomeSettings);
+
+  const persisted = JSON.parse(await AsyncStorage.getItem("metronome_settings"));
+  assert.equal(persisted.volume, 1);
+  assert.equal(persisted.modeSettings.beat.volume, 1);
+  assert.equal(persisted.modeSettings.bar.volume, 0);
+});
+
 test("loadSettings keeps known primary instruments and clears unknown ids", async () => {
   await AsyncStorage.setItem("metronome_settings", JSON.stringify({
     primaryInstrumentId: "guitar6",

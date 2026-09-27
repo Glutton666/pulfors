@@ -436,6 +436,32 @@ const DEFAULT_SETTINGS: MetronomeSettings = {
   beatStaffNotation: false,
 };
 
+function clampMetronomeVolume(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value)
+    ? Math.max(0, Math.min(1, value))
+    : undefined;
+}
+
+function isOutOfRangeMetronomeVolume(value: unknown): boolean {
+  return typeof value === "number" && Number.isFinite(value) && (value < 0 || value > 1);
+}
+
+function normalizeSettingsVolumes(settings: MetronomeSettings): MetronomeSettings {
+  const normalized: MetronomeSettings = { ...settings };
+  const volume = clampMetronomeVolume(settings.volume);
+  if (volume !== undefined) normalized.volume = volume;
+  if (isPlainObject(settings.modeSettings)) {
+    normalized.modeSettings = Object.fromEntries(
+      Object.entries(settings.modeSettings).map(([mode, value]) => {
+        if (!isPlainObject(value)) return [mode, value];
+        const profileVolume = clampMetronomeVolume(value.volume);
+        return [mode, profileVolume === undefined ? value : { ...value, volume: profileVolume }];
+      }),
+    ) as MetronomeSettings["modeSettings"];
+  }
+  return normalized;
+}
+
 export async function loadSettings(): Promise<MetronomeSettings> {
   try {
     const [data, legacyStageData] = await Promise.all([
@@ -445,7 +471,13 @@ export async function loadSettings(): Promise<MetronomeSettings> {
     if (data) {
       const parsed: unknown = JSON.parse(data);
       if (!isPlainObject(parsed)) return DEFAULT_SETTINGS;
+      const savedProfiles = isPlainObject(parsed.modeSettings) ? parsed.modeSettings : {};
+      const needsVolumeMigration = isOutOfRangeMetronomeVolume(parsed.volume)
+        || Object.values(savedProfiles).some(
+          (profile) => isPlainObject(profile) && isOutOfRangeMetronomeVolume(profile.volume),
+        );
       const merged: MetronomeSettings = { ...DEFAULT_SETTINGS, ...parsed } as MetronomeSettings;
+      merged.volume = clampMetronomeVolume(merged.volume) ?? DEFAULT_SETTINGS.volume;
       const knownInstrumentIds = new Set(
         TUNING_DATA.flatMap((category) => category.instruments.map((instrument) => instrument.id)),
       );
@@ -475,11 +507,11 @@ export async function loadSettings(): Promise<MetronomeSettings> {
         barRandomStrategy: merged.barRandomStrategy,
         beatStaffNotation: merged.beatStaffNotation,
       };
-      const savedProfiles = isPlainObject(merged.modeSettings) ? merged.modeSettings : {};
       merged.modeSettings = {};
       for (const mode of ["beat", "bar", "note", "stage"] as MetronomeMode[]) {
         const saved = isPlainObject(savedProfiles[mode]) ? savedProfiles[mode] : {};
         const profile = { ...legacyProfile, ...saved } as ModeSettings;
+        profile.volume = clampMetronomeVolume(profile.volume) ?? merged.volume;
         profile.soundSetTonePositions = sanitizeTonePositions(profile.soundSetTonePositions);
         profile.barMetronomeChannel = normalizeSampleChannel(profile.barMetronomeChannel);
         if (mode === "stage") {
@@ -498,7 +530,7 @@ export async function loadSettings(): Promise<MetronomeSettings> {
         merged.modeSettings[mode] = profile;
       }
       const savedStageProfile = isPlainObject(savedProfiles.stage) ? savedProfiles.stage : {};
-      if (legacyStageData && !isPlainObject(savedStageProfile.stageOptions)) {
+      if ((legacyStageData && !isPlainObject(savedStageProfile.stageOptions)) || needsVolumeMigration) {
         void saveSettings(merged, { notifyOnError: false }).catch(() => {});
       }
       return merged;
@@ -553,7 +585,7 @@ export async function saveSettings(
 ): Promise<void> {
   return enqueueSettingsStorageOperation(async () => {
     try {
-      await AsyncStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+      await AsyncStorage.setItem(SETTINGS_KEY, JSON.stringify(normalizeSettingsVolumes(settings)));
     } catch (e) {
       if (options.notifyOnError !== false) {
         notifyStorageError({ key: SETTINGS_KEY, operation: "save", error: e });

@@ -78,7 +78,7 @@ describe("audio playback plans", () => {
       audio,
       config: dialConfig as any,
     });
-    const boosted = buildPlaybackPlan({
+    const legacyBoost = buildPlaybackPlan({
       mode: "beat",
       platform: "web",
       bpm: 120,
@@ -108,7 +108,7 @@ describe("audio playback plans", () => {
     });
 
     expect(realtime.output.strategy).toBe("realtime");
-    expect(boosted.output).toMatchObject({ strategy: "prerender", boosted: true });
+    expect(legacyBoost.output).toMatchObject({ strategy: "realtime", boosted: false });
     expect(bar.output.strategy).toBe("prerender");
   });
 

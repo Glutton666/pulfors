@@ -8,7 +8,7 @@ import {
   type TonePosition,
 } from "@/lib/metronome-tone-dsp";
 
-export const BUILTIN_CLICK_SOURCE_GAIN = 3.2;
+export const BUILTIN_CLICK_SOURCE_GAIN = 3.6;
 export const AUDIO_OUTPUT_CEILING = 0.98;
 const NEUTRAL_TONE = Object.freeze({
   position: NEUTRAL,
@@ -43,7 +43,7 @@ export interface AudioToneShape {
 }
 
 function finiteNonNegative(value: number): number {
-  return Number.isFinite(value) ? Math.max(0, value) : 0;
+  return Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : 0;
 }
 
 export function createAudioToneSnapshot(
@@ -62,9 +62,7 @@ export function createAudioToneSnapshot(
     input.defaultPosition ?? tones[input.defaultSoundSet]?.position ?? NEUTRAL,
   );
   const outputGain = Math.min(1, volume);
-  const renderGain = volume === 0
-    ? 0
-    : BUILTIN_CLICK_SOURCE_GAIN * Math.max(1, volume);
+  const renderGain = volume === 0 ? 0 : BUILTIN_CLICK_SOURCE_GAIN;
   const realtimeGain = outputGain * BUILTIN_CLICK_SOURCE_GAIN;
 
   return Object.freeze({
@@ -72,7 +70,9 @@ export function createAudioToneSnapshot(
     outputGain,
     renderGain,
     realtimeGain,
-    boosted: volume > 1,
+    // Retained for playback-plan compatibility; built-in volume no longer
+    // supports an above-100% amplification mode.
+    boosted: false,
     toneShaped: defaultTone.active,
     defaultSoundSet: input.defaultSoundSet,
     defaultTone,

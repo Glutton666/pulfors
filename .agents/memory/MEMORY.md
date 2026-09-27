@@ -76,3 +76,4 @@
 - [Supplemental interruption ownership](supplemental-interruption-ownership.md) — Score-only recovery must not resume the global metronome; explicit stop cancels deferred supplemental resume.
 - [Android focus probe stabilization](android-focus-probe-stabilization.md) — confirm several consecutive status samples before declaring focus loss/gain; single-sample oscillation can create recovery storms.
 - [Background lease keepalive status grace window](background-lease-keepalive-status-grace.md) — ignore keepalive-player status flips for a short window right after (re)activation, or a spurious flip can loop pause/resume and exhaust heap.
+- [Android sparse-output boundary](android-sparse-output-boundary.md) — do not remove continuous audio for click-only output until a native clock and foreground-service replacement preserve locked-screen playback.
