@@ -30,6 +30,16 @@ const makeEngine = (events: string[]) => ({
   setBlockPlayMode: jest.fn((mode: PlaybackMode) => {
     events.push(`engine-mode:${mode}`);
   }),
+  previewScheduleForRandomBarOrder: jest.fn((order: number[]) => ({
+    ticks: order.map((beat, index) => ({
+      beat,
+      subBeat: 0,
+      time: index * 100,
+      type: "normal",
+      isMainBeat: true,
+    })),
+    durationMs: order.length * 100,
+  })),
   getIsRunning: jest.fn(() => true),
 }) as unknown as MetronomeEngine;
 
@@ -148,6 +158,46 @@ describe("useRandomBarSession behavior", () => {
     expect(events.indexOf("state-mode:loop")).toBeLessThan(
       events.indexOf("engine-mode:loop"),
     );
+  });
+
+  it("previews and consumes the identical cached random chunk without rerolling", async () => {
+    const events: string[] = [];
+    const blockPlayModeRef = { current: "loop" as PlaybackMode };
+    const engine = makeEngine(events);
+    const engineRef = { current: engine };
+    const fixture = makeParams(
+      { isPlaying: false },
+      events,
+      engineRef,
+      blockPlayModeRef,
+    );
+    fixture.barLoopModeRef.current = "loop";
+    const { result } = renderHook(() =>
+      useRandomBarSession({ ...fixture, isPlaying: false }),
+    );
+
+    await act(async () => {
+      await result.current.handleRandomBarPlay(async () => true);
+    });
+
+    const firstPreview = result.current.previewNextRandomBarChunk(engine);
+    expect(firstPreview).not.toBeNull();
+    expect(firstPreview?.order).toEqual(
+      result.current.randomBarPreparedChunkRef.current?.chunk,
+    );
+    expect(firstPreview?.ticks.map(tick => tick.beat)).toEqual(firstPreview?.order);
+    const previewOrder = [...(firstPreview?.order ?? [])];
+    const previewMethod = engine.previewScheduleForRandomBarOrder as jest.Mock;
+    const previewCalls = previewMethod.mock.calls.length;
+
+    const repeatedPreview = result.current.previewNextRandomBarChunk(engine);
+    expect(repeatedPreview?.order).toEqual(previewOrder);
+    expect(previewMethod).toHaveBeenCalledTimes(previewCalls);
+
+    act(() => result.current.advanceRandomBarChunk(engine));
+    expect(engine.setRandomBarOrder).toHaveBeenLastCalledWith(previewOrder);
+    expect(result.current.randomBarChunkStartRef.current).toBe(previewOrder.length);
+    expect(result.current.randomBarPreparedChunkRef.current).toBeNull();
   });
 
   it("stops before clearing the session when explicitly returning while playing", async () => {

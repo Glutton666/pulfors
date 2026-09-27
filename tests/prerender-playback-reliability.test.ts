@@ -43,17 +43,50 @@ const mockProcessClickPCM = jest.fn((
   pcm: Float32Array,
   _position: { x: number; y: number },
 ) => pcm);
+const mockSparsePrepare = jest.fn();
+const mockSparseStart = jest.fn();
+const mockSparseReplace = jest.fn();
+const mockSparseStop = jest.fn();
+const mockSparseListener = () => ({ remove: jest.fn() });
+const mockBeginBackgroundPlaybackLease = jest.fn(() => ({
+  token: Symbol("test-background-playback"),
+  ready: Promise.resolve(true),
+}));
+let mockSparseStartWallClock = 0;
+let mockSparseModuleAvailable = true;
+const originalSparseFeatureFlag = process.env.EXPO_PUBLIC_ENABLE_ANDROID_SPARSE_AUDIO;
 
 jest.mock("expo-audio", () => ({
   createAudioPlayer: (source: unknown) => mockCreateAudioPlayer(source),
 }));
 
 jest.mock("@/lib/background-playback-lease", () => ({
-  beginBackgroundPlaybackLease: () => ({
-    token: Symbol("test-background-playback"),
-    ready: Promise.resolve(true),
-  }),
+  beginBackgroundPlaybackLease: () => mockBeginBackgroundPlaybackLease(),
   endBackgroundPlaybackLease: jest.fn(),
+}));
+
+jest.mock("@/lib/notification-controls", () => ({
+  setSparseNotificationMode: jest.fn(),
+  setSparsePlaybackActive: jest.fn(),
+  isSparsePlaybackActive: jest.fn(() => false),
+  registerSparsePlaybackStopper: jest.fn(),
+  stopActiveSparsePlayback: jest.fn(),
+}));
+
+jest.mock("@/modules/sparse-metronome/src", () => ({
+  get isSparseMetronomeAvailable() {
+    return mockSparseModuleAvailable;
+  },
+  SparseMetronome: {
+    prepare: (...args: unknown[]) => mockSparsePrepare(...args),
+    start: (...args: unknown[]) => mockSparseStart(...args),
+    replace: (...args: unknown[]) => mockSparseReplace(...args),
+    stop: (...args: unknown[]) => mockSparseStop(...args),
+  },
+  addSparseMetronomeErrorListener: mockSparseListener,
+  addSparseMetronomeInterruptionListener: mockSparseListener,
+  addSparseMetronomeReplacementListener: mockSparseListener,
+  addSparseMetronomeTimingOverrunListener: mockSparseListener,
 }));
 
 jest.mock("@/lib/audio-renderer", () => ({
@@ -76,6 +109,8 @@ jest.mock("@/lib/audio-renderer", () => ({
     mockReleaseRenderedWav(uri);
     if (uri.startsWith("blob:")) URL.revokeObjectURL(uri);
   },
+  getRenderSampleRate: () => 44100,
+  resampleForPlaybackSpeed: (pcm: Float32Array) => pcm,
   ensureWebClickBuffers: jest.fn(async () => true),
   playWebRenderedLoop: (
     pcm: unknown,
@@ -220,6 +255,19 @@ describe("pre-rendered playback reliability", () => {
     mockSetPoolsVolume.mockClear();
     jest.clearAllMocks();
     (Platform as unknown as { OS: string }).OS = "ios";
+    process.env.EXPO_PUBLIC_ENABLE_ANDROID_SPARSE_AUDIO = "1";
+    mockSparseModuleAvailable = true;
+    mockSparseStartWallClock = Date.now() + 120;
+    mockSparsePrepare.mockResolvedValue({ status: "prepared" });
+    mockSparseStart.mockImplementation(async () => ({
+      status: "started",
+      startWallClockTimeMillis: mockSparseStartWallClock,
+    }));
+    mockSparseReplace.mockImplementation(async () => ({
+      status: "replacementScheduled",
+      nextBoundaryWallClockTimeMillis: mockSparseStartWallClock + 250,
+    }));
+    mockSparseStop.mockResolvedValue({ status: "stopped" });
   });
 
   it("keeps active pool gain unchanged until an explicit snapshot replacement", () => {
@@ -260,6 +308,11 @@ describe("pre-rendered playback reliability", () => {
 
   afterEach(() => {
     (Platform as unknown as { OS: string }).OS = "ios";
+    if (originalSparseFeatureFlag === undefined) {
+      delete process.env.EXPO_PUBLIC_ENABLE_ANDROID_SPARSE_AUDIO;
+    } else {
+      process.env.EXPO_PUBLIC_ENABLE_ANDROID_SPARSE_AUDIO = originalSparseFeatureFlag;
+    }
     (syncStereoArtifact as jest.Mock).mockReset();
     jest.useRealTimers();
   });
@@ -968,6 +1021,173 @@ describe("pre-rendered playback reliability", () => {
     expect(params.flushPlaybackVisuals.mock.invocationCallOrder[0])
       .toBeGreaterThan(params.setIsPlaying.mock.invocationCallOrder.at(-1)!);
     expect(params.showPlayingNotification).toHaveBeenCalledTimes(1);
+  });
+
+  it("starts a selected Bar beat with a partial sparse period and replaces it with the full pass", async () => {
+    (Platform as unknown as { OS: string }).OS = "android";
+    const engine = makeEngine();
+    engine.getScheduleInfo.mockReturnValue({
+      ticks: [
+        { time: 0, type: "strong", beat: 0, subBeat: 0, repeatIteration: 0, barRepeatIteration: 0 },
+        { time: 250, type: "normal", beat: 1, subBeat: 0, repeatIteration: 0, barRepeatIteration: 0 },
+      ],
+      durationMs: 500,
+    });
+    const params = makePlaybackParams(engine, null);
+    params.barModeRef.current = true;
+    (params.barStartBeatRef as { current: number | null }).current = 1;
+    params.barConfigRef.current = {
+      beatTypes: ["strong", "normal"],
+      beatSubdivisions: {},
+      subdivisionPattern: ["accent"],
+      barRepeats: {},
+      loopBlocks: [],
+      noteSamples: {},
+      noteSampleNames: {},
+      noteSampleSources: {},
+      noteSampleChannels: {},
+      noteSampleVolumes: {},
+      noteSampleSpeeds: {},
+      noteSampleMetroChannels: {},
+    } as any;
+    params.getPlaybackContext.mockReturnValue({
+      bpm: 120,
+      modeLabel: "Bar",
+      activityMode: "bar",
+      bpmSource: "bar",
+    });
+    const { result, unmount } = renderHook(() => usePlaybackControl(params as any));
+
+    await act(async () => {
+      await result.current.togglePlayPause();
+    });
+
+    expect(mockSparsePrepare).toHaveBeenCalledTimes(2);
+    expect(mockSparsePrepare.mock.calls[0][2]).toBe(11025);
+    expect(mockSparsePrepare.mock.calls[1][2]).toBe(22050);
+    expect(mockSparsePrepare.mock.calls[0][1]).toHaveLength(1);
+    expect(mockSparsePrepare.mock.calls[1][1]).toHaveLength(3);
+    expect(mockSparseReplace).toHaveBeenCalledTimes(1);
+    expect(engine.setPreRenderedAudio).toHaveBeenCalledWith(true);
+    expect(engine.start).toHaveBeenCalledWith(expect.objectContaining({
+      startFromBeat: 1,
+      startAtPerformanceTime: expect.any(Number),
+    }));
+    expect(params.prepareRenderedPlayer).not.toHaveBeenCalled();
+    unmount();
+  });
+
+  it("prepares and replaces a supplied-order random Bar preview when the engine has none", async () => {
+    (Platform as unknown as { OS: string }).OS = "android";
+    const engine = makeEngine();
+    const previewTicks = [{
+      time: 0,
+      type: "accent",
+      beat: 0,
+      subBeat: 0,
+      repeatIteration: 0,
+      barRepeatIteration: 0,
+    }];
+    (engine as any).getUpcomingRandomScheduleInfo = jest.fn(() => null);
+    const player = { ...mockPlayer, play: jest.fn() };
+    const params = makePlaybackParams(engine, player);
+    params.barModeRef.current = true;
+    params.blockPlayModeRef.current = "random";
+    (params as any).previewNextRandomBarChunk = jest.fn(() => ({
+      ticks: previewTicks,
+      durationMs: 500,
+    }));
+    params.barConfigRef.current = {
+      beatTypes: ["strong"],
+      beatSubdivisions: {},
+      subdivisionPattern: ["accent"],
+      barRepeats: {},
+      loopBlocks: [],
+      noteSamples: {},
+      noteSampleNames: {},
+      noteSampleSources: {},
+      noteSampleChannels: {},
+      noteSampleVolumes: {},
+      noteSampleSpeeds: {},
+      noteSampleMetroChannels: {},
+    } as any;
+    params.getPlaybackContext.mockReturnValue({
+      bpm: 120,
+      modeLabel: "Bar",
+      activityMode: "bar",
+      bpmSource: "bar",
+    });
+    const { result } = renderHook(() => usePlaybackControl(params as any));
+
+    await act(async () => {
+      await result.current.togglePlayPause();
+    });
+
+    expect((engine as any).getUpcomingRandomScheduleInfo).toHaveBeenCalledTimes(1);
+    expect((params as any).previewNextRandomBarChunk).toHaveBeenCalledWith(engine);
+    expect(mockSparsePrepare).toHaveBeenCalledTimes(2);
+    expect(mockSparsePrepare.mock.calls.map(([, , periodFrames]) => periodFrames))
+      .toEqual([22050, 22050]);
+    expect(mockSparseReplace).toHaveBeenCalledTimes(1);
+    expect(mockSparseStart).toHaveBeenCalledTimes(1);
+    expect(engine.setPreRenderedAudio).toHaveBeenCalledWith(true);
+    expect(params.prepareRenderedPlayer).not.toHaveBeenCalled();
+    expect(params.stopRenderedAudio).toHaveBeenCalledTimes(1);
+    expect(mockBeginBackgroundPlaybackLease).not.toHaveBeenCalled();
+    expect(player.play).not.toHaveBeenCalled();
+  });
+
+  it("stops instead of allowing random Bar visuals to outrun a late initial replacement", async () => {
+    (Platform as unknown as { OS: string }).OS = "android";
+    const engine = makeEngine();
+    (engine as any).getUpcomingRandomScheduleInfo = jest.fn(() => ({
+      ticks: [{
+        time: 0,
+        type: "accent",
+        beat: 0,
+        subBeat: 0,
+        repeatIteration: 0,
+        barRepeatIteration: 0,
+      }],
+      durationMs: 500,
+    }));
+    const params = makePlaybackParams(engine, null);
+    params.barModeRef.current = true;
+    params.blockPlayModeRef.current = "random";
+    params.barConfigRef.current = {
+      beatTypes: ["strong"],
+      beatSubdivisions: {},
+      subdivisionPattern: ["accent"],
+      barRepeats: {},
+      loopBlocks: [],
+      noteSamples: {},
+      noteSampleNames: {},
+      noteSampleSources: {},
+      noteSampleChannels: {},
+      noteSampleVolumes: {},
+      noteSampleSpeeds: {},
+      noteSampleMetroChannels: {},
+    } as any;
+    params.getPlaybackContext.mockReturnValue({
+      bpm: 120,
+      modeLabel: "Bar",
+      activityMode: "bar",
+      bpmSource: "bar",
+    });
+    mockSparseReplace.mockImplementationOnce(async () => ({
+      status: "replacementScheduled",
+      nextBoundaryWallClockTimeMillis: mockSparseStartWallClock + 1000,
+    }));
+    const { result } = renderHook(() => usePlaybackControl(params as any));
+
+    await act(async () => {
+      await result.current.togglePlayPause();
+    });
+
+    expect(mockSparsePrepare).toHaveBeenCalledTimes(2);
+    expect(mockSparseReplace).toHaveBeenCalledTimes(1);
+    expect(params.showPlaybackStartFailure).toHaveBeenCalledTimes(1);
+    expect(params.setIsPlaying).toHaveBeenLastCalledWith(false);
   });
 
   it("starts a preconfigured Note queue schedule without replacing it with Beat settings", async () => {
@@ -1687,8 +1907,8 @@ describe("pre-rendered playback reliability", () => {
     );
   });
 
-  it("keeps realtime startup in preparing until the first audio activity arrives", async () => {
-    (Platform as unknown as { OS: string }).OS = "android";
+  it("keeps iOS realtime startup in preparing until first audio activity arrives", async () => {
+    (Platform as unknown as { OS: string }).OS = "ios";
     const engine = makeEngine();
     let confirmActivity!: (value: boolean) => void;
     const params = makePlaybackParams(engine, null);
@@ -1775,8 +1995,8 @@ describe("pre-rendered playback reliability", () => {
     expect(params.setIsPlaying).toHaveBeenCalledWith(false);
   });
 
-  it("returns to stopped state when realtime startup has no audio activity", async () => {
-    (Platform as unknown as { OS: string }).OS = "android";
+  it("returns iOS playback to stopped state when realtime startup has no audio activity", async () => {
+    (Platform as unknown as { OS: string }).OS = "ios";
     const engine = makeEngine();
     const params = makePlaybackParams(engine, null);
     params.waitForFirstAudioActivity.mockResolvedValue(false);
@@ -1792,8 +2012,8 @@ describe("pre-rendered playback reliability", () => {
     expect(params.showPlaybackStartFailure).toHaveBeenCalledTimes(1);
   });
 
-  it("does not treat an intentionally all-muted realtime schedule as startup failure", async () => {
-    (Platform as unknown as { OS: string }).OS = "android";
+  it("does not treat an intentionally all-muted iOS realtime schedule as startup failure", async () => {
+    (Platform as unknown as { OS: string }).OS = "ios";
     const engine = makeEngine();
     engine.getScheduleInfo.mockReturnValue({
       ticks: [{
@@ -1824,7 +2044,7 @@ describe("pre-rendered playback reliability", () => {
     // render" (aborted) and "genuinely failed to render" (failed) into the
     // same null, so a tone-shaped start racing an unrelated
     // stopRenderedAudio() call used to surface a false "startup failed" toast.
-    (Platform as unknown as { OS: string }).OS = "android";
+    (Platform as unknown as { OS: string }).OS = "ios";
     const engine = makeEngine();
     const params = makePlaybackParams(engine, null);
     params.captureAudioToneSnapshot = () => createAudioToneSnapshot({
@@ -1848,7 +2068,7 @@ describe("pre-rendered playback reliability", () => {
   });
 
   it("still reports a startup failure for a genuine render failure while tone-shaped", async () => {
-    (Platform as unknown as { OS: string }).OS = "android";
+    (Platform as unknown as { OS: string }).OS = "ios";
     const engine = makeEngine();
     const params = makePlaybackParams(engine, null);
     params.captureAudioToneSnapshot = () => createAudioToneSnapshot({
@@ -1893,7 +2113,7 @@ describe("pre-rendered playback reliability", () => {
     jest.useRealTimers();
   });
 
-  it("uses a rendered loop for Android Beat mode so dense accent roles stay ordered", async () => {
+  it("uses sparse native events for Android Beat without starting a rendered or silent player", async () => {
     (Platform as unknown as { OS: string }).OS = "android";
     const engine = makeEngine();
     const player = { ...mockPlayer, volume: 0.35 };
@@ -1905,15 +2125,70 @@ describe("pre-rendered playback reliability", () => {
       await result.current.togglePlayPause();
     });
 
-    expect(params.prepareRenderedPlayer).toHaveBeenCalledTimes(1);
+    expect(mockSparsePrepare).toHaveBeenCalledTimes(1);
+    expect(mockSparseStart).toHaveBeenCalledTimes(1);
+    expect(mockSparsePrepare.mock.calls[0][2]).toBe(22050);
+    expect(mockSparsePrepare.mock.calls[0][1]).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          uri: "file:///rendered.wav",
+          startFrame: 0,
+          durationFrames: 1,
+        }),
+      ]),
+    );
+    expect(params.prepareRenderedPlayer).not.toHaveBeenCalled();
     expect(engine.setPreRenderedAudio).toHaveBeenCalledWith(true);
     expect(engine.start).toHaveBeenCalledTimes(1);
-    expect(player.play).toHaveBeenCalledTimes(1);
-    expect(player.play.mock.invocationCallOrder[0])
-      .toBeLessThan(engine.start.mock.invocationCallOrder[0]);
+    expect(player.play).not.toHaveBeenCalled();
+    expect(mockBeginBackgroundPlaybackLease).not.toHaveBeenCalled();
+    expect(mockSaveRenderedWav.mock.calls.every(([_, filename]) =>
+      String(filename).startsWith("sparse_event_"),
+    )).toBe(true);
   });
 
-  it("uses the rendered player for Android Beat custom sound sets", async () => {
+  it("keeps Android on the legacy playback path when the sparse feature flag is absent", async () => {
+    delete process.env.EXPO_PUBLIC_ENABLE_ANDROID_SPARSE_AUDIO;
+    (Platform as unknown as { OS: string }).OS = "android";
+    const engine = makeEngine();
+    const player = { ...mockPlayer, play: jest.fn() };
+    const params = makePlaybackParams(engine, player);
+    const { result } = renderHook(() => usePlaybackControl(params as any));
+
+    await act(async () => {
+      await result.current.togglePlayPause();
+    });
+
+    expect(params.prepareRenderedPlayer).toHaveBeenCalledTimes(1);
+    expect(player.play).toHaveBeenCalledTimes(1);
+    expect(mockSparsePrepare).not.toHaveBeenCalled();
+    expect(mockSparseStart).not.toHaveBeenCalled();
+    expect(mockBeginBackgroundPlaybackLease).toHaveBeenCalledTimes(1);
+  });
+
+  it("fails explicitly when sparse playback is opted in but the native module is unavailable", async () => {
+    process.env.EXPO_PUBLIC_ENABLE_ANDROID_SPARSE_AUDIO = "1";
+    mockSparseModuleAvailable = false;
+    (Platform as unknown as { OS: string }).OS = "android";
+    const engine = makeEngine();
+    const player = { ...mockPlayer, play: jest.fn() };
+    const params = makePlaybackParams(engine, player);
+    const { result } = renderHook(() => usePlaybackControl(params as any));
+
+    await act(async () => {
+      await result.current.togglePlayPause();
+    });
+
+    expect(params.showPlaybackStartFailure).toHaveBeenCalledTimes(1);
+    expect(params.prepareRenderedPlayer).not.toHaveBeenCalled();
+    expect(mockSparsePrepare).not.toHaveBeenCalled();
+    expect(mockSparseStart).not.toHaveBeenCalled();
+    expect(mockBeginBackgroundPlaybackLease).not.toHaveBeenCalled();
+    expect(player.play).not.toHaveBeenCalled();
+    expect(engine.start).not.toHaveBeenCalled();
+  });
+
+  it("prepares Android Beat custom sound sets as sparse native event voices", async () => {
     (Platform as unknown as { OS: string }).OS = "android";
     const engine = makeEngine();
     const player = { ...mockPlayer, volume: 0.35, play: jest.fn() };
@@ -1926,10 +2201,73 @@ describe("pre-rendered playback reliability", () => {
       await result.current.togglePlayPause();
     });
 
-    expect(params.prepareRenderedPlayer).toHaveBeenCalledTimes(1);
+    expect(params.getClickPCMs).toHaveBeenCalledWith(
+      "custom1",
+      expect.any(AbortSignal),
+      expect.any(Object),
+      null,
+    );
+    expect(mockSparsePrepare).toHaveBeenCalledTimes(1);
+    expect(mockSparseStart).toHaveBeenCalledTimes(1);
+    expect(params.prepareRenderedPlayer).not.toHaveBeenCalled();
     expect(engine.setPreRenderedAudio).toHaveBeenCalledWith(true);
     expect(engine.start).toHaveBeenCalledTimes(1);
-    expect(player.play).toHaveBeenCalledTimes(1);
+    expect(player.play).not.toHaveBeenCalled();
+    expect(mockBeginBackgroundPlaybackLease).not.toHaveBeenCalled();
+  });
+
+  it("fails Android sparse preparation explicitly instead of falling back to rendered playback", async () => {
+    (Platform as unknown as { OS: string }).OS = "android";
+    const engine = makeEngine();
+    const params = makePlaybackParams(engine, { ...mockPlayer, play: jest.fn() });
+    mockSparsePrepare.mockRejectedValueOnce(new Error("unsupported sparse sample"));
+    const { result } = renderHook(() => usePlaybackControl(params as any));
+
+    await act(async () => {
+      await result.current.togglePlayPause();
+    });
+
+    expect(mockSparsePrepare).toHaveBeenCalledTimes(1);
+    expect(mockSparseStart).not.toHaveBeenCalled();
+    expect(params.prepareRenderedPlayer).not.toHaveBeenCalled();
+    expect(engine.start).not.toHaveBeenCalled();
+    expect(params.showPlaybackStartFailure).toHaveBeenCalledTimes(1);
+    expect(mockBeginBackgroundPlaybackLease).not.toHaveBeenCalled();
+  });
+
+  it("stops a sparse native preparation cancelled before its acknowledgement", async () => {
+    (Platform as unknown as { OS: string }).OS = "android";
+    const engine = makeEngine();
+    const params = makePlaybackParams(engine, null);
+    let resolvePrepare!: (value: unknown) => void;
+    mockSparsePrepare.mockImplementationOnce(
+      () => new Promise((resolve) => { resolvePrepare = resolve; }),
+    );
+    const { result } = renderHook(() => usePlaybackControl(params as any));
+
+    let starting!: Promise<unknown>;
+    act(() => {
+      starting = result.current.togglePlayPause();
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(mockSparsePrepare).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      await result.current.togglePlayPause();
+    });
+    await act(async () => {
+      resolvePrepare({ status: "prepared" });
+      await starting;
+    });
+
+    expect(mockSparseStart).not.toHaveBeenCalled();
+    expect(mockSparseStop).toHaveBeenCalledTimes(1);
+    expect(engine.start).not.toHaveBeenCalled();
+    expect(params.setIsPlaying).not.toHaveBeenCalledWith(true);
+    expect(mockBeginBackgroundPlaybackLease).not.toHaveBeenCalled();
   });
 
   it("configures immediate Bar playback only from the Bar-owned snapshot", async () => {

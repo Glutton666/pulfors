@@ -180,6 +180,7 @@ export class MetronomeEngine {
   private cachedMeasureDurationMs = 0;
   private scheduleDirty = true;
   private scheduleIndex = 0;
+  private upcomingRandomSchedule: { ticks: ScheduledTick[]; durationMs: number } | null = null;
   private measureStartTime = 0;
   private measureDurationMs = 0;
   private measureCount = 0;
@@ -305,6 +306,7 @@ export class MetronomeEngine {
   private invalidateScheduleCache() {
     this.scheduleDirty = true;
     this.cachedSchedule = null;
+    this.upcomingRandomSchedule = null;
   }
 
   setBpm(bpm: number) {
@@ -406,6 +408,48 @@ export class MetronomeEngine {
   setRandomBarOrder(order: number[] | null) {
     this.randomBarOrder = order?.filter(index => Number.isInteger(index) && index >= 0) ?? null;
     this.invalidateScheduleCache();
+  }
+
+  /**
+   * Builds the deterministic schedule for a caller-owned random-Bar order
+   * without publishing it as the active schedule or consuming the active
+   * random generator. The caller can prepare audio from this snapshot before
+   * installing the exact same order at the measure boundary.
+   */
+  previewScheduleForRandomBarOrder(
+    order: number[],
+  ): { ticks: ScheduledTick[]; durationMs: number } {
+    const normalizedOrder = order.filter(index =>
+      Number.isInteger(index) && index >= 0 && index < this.beatsPerMeasure,
+    );
+    if (normalizedOrder.length === 0) {
+      throw new RangeError("A random Bar preview requires at least one valid source beat.");
+    }
+
+    const previousOrder = this.randomBarOrder;
+    const previousDuration = this.measureDurationMs;
+    const previousBlockCache = new Map(this.blockEmitCache);
+    const previousBlockCacheBuilt = this.lastBlockCacheBuilt;
+    const previousBlockCacheReused = this.lastBlockCacheReused;
+    const previousScheduleCacheHit = this.lastScheduleCacheHit;
+    try {
+      // Build directly rather than through buildScheduleMemoized(): the
+      // supplied order is deterministic and must not enter/evict active cache
+      // entries or select a nondeterministic random pass.
+      this.randomBarOrder = [...normalizedOrder];
+      const ticks = this.buildSchedule().map(tick => ({ ...tick }));
+      return { ticks, durationMs: this.measureDurationMs };
+    } finally {
+      this.randomBarOrder = previousOrder;
+      this.measureDurationMs = previousDuration;
+      this.blockEmitCache.clear();
+      for (const [key, value] of previousBlockCache) {
+        this.blockEmitCache.set(key, value);
+      }
+      this.lastBlockCacheBuilt = previousBlockCacheBuilt;
+      this.lastBlockCacheReused = previousBlockCacheReused;
+      this.lastScheduleCacheHit = previousScheduleCacheHit;
+    }
   }
 
   clearLoopBlocks() {
@@ -549,6 +593,36 @@ export class MetronomeEngine {
     return {
       ticks: this.schedule.slice(),
       durationMs: this.measureDurationMs,
+    };
+  }
+
+  /**
+   * Preselects and returns the next nondeterministic random Bar pass without
+   * advancing the active schedule. Calling this repeatedly before rollover
+   * returns the same pass; rollover consumes it without calling the RNG again.
+   *
+   * Consumers preparing audio for the next pass should call this while the
+   * current pass is active, then use the returned ticks and duration together.
+   * Returns null for non-random schedules and caller-supplied random orders.
+   */
+  getUpcomingRandomScheduleInfo(): { ticks: ScheduledTick[]; durationMs: number } | null {
+    if (!this.isRandomNonDeterministic() || this.randomBarOrder?.length) return null;
+    if (this.schedule.length === 0 || this.scheduleDirty) {
+      this.buildScheduleOnly();
+    }
+    if (!this.upcomingRandomSchedule) {
+      const currentDuration = this.measureDurationMs;
+      const ticks = this.buildScheduleMemoized().map(tick => ({ ...tick }));
+      this.upcomingRandomSchedule = {
+        ticks,
+        durationMs: this.measureDurationMs,
+      };
+      // Building a preview must not alter the active pass's duration.
+      this.measureDurationMs = currentDuration;
+    }
+    return {
+      ticks: this.upcomingRandomSchedule.ticks.map(tick => ({ ...tick })),
+      durationMs: this.upcomingRandomSchedule.durationMs,
     };
   }
 
@@ -1176,7 +1250,23 @@ export class MetronomeEngine {
     this.measureStartTime =
       this.anchorWallTime +
       (this.measureCount - this.anchorMeasureCount) * this.anchorMeasureDurationMs;
-    if (this.scheduleDirty || !this.cachedSchedule || this.blockPlayMode === "random") {
+    const preselectedRandom = !this.randomBarOrder?.length &&
+      this.upcomingRandomSchedule;
+    if (preselectedRandom) {
+      this.schedule = preselectedRandom.ticks;
+      this.measureDurationMs = preselectedRandom.durationMs;
+      this.cachedSchedule = this.schedule;
+      this.cachedMeasureDurationMs = this.measureDurationMs;
+      this.upcomingRandomSchedule = null;
+      if (this.preRenderedAudio) {
+        if (this.onScheduleRebuild) {
+          this.onScheduleRebuild();
+        } else {
+          this.preRenderedAudio = false;
+        }
+      }
+      this.scheduleDirty = false;
+    } else if (this.scheduleDirty || !this.cachedSchedule || this.blockPlayMode === "random") {
       this.schedule = this.buildScheduleMemoized();
       if (this.blockPlayMode !== "random") {
         this.cachedSchedule = this.schedule;
@@ -1465,6 +1555,7 @@ export class MetronomeEngine {
   stop() {
     this.isRunning = false;
     this.stopAfterMeasure = false;
+    this.upcomingRandomSchedule = null;
     if (this.timerId) {
       clearTimeout(this.timerId);
       this.timerId = null;

@@ -25,6 +25,8 @@ android/
 !modules/audio-decoder/ios/**
 !modules/audio-decoder/android/
 !modules/audio-decoder/android/**
+!modules/sparse-metronome/android/
+!modules/sparse-metronome/android/**
 *.orig.*
 *.jks
 *.p8

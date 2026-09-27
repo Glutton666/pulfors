@@ -16,6 +16,32 @@ const CATEGORY_ID = "metronome_controls";
 const NOTIFICATION_ID = "metronome_playback";
 
 let isSetup = false;
+let sparseNotificationMode = false;
+let sparsePlaybackActive = false;
+let sparsePlaybackStopper: (() => void) | null = null;
+
+/** Sparse Beat/Bar output uses its own non-MediaSession foreground service. */
+export function setSparseNotificationMode(enabled: boolean): void {
+  sparseNotificationMode = enabled;
+}
+
+/** Lightweight shared ownership state for audio-pipeline handoffs. */
+export function setSparsePlaybackActive(active: boolean): void {
+  sparsePlaybackActive = active;
+}
+
+export function isSparsePlaybackActive(): boolean {
+  return sparsePlaybackActive;
+}
+
+export function registerSparsePlaybackStopper(stop: (() => void) | null): void {
+  sparsePlaybackStopper = stop;
+}
+
+/** Lets the shared audio pipeline relinquish sparse native ownership. */
+export function stopActiveSparsePlayback(): void {
+  sparsePlaybackStopper?.();
+}
 let Notifications: typeof import("expo-notifications") | null = null;
 
 // Expo SDK 54에서 appOwnership이 deprecated — executionEnvironment도 함께 확인
@@ -234,9 +260,8 @@ export async function showPausedNotification(
   if (!N) return;
 
   try {
-    // 정지 상태에서도 무음 플레이어로 MediaSessionService를 유지해야 알림의
-    // 재생 액션을 앱 화면을 띄우지 않고 받을 수 있다.
-    await holdForegroundForPausedNotification();
+    // Sparse Beat/Bar deliberately avoids the legacy silent-player MediaSession.
+    if (!sparseNotificationMode) await holdForegroundForPausedNotification();
     await N.setNotificationCategoryAsync(
       CATEGORY_ID,
       buildNotificationActions(false, lang)
@@ -245,7 +270,7 @@ export async function showPausedNotification(
       !arePlaybackNotificationsEnabled() ||
       getPlaybackNotificationsRevision() !== preferenceRevision
     ) {
-      releasePausedNotificationHold();
+      if (!sparseNotificationMode) releasePausedNotificationHold();
       return;
     }
 
@@ -255,7 +280,7 @@ export async function showPausedNotification(
       trigger: null,
     });
   } catch (e) {
-    releasePausedNotificationHold();
+    if (!sparseNotificationMode) releasePausedNotificationHold();
     logger.warn("Show paused notification error:", e);
   }
 }

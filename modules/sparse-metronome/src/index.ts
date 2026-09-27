@@ -1,13 +1,13 @@
 import { requireOptionalNativeModule } from 'expo-modules-core';
 
 export type SparseClipDescriptor = {
-  /** Stable identifier unique within a prepared session. */
+  /** Stable event identifier unique within a prepared session. */
   id: string;
-  /** A file:// URI under this app's private files/cache/no-backup directories. */
+  /** A file:// URI under this app's private files/cache/no-backup directories; unique samples may reuse it. */
   uri: string;
-  /** Frame offset within the complete rendered loop (44.1 kHz). */
+  /** Event frame offset within a loop (44.1 kHz). */
   startFrame: number;
-  /** PCM frames in this segment; the WAV must be exactly this long at 44.1 kHz. */
+  /** PCM frames in this event; may extend across loop boundaries and must match the WAV's exact frame count. */
   durationFrames: number;
   /**
    * Optional pair for an interval crossing the loop boundary. Supply one head
@@ -20,10 +20,14 @@ export type SparseClipDescriptor = {
 export type SparseSessionAck = {
   sessionId: string;
   status: 'prepared' | 'started' | 'replacementScheduled' | 'stopped';
-  /** Present for started; exact decimal elapsedRealtimeNanos anchor for the first loop frame. */
+  /** Present for started; elapsedRealtimeNanos anchor for the first loop frame, scheduled 120 ms ahead. */
   startElapsedRealtimeNanos?: string;
-  /** Present for replacementScheduled; Android elapsedRealtimeNanos clock. */
+  /** Android wall-clock estimate corresponding to startElapsedRealtimeNanos. */
+  startWallClockTimeMillis?: number;
+  /** Present for replacementScheduled; next loop boundary in Android elapsedRealtimeNanos. */
   nextBoundaryElapsedRealtimeNanos?: string;
+  /** Android wall-clock estimate corresponding to nextBoundaryElapsedRealtimeNanos. */
+  nextBoundaryWallClockTimeMillis?: number;
 };
 
 export type SparseMetronomeErrorEvent = {
@@ -41,6 +45,8 @@ export type SparseMetronomeReplacementEvent = {
   previousSessionId: string;
   sessionId: string;
   boundaryElapsedRealtimeNanos: string;
+  /** Android wall-clock estimate corresponding to boundaryElapsedRealtimeNanos. */
+  boundaryWallClockTimeMillis?: number;
 };
 
 /** Recoverable schedule delay; skipped clips/cycles do not stop playback. */
@@ -89,10 +95,13 @@ const unsupported = async (): Promise<never> => {
 };
 
 /**
- * Best-effort sparse clip scheduler. Clips are preloaded with SoundPool and
- * triggered from a native HandlerThread against elapsedRealtimeNanos. Android
- * mixer/device latency is variable; this API does not promise sample-exact
- * timing or that the hardware DAC is idle between clips.
+ * Best-effort sparse PCM WAV event scheduler. Unique WAV URIs are prepared
+ * once per session and may be reused by multiple event descriptors; each
+ * descriptor keeps its own start frame and duration. Android MediaPlayer
+ * voices are started by a native HandlerThread against elapsedRealtimeNanos.
+ * Android mixer/device latency is variable; this API does not promise
+ * sample-exact output timing or that the hardware audio path/DAC is idle
+ * between events.
  *
  * The module lookup is optional, so importing this API is safe in Expo Go and
  * on unsupported platforms. Check `isSparseMetronomeAvailable` before choosing
@@ -102,21 +111,33 @@ const unsupported = async (): Promise<never> => {
  * service always attempts `startForeground`; actual startup failures reject
  * the command with `FOREGROUND_SERVICE_START_FAILED`.
  *
- * Limits: up to 256 clip segments and 32 concurrent SoundPool streams per
- * session, <=1 MiB per WAV, 16 MiB total across prepared/retiring WAV files,
+ * Limits: up to 256 event descriptors, 32 required overlapping playback
+ * voices per session, <=128 MiB per PCM16 WAV, 256 MiB total unique WAV files
+ * across prepared/retiring sessions, an event duration of at most 30 minutes,
  * a loop of at most one hour at 44.1 kHz, and at most two loaded sessions.
+ * WAVs must be mono/stereo 16-bit integer PCM at 44.1 kHz and their frame
+ * counts must exactly match durationFrames. A repeated URI must declare the
+ * same durationFrames on every descriptor. Durations may cross any number of
+ * loop boundaries; the service prepares enough voices to preserve overlaps.
+ * Unsupported WAVs, size/voice limits, and decoder failures reject explicitly.
  * Empty (all-silent) loops are valid: the service maintains the clock and
- * notification without submitting audio. Wrapping intervals are supplied as
- * a head at frame 0 and a tail ending at periodFrames.
- * Segments may not cross a loop boundary.
+ * general foreground-service notification without submitting audio. This
+ * module does not create a MediaSession or media notification card. Legacy
+ * wrapping head/tail descriptors remain accepted.
  * Clips more than 50 ms overdue are skipped rather than burst-played. Duration
- * is caller supplied and must match the WAV frame count; SoundPool/device
- * playback duration remains best-effort. Over-limit preparation rejects with
- * explicit size/interval errors and never falls back to another audio backend.
+ * is caller supplied and validated against the WAV frame count; Android
+ * decoder/device playback duration remains best-effort. Over-limit preparation
+ * rejects with explicit size/interval errors and never falls back to a
+ * continuous/silent audio backend.
  * Recoverable scheduling delays are emitted through the separate
  * `onTimingOverrun` listener, not the fatal `onError` channel.
- * Old samples remain loaded through
- * their declared tail duration plus a 150 ms cleanup grace after replacement.
+ * `startElapsedRealtimeNanos` is a future first-frame scheduling anchor with a
+ * 120 ms lead, so JS can receive the acknowledgement before that frame is
+ * scheduled to run. Its paired wall-clock estimate (and the corresponding
+ * replacement-boundary pair) can correlate Android monotonic times with JS
+ * wall/performance clocks; wall-clock changes still apply.
+ * Old samples remain loaded through their declared tail duration plus a 150 ms
+ * cleanup grace after replacement.
  * Native monotonic timestamps are decimal strings to avoid JS Number precision
  * loss; convert with BigInt when needed.
  */

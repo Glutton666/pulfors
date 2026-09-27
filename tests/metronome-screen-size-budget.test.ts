@@ -1,8 +1,10 @@
 import { readFileSync, statSync } from "node:fs";
 
 const SCREEN_HOOK_PATH = "hooks/useMetronomeScreen.ts";
-const MAX_SCREEN_HOOK_BYTES = 167_409;
-const MAX_SCREEN_HOOK_LINES = 4_228;
+// Ratchet after wiring native sparse ownership, random-pass preview, and
+// stopped-only editing guards; further growth should still be reviewed.
+const MAX_SCREEN_HOOK_BYTES = 168_667;
+const MAX_SCREEN_HOOK_LINES = 4_254;
 
 describe("useMetronomeScreen size budget", () => {
   it("does not exceed the ratcheted byte budget", () => {

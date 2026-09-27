@@ -2,6 +2,9 @@
   "expo": {
     "name": "PulFors",
     "slug": "pulfors",
+    "autolinking": {
+      "nativeModulesDir": "modules"
+    },
     "version": "1.0.0",
     "runtimeVersion": {
       "policy": "appVersion"

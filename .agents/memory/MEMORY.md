@@ -77,3 +77,4 @@
 - [Android focus probe stabilization](android-focus-probe-stabilization.md) — confirm several consecutive status samples before declaring focus loss/gain; single-sample oscillation can create recovery storms.
 - [Background lease keepalive status grace window](background-lease-keepalive-status-grace.md) — ignore keepalive-player status flips for a short window right after (re)activation, or a spurious flip can loop pause/resume and exhaust heap.
 - [Android sparse-output boundary](android-sparse-output-boundary.md) — do not remove continuous audio for click-only output until a native clock and foreground-service replacement preserve locked-screen playback.
+- [Native random-pass handoff](native-random-pass-handoff.md) — freeze the next visual/audio order before a native boundary; a late JS rollover cannot safely schedule the pass after the fact.

@@ -1,6 +1,7 @@
 import { useRef, useEffect } from "react";
 import {
   addNotificationActionListener,
+  isSparsePlaybackActive,
   updateNotificationBpm,
 } from "@/lib/notification-controls";
 import { captureBreadcrumb } from "@/lib/error-tracking";
@@ -13,6 +14,8 @@ interface UseNotificationBridgeParams {
   getPlaybackContextRef: React.MutableRefObject<() => PlaybackContext>;
   setPlaybackBpmRef: React.MutableRefObject<(bpm: number, context: PlaybackContext) => void>;
   stopRenderedAudio: () => void;
+  isPlayingRef: React.MutableRefObject<boolean>;
+  isPreparingRef: React.MutableRefObject<boolean>;
   togglePlaybackRef: React.MutableRefObject<(() => Promise<boolean | undefined>) | null>;
 }
 
@@ -26,7 +29,7 @@ interface UseNotificationBridgeParams {
 export function useNotificationBridge(params: UseNotificationBridgeParams): void {
   const {
     engineRef, languageRef, getPlaybackContextRef, setPlaybackBpmRef,
-    stopRenderedAudio, togglePlaybackRef,
+    stopRenderedAudio, togglePlaybackRef, isPlayingRef, isPreparingRef,
   } = params;
 
   // Double-tap accumulator for BPM_UP / BPM_DOWN: single tap → ±1, double → ±5.
@@ -44,8 +47,15 @@ export function useNotificationBridge(params: UseNotificationBridgeParams): void
         }
 
         if (actionId === "BPM_DOWN" || actionId === "BPM_UP") {
+          if (isPlayingRef.current || isPreparingRef.current || isSparsePlaybackActive()) {
+            if (bpmTapTimerRef.current) clearTimeout(bpmTapTimerRef.current);
+            bpmTapTimerRef.current = null;
+            bpmTapCountRef.current = { direction: "", count: 0 };
+            return;
+          }
           const dir = actionId;
           const applyBpmDelta = (delta: number) => {
+            if (isPlayingRef.current || isPreparingRef.current || isSparsePlaybackActive()) return;
             const playback = getPlaybackContextRef.current();
             const newBpm = Math.max(20, Math.min(300, playback.bpm + delta));
             setPlaybackBpmRef.current(newBpm, playback);

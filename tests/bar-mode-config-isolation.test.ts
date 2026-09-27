@@ -58,9 +58,9 @@ describe("Beat and Bar rhythm profile isolation", () => {
 
   test("Stage controls keep Bar edits on the Bar-owned callbacks", () => {
     expect(uiSource).toContain(
-      "onBpmChange={barMode ? handleBarBpmChange : updateBpm}",
+      "onBpmChange={barMode ? guardedBarBpmChange : tutorialBpmChange}",
     );
-    expect(uiSource).toContain("onBeatsPerMeasureChange={updateTimeSignature}");
+    expect(uiSource).toContain("onBeatsPerMeasureChange={guardedTimeSignatureChange}");
     expect(uiSource).toContain("barMode={barMode}");
     expect(uiSource).not.toContain("barMode={false}");
     expect(screenSource).toContain("if (barModeRef.current)");

@@ -61,6 +61,8 @@ interface UseKeyboardShortcutsParams {
   showKbShortcutsRef: React.MutableRefObject<boolean>;
   showNativeKbHintRef: React.MutableRefObject<boolean>;
   engineRef: React.MutableRefObject<MetronomeEngine | null>;
+  /** Set by the owner while audio startup is preparing but the engine is not running yet. */
+  isPreparingRef?: React.MutableRefObject<boolean>;
   togglePlayPauseRef: React.MutableRefObject<() => void>;
   handleBarModeChangeRef: React.MutableRefObject<(toBarMode: boolean) => void>;
   handleAddBarRef: React.MutableRefObject<() => void>;
@@ -99,7 +101,7 @@ export function useKeyboardShortcuts(params: UseKeyboardShortcutsParams): UseKey
     beatsPerMeasureRef, updateTimeSignatureRef,
     barModeRef, barStartBeatRef, noteModeRef, stopwatchTimerRef, stopwatchTimerLandscapeRef,
     subdivisionPatternRef, beatTypesRef, dialConfigRef, handleNoteTogglePlayRef, anyModalOpenRef,
-    showKbShortcutsRef, showNativeKbHintRef, engineRef,
+    showKbShortcutsRef, showNativeKbHintRef, engineRef, isPreparingRef,
     togglePlayPauseRef, setNoteMode, handleBarModeChangeRef, setShowKbShortcuts, setShowNativeKbHint,
     handleAddBarRef, applyCurrentBeatSubdivisionRef, appendBarSubdivisionRef, removeBarSubdivisionRef,
     barKeyboardActionsRef, noteNextRef, recorderKeyboardActionsRef,
@@ -125,7 +127,14 @@ export function useKeyboardShortcuts(params: UseKeyboardShortcutsParams): UseKey
       repeatCountRef.current = 0;
     };
 
+    const isPlaybackEditLocked = () =>
+      (engineRef.current?.getIsRunning() ?? false) || (isPreparingRef?.current ?? false);
+
     const applyActiveBpm = (nextBpm: number) => {
+      if (isPlaybackEditLocked()) {
+        clearRepeat();
+        return;
+      }
       if (barModeRef.current) {
         handleBarBpmChangeRef.current(nextBpm);
       } else {
@@ -139,6 +148,10 @@ export function useKeyboardShortcuts(params: UseKeyboardShortcutsParams): UseKey
     };
 
     const applyBeatDelta = (delta: number) => {
+      if (isPlaybackEditLocked()) {
+        clearRepeat();
+        return;
+      }
       updateTimeSignatureRef.current(beatsPerMeasureRef.current + delta);
     };
 
@@ -219,6 +232,7 @@ export function useKeyboardShortcuts(params: UseKeyboardShortcutsParams): UseKey
         return;
       }
 
+      const playbackEditLocked = isPlaybackEditLocked();
       const playing = engineRef.current?.getIsRunning() ?? false;
       if (inBarMode && !playing) {
         if (matchesBinding(e, b.barPrevious) || matchesBinding(e, b.barNext)) {
@@ -232,6 +246,7 @@ export function useKeyboardShortcuts(params: UseKeyboardShortcutsParams): UseKey
 
         if (matchesBinding(e, b.barBlock)) {
           e.preventDefault();
+          if (playbackEditLocked) return;
           const selected = barStartBeatRef.current;
           if (selected === null) return;
           if (pendingBlockStart === null) {
@@ -256,6 +271,7 @@ export function useKeyboardShortcuts(params: UseKeyboardShortcutsParams): UseKey
         for (const { binding, symbol } of symbolShortcuts) {
           if (matchesBinding(e, binding)) {
             e.preventDefault();
+            if (playbackEditLocked) return;
             barKeyboardActionsRef.current.applySymbol(symbol);
             return;
           }
@@ -268,18 +284,21 @@ export function useKeyboardShortcuts(params: UseKeyboardShortcutsParams): UseKey
         }
         if (matchesBinding(e, b.barPaste)) {
           e.preventDefault();
+          if (playbackEditLocked) return;
           barKeyboardActionsRef.current.paste();
           barDurationDigits = "";
           return;
         }
         if (matchesBinding(e, b.barRepeatMode)) {
           e.preventDefault();
+          if (playbackEditLocked) return;
           barKeyboardActionsRef.current.toggleRepeatMode();
           barDurationDigits = "";
           return;
         }
         if (matchesBinding(e, b.barAddLayer)) {
           e.preventDefault();
+          if (playbackEditLocked) return;
           barKeyboardActionsRef.current.addLayer();
           return;
         }
@@ -302,6 +321,7 @@ export function useKeyboardShortcuts(params: UseKeyboardShortcutsParams): UseKey
           !e.metaKey
         ) {
           e.preventDefault();
+          if (playbackEditLocked) return;
           const digit = Number(e.code.slice(5));
           if (barKeyboardActionsRef.current.getRepeatMode() === "count") {
             barKeyboardActionsRef.current.setRepeatValue(digit);
@@ -331,6 +351,7 @@ export function useKeyboardShortcuts(params: UseKeyboardShortcutsParams): UseKey
         matchesBinding(e, b.applySubdivision)
       ) {
         e.preventDefault();
+        if (playbackEditLocked) return;
         applyCurrentBeatSubdivisionRef.current();
         return;
       }
@@ -345,7 +366,7 @@ export function useKeyboardShortcuts(params: UseKeyboardShortcutsParams): UseKey
           return;
         }
         e.preventDefault();
-        if (engineRef.current?.getIsRunning()) return;
+        if (isPlaybackEditLocked() && barStartBeatRef.current === null) return;
         if (barStartBeatRef.current === null) {
           handleAddBarRef.current();
         } else {
@@ -366,6 +387,7 @@ export function useKeyboardShortcuts(params: UseKeyboardShortcutsParams): UseKey
           return;
         }
         e.preventDefault();
+        if (playbackEditLocked) return;
         const now = performance.now();
         if (tapTimestamps.length > 0 && now - tapTimestamps[tapTimestamps.length - 1] > TAP_RESET_MS) {
           tapTimestamps.length = 0;
@@ -389,6 +411,7 @@ export function useKeyboardShortcuts(params: UseKeyboardShortcutsParams): UseKey
       // Arrow Up/Down — beats ±1 (with key-repeat acceleration)
       if (matchesBinding(e, b.bpmUp) || matchesBinding(e, b.bpmDown)) {
         e.preventDefault();
+        if (playbackEditLocked) return;
         const delta = matchesBinding(e, b.bpmUp) ? 1 : -1;
         applyBeatDelta(delta);
         if (heldKeyRef.current !== e.code) {
@@ -407,6 +430,7 @@ export function useKeyboardShortcuts(params: UseKeyboardShortcutsParams): UseKey
       // Arrow Left/Right — BPM ±5 (with key-repeat acceleration)
       if (matchesBinding(e, b.bpmRight) || matchesBinding(e, b.bpmLeft)) {
         e.preventDefault();
+        if (playbackEditLocked) return;
         const delta = matchesBinding(e, b.bpmRight) ? 5 : -5;
         applyBpmDelta(delta);
         if (heldKeyRef.current !== e.code) {
@@ -475,6 +499,7 @@ export function useKeyboardShortcuts(params: UseKeyboardShortcutsParams): UseKey
         for (const { binding, type } of barSubdivisionShortcuts) {
           if (matchesBinding(e, binding)) {
             e.preventDefault();
+            if (playbackEditLocked) return;
             appendBarSubdivisionRef.current(type);
             return;
           }
@@ -483,6 +508,7 @@ export function useKeyboardShortcuts(params: UseKeyboardShortcutsParams): UseKey
         // Backspace — remove the selected bar's final subdivision cell.
         if (matchesBinding(e, b.barRemoveSubdivision)) {
           e.preventDefault();
+          if (playbackEditLocked) return;
           removeBarSubdivisionRef.current();
           return;
         }
@@ -498,6 +524,7 @@ export function useKeyboardShortcuts(params: UseKeyboardShortcutsParams): UseKey
         for (const { binding, type } of addBeatShortcuts) {
           if (matchesBinding(e, binding)) {
             e.preventDefault();
+            if (playbackEditLocked) return;
             const cur = beatsPerMeasureRef.current;
             if (cur < 16) {
               const newBeats = cur + 1;
@@ -519,6 +546,7 @@ export function useKeyboardShortcuts(params: UseKeyboardShortcutsParams): UseKey
         // D — remove last beat
         if (matchesBinding(e, b.removeBeat)) {
           e.preventDefault();
+          if (playbackEditLocked) return;
           const cur = beatsPerMeasureRef.current;
           if (cur > 1) {
             const newBeats = cur - 1;
@@ -560,6 +588,7 @@ export function useKeyboardShortcuts(params: UseKeyboardShortcutsParams): UseKey
         for (const { binding, type } of addSubShortcuts) {
           if (matchesBinding(e, binding)) {
             e.preventDefault();
+            if (playbackEditLocked) return;
             const p = subdivisionPatternRef.current;
             if (p.length < 9) {
               const newP: BeatType[] = [...p, type];
@@ -575,6 +604,7 @@ export function useKeyboardShortcuts(params: UseKeyboardShortcutsParams): UseKey
         // Shift+D — remove last subdivision cell
         if (matchesBinding(e, b.removeSub)) {
           e.preventDefault();
+          if (playbackEditLocked) return;
           const p = subdivisionPatternRef.current;
           if (p.length > 1) {
             const newP = p.slice(0, -1);
@@ -590,6 +620,7 @@ export function useKeyboardShortcuts(params: UseKeyboardShortcutsParams): UseKey
       // 0 — cycle subdivision cell types (beat mode only)
       if (!barModeRef.current && !noteModeRef.current && matchesBinding(e, b.cycleBeatTypes)) {
         e.preventDefault();
+        if (playbackEditLocked) return;
         const subCycleOrder: BeatType[] = ["strong", "accent", "normal", "mute"];
         const prev = subdivisionPatternRef.current;
         const first = prev[0] || "normal";
@@ -616,6 +647,7 @@ export function useKeyboardShortcuts(params: UseKeyboardShortcutsParams): UseKey
       // L — loop mode toggle (bar mode)
       if (inBarMode && matchesBinding(e, b.loopToggle)) {
         e.preventDefault();
+        if (playbackEditLocked) return;
         setBarLoopMode((prev) => (prev === "once" ? "loop" : "once"));
         return;
       }
@@ -623,6 +655,7 @@ export function useKeyboardShortcuts(params: UseKeyboardShortcutsParams): UseKey
       // G — block play mode cycle (bar mode)
       if (inBarMode && matchesBinding(e, b.blockPlayModeNext)) {
         e.preventDefault();
+        if (playbackEditLocked) return;
         setBlockPlayMode((prev) => {
           const order: ("sequential" | "loop" | "random")[] = ["sequential", "loop", "random"];
           const idx = order.indexOf(prev);

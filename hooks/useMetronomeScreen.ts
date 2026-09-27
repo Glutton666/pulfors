@@ -27,6 +27,7 @@ import {
   updateNotificationBpm,
   dismissNotification,
   addNotificationActionListener,
+  isSparsePlaybackActive,
 } from "@/lib/notification-controls";
 import Animated, {
   useAnimatedStyle,
@@ -821,6 +822,7 @@ export function useMetronomeScreen() {
     handleApplyRandomBarSession: applyRandomBarFromHook,
     handleReturnToOriginalBarList: returnToOriginalBarFromHook,
     advanceRandomBarChunk,
+    previewNextRandomBarChunk,
   } = useRandomBarSession({
     strategy: barRandomStrategy,
     setStrategy: setBarRandomStrategy,
@@ -1270,6 +1272,7 @@ export function useMetronomeScreen() {
     };
 
     engine.setCustomSampleCallback((beat: number, subBeat: number) => {
+      if (isSparsePlaybackActive()) return false;
       if (fadeOutMutedRef.current) return false;
       if (!barModeRef.current) return false;
       const keys = sampleSlotKeys(beat, subBeat);
@@ -1588,6 +1591,7 @@ export function useMetronomeScreen() {
     });
 
     engine.setOnScheduleRebuild(() => {
+      if (isSparsePlaybackActive()) return;
       stopRenderedAudio();
       if (Platform.OS === "web") {
         // A random pass or failed/replaced schedule must not leave the previous
@@ -2061,6 +2065,7 @@ export function useMetronomeScreen() {
     capturePlaybackError: (message, error, level = "error") =>
       captureBreadcrumb({ category: "metronome", message, level, data: { error: String(error) } }),
     onPlaybackStopped: finishRandomBarPlay,
+    previewNextRandomBarChunk,
   });
 
   useEffect(() => {
@@ -2391,7 +2396,7 @@ export function useMetronomeScreen() {
     beatsPerMeasureRef, updateTimeSignatureRef,
     barModeRef, barStartBeatRef, noteModeRef, stopwatchTimerRef, stopwatchTimerLandscapeRef,
     subdivisionPatternRef, beatTypesRef, dialConfigRef, handleNoteTogglePlayRef, anyModalOpenRef,
-    showKbShortcutsRef, showNativeKbHintRef, engineRef,
+    showKbShortcutsRef, showNativeKbHintRef, engineRef, isPreparingRef,
     togglePlayPauseRef, setNoteMode, handleBarModeChangeRef, setShowKbShortcuts, setShowNativeKbHint,
     handleAddBarRef: handleAddBarKeyboardRef,
     applyCurrentBeatSubdivisionRef,
@@ -2408,7 +2413,7 @@ export function useMetronomeScreen() {
   // ── Notification bridge (TOGGLE_PLAY / BPM_UP / BPM_DOWN from lock screen) ─
   useNotificationBridge({
     engineRef, languageRef, getPlaybackContextRef, setPlaybackBpmRef,
-    stopRenderedAudio, togglePlaybackRef: togglePlayPauseRef,
+    stopRenderedAudio, isPlayingRef, isPreparingRef, togglePlaybackRef: togglePlayPauseRef,
   });
 
 
@@ -2522,6 +2527,18 @@ export function useMetronomeScreen() {
           return;
         }
         if (elapsed === sess.N) {
+          if (isSparsePlaybackActive()) {
+            // A rendered-loop mute does not mute native sparse events. Until
+            // silent/audible replacement sessions are supported, stop rather
+            // than let sound continue through the supposedly muted phase.
+            fadeOutMutedRef.current = false;
+            fadeOutSessionRef.current = null;
+            fadeOutMeasureCountRef.current = 0;
+            setFadeOutPhase(null);
+            setFadeOutMeasureInPhase(0);
+            stopMetronomeRef.current("fade_out");
+            return;
+          }
           fadeOutMutedRef.current = true;
           // pre-rendered loop (webRenderedLoopRef / renderedPlayerRef)는
           // fadeOutMutedRef를 확인하지 않으므로 반드시 명시적으로 중단해야 한다.
@@ -2541,6 +2558,15 @@ export function useMetronomeScreen() {
         // ── Seamless setlist advance ──────────────────────────────────
         // 다음 항목이 예약돼 있으면 엔진을 즉시 재시작 (정지 없음 = gap 없음).
         const seamlessNext = seamlessNextEntryRef.current;
+        if (seamlessNext && isSparsePlaybackActive()) {
+          // The legacy setlist handoff restarts only the JS engine. Keeping
+          // native sparse audio alive here would play the previous entry over
+          // the new visuals. Stop cleanly until a native boundary handoff is
+          // implemented for setlists.
+          seamlessNextEntryRef.current = null;
+          stopMetronomeRef.current("measure_complete");
+          return;
+        }
         if (seamlessNext) {
           seamlessNextEntryRef.current = null;
           const entryIsBar = seamlessNext.mode === "bar";

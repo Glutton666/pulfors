@@ -38,15 +38,25 @@ import {
   addNotificationActionListener,
   buildNotificationActions,
   setPlaybackNotificationsEnabled,
+  setSparseNotificationMode,
+  setSparsePlaybackActive,
+  isSparsePlaybackActive,
+  registerSparsePlaybackStopper,
+  stopActiveSparsePlayback,
+  showPausedNotification,
   showPlayingNotification,
   setupNotificationControls,
 } from "../lib/notification-controls";
+import * as androidForegroundService from "../lib/android-foreground-service";
 
 let liveResponseListener: ((response: { actionIdentifier: string }) => void) | null = null;
 
 beforeEach(() => {
   jest.clearAllMocks();
   setPlaybackNotificationsEnabled(false);
+  setSparseNotificationMode(false);
+  setSparsePlaybackActive(false);
+  registerSparsePlaybackStopper(null);
   mockRequestPermissionsAsync.mockResolvedValue({ status: "granted" });
   mockDeleteNotificationChannelAsync.mockResolvedValue(undefined);
   mockSetNotificationChannelAsync.mockResolvedValue(undefined);
@@ -58,6 +68,7 @@ beforeEach(() => {
     liveResponseListener = listener;
     return { remove: jest.fn() };
   });
+  jest.spyOn(androidForegroundService, "holdForegroundForPausedNotification").mockResolvedValue(undefined);
 });
 
 afterEach(() => {
@@ -153,4 +164,28 @@ test("cold-start notification responses dispatch after the app mount delay", asy
 
   jest.advanceTimersByTime(500);
   assert.deepEqual(callback.mock.calls.map(([action]) => action), ["BPM_DOWN"]);
+});
+
+test("sparse pauses keep the user notification without activating the legacy silence lease", async () => {
+  await setupNotificationControls("en");
+  setPlaybackNotificationsEnabled(true);
+  setSparseNotificationMode(true);
+  const holdForeground = jest.spyOn(androidForegroundService, "holdForegroundForPausedNotification");
+  holdForeground.mockClear();
+  mockScheduleNotificationAsync.mockClear();
+
+  await showPausedNotification(120, "Beat", "en");
+
+  assert.equal(holdForeground.mock.calls.length, 0);
+  assert.equal(mockScheduleNotificationAsync.mock.calls.length, 1);
+});
+
+test("sparse output ownership is shared with the audio pipeline", () => {
+  const stop = jest.fn();
+  registerSparsePlaybackStopper(stop);
+  setSparsePlaybackActive(true);
+
+  assert.equal(isSparsePlaybackActive(), true);
+  stopActiveSparsePlayback();
+  expect(stop).toHaveBeenCalledTimes(1);
 });

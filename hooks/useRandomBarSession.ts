@@ -75,6 +75,9 @@ export interface UseRandomBarSessionResult {
   handleApplyRandomBarSession: () => void;
   handleReturnToOriginalBarList: (togglePlayPause: PlaybackToggle) => void;
   advanceRandomBarChunk: (engine: MetronomeEngine) => void;
+  previewNextRandomBarChunk: (
+    engine: MetronomeEngine,
+  ) => { ticks: ReturnType<MetronomeEngine["getScheduleInfo"]>["ticks"]; durationMs: number; order: number[] } | null;
 }
 
 /**
@@ -97,6 +100,13 @@ export function useRandomBarSession(
     chunk: number[];
     nextSession: BarRandomSession;
   } | null>(null);
+  const randomBarBoundaryPreviewRef = useRef<{
+    start: number;
+    length: number;
+    chunk: number[];
+    ticks: ReturnType<MetronomeEngine["getScheduleInfo"]>["ticks"];
+    durationMs: number;
+  } | null>(null);
   const randomBarPreviousModeRef = useRef<BlockPlayMode | null>(null);
   const randomBarPlaybackBecameActiveRef = useRef(false);
 
@@ -111,6 +121,10 @@ export function useRandomBarSession(
 
   const updateRandomBarSession = useCallback(
     (session: BarRandomSession | null) => {
+      if (!session) {
+        randomBarPreparedChunkRef.current = null;
+        randomBarBoundaryPreviewRef.current = null;
+      }
       randomBarSessionRef.current = session;
       setRandomBarSession(session ? { ...session, order: [...session.order] } : null);
     },
@@ -119,6 +133,8 @@ export function useRandomBarSession(
 
   const setRandomBarConfig = useCallback(
     (config: BarRandomConfig) => {
+      randomBarPreparedChunkRef.current = null;
+      randomBarBoundaryPreviewRef.current = null;
       p.setStrategy(config.strategy);
       p.persistSettings({ barRandomStrategy: config.strategy });
     },
@@ -130,6 +146,7 @@ export function useRandomBarSession(
     if (previousMode === null) return;
     randomBarPreviousModeRef.current = null;
     randomBarPreparedChunkRef.current = null;
+    randomBarBoundaryPreviewRef.current = null;
     p.blockPlayModeRef.current = previousMode;
     p.setBlockPlayMode(previousMode);
     p.engineRef.current?.setRandomBarOrder(null);
@@ -169,6 +186,7 @@ export function useRandomBarSession(
     randomBarChunkStartRef.current = 0;
     randomBarChunkLengthRef.current = chunk.length;
     randomBarPreparedChunkRef.current = null;
+    randomBarBoundaryPreviewRef.current = null;
     updateRandomBarSession(session);
     randomBarPreviousModeRef.current = p.blockPlayModeRef.current;
     p.blockPlayModeRef.current = "random";
@@ -193,6 +211,7 @@ export function useRandomBarSession(
     randomBarChunkStartRef.current = 0;
     randomBarChunkLengthRef.current = session.order.length;
     randomBarPreparedChunkRef.current = null;
+    randomBarBoundaryPreviewRef.current = null;
     updateRandomBarSession(session);
     randomBarPreviousModeRef.current = p.blockPlayModeRef.current;
     p.blockPlayModeRef.current = "random";
@@ -343,7 +362,63 @@ export function useRandomBarSession(
     randomBarChunkLengthRef.current = nextChunk.length;
     updateRandomBarSession(session);
     engine.setRandomBarOrder(nextChunk);
+    randomBarBoundaryPreviewRef.current = null;
   }, [p.barLoopModeRef, updateRandomBarSession]);
+
+  const previewNextRandomBarChunk = useCallback((engine: MetronomeEngine) => {
+    const session = randomBarSessionRef.current;
+    if (
+      !session?.active ||
+      randomBarPreviousModeRef.current === null ||
+      p.barLoopModeRef.current !== "loop"
+    ) return null;
+
+    const start = randomBarChunkStartRef.current;
+    const length = randomBarChunkLengthRef.current;
+    const cached = randomBarBoundaryPreviewRef.current;
+    if (cached && cached.start === start && cached.length === length) {
+      return {
+        ticks: cached.ticks.map(tick => ({ ...tick })),
+        durationMs: cached.durationMs,
+        order: [...cached.chunk],
+      };
+    }
+
+    let prepared = randomBarPreparedChunkRef.current;
+    if (!prepared) {
+      const nextSession: BarRandomSession = {
+        ...session,
+        order: [...session.order],
+        remainingShuffleBag: [...session.remainingShuffleBag],
+      };
+      const chunk = appendBarRandomPlaybackChunk(
+        nextSession,
+        Math.max(2, randomBarViewportCapacityRef.current * 2),
+        true,
+        randomBarConfigRef.current,
+      );
+      if (chunk.length === 0) return null;
+      prepared = { chunk: [...chunk], nextSession };
+      // The same cached chunk is consumed by the progress prefetch and by
+      // advanceRandomBarChunk; neither path is allowed to roll a new order.
+      randomBarPreparedChunkRef.current = prepared;
+    }
+
+    const schedule = engine.previewScheduleForRandomBarOrder(prepared.chunk);
+    const preview = {
+      start,
+      length,
+      chunk: [...prepared.chunk],
+      ticks: schedule.ticks.map(tick => ({ ...tick })),
+      durationMs: schedule.durationMs,
+    };
+    randomBarBoundaryPreviewRef.current = preview;
+    return {
+      ticks: preview.ticks.map(tick => ({ ...tick })),
+      durationMs: preview.durationMs,
+      order: [...preview.chunk],
+    };
+  }, [p.barLoopModeRef]);
 
   return {
     randomBarSession,
@@ -366,8 +441,10 @@ export function useRandomBarSession(
       if (p.isPlaying || p.isPreparing) togglePlayPause();
       finishRandomBarPlay();
       randomBarPreparedChunkRef.current = null;
+      randomBarBoundaryPreviewRef.current = null;
       updateRandomBarSession(null);
     },
     advanceRandomBarChunk,
+    previewNextRandomBarChunk,
   };
 }

@@ -217,14 +217,33 @@ export function MetronomeScreenUI(props: Props) {
   const showSharedEasterEggQuiz = easterEggActive
     && usesSharedEasterEggGesture(currentMode, showPolygon);
 
+  const playbackEditsLocked = isPlaying || isPreparing || noteIsPlaying;
   const tutorialBpmChange = useCallback((value: number) => {
+    if (isPlaying || isPreparing || noteIsPlaying) return;
     updateBpm(value);
     if (value !== bpm) recordTutorialAction("bpm_change");
-  }, [bpm, recordTutorialAction, updateBpm]);
+  }, [bpm, isPlaying, isPreparing, noteIsPlaying, recordTutorialAction, updateBpm]);
   const tutorialTapTempo = useCallback(() => {
+    if (isPlaying || isPreparing || noteIsPlaying) return;
     handleTapTempo();
     recordTutorialAction("tap_tempo");
-  }, [handleTapTempo, recordTutorialAction]);
+  }, [handleTapTempo, isPlaying, isPreparing, noteIsPlaying, recordTutorialAction]);
+  const guardedTimeSignatureChange = useCallback((value: number) => {
+    if (isPlaying || isPreparing || noteIsPlaying) return;
+    updateTimeSignature(value);
+  }, [isPlaying, isPreparing, noteIsPlaying, updateTimeSignature]);
+  const guardedBarBpmChange = useCallback((value: number) => {
+    if (isPlaying || isPreparing || noteIsPlaying) return;
+    handleBarBpmChange(value);
+  }, [handleBarBpmChange, isPlaying, isPreparing, noteIsPlaying]);
+  const guardedDenominatorCycle = useCallback(() => {
+    if (isPlaying || isPreparing || noteIsPlaying) return;
+    handleBeatDenominatorCycle();
+  }, [handleBeatDenominatorCycle, isPlaying, isPreparing, noteIsPlaying]);
+  const guardedEasterEggGuess = useCallback((guess: number) => {
+    if (isPlaying || isPreparing || noteIsPlaying) return;
+    handleEasterEggGuess(guess);
+  }, [handleEasterEggGuess, isPlaying, isPreparing, noteIsPlaying]);
   const tutorialTogglePlay = useCallback(() => {
     togglePlayPause();
     recordTutorialAction("toggle_play");
@@ -301,10 +320,18 @@ export function MetronomeScreenUI(props: Props) {
   };
 
   const openScopedSettings = useCallback((scope: SettingsScope) => {
+    if (isPlaying || isPreparing || noteIsPlaying) return;
     settingsReturnModalRef.current = null;
     setSettingsScope(scope);
     openExclusive("settings");
-  }, [openExclusive, settingsReturnModalRef]);
+  }, [isPlaying, isPreparing, noteIsPlaying, openExclusive, settingsReturnModalRef]);
+
+  const openMenuSettings = useCallback(() => {
+    if (isPlaying || isPreparing || noteIsPlaying) return;
+    settingsReturnModalRef.current = "menu";
+    setSettingsScope("global");
+    openExclusive("settings");
+  }, [isPlaying, isPreparing, noteIsPlaying, openExclusive, settingsReturnModalRef]);
 
   const openScopedPracticeBook = useCallback((
     filter: PracticeBookMode,
@@ -622,11 +649,7 @@ export function MetronomeScreenUI(props: Props) {
               clearMenuItemReturn();
               setActiveModal(null);
             }}
-            onSettings={() => {
-              settingsReturnModalRef.current = "menu";
-              setSettingsScope("global");
-              openExclusive("settings");
-            }}
+            onSettings={openMenuSettings}
             onProfile={() => openMenuItem(() => openExclusive("profile"))}
             onSignalGen={() => {
               openMenuItem(() => {
@@ -688,7 +711,7 @@ export function MetronomeScreenUI(props: Props) {
             onClose={closeMenuItem}
             onTogglePlay={() => void togglePlayPauseRef.current?.()}
             bpm={bpm}
-            onBpmChange={updateBpm}
+            onBpmChange={tutorialBpmChange}
           />
         </View>
       )}
@@ -997,11 +1020,17 @@ export function MetronomeScreenUI(props: Props) {
         }
         onClose={closeSettings}
         volume={volume}
-        onVolumeChange={updateVolume}
+        onVolumeChange={(value) => {
+          if (!playbackEditsLocked) updateVolume(value);
+        }}
         tonePosition={tonePosition}
-        onTonePositionChange={updateTonePosition}
+        onTonePositionChange={(value) => {
+          if (!playbackEditsLocked) updateTonePosition(value);
+        }}
         sampleVolume={sampleVolume}
-        onSampleVolumeChange={updateSampleVolume}
+        onSampleVolumeChange={(value) => {
+          if (!playbackEditsLocked) updateSampleVolume(value);
+        }}
         backgroundPlay={backgroundPlay}
         onBackgroundPlayChange={updateBackgroundPlay}
         playbackNotifications={playbackNotifications}
@@ -1009,9 +1038,12 @@ export function MetronomeScreenUI(props: Props) {
         autoResumeAfterInterruption={autoResumeAfterInterruption}
         onAutoResumeAfterInterruptionChange={updateAutoResumeAfterInterruption}
         soundSet={soundSet}
-        onSoundSetChange={updateSoundSet}
+        onSoundSetChange={(value) => {
+          if (!playbackEditsLocked) updateSoundSet(value);
+        }}
         layerSoundSets={layerSoundSets}
         onLayerSoundSetsChange={(val) => {
+          if (playbackEditsLocked) return;
           for (const ss of Object.values(val)) invalidatePCMCachePrefix(`click:${ss}:`);
           setLayerSoundSets(val);
           layerSoundSetsRef.current = val;
@@ -1044,6 +1076,7 @@ export function MetronomeScreenUI(props: Props) {
         onResetApp={handleResetApp}
         customSoundSets={customSoundSets}
         onCustomSoundSetsChange={(configs) => {
+          if (playbackEditsLocked) return;
           setCustomSoundSets(configs);
           invalidatePCMCachePrefix("click:");
         }}
@@ -1193,12 +1226,13 @@ export function MetronomeScreenUI(props: Props) {
             currentBeat={currentBeat}
             isPlaying={isPlaying}
             isPreparing={isPreparing}
-            onBeatsChange={updateTimeSignature}
+            onBeatsChange={guardedTimeSignatureChange}
             onTogglePlay={tutorialTogglePlay}
             onOpenSettings={() => openScopedSettings(barMode ? "bar" : "beat")}
             onPlayLongPress={scoreMode === null && !barMode ? handleBeatQuickSaveOpen : undefined}
             beatTypes={beatTypes}
             onBeatTypeChange={(index, type) => {
+              if (playbackEditsLocked) return;
               handleBeatTypeChange(index, type);
               recordTutorialAction("bar_edit");
             }}
@@ -1209,28 +1243,44 @@ export function MetronomeScreenUI(props: Props) {
             barMode={barMode}
             onBarModeChange={handleBarModeChange}
             beatSubdivisions={beatSubdivisions}
-            onBeatSubdivisionChange={handleBeatSubdivisionChange}
+            onBeatSubdivisionChange={(...args) => {
+              if (playbackEditsLocked) return;
+              handleBeatSubdivisionChange(...args);
+            }}
             activeSubNote={activeSubNote}
             barAreaRef={barAreaRef}
             onBarAreaLayout={handleBarAreaLayout}
             barRepeats={barRepeats}
             onBarRepeatChange={(beat, repeat) => {
+              if (playbackEditsLocked) return;
               handleBarRepeatChange(beat, repeat);
               recordTutorialAction("bar_edit");
             }}
-            onBarMeterChange={handleBarMeterChange}
+            onBarMeterChange={(...args) => {
+              if (playbackEditsLocked) return;
+              handleBarMeterChange(...args);
+            }}
             loopBlocks={loopBlocks}
-            onLoopBlocksChange={handleLoopBlocksChange}
+            onLoopBlocksChange={(...args) => {
+              if (playbackEditsLocked) return;
+              handleLoopBlocksChange(...args);
+            }}
             barLoopMode={barLoopMode}
-            onBarLoopModeChange={setBarLoopMode}
+            onBarLoopModeChange={(value) => {
+              if (!playbackEditsLocked) setBarLoopMode(value);
+            }}
             blockPlayMode={blockPlayMode}
-            onBlockPlayModeChange={setBlockPlayMode}
+            onBlockPlayModeChange={(value) => {
+              if (!playbackEditsLocked) setBlockPlayMode(value);
+            }}
             onRandomPlayRequest={handleRandomBarPlay}
             randomBarSession={randomBarSession}
             onRandomViewportCapacityChange={onRandomViewportCapacityChange}
             onReplayRandomBarSession={handleReplayRandomBarSession}
             onSaveRandomBarSession={handleSaveRandomBarSession}
-            onApplyRandomBarSession={handleApplyRandomBarSession}
+            onApplyRandomBarSession={(...args) => {
+              if (!playbackEditsLocked) handleApplyRandomBarSession(...args);
+            }}
             onReturnToOriginalBarList={handleReturnToOriginalBarList}
             onBarScrollOffset={(offset) => { barScrollOffsetRef.current = offset; }}
             noteSamples={noteSamples}
@@ -1239,29 +1289,43 @@ export function MetronomeScreenUI(props: Props) {
             onNoteRecordRequest={handleNoteRecordRequest}
             bpm={bpm}
             barBpm={barBpm}
-            onBarBpmChange={handleBarBpmChange}
+            onBarBpmChange={guardedBarBpmChange}
             barStartBeat={barStartBeat}
             onBarStartBeatSelect={setBarStartBeat}
             progressInfo={progressInfo}
             layerProgressMap={layerProgressMap}
             measureCount={measureCount}
-            onBarReset={handleBarReset}
+            onBarReset={() => {
+              if (!playbackEditsLocked) handleBarReset();
+            }}
             onBarQuickSave={handleBarQuickSave}
             onResetFlash={handleResetFlash}
             halfTime={halfTime}
             beatDenominator={beatDenominator}
-            onDenominatorCycle={handleBeatDenominatorCycle}
+            onDenominatorCycle={guardedDenominatorCycle}
             isLandscape={isLandscape}
             beatDirection={beatDirection}
             subdivisionBarElement={barMode ? (
               <SubdivisionBar
                 pattern={subdivisionPattern}
-                onPatternChange={handlePatternChange}
-                onDragStart={handleDragStart}
-                onDragMove={handleDragMove}
-                onDragEnd={handleDragEnd}
-                onDragCancel={handleDragCancel}
-                onReset={handleReset}
+                onPatternChange={(...args) => {
+                  if (!playbackEditsLocked) handlePatternChange(...args);
+                }}
+                onDragStart={(...args) => {
+                  if (!playbackEditsLocked) handleDragStart(...args);
+                }}
+                onDragMove={(...args) => {
+                  if (!playbackEditsLocked) handleDragMove(...args);
+                }}
+                onDragEnd={(...args) => {
+                  if (!playbackEditsLocked) handleDragEnd(...args);
+                }}
+                onDragCancel={(...args) => {
+                  if (!playbackEditsLocked) handleDragCancel(...args);
+                }}
+                onReset={() => {
+                  if (!playbackEditsLocked) handleReset();
+                }}
                 isPlaying={isPlaying}
                 activeSubNote={activeSubNote}
                 activeBeatPattern={isPlaying && currentBeat >= 0 ? (beatSubdivisions[String(currentBeat)] || null) : null}
@@ -1271,7 +1335,7 @@ export function MetronomeScreenUI(props: Props) {
             bpmSliderElement={!barMode && isLandscape ? (
               easterEggActive ? (
                 <EasterEggQuiz
-                  onGuess={handleEasterEggGuess}
+                  onGuess={guardedEasterEggGuess}
                   revealBpm={easterEggRevealBpm}
                   isGiveUp={easterEggGiveUpMode}
                   shakeCount={easterEggShakeCount}
@@ -1286,26 +1350,38 @@ export function MetronomeScreenUI(props: Props) {
                   bpm={bpm}
             onBpmChange={tutorialBpmChange}
             onTapTempo={tutorialTapTempo}
-                  onDenominatorCycle={handleBeatDenominatorCycle}
+                  onDenominatorCycle={guardedDenominatorCycle}
                   isLandscape={true}
                 />
               )
             ) : undefined}
             onEnterNoteMode={handleEnterNoteMode}
             onAddBar={(draft) => {
+              if (playbackEditsLocked) return;
               handleAddBar(draft);
               recordTutorialAction("bar_add");
             }}
-            onDeleteBar={handleDeleteBar}
-            onCopyBar={handleCopyBar}
-            onReorderBar={handleReorderBar}
-            onInsertBarAfter={handleInsertBarAfter}
+            onDeleteBar={(...args) => {
+              if (!playbackEditsLocked) handleDeleteBar(...args);
+            }}
+            onCopyBar={(...args) => {
+              if (!playbackEditsLocked) handleCopyBar(...args);
+            }}
+            onReorderBar={(...args) => {
+              if (!playbackEditsLocked) handleReorderBar(...args);
+            }}
+            onInsertBarAfter={(...args) => {
+              if (!playbackEditsLocked) handleInsertBarAfter(...args);
+            }}
             tempoLabel={tempoLabel}
             soundSet={soundSet}
-            onSoundSetChange={(ss) => updateSoundSet(ss as SoundSet)}
+            onSoundSetChange={(ss) => {
+              if (!playbackEditsLocked) updateSoundSet(ss as SoundSet);
+            }}
             onPreviewSoundSet={previewSoundSet}
             layerSoundSets={layerSoundSets as Record<number, string>}
             onLayerSoundSetsChange={(val) => {
+              if (playbackEditsLocked) return;
               const typed = val as Record<number, SoundSet>;
               for (const ss of Object.values(typed)) invalidatePCMCachePrefix(`click:${ss}:`);
               setLayerSoundSets(typed);
@@ -1315,6 +1391,7 @@ export function MetronomeScreenUI(props: Props) {
             }}
             customSoundSets={customSoundSets}
             onCustomSoundSetsChange={(configs) => {
+              if (playbackEditsLocked) return;
               setCustomSoundSets(configs);
               invalidatePCMCachePrefix("click:");
             }}
@@ -1324,7 +1401,9 @@ export function MetronomeScreenUI(props: Props) {
             beatStaffNotation={beatStaffNotation}
             subdivisionPattern={subdivisionPattern}
             beatStaffCellRectsRef={beatStaffCellRectsRef}
-            onBeatStaffDelete={handleBeatStaffDelete}
+            onBeatStaffDelete={(...args) => {
+              if (!playbackEditsLocked) handleBeatStaffDelete(...args);
+            }}
             onEasterEggTrigger={handleEasterEggTrigger}
             easterEggEnabled={!usesSharedEasterEggGesture(currentMode, showPolygon)}
           />
@@ -1338,12 +1417,24 @@ export function MetronomeScreenUI(props: Props) {
           <View style={{ alignItems: "center", gap: S.ms(6, 0.3) }}>
             <SubdivisionBar
               pattern={subdivisionPattern}
-              onPatternChange={handlePatternChange}
-              onDragStart={handleDragStart}
-              onDragMove={handleDragMove}
-              onDragEnd={handleDragEnd}
-              onDragCancel={handleDragCancel}
-              onReset={handleReset}
+              onPatternChange={(...args) => {
+                if (!playbackEditsLocked) handlePatternChange(...args);
+              }}
+              onDragStart={(...args) => {
+                if (!playbackEditsLocked) handleDragStart(...args);
+              }}
+              onDragMove={(...args) => {
+                if (!playbackEditsLocked) handleDragMove(...args);
+              }}
+              onDragEnd={(...args) => {
+                if (!playbackEditsLocked) handleDragEnd(...args);
+              }}
+              onDragCancel={(...args) => {
+                if (!playbackEditsLocked) handleDragCancel(...args);
+              }}
+              onReset={() => {
+                if (!playbackEditsLocked) handleReset();
+              }}
               isPlaying={isPlaying}
               activeSubNote={activeSubNote}
               activeBeatPattern={isPlaying && currentBeat >= 0 ? (beatSubdivisions[String(currentBeat)] || null) : null}
@@ -1544,7 +1635,7 @@ export function MetronomeScreenUI(props: Props) {
             <Text style={[styles.tempoLabel, { color: C.accentMuted }]}>{tempoLabel}</Text>
             {easterEggActive ? (
               <EasterEggQuiz
-                onGuess={handleEasterEggGuess}
+                onGuess={guardedEasterEggGuess}
                 revealBpm={easterEggRevealBpm}
                 isGiveUp={easterEggGiveUpMode}
                 shakeCount={easterEggShakeCount}
@@ -1559,7 +1650,7 @@ export function MetronomeScreenUI(props: Props) {
                 bpm={bpm}
                 onBpmChange={tutorialBpmChange}
                 onTapTempo={tutorialTapTempo}
-                onDenominatorCycle={handleBeatDenominatorCycle}
+                onDenominatorCycle={guardedDenominatorCycle}
                 isLandscape={true}
               />
             )}
@@ -1569,7 +1660,7 @@ export function MetronomeScreenUI(props: Props) {
         <View style={[styles.bpmSection, { flex: 2, width: "100%" }]}>
           {easterEggActive ? (
             <EasterEggQuiz
-              onGuess={handleEasterEggGuess}
+              onGuess={guardedEasterEggGuess}
               revealBpm={easterEggRevealBpm}
               isGiveUp={easterEggGiveUpMode}
               shakeCount={easterEggShakeCount}
@@ -1584,7 +1675,7 @@ export function MetronomeScreenUI(props: Props) {
               bpm={bpm}
               onBpmChange={tutorialBpmChange}
               onTapTempo={tutorialTapTempo}
-              onDenominatorCycle={handleBeatDenominatorCycle}
+              onDenominatorCycle={guardedDenominatorCycle}
               isLandscape={false}
             />
           )}
@@ -1662,9 +1753,9 @@ export function MetronomeScreenUI(props: Props) {
         hapticMode={hapticMode}
         onPlayPause={() => void togglePlayPauseRef.current?.()}
         onExit={() => void exitStageMode()}
-        onBpmChange={barMode ? handleBarBpmChange : updateBpm}
-        onTapTempo={handleTapTempo}
-        onBeatsPerMeasureChange={updateTimeSignature}
+        onBpmChange={barMode ? guardedBarBpmChange : tutorialBpmChange}
+        onTapTempo={tutorialTapTempo}
+        onBeatsPerMeasureChange={guardedTimeSignatureChange}
         onBeatTypesChange={(types) => {
           const changedIndex = currentBarConfig.beatTypes.findIndex(
             (type, index) => type !== types[index],
@@ -1673,7 +1764,7 @@ export function MetronomeScreenUI(props: Props) {
             handleBeatTypeChange(changedIndex, types[changedIndex]);
           }
         }}
-        onBeatDenominatorCycle={handleBeatDenominatorCycle}
+        onBeatDenominatorCycle={guardedDenominatorCycle}
         onFlashModeChange={(m) => {
           setFlashMode(m);
           persistSettings({ flashMode: m });
@@ -1705,15 +1796,31 @@ export function MetronomeScreenUI(props: Props) {
                 handleBeatQuickSaveOpen();
               }
             }}
-            onBeatsChange={updateTimeSignature}
-            onBeatTypeChange={handleBeatTypeChange}
-            onBeatSubdivisionChange={handleBeatSubdivisionChange}
-            onApplyPatternToAll={applyToAllBeats}
-            onPatternChange={handlePatternChange}
-            onDragStart={handleDragStart}
-            onDragMove={handleDragMove}
-            onDragCancel={handleDragCancel}
-            onReset={handleReset}
+            onBeatsChange={guardedTimeSignatureChange}
+            onBeatTypeChange={(...args) => {
+              if (!playbackEditsLocked) handleBeatTypeChange(...args);
+            }}
+            onBeatSubdivisionChange={(...args) => {
+              if (!playbackEditsLocked) handleBeatSubdivisionChange(...args);
+            }}
+            onApplyPatternToAll={(pattern) => {
+              if (!playbackEditsLocked) applyToAllBeats(pattern);
+            }}
+            onPatternChange={(...args) => {
+              if (!playbackEditsLocked) handlePatternChange(...args);
+            }}
+            onDragStart={(...args) => {
+              if (!playbackEditsLocked) handleDragStart(...args);
+            }}
+            onDragMove={(...args) => {
+              if (!playbackEditsLocked) handleDragMove(...args);
+            }}
+            onDragCancel={(...args) => {
+              if (!playbackEditsLocked) handleDragCancel(...args);
+            }}
+            onReset={() => {
+              if (!playbackEditsLocked) handleReset();
+            }}
           />
         )}
         practiceBook={stagePracticeEntries}
@@ -1726,6 +1833,10 @@ export function MetronomeScreenUI(props: Props) {
         modeSettingsVisible={showSettings && settingsScope === "stage"}
         onQueueSeamlessNext={(next) => { seamlessNextEntryRef.current = next; }}
         onSelectEntry={(entry) => {
+          if (playbackEditsLocked) {
+            setActiveStagePracticeEntryId(entry.id);
+            return;
+          }
           seamlessNextEntryRef.current = null; // 수동 전환 시 예약된 seamless 취소
           const engine = engineRef.current;
           if (!engine) return;
@@ -1932,7 +2043,7 @@ export function MetronomeScreenUI(props: Props) {
         >
           <View style={{ width: "100%", maxWidth: 440 }}>
             <EasterEggQuiz
-              onGuess={handleEasterEggGuess}
+              onGuess={guardedEasterEggGuess}
               revealBpm={easterEggRevealBpm}
               isGiveUp={easterEggGiveUpMode}
               shakeCount={easterEggShakeCount}

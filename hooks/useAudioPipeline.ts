@@ -1,5 +1,6 @@
 import { useRef, useEffect, useCallback, useState } from "react";
 import { Platform } from "react-native";
+import { isSparsePlaybackActive, stopActiveSparsePlayback } from "@/lib/notification-controls";
 import type { AudioPlayer as ExpoAudioPlayer } from "expo-audio";
 import { soundSets } from "@/lib/metronome-engine";
 import type { MetronomeEngine } from "@/lib/metronome-engine";
@@ -806,6 +807,9 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
   ]);
 
   const stopRenderedAudio = useCallback(() => {
+    // Several mode-exit paths use this narrower cleanup directly. They must
+    // still relinquish the Android native service when it owns playback.
+    if (isSparsePlaybackActive()) stopActiveSparsePlayback();
     audioRenderLifecycle.cancel();
     clearRealtimeWebAudio();
     engineRef.current?.setPendingMeasureStartAction(null);
@@ -816,6 +820,9 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
   }, [audioRenderLifecycle, clearRealtimeWebAudio, engineRef, outputOwner]);
 
   const scheduleReRender = useCallback(() => {
+    // The Android sparse service owns the full Beat/Bar schedule. An engine
+    // rebuild must not start a second, continuously rendered audio output.
+    if (isSparsePlaybackActive()) return;
     const toneSnapshot = captureAudioToneSnapshot();
     setActiveAudioToneSnapshot(toneSnapshot);
     audioRenderLifecycle.cancel();
@@ -1218,6 +1225,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
   const stopPlaybackAudio = useCallback(() => {
     // One ownership boundary for every complete playback stop. Render/sample
     // producers are invalidated before active outputs and timers are released.
+    stopActiveSparsePlayback();
     cancelNoteSamplePreload();
     invalidateAudioStartupProbe();
     clearAudioWatchdog();

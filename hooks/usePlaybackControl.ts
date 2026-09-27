@@ -56,6 +56,20 @@ import {
   endBackgroundPlaybackLease,
   type BackgroundPlaybackLease,
 } from "@/lib/background-playback-lease";
+import {
+  isSparseMetronomeAvailable,
+  SparseMetronome,
+  addSparseMetronomeErrorListener,
+  addSparseMetronomeInterruptionListener,
+  addSparseMetronomeReplacementListener,
+  addSparseMetronomeTimingOverrunListener,
+} from "@/modules/sparse-metronome/src";
+import { prepareSparseEvents, type PreparedSparseEvents } from "@/lib/audio-sparse-event-preparation";
+import {
+  registerSparsePlaybackStopper,
+  setSparseNotificationMode,
+  setSparsePlaybackActive,
+} from "@/lib/notification-controls";
 
 type Ref<T> = { current: T };
 
@@ -81,6 +95,8 @@ export interface UsePlaybackControlParams {
   barStartBeatRef: Ref<number | null>;
   barLoopModeRef: Ref<"loop" | "once">;
   blockPlayModeRef: Ref<"sequential" | "loop" | "random">;
+  previewNextRandomBarChunk?: (engine: MetronomeEngine) =>
+    { ticks: TickInfo[]; durationMs: number } | null;
   beatDenominatorRef: Ref<2 | 4 | 8>;
   seamlessNextEntryRef?: Ref<PracticeEntry | null>;
   stopRenderedAudio: () => void;
@@ -156,14 +172,186 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
   const startAttemptRef = useRef(0);
   const scheduledStartTokenRef = useRef<symbol | null>(null);
   const backgroundLeaseRef = useRef<BackgroundPlaybackLease | null>(null);
+  const sparseSessionRef = useRef<{
+    id: string;
+    prepared: PreparedSparseEvents;
+    maxDurationMs: number;
+    periodFrames: number;
+  } | null>(null);
+  const sparsePendingRef = useRef<{
+    id: string;
+    prepared: PreparedSparseEvents;
+    maxDurationMs: number;
+    periodFrames: number;
+  } | null>(null);
+  const sparseGenerationRef = useRef(0);
+  const sparseAbortRef = useRef<AbortController | null>(null);
+  const sparseFatalHandlerRef = useRef<((message: string, error?: unknown) => void) | null>(null);
+  const sparseReplaceHandlerRef = useRef<((event: { previousSessionId: string; sessionId: string; boundaryWallClockTimeMillis?: number }) => void) | null>(null);
+  const sparseListenersRef = useRef<{ remove(): void }[]>([]);
   const togglePlayPauseRef = useRef<() => Promise<boolean | undefined>>(
     async () => undefined,
   );
+  const invalidateAudioStartupProbe = p.invalidateAudioStartupProbe;
+  const preparingCancelledRef = p.preparingCancelledRef;
 
   const releaseBackgroundLease = useCallback(() => {
     endBackgroundPlaybackLease(backgroundLeaseRef.current);
     backgroundLeaseRef.current = null;
   }, []);
+
+  const disposeSparseSession = useCallback((
+    session: { id: string; prepared: PreparedSparseEvents; maxDurationMs: number } | null,
+    stopNative: boolean,
+  ) => {
+    if (!session) return;
+    const disposeFiles = () => session.prepared.dispose();
+    if (!stopNative) {
+      setTimeout(disposeFiles, Math.max(250, session.maxDurationMs + 250));
+      return;
+    }
+    void SparseMetronome.stop(session.id).then(disposeFiles, () => {
+      // Keep decoder source files available if native did not confirm a stop.
+      setTimeout(disposeFiles, Math.max(1500, session.maxDurationMs + 250));
+    });
+  }, []);
+
+  const stopSparsePlayback = useCallback(() => {
+    sparseGenerationRef.current += 1;
+    sparseAbortRef.current?.abort();
+    sparseAbortRef.current = null;
+    sparseReplaceHandlerRef.current = null;
+    const active = sparseSessionRef.current;
+    const pending = sparsePendingRef.current;
+    sparseSessionRef.current = null;
+    sparsePendingRef.current = null;
+    setSparsePlaybackActive(false);
+    disposeSparseSession(active, true);
+    if (pending && pending.id !== active?.id) disposeSparseSession(pending, true);
+  }, [disposeSparseSession]);
+
+  const prepareSparseSchedule = useCallback(async (
+    plan: MetronomePlaybackPlan,
+    scheduleInfo: { ticks: TickInfo[]; durationMs: number },
+    generation: number,
+  ) => {
+    if (!isSparseMetronomeAvailable) {
+      throw new Error("Android sparse audio is unavailable in this build; no continuous-audio fallback is permitted.");
+    }
+    const controller = new AbortController();
+    sparseAbortRef.current = controller;
+    const shouldAbort = () => generation !== sparseGenerationRef.current ||
+      p.preparingCancelledRef.current;
+    const [clickPCMs, layerClickPCMs, samplePCMs] = await Promise.all([
+      p.getClickPCMs(
+        plan.audio.soundSet,
+        controller.signal,
+        plan.audio.tone,
+        plan.audio.customSoundSets[plan.audio.soundSet] ?? null,
+      ),
+      p.getLayerClickPCMsForSchedule(scheduleInfo.ticks, controller.signal, {
+        defaultSoundSet: plan.audio.soundSet,
+        layerSoundSets: plan.audio.layerSoundSets,
+        tone: plan.audio.tone,
+        customSoundSets: plan.audio.customSoundSets,
+      }),
+      p.getSamplePCMs(plan.audio.noteSamples, controller.signal),
+    ]);
+    if (shouldAbort()) throw new Error("Sparse audio preparation was cancelled.");
+    const prepared = await prepareSparseEvents({
+      schedule: scheduleInfo.ticks,
+      measureDurationMs: scheduleInfo.durationMs,
+      clickPCMs,
+      layerClickPCMs,
+      samplePCMs,
+      clickVolume: plan.audio.tone.renderGain,
+      sampleVolume: samplePCMs.size > 0 ? plan.audio.sampleVolume : 0,
+      sampleVolumes: plan.audio.noteSampleVolumes,
+      sampleSpeeds: plan.audio.noteSampleSpeeds,
+      sampleChannels: plan.audio.noteSampleChannels,
+      metronomeChannel: plan.audio.metronomeChannel,
+      metroChannelsByBeat: plan.mode === "bar" ? plan.audio.noteSampleMetroChannels : undefined,
+      outputGain: plan.audio.tone.outputGain,
+    }, { signal: controller.signal, shouldAbort });
+    if (sparseAbortRef.current === controller) sparseAbortRef.current = null;
+    if (shouldAbort()) {
+      prepared.dispose();
+      throw new Error("Sparse audio preparation was cancelled.");
+    }
+    const id = `sparse-${Date.now()}-${generation}-${Math.random().toString(36).slice(2)}`;
+    try {
+      await SparseMetronome.prepare(id, prepared.clipDescriptors, prepared.periodFrames);
+      if (shouldAbort()) {
+        void SparseMetronome.stop(id).finally(() => prepared.dispose());
+        throw new Error("Sparse audio preparation was cancelled.");
+      }
+    } catch (error) {
+      prepared.dispose();
+      throw error;
+    }
+    return {
+      id,
+      prepared,
+      maxDurationMs: prepared.clipDescriptors.reduce(
+        (max, event) => Math.max(max, event.durationFrames / 44.1),
+        0,
+      ),
+      periodFrames: prepared.periodFrames,
+    };
+  }, [p]);
+
+  sparseFatalHandlerRef.current = (message: string, error?: unknown) => {
+    if (!sparseSessionRef.current && !sparsePendingRef.current) return;
+    startAttemptRef.current += 1;
+    p.preparingCancelledRef.current = true;
+    p.capturePlaybackError(message, error ?? message, "error");
+    stopSparsePlayback();
+    p.stopPlaybackAudio();
+    p.setIsPreparing(false);
+    p.isPreparingRef.current = false;
+    p.setIsPlaying(false);
+    p.isPlayingRef.current = false;
+    p.notifyVoicePlayState(false);
+    p.resetPlaybackVisuals();
+    markAudioStopped();
+    p.showPlaybackStartFailure();
+    completePracticeSession("audio_interruption", "abandoned");
+    p.onPlaybackStopped?.();
+  };
+
+  useEffect(() => {
+    registerSparsePlaybackStopper(stopSparsePlayback);
+    const ownsSession = (id?: string) => !!id && (
+      sparseSessionRef.current?.id === id || sparsePendingRef.current?.id === id
+    );
+    sparseListenersRef.current = [
+      addSparseMetronomeErrorListener?.((event) => {
+        if (ownsSession(event.sessionId)) sparseFatalHandlerRef.current?.(event.message, event);
+      }),
+      addSparseMetronomeInterruptionListener?.((event) => {
+        if (ownsSession(event.sessionId)) sparseFatalHandlerRef.current?.("Android audio focus was interrupted.", event);
+      }),
+      addSparseMetronomeTimingOverrunListener?.((event) => {
+        // The native clock skips late events and keeps running. Report the
+        // recoverable delay without tearing down the session.
+        if (ownsSession(event.sessionId)) {
+          p.capturePlaybackError("Android sparse scheduling delay", event, "warning");
+        }
+      }),
+      addSparseMetronomeReplacementListener?.((event) => {
+        if (ownsSession(event.previousSessionId) || ownsSession(event.sessionId)) {
+          sparseReplaceHandlerRef.current?.(event);
+        }
+      }),
+    ].filter((listener): listener is { remove(): void } => !!listener);
+    return () => {
+      registerSparsePlaybackStopper(null);
+      for (const listener of sparseListenersRef.current) listener.remove();
+      sparseListenersRef.current = [];
+      stopSparsePlayback();
+      invalidateAudioStartupProbe();
+    };
+  }, [invalidateAudioStartupProbe, stopSparsePlayback]);
 
   useEffect(() => () => {
     // A focus/buffer/scheduled-start await may resolve after the owning screen
@@ -171,10 +359,10 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
     // the engine or publish React/audio lifecycle state.
     scheduledStartTokenRef.current = null;
     startAttemptRef.current += 1;
-    p.preparingCancelledRef.current = true;
-    p.invalidateAudioStartupProbe();
+    preparingCancelledRef.current = true;
+    invalidateAudioStartupProbe();
     releaseBackgroundLease();
-  }, [p.invalidateAudioStartupProbe, p.preparingCancelledRef, releaseBackgroundLease]);
+  }, [invalidateAudioStartupProbe, preparingCancelledRef, releaseBackgroundLease]);
 
   const startOrResumePracticeSession = useCallback(() => {
     if (!p.loggingEnabled) return;
@@ -356,6 +544,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
     scheduledStartTokenRef.current = null;
     startAttemptRef.current += 1;
     p.preparingCancelledRef.current = true;
+    stopSparsePlayback();
     p.stopPlaybackAudio();
     p.setIsPreparing(false);
     p.isPreparingRef.current = false;
@@ -367,7 +556,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
     completePracticeSession(endReason);
     p.onPlaybackStopped?.();
     releaseBackgroundLease();
-  }, [completePracticeSession, p, releaseBackgroundLease]);
+  }, [completePracticeSession, p, releaseBackgroundLease, stopSparsePlayback]);
 
   const cancelPlaybackAttempt = useCallback((
     notifyFailure = false,
@@ -376,6 +565,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
     scheduledStartTokenRef.current = null;
     startAttemptRef.current += 1;
     p.preparingCancelledRef.current = true;
+    stopSparsePlayback();
     p.stopPlaybackAudio();
     p.setIsPreparing(false);
     p.isPreparingRef.current = false;
@@ -387,7 +577,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
     if (notifyFailure) p.showPlaybackStartFailure();
     p.onPlaybackStopped?.();
     releaseBackgroundLease();
-  }, [p, releaseBackgroundLease]);
+  }, [p, releaseBackgroundLease, stopSparsePlayback]);
 
   const startPreparedPlayback = useCallback(async (
     engine: MetronomeEngine,
@@ -500,16 +690,27 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
 
     try {
       releaseBackgroundLease();
-      const backgroundLease = beginBackgroundPlaybackLease({
-        isPlaying: () => p.isPlayingRef.current || p.isPreparingRef.current,
-        pause: () => togglePlayPauseRef.current(),
-        resume: () => togglePlayPauseRef.current(),
-      });
-      backgroundLeaseRef.current = backgroundLease.token;
-      // Audio startup must not wait on the keepalive helper. The baseline
-      // audio mode is already applied from settings; this lease strengthens
-      // process priority in parallel without delaying the first audible beat.
-      void backgroundLease.ready;
+      const useSparseAndroid =
+        Platform.OS === "android" &&
+        (plan.mode === "beat" || plan.mode === "bar") &&
+        // Keep the existing default until a custom Android build has passed
+        // locked-screen, interruption and wired-output device verification.
+        process.env.EXPO_PUBLIC_ENABLE_ANDROID_SPARSE_AUDIO === "1";
+      if (useSparseAndroid) {
+        if (!isSparseMetronomeAvailable) {
+          throw new Error("Android sparse audio is unavailable in this build; no continuous-audio fallback is permitted.");
+        }
+      } else {
+        setSparseNotificationMode(false);
+        const backgroundLease = beginBackgroundPlaybackLease({
+          isPlaying: () => p.isPlayingRef.current || p.isPreparingRef.current,
+          pause: () => togglePlayPauseRef.current(),
+          resume: () => togglePlayPauseRef.current(),
+        });
+        backgroundLeaseRef.current = backgroundLease.token;
+        // Do not block other modes on their optional playback lease.
+        void backgroundLease.ready;
+      }
       if (cancelled()) {
         releaseBackgroundLease();
         return false;
@@ -576,6 +777,177 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
           );
           if (!active) throw new Error("No initial Web Audio activity");
         }
+      } else if (useSparseAndroid) {
+        stopSparsePlayback();
+        const sparseGeneration = sparseGenerationRef.current;
+        const initialInfo = engine.getScheduleInfo();
+        const randomBar = plan.mode === "bar" && p.blockPlayModeRef.current === "random";
+        const upcoming = randomBar
+          ? engine.getUpcomingRandomScheduleInfo() ?? p.previewNextRandomBarChunk?.(engine) ?? null
+          : null;
+        if (randomBar && !upcoming) {
+          throw new Error("Random Bar playback could not preselect its next sparse schedule.");
+        }
+        const selectedStartTick = startBeat === undefined
+          ? undefined
+          : (initialInfo.ticks as TickInfo[]).find(
+              (tick) => tick.beat === startBeat && tick.subBeat === 0,
+            );
+        if (startBeat !== undefined && !selectedStartTick) {
+          throw new Error("The selected Bar start beat is missing from the sparse schedule.");
+        }
+        const startOffsetMs = selectedStartTick?.time ?? 0;
+        const partialPeriod = startOffsetMs > 0;
+        const initialSparseInfo = partialPeriod
+          ? {
+              ticks: (initialInfo.ticks as TickInfo[])
+                .filter((tick) => tick.time >= startOffsetMs)
+                .map((tick) => ({ ...tick, time: tick.time - startOffsetMs })),
+              durationMs: initialInfo.durationMs - startOffsetMs,
+            }
+          : {
+              ticks: initialInfo.ticks as TickInfo[],
+              durationMs: initialInfo.durationMs,
+            };
+        if (initialSparseInfo.durationMs <= 0) {
+          throw new Error("The selected Bar start beat leaves no sparse audio period.");
+        }
+        const replaceAtFirstBoundary = randomBar || partialPeriod;
+        const activeSession = await awaitWithin(
+          prepareSparseSchedule(plan, initialSparseInfo, sparseGeneration),
+          "Android sparse event preparation",
+        );
+        let nextSession: Awaited<ReturnType<typeof prepareSparseSchedule>> | null = null;
+        const firstReplacementInfo = upcoming ?? (partialPeriod
+          ? { ticks: initialInfo.ticks as TickInfo[], durationMs: initialInfo.durationMs }
+          : null);
+        if (firstReplacementInfo) {
+          nextSession = await awaitWithin(
+            prepareSparseSchedule(plan, {
+              ticks: firstReplacementInfo.ticks as TickInfo[],
+              durationMs: firstReplacementInfo.durationMs,
+            }, sparseGeneration),
+            randomBar ? "Android random Bar look-ahead preparation" : "Android selected-start continuation preparation",
+          );
+        }
+        if (cancelled() || sparseGeneration !== sparseGenerationRef.current) {
+          disposeSparseSession(activeSession, true);
+          if (nextSession) disposeSparseSession(nextSession, true);
+          return false;
+        }
+        sparseSessionRef.current = activeSession;
+        sparsePendingRef.current = nextSession;
+        sparseReplaceHandlerRef.current = (event) => {
+          if (
+            !sparsePendingRef.current ||
+            sparsePendingRef.current.id !== event.sessionId ||
+            sparseSessionRef.current?.id !== event.previousSessionId
+          ) return;
+          const previous = sparseSessionRef.current;
+          sparseSessionRef.current = sparsePendingRef.current;
+          sparsePendingRef.current = null;
+          const boundaryWallClockTimeMillis = event.boundaryWallClockTimeMillis;
+          if (randomBar && boundaryWallClockTimeMillis === undefined) {
+            sparseFatalHandlerRef.current?.("Android did not report the random Bar replacement boundary.");
+            return;
+          }
+          const expectedNextBoundary = boundaryWallClockTimeMillis === undefined
+            ? undefined
+            : boundaryWallClockTimeMillis + sparseSessionRef.current.periodFrames / 44.1;
+          disposeSparseSession(previous, false);
+          if (!randomBar) return;
+          // Never preview from the old JS pass simply because a fixed delay
+          // expired. Wait for the visual engine to consume this exact pass,
+          // or stop if there is no time left for the next native boundary.
+          const boundaryPerformanceTime = performance.now() +
+            (boundaryWallClockTimeMillis! - Date.now());
+          const prepareAfterVisualRollover = () => {
+            if (
+              sparseGeneration !== sparseGenerationRef.current ||
+              !sparseSessionRef.current ||
+              sparsePendingRef.current
+            ) return;
+            if (Date.now() >= expectedNextBoundary! - 20) {
+              sparseFatalHandlerRef.current?.("Random Bar next pass missed its native boundary.");
+              return;
+            }
+            if (engine.getMeasureStartTime() < boundaryPerformanceTime - 20) {
+              setTimeout(prepareAfterVisualRollover, 8);
+              return;
+            }
+            const next = engine.getUpcomingRandomScheduleInfo() ??
+              p.previewNextRandomBarChunk?.(engine);
+            if (!next) {
+              sparseFatalHandlerRef.current?.("Random Bar sparse playback lost its preselected next pass.");
+              return;
+            }
+            void prepareSparseSchedule(plan, {
+              ticks: next.ticks as TickInfo[],
+              durationMs: next.durationMs,
+            }, sparseGeneration).then(async (preparedNext) => {
+              if (sparseGeneration !== sparseGenerationRef.current || !sparseSessionRef.current) {
+                disposeSparseSession(preparedNext, true);
+                return;
+              }
+              sparsePendingRef.current = preparedNext;
+              const replacement = await SparseMetronome.replace({ sessionId: preparedNext.id });
+              if (
+                expectedNextBoundary !== undefined &&
+                replacement.nextBoundaryWallClockTimeMillis !== undefined &&
+                replacement.nextBoundaryWallClockTimeMillis > expectedNextBoundary + 40
+              ) {
+                throw new Error("Random Bar next pass was not ready for its immediately following boundary.");
+              }
+            }).catch((error) => {
+              sparseFatalHandlerRef.current?.("Could not prepare the next random Bar pass.", error);
+            });
+          };
+          setTimeout(prepareAfterVisualRollover, 0);
+        };
+
+        if (startAtPerformanceTime !== undefined) {
+          // Native start reserves its first event 120 ms ahead; submit the
+          // command before the requested start rather than 120 ms after it.
+          const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+          const waitMs = startAtPerformanceTime - now - 120;
+          if (waitMs > 0) await new Promise<void>((resolve) => setTimeout(resolve, waitMs));
+          deadline = Math.max(deadline, Date.now() + 2000);
+        }
+        if (cancelled()) return false;
+        const started = await awaitWithin(SparseMetronome.start(activeSession.id), "Android sparse playback start");
+        if (cancelled() || sparseGeneration !== sparseGenerationRef.current) return false;
+        setSparseNotificationMode(true);
+        setSparsePlaybackActive(true);
+        // The native sparse scheduler owns all click audio. Keep the engine's
+        // visual/haptic clock running while suppressing its legacy click path.
+        engine.setPreRenderedAudio(true);
+        const nowPerformance = typeof performance !== "undefined" ? performance.now() : Date.now();
+        const anchorPerformance = started.startWallClockTimeMillis === undefined
+          ? nowPerformance + 120
+          : nowPerformance + (started.startWallClockTimeMillis - Date.now());
+        if (cancelled()) return false;
+        const engineStartAt = anchorPerformance;
+        engine.start({
+          startFromBeat: startBeat,
+          startAtPerformanceTime: engineStartAt,
+        });
+        if (nextSession && replaceAtFirstBoundary) {
+          const replacement = await awaitWithin(
+            SparseMetronome.replace({ sessionId: nextSession.id }),
+            "Android first sparse boundary replacement scheduling",
+          );
+          const expectedBoundary = started.startWallClockTimeMillis === undefined
+            ? undefined
+            : started.startWallClockTimeMillis + activeSession.periodFrames / 44.1;
+          if (
+            expectedBoundary !== undefined &&
+            replacement.nextBoundaryWallClockTimeMillis !== undefined &&
+            replacement.nextBoundaryWallClockTimeMillis > expectedBoundary + 40
+          ) {
+            throw new Error("The first sparse replacement missed its matching visual measure boundary.");
+          }
+        }
+        if (cancelled()) return false;
       } else {
         const renderResult = useRenderedLoop
           ? await awaitWithin(p.prepareRenderedPlayer(plan), "Native rendered player")
@@ -652,7 +1024,10 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
       p.flushPlaybackVisuals();
       p.notifyVoicePlayState(true);
       markAudioPlaying();
-      p.armAudioWatchdogRef.current();
+      // Sparse native playback reports focus loss and scheduler failures via
+      // its own listeners. The JS watchdog cannot observe MediaPlayer events
+      // and would falsely declare healthy sparse output stuck.
+      if (!useSparseAndroid) p.armAudioWatchdogRef.current();
       p.showPlayingNotification(plan.bpm, playbackAtStart.modeLabel, p.languageRef.current);
       startOrResumePracticeSession();
       if (
@@ -668,7 +1043,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
       cancelPlaybackAttempt(true);
       return false;
     }
-  }, [cancelPlaybackAttempt, p, renderWebLoop, startOrResumePracticeSession]);
+  }, [cancelPlaybackAttempt, disposeSparseSession, p, prepareSparseSchedule, renderWebLoop, startOrResumePracticeSession, stopSparsePlayback, releaseBackgroundLease]);
 
   const togglePlayPause = useCallback(async () => {
     const engine = p.engineRef.current;
@@ -690,6 +1065,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
       startAttemptRef.current += 1;
       const playback = p.getPlaybackContext();
       seamlessRef.current = null;
+      stopSparsePlayback();
       p.stopPlaybackAudio();
       p.setIsPreparing(false);
       p.isPreparingRef.current = false;
@@ -713,7 +1089,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
     const androidProbeReady = p.notifyUserToggle();
     const startBeat = p.barModeRef.current ? p.barStartBeatRef.current : undefined;
     return startPreparedPlayback(engine, startBeat ?? undefined, androidProbeReady);
-  }, [cancelPlaybackAttempt, p, pausePracticeSession, releaseBackgroundLease, seamlessRef, startPreparedPlayback]);
+  }, [cancelPlaybackAttempt, p, pausePracticeSession, releaseBackgroundLease, seamlessRef, startPreparedPlayback, stopSparsePlayback]);
 
   useEffect(() => { togglePlayPauseRef.current = togglePlayPause; }, [togglePlayPause]);
 
@@ -747,6 +1123,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
     if (p.isPlayingRef.current) {
       const playback = p.getPlaybackContext();
       startAttemptRef.current += 1;
+      stopSparsePlayback();
       p.stopPlaybackAudio();
       p.setIsPreparing(false);
       p.isPreparingRef.current = false;
@@ -778,7 +1155,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
         scheduledStartTokenRef.current = null;
       }
     }
-  }, [cancelPlaybackAttempt, p, pausePracticeSession, releaseBackgroundLease, startPreparedPlayback]);
+  }, [cancelPlaybackAttempt, p, pausePracticeSession, releaseBackgroundLease, startPreparedPlayback, stopSparsePlayback]);
 
   const cancelScheduledMetronome = useCallback(() => {
     if (!scheduledStartTokenRef.current) return;
@@ -790,13 +1167,14 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
     if (p.isPreparingRef.current) return;
     markAudioRecovering("watchdog");
     p.practiceSessionRef.current?.interrupt();
+    stopSparsePlayback();
     p.stopPlaybackAudio();
     p.setIsPlaying(false);
     p.isPlayingRef.current = false;
     p.setIsPreparing(false);
     p.isPreparingRef.current = false;
     await startMetronome();
-  }, [p, startMetronome]);
+  }, [p, startMetronome, stopSparsePlayback]);
 
   return {
     togglePlayPause,
