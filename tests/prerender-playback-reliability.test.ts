@@ -48,12 +48,15 @@ const mockSparseStart = jest.fn();
 const mockSparseReplace = jest.fn();
 const mockSparseStop = jest.fn();
 const mockSparseListener = () => ({ remove: jest.fn() });
+const mockSetSparseNotificationMode = jest.fn();
+const mockReleaseDormantBackgroundPlaybackControls = jest.fn();
 const mockBeginBackgroundPlaybackLease = jest.fn(() => ({
   token: Symbol("test-background-playback"),
   ready: Promise.resolve(true),
 }));
 let mockSparseStartWallClock = 0;
 let mockSparseModuleAvailable = true;
+const mockCheckSparseModuleAvailability = jest.fn(() => mockSparseModuleAvailable);
 const originalSparseFeatureFlag = process.env.EXPO_PUBLIC_ENABLE_ANDROID_SPARSE_AUDIO;
 
 jest.mock("expo-audio", () => ({
@@ -63,10 +66,11 @@ jest.mock("expo-audio", () => ({
 jest.mock("@/lib/background-playback-lease", () => ({
   beginBackgroundPlaybackLease: () => mockBeginBackgroundPlaybackLease(),
   endBackgroundPlaybackLease: jest.fn(),
+  releaseDormantBackgroundPlaybackControls: () => mockReleaseDormantBackgroundPlaybackControls(),
 }));
 
 jest.mock("@/lib/notification-controls", () => ({
-  setSparseNotificationMode: jest.fn(),
+  setSparseNotificationMode: (...args: unknown[]) => mockSetSparseNotificationMode(...args),
   setSparsePlaybackActive: jest.fn(),
   isSparsePlaybackActive: jest.fn(() => false),
   registerSparsePlaybackStopper: jest.fn(),
@@ -75,7 +79,7 @@ jest.mock("@/lib/notification-controls", () => ({
 
 jest.mock("@/modules/sparse-metronome/src", () => ({
   get isSparseMetronomeAvailable() {
-    return mockSparseModuleAvailable;
+    return mockCheckSparseModuleAvailability();
   },
   SparseMetronome: {
     prepare: (...args: unknown[]) => mockSparsePrepare(...args),
@@ -1075,6 +1079,29 @@ describe("pre-rendered playback reliability", () => {
     }));
     expect(params.prepareRenderedPlayer).not.toHaveBeenCalled();
     unmount();
+  });
+
+  it.each([
+    ["Beat", "beat"],
+    ["Bar", "bar"],
+  ])("selects sparse notification ownership when an Android %s hook mounts", (modeLabel, activityMode) => {
+    (Platform as unknown as { OS: string }).OS = "android";
+    const engine = makeEngine();
+    const params = makePlaybackParams(engine, null);
+    params.barModeRef.current = activityMode === "bar";
+    params.getPlaybackContext.mockReturnValue({
+      bpm: 120,
+      mode: activityMode,
+      modeLabel,
+      activityMode,
+      bpmSource: activityMode,
+    } as any);
+
+    renderHook(() => usePlaybackControl(params as any));
+
+    expect(mockSetSparseNotificationMode).toHaveBeenCalledWith(true);
+    expect(mockReleaseDormantBackgroundPlaybackControls).toHaveBeenCalled();
+    expect(mockBeginBackgroundPlaybackLease).not.toHaveBeenCalled();
   });
 
   it("prepares and replaces a supplied-order random Bar preview when the engine has none", async () => {
@@ -2164,6 +2191,47 @@ describe("pre-rendered playback reliability", () => {
     expect(mockSparsePrepare).not.toHaveBeenCalled();
     expect(mockSparseStart).not.toHaveBeenCalled();
     expect(mockBeginBackgroundPlaybackLease).toHaveBeenCalledTimes(1);
+    expect(mockSetSparseNotificationMode).toHaveBeenCalledWith(false);
+    expect(mockSetSparseNotificationMode).not.toHaveBeenCalledWith(true);
+  });
+
+  it("selects sparse notification ownership before delayed native preparation", async () => {
+    (Platform as unknown as { OS: string }).OS = "android";
+    const engine = makeEngine();
+    const params = makePlaybackParams(engine, null);
+    let resolvePrepare!: (value: unknown) => void;
+    mockSparsePrepare.mockImplementationOnce(
+      () => new Promise((resolve) => { resolvePrepare = resolve; }),
+    );
+    const { result, unmount } = renderHook(() => usePlaybackControl(params as any));
+    // Ignore mount ownership so this checks the startup selection that must
+    // happen before native preparation starts.
+    mockSetSparseNotificationMode.mockClear();
+    mockReleaseDormantBackgroundPlaybackControls.mockClear();
+
+    let starting!: Promise<unknown>;
+    act(() => {
+      starting = result.current.togglePlayPause();
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(mockSparsePrepare).toHaveBeenCalledTimes(1);
+    expect(mockSetSparseNotificationMode).toHaveBeenCalledWith(true);
+    expect(mockSetSparseNotificationMode.mock.invocationCallOrder[0])
+      .toBeLessThan(mockSparsePrepare.mock.invocationCallOrder[0]);
+    expect(mockReleaseDormantBackgroundPlaybackControls).toHaveBeenCalled();
+    expect(mockBeginBackgroundPlaybackLease).not.toHaveBeenCalled();
+
+    await act(async () => {
+      resolvePrepare({ status: "prepared" });
+      await starting;
+    });
+    expect(mockSparseStart).toHaveBeenCalledTimes(1);
+    unmount();
   });
 
   it("fails explicitly when sparse playback is opted in but the native module is unavailable", async () => {
@@ -2174,11 +2242,17 @@ describe("pre-rendered playback reliability", () => {
     const player = { ...mockPlayer, play: jest.fn() };
     const params = makePlaybackParams(engine, player);
     const { result } = renderHook(() => usePlaybackControl(params as any));
+    mockSetSparseNotificationMode.mockClear();
+    mockReleaseDormantBackgroundPlaybackControls.mockClear();
 
     await act(async () => {
       await result.current.togglePlayPause();
     });
 
+    expect(mockSetSparseNotificationMode).toHaveBeenCalledWith(true);
+    expect(mockSetSparseNotificationMode.mock.invocationCallOrder[0])
+      .toBeLessThan(mockCheckSparseModuleAvailability.mock.invocationCallOrder[0]);
+    expect(mockReleaseDormantBackgroundPlaybackControls).toHaveBeenCalled();
     expect(params.showPlaybackStartFailure).toHaveBeenCalledTimes(1);
     expect(params.prepareRenderedPlayer).not.toHaveBeenCalled();
     expect(mockSparsePrepare).not.toHaveBeenCalled();
@@ -2222,11 +2296,17 @@ describe("pre-rendered playback reliability", () => {
     const params = makePlaybackParams(engine, { ...mockPlayer, play: jest.fn() });
     mockSparsePrepare.mockRejectedValueOnce(new Error("unsupported sparse sample"));
     const { result } = renderHook(() => usePlaybackControl(params as any));
+    mockSetSparseNotificationMode.mockClear();
+    mockReleaseDormantBackgroundPlaybackControls.mockClear();
 
     await act(async () => {
       await result.current.togglePlayPause();
     });
 
+    expect(mockSetSparseNotificationMode).toHaveBeenCalledWith(true);
+    expect(mockSetSparseNotificationMode.mock.invocationCallOrder[0])
+      .toBeLessThan(mockSparsePrepare.mock.invocationCallOrder[0]);
+    expect(mockReleaseDormantBackgroundPlaybackControls).toHaveBeenCalled();
     expect(mockSparsePrepare).toHaveBeenCalledTimes(1);
     expect(mockSparseStart).not.toHaveBeenCalled();
     expect(params.prepareRenderedPlayer).not.toHaveBeenCalled();

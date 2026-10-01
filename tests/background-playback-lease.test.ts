@@ -58,6 +58,7 @@ import {
   _resetBackgroundPlaybackLeaseForTests,
   beginBackgroundPlaybackLease,
   endBackgroundPlaybackLease,
+  releaseDormantBackgroundPlaybackControls,
 } from "@/lib/background-playback-lease";
 
 describe("background playback lease", () => {
@@ -153,6 +154,74 @@ describe("background playback lease", () => {
     expect(controls.resume).toHaveBeenCalledTimes(1);
     expect(_backgroundPlaybackLeaseDebugState().ownerCount).toBe(1);
     endBackgroundPlaybackLease(lease.token);
+    jest.restoreAllMocks();
+  });
+
+  it("releases dormant lock-screen controls retained after a remote pause", async () => {
+    (Platform as unknown as { OS: string }).OS = "android";
+    let playing = true;
+    let lease: ReturnType<typeof beginBackgroundPlaybackLease>;
+    const controls = {
+      isPlaying: () => playing,
+      pause: jest.fn(() => {
+        playing = false;
+        endBackgroundPlaybackLease(lease.token);
+      }),
+      resume: jest.fn(() => { playing = true; }),
+    };
+    lease = beginBackgroundPlaybackLease(controls);
+    await lease.ready;
+    jest.spyOn(Date, "now").mockReturnValue(Date.now() + 1000);
+
+    createdPlayers[0].emitStatus(false);
+    expect(controls.pause).toHaveBeenCalledTimes(1);
+    expect(_backgroundPlaybackLeaseDebugState()).toEqual({
+      ownerCount: 0,
+      hasKeepalivePlayer: true,
+      activationPending: false,
+    });
+
+    releaseDormantBackgroundPlaybackControls();
+
+    expect(createdPlayers[0].clearLockScreenControls).toHaveBeenCalledTimes(1);
+    expect(createdPlayers[0].pause).toHaveBeenCalledTimes(1);
+    expect(createdPlayers[0].release).toHaveBeenCalledTimes(1);
+    expect(mockRelinquishForegroundPlayback).toHaveBeenCalledWith("active-playback");
+    expect(_backgroundPlaybackLeaseDebugState().hasKeepalivePlayer).toBe(false);
+    jest.restoreAllMocks();
+  });
+
+  it("preserves an independent active owner when dormant controls are released", async () => {
+    (Platform as unknown as { OS: string }).OS = "android";
+    let playing = true;
+    let pausedLease: ReturnType<typeof beginBackgroundPlaybackLease>;
+    const controls = {
+      isPlaying: () => playing,
+      pause: jest.fn(() => {
+        playing = false;
+        endBackgroundPlaybackLease(pausedLease.token);
+      }),
+      resume: jest.fn(() => { playing = true; }),
+    };
+    pausedLease = beginBackgroundPlaybackLease(controls);
+    await pausedLease.ready;
+    jest.spyOn(Date, "now").mockReturnValue(Date.now() + 1000);
+
+    createdPlayers[0].emitStatus(false);
+    expect(_backgroundPlaybackLeaseDebugState().ownerCount).toBe(0);
+
+    const independentLease = beginBackgroundPlaybackLease();
+    await expect(independentLease.ready).resolves.toBe(true);
+    releaseDormantBackgroundPlaybackControls();
+
+    expect(_backgroundPlaybackLeaseDebugState().ownerCount).toBe(1);
+    expect(_backgroundPlaybackLeaseDebugState().hasKeepalivePlayer).toBe(true);
+    expect(createdPlayers[0].clearLockScreenControls).not.toHaveBeenCalled();
+    expect(createdPlayers[0].release).not.toHaveBeenCalled();
+
+    endBackgroundPlaybackLease(independentLease.token);
+    expect(createdPlayers[0].clearLockScreenControls).toHaveBeenCalledTimes(1);
+    expect(createdPlayers[0].release).toHaveBeenCalledTimes(1);
     jest.restoreAllMocks();
   });
 

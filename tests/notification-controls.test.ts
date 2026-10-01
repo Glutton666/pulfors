@@ -180,6 +180,40 @@ test("sparse pauses keep the user notification without activating the legacy sil
   assert.equal(mockScheduleNotificationAsync.mock.calls.length, 1);
 });
 
+test("entering sparse mode releases a paused hold even when notifications are disabled", () => {
+  const releaseHold = jest.spyOn(androidForegroundService, "releasePausedNotificationHold");
+  setPlaybackNotificationsEnabled(false);
+  releaseHold.mockClear();
+
+  setSparseNotificationMode(true);
+
+  expect(releaseHold).toHaveBeenCalledTimes(1);
+});
+
+test("late sparse entry releases a legacy hold after its pending acquire settles", async () => {
+  await setupNotificationControls("en");
+  setPlaybackNotificationsEnabled(true);
+  setSparseNotificationMode(false);
+  let finishHold!: () => void;
+  jest.spyOn(androidForegroundService, "holdForegroundForPausedNotification").mockImplementation(
+    () => new Promise<void>((resolve) => { finishHold = resolve; }),
+  );
+  const releaseHold = jest.spyOn(androidForegroundService, "releasePausedNotificationHold");
+  releaseHold.mockClear();
+
+  const showing = showPausedNotification(120, "Beat", "en");
+  await Promise.resolve();
+  await Promise.resolve();
+  setSparseNotificationMode(true);
+  const releasesAtSparseEntry = releaseHold.mock.calls.length;
+  finishHold();
+  await showing;
+
+  assert.ok(releasesAtSparseEntry >= 1);
+  assert.ok(releaseHold.mock.calls.length > releasesAtSparseEntry);
+  assert.equal(mockScheduleNotificationAsync.mock.calls.length, 1);
+});
+
 test("sparse output ownership is shared with the audio pipeline", () => {
   const stop = jest.fn();
   registerSparsePlaybackStopper(stop);

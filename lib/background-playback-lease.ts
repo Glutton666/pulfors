@@ -212,6 +212,17 @@ export function endBackgroundPlaybackLease(token: BackgroundPlaybackLease | null
   logger.info("[background-playback] continuous native lease released");
 }
 
+/** Relinquish remote-paused controls before a non-MediaSession handoff.
+ * Active owners (including independent Score playback) remain untouched.
+ */
+export function releaseDormantBackgroundPlaybackControls(): void {
+  if (owners.size > 0) return;
+  generation += 1;
+  dormantRemoteControls = null;
+  remotePauseInProgress = false;
+  stopKeepalive();
+}
+
 export function _resetBackgroundPlaybackLeaseForTests(): void {
   owners.clear();
   generation += 1;

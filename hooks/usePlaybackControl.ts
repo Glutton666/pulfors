@@ -54,6 +54,7 @@ import {
 import {
   beginBackgroundPlaybackLease,
   endBackgroundPlaybackLease,
+  releaseDormantBackgroundPlaybackControls,
   type BackgroundPlaybackLease,
 } from "@/lib/background-playback-lease";
 import {
@@ -199,6 +200,18 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
     endBackgroundPlaybackLease(backgroundLeaseRef.current);
     backgroundLeaseRef.current = null;
   }, []);
+
+  const playbackMode = p.getPlaybackContext().mode;
+  const sparseNotificationSelected = Platform.OS === "android" &&
+    (playbackMode === "beat" || playbackMode === "bar") &&
+    process.env.EXPO_PUBLIC_ENABLE_ANDROID_SPARSE_AUDIO === "1";
+  useEffect(() => {
+    if (!sparseNotificationSelected) return;
+    // Idle/paused notifications must not acquire a legacy silent player,
+    // including before the first successful native start.
+    setSparseNotificationMode(true);
+    releaseDormantBackgroundPlaybackControls();
+  }, [sparseNotificationSelected]);
 
   const disposeSparseSession = useCallback((
     session: { id: string; prepared: PreparedSparseEvents; maxDurationMs: number } | null,
@@ -636,6 +649,13 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
             config: p.dialConfigRef.current,
           },
     );
+    const useSparseAndroid =
+      Platform.OS === "android" &&
+      (plan.mode === "beat" || plan.mode === "bar") &&
+      process.env.EXPO_PUBLIC_ENABLE_ANDROID_SPARSE_AUDIO === "1";
+    // Select notification ownership before any preparation/start await.
+    // Failed starts must never leave the legacy MediaSession selected.
+    setSparseNotificationMode(useSparseAndroid);
     p.setActiveAudioToneSnapshot(plan.audio.tone);
     const attempt = ++startAttemptRef.current;
     const startupEpoch = p.beginAudioStartupProbe();
@@ -690,18 +710,12 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
 
     try {
       releaseBackgroundLease();
-      const useSparseAndroid =
-        Platform.OS === "android" &&
-        (plan.mode === "beat" || plan.mode === "bar") &&
-        // Keep the existing default until a custom Android build has passed
-        // locked-screen, interruption and wired-output device verification.
-        process.env.EXPO_PUBLIC_ENABLE_ANDROID_SPARSE_AUDIO === "1";
       if (useSparseAndroid) {
+        releaseDormantBackgroundPlaybackControls();
         if (!isSparseMetronomeAvailable) {
           throw new Error("Android sparse audio is unavailable in this build; no continuous-audio fallback is permitted.");
         }
       } else {
-        setSparseNotificationMode(false);
         const backgroundLease = beginBackgroundPlaybackLease({
           isPlaying: () => p.isPlayingRef.current || p.isPreparingRef.current,
           pause: () => togglePlayPauseRef.current(),

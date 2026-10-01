@@ -19,10 +19,12 @@ let isSetup = false;
 let sparseNotificationMode = false;
 let sparsePlaybackActive = false;
 let sparsePlaybackStopper: (() => void) | null = null;
+let pausedNotificationRequestGeneration = 0;
 
 /** Sparse Beat/Bar output uses its own non-MediaSession foreground service. */
 export function setSparseNotificationMode(enabled: boolean): void {
   sparseNotificationMode = enabled;
+  if (enabled) releasePausedNotificationHold();
 }
 
 /** Lightweight shared ownership state for audio-pipeline handoffs. */
@@ -255,22 +257,47 @@ export async function showPausedNotification(
   if (Platform.OS === "web" || !isSetup) return;
   if (isExpoGo) return;
   const preferenceRevision = getPlaybackNotificationsRevision();
+  const requestGeneration = ++pausedNotificationRequestGeneration;
 
   const N = await getNotifications();
   if (!N) return;
+  if (
+    !arePlaybackNotificationsEnabled() ||
+    getPlaybackNotificationsRevision() !== preferenceRevision
+  ) {
+    if (requestGeneration === pausedNotificationRequestGeneration && !sparseNotificationMode) {
+      releasePausedNotificationHold();
+    }
+    return;
+  }
 
   try {
     // Sparse Beat/Bar deliberately avoids the legacy silent-player MediaSession.
     if (!sparseNotificationMode) await holdForegroundForPausedNotification();
-    await N.setNotificationCategoryAsync(
-      CATEGORY_ID,
-      buildNotificationActions(false, lang)
-    );
     if (
       !arePlaybackNotificationsEnabled() ||
       getPlaybackNotificationsRevision() !== preferenceRevision
     ) {
-      if (!sparseNotificationMode) releasePausedNotificationHold();
+      if (requestGeneration === pausedNotificationRequestGeneration && !sparseNotificationMode) {
+        releasePausedNotificationHold();
+      }
+      return;
+    }
+    // Sparse mode may have been entered while the legacy acquire was pending.
+    // Its setter releases synchronously; repeat here to cover late completion.
+    if (sparseNotificationMode) releasePausedNotificationHold();
+    await N.setNotificationCategoryAsync(
+      CATEGORY_ID,
+      buildNotificationActions(false, lang)
+    );
+    if (sparseNotificationMode) releasePausedNotificationHold();
+    if (
+      !arePlaybackNotificationsEnabled() ||
+      getPlaybackNotificationsRevision() !== preferenceRevision
+    ) {
+      if (requestGeneration === pausedNotificationRequestGeneration && !sparseNotificationMode) {
+        releasePausedNotificationHold();
+      }
       return;
     }
 
@@ -280,7 +307,10 @@ export async function showPausedNotification(
       trigger: null,
     });
   } catch (e) {
-    if (!sparseNotificationMode) releasePausedNotificationHold();
+    if (
+      requestGeneration === pausedNotificationRequestGeneration &&
+      !sparseNotificationMode
+    ) releasePausedNotificationHold();
     logger.warn("Show paused notification error:", e);
   }
 }
