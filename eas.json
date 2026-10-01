@@ -26,10 +26,7 @@
       "android": {
         "buildType": "apk"
       },
-      "env": {
-        "SENTRY_DISABLE_AUTO_UPLOAD": "true",
-        "EXPO_PUBLIC_ENABLE_ANDROID_SPARSE_AUDIO": "1"
-      }
+      "env": { "SENTRY_DISABLE_AUTO_UPLOAD": "true" }
     }
   },
   "submit": {
