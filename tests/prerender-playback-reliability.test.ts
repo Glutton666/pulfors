@@ -2195,6 +2195,26 @@ describe("pre-rendered playback reliability", () => {
     expect(mockSetSparseNotificationMode).not.toHaveBeenCalledWith(true);
   });
 
+  it("does not start Android audio if its no-MediaSession background service fails", async () => {
+    delete process.env.EXPO_PUBLIC_ENABLE_ANDROID_SPARSE_AUDIO;
+    (Platform as unknown as { OS: string }).OS = "android";
+    mockBeginBackgroundPlaybackLease.mockReturnValueOnce({
+      token: Symbol("failed-background-service"),
+      ready: Promise.resolve(false),
+    });
+    const engine = makeEngine();
+    const player = { ...mockPlayer, play: jest.fn() };
+    const params = makePlaybackParams(engine, player);
+    const { result } = renderHook(() => usePlaybackControl(params as any));
+
+    await act(async () => { await result.current.togglePlayPause(); });
+
+    expect(player.play).not.toHaveBeenCalled();
+    expect(params.prepareRenderedPlayer).not.toHaveBeenCalled();
+    expect(params.showPlaybackStartFailure).toHaveBeenCalled();
+    expect(params.isPlayingRef.current).toBe(false);
+  });
+
   it("selects sparse notification ownership before delayed native preparation", async () => {
     (Platform as unknown as { OS: string }).OS = "android";
     const engine = makeEngine();

@@ -51,7 +51,7 @@
 - [Bar staff rhythm notation](bar-staff-rhythm-notation.md) — derive note value from the lower power-of-two subdivision bucket; duration affects notehead fill as well as beams.
 - [Audio warm-up isolation](audio-warmup-isolation.md) — never mute/play shared click pools on a delayed timer; it can race both realtime and rendered playback startup.
 - [Notification preference races](notification-preference-races.md) — disabling a notification needs an epoch check before every async publish, not only an initial enabled guard.
-- [Paused notification replay](paused-notification-replay.md) — background-only replay needs a live Android MediaSessionService; keep it with true-silence audio while the paused notification remains.
+- [Paused notification replay](paused-notification-replay.md) — background-only replay needs a plain Android foreground hold and true-silence audio, not a MediaSession.
 - [Capped meter changes](capped-meter-changes.md) — never call the meter updater with an unchanged capped count; equality intentionally resets beat types.
 - [Audio startup handshake](audio-startup-handshake.md) — playing UI waits for accepted output; every start/stop owns and invalidates an activity epoch, including delayed native seeks.
 - [Native dense-pattern playback](native-dense-pattern-playback.md) — native Beat playback is rendered-first; async per-tick seek/play can reorder accent and normal output.
@@ -72,9 +72,9 @@
 - [Restartable producer callbacks](restartable-producer-callbacks.md) — boolean gates do not reject callbacks from an older lifetime after restart; each installed producer needs an immutable generation.
 - [Shared PCM cancellation](shared-pcm-cancellation.md) — caller abort detaches one waiter; cancel shared decode only after the last waiter leaves, and never publish invalidated completions.
 - [Audio output ownership scope](audio-output-ownership-scope.md) — metronome and Polygon share one owner; score playback remains a separate session architecture until explicitly migrated.
-- [Expo Audio foreground MediaSession controls](expo-audio-foreground-mediasession-controls.md) — setActiveForLockScreen starts Android’s media service but also exposes play/pause; bridge those events to the real transport.
+- [Android media-card ownership](expo-audio-foreground-mediasession-controls.md) — retain silence but use a plain foreground service; Expo lock-screen controls would recreate the unwanted media card.
 - [Supplemental interruption ownership](supplemental-interruption-ownership.md) — Score-only recovery must not resume the global metronome; explicit stop cancels deferred supplemental resume.
 - [Android focus probe stabilization](android-focus-probe-stabilization.md) — confirm several consecutive status samples before declaring focus loss/gain; single-sample oscillation can create recovery storms.
-- [Background lease keepalive status grace window](background-lease-keepalive-status-grace.md) — ignore keepalive-player status flips for a short window right after (re)activation, or a spurious flip can loop pause/resume and exhaust heap.
+- [Native player status instability](background-lease-keepalive-status-grace.md) — helper-player status flips are not transport commands; bridging transient flips can create restart loops and exhaust heap.
 - [Android sparse-output boundary](android-sparse-output-boundary.md) — do not remove continuous audio for click-only output until a native clock and foreground-service replacement preserve locked-screen playback.
 - [Native random-pass handoff](native-random-pass-handoff.md) — freeze the next visual/audio order before a native boundary; a late JS rollover cannot safely schedule the pass after the fact.

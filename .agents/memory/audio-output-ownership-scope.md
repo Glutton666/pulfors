@@ -11,8 +11,8 @@ Score playback remains a separate mode-owned scheduler and synthesis/session arc
 
 **How to apply:** Changes to metronome or Polygon playback must preserve the shared owner. Changes that move score output under the same owner should be scoped and verified as an explicit score-session migration.
 
-Removing the legacy media card during Android sparse Beat/Bar entry must clear ownerless remote-paused controls and cancel pending paused-notification holds, not globally stop shared background leases with active owners.
+Removing the Android media card is independent of adopting sparse audio. Preserve existing audible/true-silence output and active independent owners while moving background lifetime to a plain non-MediaSession service.
 
-**Why:** A MediaSession retained for remote resume can outlive its metronome lease token. Global cleanup would hide the card at the cost of stopping independent Score playback.
+**Why:** Gating card removal behind the optional sparse route left default APKs unchanged. Global lease cleanup would hide the card at the cost of stopping independent Score playback.
 
-**How to apply:** Select the no-MediaSession notification policy before asynchronous preparation, preserve active independent owners, and test cancellation while a legacy hold is still being acquired.
+**How to apply:** Keep sparse adoption and card removal separate, preserve active owners, and cancel pending holds by immutable native tokens so stale teardown cannot release a newer session.

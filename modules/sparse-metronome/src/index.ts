@@ -57,6 +57,8 @@ export type SparseMetronomeTimingOverrunEvent = {
 };
 
 type NativeSparseMetronome = {
+  acquireBackgroundPlayback?(owner: string): Promise<SparseSessionAck>;
+  releaseBackgroundPlayback?(owner: string): Promise<SparseSessionAck>;
   prepare(
     sessionId: string,
     clipDescriptors: SparseClipDescriptor[],
@@ -87,6 +89,22 @@ const nativeModule = requireOptionalNativeModule<NativeSparseMetronome>('SparseM
 
 /** True when this runtime includes the Android native module (false in Expo Go without a custom native build). */
 export const isSparseMetronomeAvailable = nativeModule !== null;
+
+/** Independent of sparse scheduling: holds the existing audio with no media card. */
+export const BackgroundPlaybackService = {
+  async acquire(owner: string): Promise<void> {
+    if (!nativeModule?.acquireBackgroundPlayback) {
+      throw new Error('No-MediaSession background service is unavailable. Rebuild the Android app with the updated native module.');
+    }
+    await nativeModule.acquireBackgroundPlayback(owner);
+  },
+  async release(owner: string): Promise<void> {
+    if (!nativeModule?.releaseBackgroundPlayback) {
+      throw new Error('No-MediaSession background service is unavailable in this Android build.');
+    }
+    await nativeModule.releaseBackgroundPlayback(owner);
+  },
+};
 
 const unsupported = async (): Promise<never> => {
   throw new Error(

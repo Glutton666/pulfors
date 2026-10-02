@@ -111,17 +111,15 @@ describe("background playback lease", () => {
     await lease.ready;
 
     expect(mockRequestForegroundPlayback).toHaveBeenCalledWith("active-playback");
-    expect(createdPlayers[0].setActiveForLockScreen).toHaveBeenCalledWith(
-      true,
-      expect.objectContaining({ title: "Metronome" }),
-      expect.objectContaining({ showSeekBackward: false, showSeekForward: false }),
-    );
+    expect(createdPlayers[0].setActiveForLockScreen).not.toHaveBeenCalled();
+    expect(createdPlayers[0].loop).toBe(true);
+    expect(createdPlayers[0].volume).toBe(0);
     endBackgroundPlaybackLease(lease.token);
     expect(createdPlayers[0].clearLockScreenControls).toHaveBeenCalledTimes(1);
     expect(mockRelinquishForegroundPlayback).toHaveBeenCalledWith("active-playback");
   });
 
-  it("routes Android MediaSession pause and play to the real transport", async () => {
+  it("does not expose a MediaSession or interpret silent-player status as transport commands", async () => {
     (Platform as unknown as { OS: string }).OS = "android";
     let playing = true;
     let lease: ReturnType<typeof beginBackgroundPlaybackLease>;
@@ -139,25 +137,21 @@ describe("background playback lease", () => {
     lease = beginBackgroundPlaybackLease(controls);
     await lease.ready;
 
-    // A freshly (re)activated keepalive player ignores status flips for a
-    // short grace window (spurious creation-time instability, not a real
-    // remote command — see REMOTE_STATUS_GRACE_MS). Advance past it so this
-    // test exercises a genuine, steady-state remote pause/resume.
-    jest.spyOn(Date, "now").mockReturnValue(Date.now() + 1000);
-
+    expect(createdPlayers[0].setActiveForLockScreen).not.toHaveBeenCalled();
+    expect(createdPlayers[0].addListener).not.toHaveBeenCalled();
     createdPlayers[0].emitStatus(false);
-    expect(controls.pause).toHaveBeenCalledTimes(1);
-    expect(_backgroundPlaybackLeaseDebugState().ownerCount).toBe(0);
+    expect(controls.pause).not.toHaveBeenCalled();
+    expect(_backgroundPlaybackLeaseDebugState().ownerCount).toBe(1);
     expect(_backgroundPlaybackLeaseDebugState().hasKeepalivePlayer).toBe(true);
 
     createdPlayers[0].emitStatus(true);
-    expect(controls.resume).toHaveBeenCalledTimes(1);
+    expect(controls.resume).not.toHaveBeenCalled();
     expect(_backgroundPlaybackLeaseDebugState().ownerCount).toBe(1);
     endBackgroundPlaybackLease(lease.token);
     jest.restoreAllMocks();
   });
 
-  it("releases dormant lock-screen controls retained after a remote pause", async () => {
+  it("releases the silent helper and ordinary service on pause without retaining a media session", async () => {
     (Platform as unknown as { OS: string }).OS = "android";
     let playing = true;
     let lease: ReturnType<typeof beginBackgroundPlaybackLease>;
@@ -171,13 +165,10 @@ describe("background playback lease", () => {
     };
     lease = beginBackgroundPlaybackLease(controls);
     await lease.ready;
-    jest.spyOn(Date, "now").mockReturnValue(Date.now() + 1000);
-
-    createdPlayers[0].emitStatus(false);
-    expect(controls.pause).toHaveBeenCalledTimes(1);
+    controls.pause();
     expect(_backgroundPlaybackLeaseDebugState()).toEqual({
       ownerCount: 0,
-      hasKeepalivePlayer: true,
+      hasKeepalivePlayer: false,
       activationPending: false,
     });
 
@@ -191,7 +182,7 @@ describe("background playback lease", () => {
     jest.restoreAllMocks();
   });
 
-  it("preserves an independent active owner when dormant controls are released", async () => {
+  it("preserves an independent active owner during sparse handoff cleanup", async () => {
     (Platform as unknown as { OS: string }).OS = "android";
     let playing = true;
     let pausedLease: ReturnType<typeof beginBackgroundPlaybackLease>;
@@ -205,13 +196,10 @@ describe("background playback lease", () => {
     };
     pausedLease = beginBackgroundPlaybackLease(controls);
     await pausedLease.ready;
-    jest.spyOn(Date, "now").mockReturnValue(Date.now() + 1000);
-
-    createdPlayers[0].emitStatus(false);
-    expect(_backgroundPlaybackLeaseDebugState().ownerCount).toBe(0);
-
     const independentLease = beginBackgroundPlaybackLease();
     await expect(independentLease.ready).resolves.toBe(true);
+    controls.pause();
+    expect(_backgroundPlaybackLeaseDebugState().ownerCount).toBe(1);
     releaseDormantBackgroundPlaybackControls();
 
     expect(_backgroundPlaybackLeaseDebugState().ownerCount).toBe(1);
@@ -225,7 +213,7 @@ describe("background playback lease", () => {
     jest.restoreAllMocks();
   });
 
-  it("ignores a spurious status flip in the grace window right after activation", async () => {
+  it("ignores silent-player status changes without toggling audible playback", async () => {
     (Platform as unknown as { OS: string }).OS = "android";
     let playing = true;
     let lease: ReturnType<typeof beginBackgroundPlaybackLease>;
@@ -237,11 +225,6 @@ describe("background playback lease", () => {
     lease = beginBackgroundPlaybackLease(controls);
     await lease.ready;
 
-    // No time advance: this simulates the exact real-device failure — a
-    // transient false/true blip from the native player immediately after
-    // creation. It must not toggle real playback, or re-activation of a new
-    // keepalive player for that toggle can itself blip again (the runaway
-    // loop that exhausted heap on-device in ~7s, 2026-09-24).
     createdPlayers[0].emitStatus(false);
     expect(controls.pause).not.toHaveBeenCalled();
     createdPlayers[0].emitStatus(true);

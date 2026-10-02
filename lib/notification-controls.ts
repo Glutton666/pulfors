@@ -105,7 +105,7 @@ export function buildNotificationActions(isPlaying: boolean, lang: Language = "k
       buttonTitle: isPlaying
         ? `⏸ ${t("notification", "pause")}`
         : `▶ ${t("notification", "play")}`,
-      // 재생 중과 정지 알림 유지 중 모두 MediaSessionService가 살아 있으므로
+      // 재생 중과 정지 알림 유지 중 모두 일반 포그라운드 서비스가 살아 있으므로
       // 앱 화면을 열지 않고 알림 안에서 처리한다.
       options: { opensAppToForeground: false },
     },
@@ -191,7 +191,7 @@ export async function showPlayingNotification(
   }
 
   // Detailed notification state is optional. The actual playback lifecycle
-  // owns the mandatory foreground MediaSession notification independently.
+  // owns the mandatory general foreground-service notification independently.
   releasePausedNotificationHold();
 
   const N = await getNotifications();

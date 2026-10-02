@@ -6,6 +6,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.os.Build
 import expo.modules.kotlin.Promise
+import expo.modules.kotlin.functions.Queues
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import java.util.UUID
@@ -17,6 +18,7 @@ class SparseMetronomeModule : Module() {
   private val pendingPromises = ConcurrentHashMap<String, Promise>()
   private var receiver: BroadcastReceiver? = null
   private var replyAction: String? = null
+  private val backgroundOwners = mutableSetOf<String>()
 
   override fun definition() = ModuleDefinition {
     Name("SparseMetronome")
@@ -184,8 +186,44 @@ class SparseMetronomeModule : Module() {
       }
     }
 
+    AsyncFunction("acquireBackgroundPlayback") { owner: String, promise: Promise ->
+      val context = appContext.reactContext?.applicationContext
+      if (context == null || owner.isBlank()) {
+        promise.reject("INVALID_BACKGROUND_OWNER", "Android context and a non-empty owner are required.", null)
+      } else {
+        backgroundOwners.add(owner)
+        BackgroundPlaybackService.registerOwner(owner)
+        submit(context, "acquireBackground", owner, promise,
+          serviceClass = BackgroundPlaybackService::class.java)
+      }
+    }.runOnQueue(Queues.MAIN)
+
+    AsyncFunction("releaseBackgroundPlayback") { owner: String, promise: Promise ->
+      val context = appContext.reactContext?.applicationContext
+      backgroundOwners.remove(owner)
+      BackgroundPlaybackService.unregisterOwner(owner)
+      if (context == null) {
+        promise.reject("NO_ANDROID_CONTEXT", "Android application context is unavailable.", null)
+      } else {
+        submit(context, "releaseBackground", owner, promise, useForegroundStart = false,
+          serviceClass = BackgroundPlaybackService::class.java)
+      }
+    }.runOnQueue(Queues.MAIN)
+
     OnDestroy {
       val context = appContext.reactContext?.applicationContext
+      // Module reloads must not leave a foreground service owned by dead JS.
+      val ownersToRelease = backgroundOwners.toList()
+      android.os.Handler(android.os.Looper.getMainLooper()).post {
+        ownersToRelease.forEach { BackgroundPlaybackService.unregisterOwner(it) }
+        if (context != null && ownersToRelease.isNotEmpty()) {
+          try {
+            context.startService(Intent(context, BackgroundPlaybackService::class.java)
+              .putExtra("command", "releaseBackground"))
+          } catch (_: Exception) { /* Android may already have stopped the service. */ }
+        }
+      }
+      backgroundOwners.clear()
       val currentReceiver = receiver
       if (context != null && currentReceiver != null) {
         try {
@@ -208,10 +246,11 @@ class SparseMetronomeModule : Module() {
     sessionId: String,
     promise: Promise,
     useForegroundStart: Boolean = true,
+    serviceClass: Class<out android.app.Service> = SparseMetronomeService::class.java,
     extras: Intent.() -> Unit = {}
   ) {
     val requestId = UUID.randomUUID().toString()
-    val intent = Intent(context, SparseMetronomeService::class.java)
+    val intent = Intent(context, serviceClass)
       .setAction(SparseMetronomeService.ACTION_COMMAND)
       .putExtra("command", action)
       .putExtra("sessionId", sessionId)
@@ -219,6 +258,20 @@ class SparseMetronomeModule : Module() {
       .putExtra("replyAction", replyAction)
       .apply(extras)
     pendingPromises[requestId] = promise
+    if (serviceClass == BackgroundPlaybackService::class.java) {
+      android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+        val pending = pendingPromises.remove(requestId)
+        if (pending != null) {
+          backgroundOwners.remove(sessionId)
+          BackgroundPlaybackService.unregisterOwner(sessionId)
+          try {
+            context.startService(Intent(context, BackgroundPlaybackService::class.java)
+              .putExtra("command", "releaseBackground"))
+          } catch (_: Exception) { /* A stopped service has no resource to release. */ }
+          pending.reject("BACKGROUND_SERVICE_TIMEOUT", "Background service did not acknowledge startup or shutdown.", null)
+        }
+      }, 5_000L)
+    }
     try {
       if (useForegroundStart && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
         context.startForegroundService(intent)
@@ -226,6 +279,10 @@ class SparseMetronomeModule : Module() {
         context.startService(intent)
       }
     } catch (error: Exception) {
+      if (serviceClass == BackgroundPlaybackService::class.java) {
+        backgroundOwners.remove(sessionId)
+        BackgroundPlaybackService.unregisterOwner(sessionId)
+      }
       pendingPromises.remove(requestId)
       promise.reject("SERVICE_START_FAILED", error.message ?: "Could not start the sparse playback service.", error)
     }

@@ -722,8 +722,14 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
           resume: () => togglePlayPauseRef.current(),
         });
         backgroundLeaseRef.current = backgroundLease.token;
-        // Do not block other modes on their optional playback lease.
-        void backgroundLease.ready;
+        if (Platform.OS === "android" && backgroundLease.token) {
+          const ready = await awaitWithin(backgroundLease.ready, "Android background service");
+          if (!ready) {
+            throw new Error("Android background playback service could not start; no MediaSession fallback is permitted.");
+          }
+        } else {
+          void backgroundLease.ready;
+        }
       }
       if (cancelled()) {
         releaseBackgroundLease();

@@ -5,6 +5,15 @@ import * as audioModeCache from "../lib/audio-mode-cache";
 
 const mockApplyAudioModeIfChanged = jest.spyOn(audioModeCache, "applyAudioModeIfChanged");
 const mockCreateAudioPlayer = jest.fn();
+const mockAcquireBackgroundService = jest.fn(async (_token: string) => {});
+const mockReleaseBackgroundService = jest.fn(async (_token: string) => {});
+
+jest.mock("../modules/sparse-metronome/src", () => ({
+  BackgroundPlaybackService: {
+    acquire: (token: string) => mockAcquireBackgroundService(token),
+    release: (token: string) => mockReleaseBackgroundService(token),
+  },
+}));
 
 jest.mock("expo-audio", () => ({
   createAudioPlayer: mockCreateAudioPlayer,
@@ -25,6 +34,7 @@ function createPlayer() {
     play: jest.fn(),
     pause: jest.fn(),
     release: jest.fn(),
+    setActiveForLockScreen: jest.fn(),
   };
 }
 
@@ -32,6 +42,8 @@ beforeEach(() => {
   Platform.OS = "android";
   mockApplyAudioModeIfChanged.mockReset().mockResolvedValue(undefined);
   mockCreateAudioPlayer.mockReset().mockImplementation(createPlayer);
+  mockAcquireBackgroundService.mockReset().mockResolvedValue(undefined);
+  mockReleaseBackgroundService.mockReset().mockResolvedValue(undefined);
 });
 
 afterEach(() => {
@@ -49,6 +61,7 @@ test("paused notification acquisition is deduped and releases its player and own
   await Promise.all([first, second]);
 
   assert.equal(mockCreateAudioPlayer.mock.calls.length, 1);
+  expect(mockAcquireBackgroundService).toHaveBeenCalledTimes(1);
   assert.equal(_foregroundPlaybackDebugState().owners.length, 1);
   assert.match(_foregroundPlaybackDebugState().owners[0], /^paused-notification:/);
   const player = mockCreateAudioPlayer.mock.results[0]?.value;
@@ -57,6 +70,8 @@ test("paused notification acquisition is deduped and releases its player and own
 
   expect(player.pause).toHaveBeenCalledTimes(1);
   expect(player.release).toHaveBeenCalledTimes(1);
+  expect(player.setActiveForLockScreen).not.toHaveBeenCalled();
+  expect(mockReleaseBackgroundService).toHaveBeenCalledWith(mockAcquireBackgroundService.mock.calls[0][0]);
   assert.deepEqual(_foregroundPlaybackDebugState().owners, []);
 });
 
@@ -109,4 +124,35 @@ test("releasing the paused hold preserves active foreground owners", async () =>
 
   assert.deepEqual(_foregroundPlaybackDebugState().owners, ["active-playback"]);
   assert.equal(_foregroundPlaybackDebugState().isForegroundActive, true);
+  expect(mockAcquireBackgroundService).toHaveBeenCalledTimes(1);
+  expect(mockReleaseBackgroundService).not.toHaveBeenCalled();
+});
+
+test("a canceled native acquire cannot release a newer foreground hold", async () => {
+  let finishOldNative!: () => void;
+  mockAcquireBackgroundService.mockImplementationOnce(
+    () => new Promise<void>((resolve) => { finishOldNative = resolve; }),
+  );
+  const old = requestForegroundPlayback("old");
+  await Promise.resolve();
+  const oldToken = mockAcquireBackgroundService.mock.calls[0][0];
+  relinquishForegroundPlayback("old");
+  await requestForegroundPlayback("new");
+  const newToken = mockAcquireBackgroundService.mock.calls[1][0];
+  assert.notEqual(oldToken, newToken);
+
+  finishOldNative();
+  await old;
+  assert.deepEqual(_foregroundPlaybackDebugState().owners, ["new"]);
+  assert.equal(_foregroundPlaybackDebugState().isForegroundActive, true);
+  expect(mockReleaseBackgroundService).toHaveBeenCalledWith(oldToken);
+  expect(mockReleaseBackgroundService).not.toHaveBeenCalledWith(newToken);
+});
+
+test("a missing or failed native service is reported without creating a silent player", async () => {
+  mockAcquireBackgroundService.mockRejectedValueOnce(new Error("Rebuild the Android app"));
+  await expect(holdForegroundForPausedNotification()).rejects.toThrow("Rebuild the Android app");
+  expect(mockCreateAudioPlayer).not.toHaveBeenCalled();
+  assert.deepEqual(_foregroundPlaybackDebugState().owners, []);
+  assert.equal(_foregroundPlaybackDebugState().isForegroundActive, false);
 });

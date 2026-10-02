@@ -1,10 +1,10 @@
 ---
 name: Expo Audio foreground MediaSession controls
-description: Non-obvious Android behavior when expo-audio is used to hold a mediaPlayback foreground service.
+description: Why silent Expo Audio helpers must not own Android's MediaSession when the media card is unwanted.
 ---
 
-Calling `AudioPlayer.setActiveForLockScreen(true, ...)` is what activates expo-audio’s Android `MediaSessionService`, but it also exposes system play/pause controls for that exact player. If the active player is only a silent keepalive, those controls must be forwarded to the real audible transport.
+Do not activate Expo Audio lock-screen controls on silent helpers. Keep Android background lifetime in a plain foreground service, independently of the audible and true-silence players.
 
-**Why:** Without the bridge, system Pause stops only the silent helper while metronome or score audio continues. The app then loses the continuous foreground hold and presents misleading transport state.
+**Why:** Activating lock-screen controls starts Expo Audio’s MediaSessionService and exposes a system media card for the silent player. Removing silence alone would risk background timing; separating service ownership removes the card without replacing the audio backend.
 
-**How to apply:** Any silent foreground keepalive must subscribe to its playback-status events, route remote pause/play to the owning transport, suppress callbacks during intentional disposal, and preserve enough paused-session state for remote Play to resume the real transport.
+**How to apply:** Preserve ordinary notification actions and the mandatory general service notification, but do not recreate MediaSession ownership as a fallback. Native changes require rebuilding the APK and checking actual card absence together with locked-screen playback.

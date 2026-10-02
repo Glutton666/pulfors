@@ -18,6 +18,15 @@ instead of reverting to the legacy continuous player. Locked-screen playback,
 audio interruptions, wired-amplifier noise, and acoustic onset timing still
 require physical-device validation before enabling it by default.
 
+The same native module also exposes an independent `BackgroundPlaybackService`
+hold for the **default** audio route. This plain Android foreground service and
+partial wake lock replace Expo Audio's lock-screen MediaSession ownership.
+Existing rendered/click audio and the true-silence keepalive are retained; no
+sparse feature flag is needed to remove the media card. A general service
+notification remains required. The updated native module requires a new APK;
+older APKs and Expo Go cannot provide this hold. Beat/Bar startup reports a
+failed hold instead of silently falling back to the media-card backend.
+
 The existing TypeScript `SparseMetronome.prepare(sessionId, descriptors,
 periodFrames)` API is unchanged. A reused URI must declare the same duration
 on every event. WAVs must be app-private mono/stereo 16-bit integer PCM at
