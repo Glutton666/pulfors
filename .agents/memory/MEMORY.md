@@ -78,3 +78,4 @@
 - [Native player status instability](background-lease-keepalive-status-grace.md) — helper-player status flips are not transport commands; bridging transient flips can create restart loops and exhaust heap.
 - [Android sparse-output boundary](android-sparse-output-boundary.md) — do not remove continuous audio for click-only output until a native clock and foreground-service replacement preserve locked-screen playback.
 - [Native random-pass handoff](native-random-pass-handoff.md) — freeze the next visual/audio order before a native boundary; a late JS rollover cannot safely schedule the pass after the fact.
+- [웹·앱 공동 사용](web-app-parity.md) — 웹에서도 앱과 같은 화면·기능을 유지하며 같은 계정의 설정과 연습 데이터를 자동 동기화한다.
