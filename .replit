@@ -5,8 +5,8 @@ modules = ["nodejs-22", "python-3.11", "java-17"]
 channel = "stable-24_05"
 
 [deployment]
-deploymentTarget = "cloudrun"
-build = ["sh", "-c", "npm run expo:static:build && npm run server:build"]
+deploymentTarget = "autoscale"
+build = ["sh", "-c", "npm run release:web:build && npm run release:web:verify"]
 run = ["npm", "run", "server:prod"]
 
 [[ports]]

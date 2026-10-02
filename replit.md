@@ -51,12 +51,12 @@ Preferred communication style: Simple, everyday language.
 - **Framework**: Express 5 with TypeScript.
 - **API Structure**: Routes defined in `server/routes.ts`, prefixed with `/api`.
 - **Active endpoints**:
-  - `GET /` — serves the landing page (`server/templates/landing-page.html`) or the Expo OTA manifest when an `expo-platform` header is present.
+  - `GET /` — serves the exported web app; without a web build in development, serves the Expo Go landing page. An `expo-platform` header selects the native manifest route.
   - `GET /manifest` — same Expo manifest routing as `/`.
   - `GET /api/time` — returns an uncached server timestamp.
 - **Local sample analysis**: Imported and recorded audio is decoded, trimmed, and BPM-measured on the device; the backend never receives sample audio.
 - **No database**: All user data (settings, practice entries, sound sets, etc.) is stored on-device via AsyncStorage. The server holds no persistent state.
-- **Deployment**: Serves the static Expo web build from `static-build/` in production; in development the Expo dev server runs separately on port 8081.
+- **Deployment**: Serves the static Expo web build from `static-build/` in production; in development the Expo dev server runs separately on port 8081. Production startup rejects missing/invalid web exports rather than showing the Expo Go page. Publishing runs `release:web:build` followed by `release:web:verify`; for local browser and backup smoke checks run `node scripts/verify-web-release.mjs --browser`.
 
 ### Database
 - **Not implemented**: There is no active database connection. The server is stateless — no ORM, no schema, no migrations. If server-side persistence is needed in the future (e.g. user accounts, cloud sync), add Drizzle ORM + PostgreSQL at that point.

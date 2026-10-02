@@ -309,6 +309,14 @@ export function setupErrorHandler(app: express.Application) {
 }
 
 export async function startServer() {
+  // Never publish a successful-looking Expo Go page when the web export is
+  // missing. Development may still use the separate Metro frontend.
+  if (isProduction) {
+    const indexPath = path.resolve(process.cwd(), "static-build", "index.html");
+    if (!fs.existsSync(indexPath) || !fs.readFileSync(indexPath, "utf8").includes('id="root"')) {
+      throw new Error("Web build missing or invalid: run npm run release:web:build before starting production.");
+    }
+  }
   app.set("trust proxy", getTrustProxyHops());
   setupSecurityHeaders(app);
   setupCors(app);
@@ -325,6 +333,12 @@ export async function startServer() {
   app.use((req: Request, res: Response) => {
     if (req.path.startsWith("/api")) {
       res.status(404).json({ message: "Not found" });
+      return;
+    }
+    // Missing bundles/assets must not receive SPA HTML with a misleading 200.
+    if (/^\/(?:_expo|assets|audio-worklets)(?:\/|$)/.test(req.path)
+      || path.posix.extname(req.path)) {
+      res.status(404).json({ message: "File not found" });
       return;
     }
     const staticIndexPath = path.resolve(
@@ -367,5 +381,8 @@ export async function startServer() {
 }
 
 if (require.main === module) {
-  void startServer();
+  void startServer().catch((error: unknown) => {
+    console.error(error instanceof Error ? error.message : error);
+    process.exit(1);
+  });
 }

@@ -31,6 +31,7 @@ import {
 import { loadGoals, saveGoals, type Goal } from "@/lib/activity-log";
 import { make_styles } from "@/components/SettingsModal.styles";
 import { filterPrimaryInstrumentCategories } from "@/lib/primary-instrument-search";
+import { alertInfo, confirmDestructive } from "@/lib/confirm";
 
 export interface SettingsProfileTabProps {
   visible: boolean;
@@ -132,6 +133,11 @@ export function SettingsProfileTab({
     const { importBackup } = await import("@/lib/backup");
     const result = await importBackup();
     if (result.success) {
+      if (Platform.OS === "web") {
+        alertInfo(t("settings", "complete"), t("settings", "restoreSuccess"));
+        window.location.reload();
+        return;
+      }
       Alert.alert(t("settings", "complete"), t("settings", "restoreSuccess"), [{
         text: "OK",
         onPress: async () => {
@@ -144,6 +150,8 @@ export function SettingsProfileTab({
       }]);
       return;
     }
+    // Dismissing the file picker is not a failed restore.
+    if (!result.errorCode && !result.recoveryStatus) return;
     const msgKey = result.errorCode === "unsupported_version"
       ? "restoreUnsupportedVersion"
       : result.recoveryStatus === "rolled_back"
@@ -154,6 +162,15 @@ export function SettingsProfileTab({
     const detail = result.validationDetail
       ? `\n\n${t("settings", "restoreInvalidDetail")}: ${result.validationDetail}`
       : "";
+    if (Platform.OS === "web") {
+      const message = t("settings", msgKey) + detail;
+      if (result.recoveryStatus === "rollback_pending") {
+        alertInfo(t("settings", "error"), message);
+      } else if (window.confirm(`${t("settings", "error")}\n\n${message}\n\n${t("settings", "restoreRetry")}?`)) {
+        void showRestoreResult();
+      }
+      return;
+    }
     const actions = result.recoveryStatus === "rollback_pending"
       ? [{ text: t("settings", "complete") }]
       : [
@@ -488,11 +505,12 @@ export function SettingsProfileTab({
         </View>
         <View style={{ flexDirection: "row", gap: 10, marginTop: 6 }}>
           <Pressable
+            testID="settings-backup-export"
             style={[styles.addRoomBtn, { borderColor: C.accentDim, flex: 1 }]}
             onPress={async () => {
               const { exportBackup } = await import("@/lib/backup");
               const ok = await exportBackup();
-              Alert.alert(
+              alertInfo(
                 ok ? t("settings", "complete") : t("settings", "error"),
                 ok ? t("settings", "backupSuccess") : t("settings", "backupFail")
               );
@@ -502,19 +520,17 @@ export function SettingsProfileTab({
             <Text style={[styles.addRoomBtnText, { color: C.accent }]}>{t("settings", "createBackup")}</Text>
           </Pressable>
           <Pressable
+            testID="settings-backup-import"
             style={[styles.addRoomBtn, { borderColor: C.accentDim, flex: 1 }]}
             onPress={() => {
-              Alert.alert(
-                t("settings", "restoreBackup"),
+              confirmDestructive(
                 t("settings", "restoreWarning"),
-                [
-                  { text: t("settings", "cancel"), style: "cancel" },
-                  {
-                    text: t("settings", "restoreConfirm"),
-                    style: "destructive",
-                    onPress: () => { void showRestoreResult(); },
-                  },
-                ]
+                {
+                  title: t("settings", "restoreBackup"),
+                  cancelText: t("settings", "cancel"),
+                  confirmText: t("settings", "restoreConfirm"),
+                  onConfirm: showRestoreResult,
+                }
               );
             }}
           >

@@ -26,7 +26,7 @@ import {
 } from "@/components/polygon-mode/PolygonTypes";
 import type { PolygonLayer } from "@/components/polygon-mode/PolygonTypes";
 import { createAudioOutputOwner } from "@/lib/audio-output-owner";
-import { createAudioToneSnapshot } from "@/lib/audio-tone-snapshot";
+import { BUILTIN_CLICK_SOURCE_GAIN, createAudioToneSnapshot } from "@/lib/audio-tone-snapshot";
 import {
   PCM_CACHE_MAX_ENTRIES,
   peekPCM,
@@ -660,7 +660,11 @@ describe("usePolygonMode — engine callback driven", () => {
     expect(starts).toHaveLength(2);
     expect(renderer.playWebClick).not.toHaveBeenCalled();
     expect(audioContext.createBuffer).toHaveBeenCalledWith(1, 1, 44100);
-    expect(gains).toEqual([1.92, 1.92]);
+    // Both layers use global volume × the shared click-source calibration.
+    expect(gains).toEqual([
+      expect.closeTo(0.6 * BUILTIN_CLICK_SOURCE_GAIN),
+      expect.closeTo(0.6 * BUILTIN_CLICK_SOURCE_GAIN),
+    ]);
   });
 
   it("web cached PCM failures fall back to playWebClick with role and gain", () => {
@@ -685,7 +689,7 @@ describe("usePolygonMode — engine callback driven", () => {
     expect(renderer.playWebClick).toHaveBeenCalledWith(
       "strong",
       "both",
-      expect.closeTo(0.64),
+      expect.closeTo(0.4 * 0.5 * BUILTIN_CLICK_SOURCE_GAIN),
     );
   });
 
