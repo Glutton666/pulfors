@@ -28,6 +28,18 @@ import { createAudioOutputOwner } from "@/lib/audio-output-owner";
 import { createWebAudioOutput, createWebVisualTimingProvider } from "@/lib/web-audio-output";
 
 describe("web audio output handoff", () => {
+  it("maps realtime presentation against the reservation clock after an audio clock stall", () => {
+    context.state = "running";
+    context.currentTime = 2;
+    context.outputLatency = 0.08;
+    const now = jest.spyOn(performance, "now").mockReturnValue(1000);
+    const map = jest.fn(() => 850);
+    const timing = createWebVisualTimingProvider(() => undefined, map);
+    expect(timing(500, 2000, false)).toBeCloseTo(350);
+    expect(map).toHaveBeenCalledWith(1.92);
+    now.mockRestore();
+    context.currentTime = 10;
+  });
   it("does not wrap a long output delay into the wrong fast measure", () => {
     const timing = createWebVisualTimingProvider(() => -0.08);
     expect(timing(0, 100, true)).toBeCloseTo(-80);

@@ -16,6 +16,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons, Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import { AnimatedModal } from "@/components/AnimatedModal";
 import { BeatIndicator } from "@/components/BeatIndicator";
+import { PlaybackVisualContext } from "@/contexts/PlaybackVisualContext";
 import { BpmSlider } from "@/components/BpmSlider";
 import { EasterEggQuiz } from "@/components/EasterEggQuiz";
 import { PitchQuizModal } from "@/components/PitchQuizModal";
@@ -98,7 +99,7 @@ export function MetronomeScreenUI(props: Props) {
     settingsReturnModalRef, featureStartRef, practiceStartRef, discardPracticeSession, startOrResumePracticeSession,
     handleNoteTogglePlayRef,
     bpm, beatsPerMeasure, beatDenominator, beatTypes, subdivisionPattern, beatSubdivisions,
-    isPlaying, isPreparing, audioLifecycle, retryAudioRecovery, currentBeat, measureCount, activeSubNote, progressInfo,
+    isPlaying, isPreparing, audioLifecycle, retryAudioRecovery, currentBeat, measureCount, activeSubNote, playbackVisualStore, progressInfo,
     layerProgressMap, halfTime,
     togglePlayPause, updateBpm, updateTimeSignature, handleBeatTypeChange, handleBeatStaffDelete,
     handleBeatSubdivisionChange, handleBeatDenominatorCycle, handleTapTempo,
@@ -380,6 +381,7 @@ export function MetronomeScreenUI(props: Props) {
   const KbView = View as React.ComponentType<NativeKbViewProps>;
 
   return (
+    <PlaybackVisualContext.Provider value={playbackVisualStore ?? null}>
     <KbView
       ref={rootViewRef}
       style={styles.screen}
@@ -2063,6 +2065,7 @@ export function MetronomeScreenUI(props: Props) {
         </View>
       ) : null}
     </KbView>
+    </PlaybackVisualContext.Provider>
   );
 }
 

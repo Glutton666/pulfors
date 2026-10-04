@@ -55,7 +55,7 @@
 - [Capped meter changes](capped-meter-changes.md) — never call the meter updater with an unchanged capped count; equality intentionally resets beat types.
 - [Audio startup handshake](audio-startup-handshake.md) — playing UI waits for accepted output; every start/stop owns and invalidates an activity epoch, including delayed native seeks.
 - [Native dense-pattern playback](native-dense-pattern-playback.md) — native Beat playback is rendered-first; async per-tick seek/play can reorder accent and normal output.
-- [Metronome boost path](metronome-boost-path.md) — volumes above unity and XY tone shaping require pre-rendered PCM; realtime is only the neutral ≤100% path.
+- [Metronome tone shaping](metronome-boost-path.md) — XY tone shaping requires shared rendered PCM; realtime remains the neutral-tone path.
 - [RN Web ScrollView parent sizing](rn-web-scrollview-parent-sizing.md) — a bounded card is insufficient; the ScrollView's direct parent also needs flex:1/minHeight:0 or short screens cannot scroll.
 - [Deployment npm compatibility](deployment-npm-peer-resolution.md) — publishing ignores Yarn-only resolutions; verify fresh npm peers and parent-pinned security dependencies.
 - [Scheduled playback ownership](scheduled-playback-ownership.md) — preloaded starts need token ownership; modal unmount cleanup must use a latest-callback ref.
@@ -81,4 +81,5 @@
 - [웹·앱 공동 사용](web-app-parity.md) — 공통 화면·기능과 기존 주소 유지; 현재 계정·자동 동기화는 보류하고 수동 백업을 사용한다.
 - [Public web verification](public-web-verification.md) — 배포 성공 상태만으로 웹 앱 링크라고 안내하지 말고 실제 공개 응답을 확인한다.
 - [Web visual presentation clock](web-visual-presentation-clock.md) — align visuals to audible output, not render-ahead time; never move audio deadlines to fix a visual mismatch.
+- [Dense subdivision visuals](dense-subdivision-visuals.md) — isolate per-slot display updates, sample latest position at the frame, and expire pulses within their slot.
 - [원형 서브디비전 그림 해석](circular-writing-reference.md) — 사용자가 확정한 두 번째 그림은 ANANANANS 9개이며, 마지막 S는 시작점이 아니다.

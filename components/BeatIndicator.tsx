@@ -27,6 +27,8 @@ import Animated, {
   Easing,
 } from "react-native-reanimated";
 import { glowPlan } from "@/lib/animation-lifecycle";
+import { playbackPulseEnvelope, type PlaybackVisual } from "@/lib/playback-visual";
+import { usePlaybackVisual } from "@/contexts/PlaybackVisualContext";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import Colors from "@/constants/colors";
@@ -96,6 +98,7 @@ interface BeatIndicatorProps {
   subdivisionPattern?: BeatType[];
   onBeatSubdivisionChange: (beatIndex: number, pattern: BeatType[] | null) => void;
   activeSubNote: number;
+  playbackVisual?: PlaybackVisual | null;
   barAreaRef?: React.RefObject<View | null>;
   onBarAreaLayout?: (pageY: number, height: number) => void;
   barRepeats: Record<number, BarRepeat>;
@@ -197,6 +200,7 @@ export function BeatIndicator({
   subdivisionPattern = ["accent"],
   onBeatSubdivisionChange,
   activeSubNote,
+  playbackVisual,
   barAreaRef,
   onBarAreaLayout,
   barRepeats,
@@ -267,6 +271,9 @@ export function BeatIndicator({
   easterEggEnabled = true,
   onOpenSettings,
 }: BeatIndicatorProps) {
+  playbackVisual = usePlaybackVisual(isPlaying) ?? playbackVisual;
+  currentBeat = playbackVisual?.beat ?? currentBeat;
+  activeSubNote = playbackVisual?.subBeat ?? activeSubNote;
   const { colors: C, getImageForBeatType, hubImages } = useTheme();
   const { t } = useLanguage();
   const S = useScale();
@@ -284,6 +291,15 @@ export function BeatIndicator({
   const prevBeatRef = useRef(-1);
 
   useEffect(() => {
+    if (playbackVisual && isPlaying) {
+      cancelAnimation(centerGlow);
+      const pulse = playbackPulseEnvelope(playbackVisual.intervalMs, playbackVisual.ageMs);
+      centerGlow.value = playbackVisual.type === "mute" ? 0 : pulse.initial;
+      if (playbackVisual.type !== "mute" && pulse.remainingMs > 0) {
+        centerGlow.value = withTiming(0, { duration: pulse.remainingMs, easing: Easing.linear });
+      }
+      return;
+    }
     // glowPlan이 cancel/pulse/reset 명령을 결정론적으로 산출한다. 고 BPM에서
     // release가 비트 간격보다 길면 글로우가 중첩돼 깜빡임이 누적되므로,
     // 진행 중 애니메이션을 cancel하고 BPM에 맞춰 release를 단축한 단일
@@ -312,7 +328,7 @@ export function BeatIndicator({
         );
       }
     }
-  }, [isPlaying, currentBeat, bpm]);
+  }, [isPlaying, currentBeat, bpm, playbackVisual?.pulseId]);
 
   const startPosRef = useRef({ x: 0, y: 0 });
   const centerRef = useRef({ x: 0, y: 0 });
@@ -638,7 +654,7 @@ export function BeatIndicator({
     transform: [{ scale: 1 + centerGlow.value * 0.3 }],
   }));
 
-  const currentBeatTypeForGlow = isPlaying && currentBeat >= 0 ? (beatTypes[currentBeat] || "normal") : "normal";
+  const currentBeatTypeForGlow = isPlaying && currentBeat >= 0 ? (playbackVisual?.type ?? beatTypes[currentBeat] ?? "normal") : "normal";
   const isAccentBeat = isPlaying && (currentBeatTypeForGlow === "strong" || currentBeatTypeForGlow === "accent");
 
   const nativePanHandlers =
@@ -1453,6 +1469,7 @@ export function BeatIndicator({
                 onPress={() => cycleBeatType(beat)}
                 isDropTarget={dropTargetBeat === beat || dropTargetBeat === -1}
                 subdivisionCount={beatSubdivisionCounts[beat] || 0}
+                playbackVisual={isPlaying && playbackVisual?.beat === beat ? playbackVisual : null}
                 beatDirection={beatDirection}
                 dDialRadius={S.dialRadius}
                 dDotRadiusFromCenter={S.dotRadiusFromCenter}
@@ -1500,6 +1517,12 @@ export function BeatIndicator({
           })()}
 
           <Animated.View
+            testID="beat-center-glow"
+            {...(Platform.OS === "web" && playbackVisual ? { dataSet: {
+              visualPulse: playbackVisual.pulseId,
+              visualSample: String(playbackVisual.sampledAtMs ?? ""),
+              visualDelivered: String(playbackVisual.deliveredAtMs ?? ""),
+            } } : {})}
             style={[
               styles.centerGlow,
               {

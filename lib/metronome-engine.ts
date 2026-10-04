@@ -1,5 +1,6 @@
 import * as Haptics from "expo-haptics";
 import { Platform } from "react-native";
+import { findVisualTick, visualTickInterval, type PlaybackVisual } from "./playback-visual";
 
 // ── 순수 스케줄링 함수·타입은 metronome-engine-pure.ts에서 가져와 re-export ──
 export * from "./metronome-engine-pure";
@@ -194,6 +195,9 @@ export class MetronomeEngine {
   private clearRealtimeAudio: (() => void) | null = null;
   private realtimeScheduledTicks = new Set<ScheduledTick>();
   private hasRealtimeAudioOutput = false;
+  private visualGeneration = 0;
+  private lastVisual: PlaybackVisual | null = null;
+  private lastVisualAt = 0;
 
   private static readonly SCHEDULE_CACHE_MAX = 16;
   private scheduleCache: Map<string, { ticks: ScheduledTick[]; durationMs: number }> = new Map();
@@ -316,6 +320,39 @@ export class MetronomeEngine {
 
   getCurrentBeat() {
     return this.currentBeat;
+  }
+
+  /** Sample at the screen frame, not at the earlier timer callback. Audio is untouched. */
+  getPlaybackVisual(): PlaybackVisual | null {
+    if (!this.isRunning) return null;
+    const callbackPosition = () => this.lastVisual && {
+      ...this.lastVisual, ageMs: Math.max(0, performance.now() - this.lastVisualAt),
+      sampledAtMs: performance.now(),
+    };
+    // Native/Polygon callback-driven audio must retain its actual callback timing.
+    if (this.measureDurationMs <= 0 || (!this.preRenderedAudio && (!this.hasRealtimeAudioOutput || this.baseClickMuted))) return callbackPosition();
+    let elapsed = this.getElapsed();
+    if (elapsed < 0) return callbackPosition(); // early rollover: final slot still audible
+    let pass = this.measureCount;
+    if (elapsed >= this.measureDurationMs) {
+      // Only a known repeating schedule can be extrapolated after a stalled JS turn.
+      // Random passes and finite sessions must wait for their real boundary handoff.
+      if (this.shouldStopAtMeasureBoundary() || this.blockPlayMode === "random" || this.scheduleDirty ||
+        this.pendingMeasureStartAction || this.schedule[this.schedule.length - 1]?.stopAfterThis) return callbackPosition();
+      pass += Math.floor(elapsed / this.measureDurationMs);
+      elapsed %= this.measureDurationMs;
+    }
+    const index = findVisualTick(this.schedule, elapsed);
+    if (index < 0) return callbackPosition();
+    const tick = this.schedule[index];
+    const pulseId = `${this.visualGeneration}:${pass}:${index}`;
+    return {
+      beat: tick.beat, subBeat: tick.subBeat, type: tick.type,
+      intervalMs: visualTickInterval(this.schedule, index, this.measureDurationMs),
+      ageMs: Math.max(0, elapsed - tick.time),
+      pulseId, sampledAtMs: performance.now(),
+      deliveredAtMs: pulseId === this.lastVisual?.pulseId ? this.lastVisualAt : undefined,
+    };
   }
 
   private invalidateScheduleCache() {
@@ -1161,6 +1198,14 @@ export class MetronomeEngine {
     if (!isLayerTick) {
       this.currentBeat = tick.beat;
       this.currentSubBeat = tick.subBeat;
+      const index = this.schedule[this.scheduleIndex] === tick ? this.scheduleIndex : -1;
+      this.lastVisualAt = performance.now();
+      this.lastVisual = {
+        beat: tick.beat, subBeat: tick.subBeat, type: tick.type, ageMs: 0,
+        intervalMs: index >= 0 ? visualTickInterval(this.schedule, index, this.measureDurationMs) : 500,
+        pulseId: `${this.visualGeneration}:${this.measureCount}:${index}`,
+        deliveredAtMs: this.lastVisualAt,
+      };
     }
 
     const isStrong = tick.type === "strong";
@@ -1502,6 +1547,8 @@ export class MetronomeEngine {
 
   start(arg?: number | { startFromBeat?: number; startAtPerformanceTime?: number; measureStartAt?: number }) {
     if (this.isRunning) return;
+    this.visualGeneration += 1;
+    this.lastVisual = null;
     let startFromBeat: number | undefined;
     let startAtPerformanceTime: number | undefined;
     let measureStartAt: number | undefined;

@@ -18,6 +18,7 @@ import { Ionicons } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
 import { Spacing, Radius } from "@/constants/tokens";
 import { useTheme } from "@/contexts/ThemeContext";
+import { usePlaybackVisual } from "@/contexts/PlaybackVisualContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import type { PracticeEntry } from "@/lib/storage";
 import type { BeatType } from "@/lib/metronome-engine";
@@ -446,6 +447,9 @@ export function NoteModeView({
   onSourceSelectionChange,
   onOpenSettings,
 }: NoteModeViewProps) {
+  const playbackVisual = usePlaybackVisual(isPlaying);
+  currentBeat = playbackVisual?.beat ?? currentBeat;
+  activeSubNote = playbackVisual?.subBeat ?? activeSubNote;
   const { colors: C } = useTheme();
   const S = useScale();
   const styles = useMemo(() => make_styles(C, S), [C, S]);

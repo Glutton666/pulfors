@@ -1,13 +1,13 @@
 ---
-name: Metronome boost path
-description: Why boosted volume and XY tone shaping must use pre-rendered PCM rather than player volume.
+name: Metronome tone shaping path
+description: Why XY tone shaping must use shared rendered PCM rather than separate platform effects.
 ---
 
-Keep the realtime click path restricted to neutral tone at volume values up to unity. Any volume above unity or non-neutral XY tone position must use pre-rendered PCM with gain applied once, linked limiting, and runtime player volume fixed at unity.
+Keep the realtime click path restricted to neutral tone. Non-neutral XY tone shaping must use shared rendered PCM, with gain applied once and linked limiting.
 
-**Why:** Native Expo player volume is capped at unity, while separate web and native gain/compressor paths produced inconsistent output. Applying shaping and boost in shared PCM rendering gives both platforms the same result and preserves a transparent 100% path.
+**Why:** Separate web and native gain/compressor paths produced inconsistent output. Shared PCM processing gives both platforms the same shaped waveform.
 
-**How to apply:** When changing playback routing, volume handling, sound-set caches, or runtime rerenders, fail closed if required rendering fails. Treat aborts from superseded renders as normal, not fatal. Keep the active rendered player's output gain synced immediately for ordinary (≤100%) volume changes; values above unity still require a boosted PCM rerender.
+**How to apply:** When changing playback routing, volume handling, sound-set caches, or runtime rerenders, fail closed if required rendering fails. Treat aborts from superseded renders as normal, not fatal. Keep the active rendered player's output gain synced immediately for volume changes.
 
 Limiter transfer must remain continuous where peaks first cross the ceiling. Use immediate linked gain reduction with a short release; switching from whole-buffer bypass to a separate soft-knee curve at the ceiling causes a large audible jump.
 

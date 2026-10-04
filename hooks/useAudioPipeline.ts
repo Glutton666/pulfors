@@ -264,7 +264,10 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
     setPoolsVolume(snapshot.realtimeGain);
     engineRef.current?.setVisualTimingProvider?.(
       Platform.OS === "web"
-        ? createWebVisualTimingProvider(() => outputOwner.active()?.getPresentedPositionSeconds?.())
+        ? createWebVisualTimingProvider(
+          () => outputOwner.active()?.getPresentedPositionSeconds?.(),
+          (audioTime) => webClockAdapterRef.current?.audioTimeToPerformanceMs(audioTime),
+        )
         : null,
     );
   }, [engineRef, outputOwner, setPoolsVolume]);

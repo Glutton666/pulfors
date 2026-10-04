@@ -14,6 +14,7 @@ import { useTheme } from "@/contexts/ThemeContext";
 import type { BeatType } from "@/lib/metronome-engine";
 import { Radius, FontSize } from "@/constants/tokens";
 import { accentGradientEdge, onAccentColor, onAccentShadow, withAlpha } from "@/lib/color-contrast";
+import { playbackPulseEnvelope, type PlaybackVisual } from "@/lib/playback-visual";
 
 export interface DialBeatDotProps {
   index: number;
@@ -28,6 +29,7 @@ export interface DialBeatDotProps {
   dDotRadiusFromCenter: number;
   dDotSize: number;
   circularHandlers?: GestureResponderHandlers;
+  playbackVisual?: PlaybackVisual | null;
 }
 
 export function DialBeatDot({
@@ -43,6 +45,7 @@ export function DialBeatDot({
   dDotRadiusFromCenter,
   dDotSize,
   circularHandlers,
+  playbackVisual,
 }: DialBeatDotProps) {
   const { colors: C } = useTheme();
   const isStrong = beatType === "strong";
@@ -83,16 +86,43 @@ export function DialBeatDot({
   const beatTypeTag = useSharedValue(0);
   const colorHash = accentColor.split('').reduce((a, c) => ((a << 5) - a + c.charCodeAt(0)) | 0, 0);
   const currentTag = (isMute ? 1 : isStrong ? 2 : isAccent ? 3 : 0) + colorHash * 0.0000001;
+  const pulseKey = useSharedValue("");
+  const pulseAge = useSharedValue(0);
+  const pulseInterval = useSharedValue(500);
+  useEffect(() => {
+    pulseAge.value = playbackVisual?.ageMs ?? 0;
+    pulseInterval.value = playbackVisual?.intervalMs ?? 500;
+    pulseKey.value = playbackVisual?.pulseId ?? "";
+  }, [playbackVisual?.pulseId]);
   useEffect(() => {
     beatTypeTag.value = currentTag;
   }, [currentTag]);
 
   useAnimatedReaction(
-    () => [activeSV.value, beatTypeTag.value] as const,
+    () => [activeSV.value, beatTypeTag.value, pulseKey.value] as const,
     ([curActive, _curTag], prev) => {
       const prevActive = prev ? prev[0] : -1;
       const activeChanged = curActive !== prevActive;
       const active = curActive === 1;
+      if (active && pulseKey.value) {
+        if (activeChanged || pulseKey.value !== prev?.[2]) {
+          const pulse = playbackPulseEnvelope(pulseInterval.value, pulseAge.value);
+          // No 50ms attack or 150ms trail: dense slots can be shorter than both.
+          beatScale.value = 1 + (isStrong ? 0.35 : 0.2) * pulse.initial;
+          beatScale.value = withTiming(1, { duration: pulse.remainingMs, easing: Easing.linear });
+        }
+        beatBg.value = isMute ? C.overlay10 : isAccent ? accentColor : C.text;
+        beatBorder.value = isMute ? C.textSecondary : isStrong ? accentColor : "transparent";
+        beatOpacity.value = 1;
+        return;
+      }
+      if (prev?.[2]) {
+        beatScale.value = 1;
+        beatBg.value = isMute ? "transparent" : isStrong ? accentColor : isAccent ? accentMutedColor : C.textTertiary;
+        beatBorder.value = isMute ? C.textSecondary : isStrong ? accentColor : "transparent";
+        beatOpacity.value = isStrong ? 0.85 : 1;
+        return;
+      }
       if (isMute) {
         if (active) {
           if (activeChanged) {

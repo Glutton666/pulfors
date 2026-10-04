@@ -14,3 +14,9 @@ Align web beat visuals with the browser's audible presentation clock, without mo
 **Why:** The audio graph renders ahead of device output. Comparing a JavaScript timer directly with the graph clock can leave the display ahead of what the user hears, even when the audio scheduling itself is stable. Periodic phase re-anchoring can also skip the current displayed beat after a stall. Delaying a callback-driven producer together with its visuals does not close the sound/display gap.
 
 **How to apply:** Apply presentation correction only to independently clocked web output. Native and callback-driven Polygon producers retain their existing timing. Audio replacement boundaries still use the graph clock, not the delayed presentation clock. Headless clock tests establish scheduling behavior, not physically measured speaker or Bluetooth latency.
+
+Realtime visual time must use the same audio-to-performance clock mapping as click reservations, not only subtract reported output latency.
+
+**Why:** AudioContext can start advancing later than performance.now() or pause independently. Latency subtraction alone leaves an unrelated phase error even after the context resumes; dense subdivisions make that error more visible.
+
+**How to apply:** Map audible context time through the existing reservation clock for realtime output. Do not remap reservations, restart the audio epoch, or apply this correction again to prerendered output's own presentation position.

@@ -17,7 +17,10 @@ export interface WebOutputResource {
 }
 
 /** Read the current output dynamically, including after a boundary replacement. */
-export function createWebVisualTimingProvider(readPresentedPosition: () => number | undefined) {
+export function createWebVisualTimingProvider(
+  readPresentedPosition: () => number | undefined,
+  mapAudioTimeToPerformance?: (audioTimeSeconds: number) => number | null | undefined,
+) {
   return (elapsedMs: number, durationMs: number, rendered: boolean): number | null => {
     const ctx = getWebAudioContext();
     if (!ctx || ctx.state !== "running") return null;
@@ -30,7 +33,13 @@ export function createWebVisualTimingProvider(readPresentedPosition: () => numbe
         ? alignVisualElapsedToAudio(elapsedMs, position * 1000 + outputDelayMs, durationMs) - outputDelayMs
         : null;
     }
-    return elapsedMs - outputDelayMs;
+    // Use the same clock mapping as click reservations. AudioContext can pause
+    // or start advancing later than performance.now(); subtracting latency alone
+    // silently assumes those two clocks have never diverged.
+    const presentedPerformanceMs = mapAudioTimeToPerformance?.(getWebAudioPresentationTime(ctx));
+    return presentedPerformanceMs !== null && presentedPerformanceMs !== undefined && Number.isFinite(presentedPerformanceMs)
+      ? elapsedMs + presentedPerformanceMs - performance.now()
+      : elapsedMs - outputDelayMs;
   };
 }
 

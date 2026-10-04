@@ -52,6 +52,7 @@ interface SubdivisionBarProps {
 }
 
 import { MAX_SUBDIVISION_CELLS } from "@/lib/subdivision-limits";
+import { usePlaybackVisual } from "@/contexts/PlaybackVisualContext";
 export { MAX_SUBDIVISION_CELLS } from "@/lib/subdivision-limits";
 const MIN_CELLS = 1;
 const SWIPE_THRESHOLD = 30;
@@ -97,6 +98,8 @@ export function SubdivisionBar({
   activeBeatPattern = null,
   currentBeatType = null,
 }: SubdivisionBarProps) {
+  const playbackVisual = usePlaybackVisual(isPlaying);
+  activeSubNote = playbackVisual?.subBeat ?? activeSubNote;
   const { colors: C } = useTheme();
   const { t } = useLanguage();
   const S = useScale();

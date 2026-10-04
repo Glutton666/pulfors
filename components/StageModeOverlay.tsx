@@ -39,6 +39,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { usePlaybackVisual } from "@/contexts/PlaybackVisualContext";
 import * as Haptics from "expo-haptics";
 import { StageBeatColumn } from "@/components/StageBeatColumn";
 import { BpmSlider } from "@/components/BpmSlider";
@@ -342,6 +343,9 @@ export function StageModeOverlay({
   modeSettingsVisible = false,
   onQueueSeamlessNext,
 }: StageModeOverlayProps) {
+  const playbackVisual = usePlaybackVisual(isPlaying && visible);
+  currentBeat = playbackVisual?.beat ?? currentBeat;
+  activeSubNote = playbackVisual?.subBeat ?? activeSubNote;
   const { t } = useLanguage();
   const insets = useSafeAreaInsets();
   const { width: winWidth, height: winHeight } = useWindowDimensions();
