@@ -226,12 +226,43 @@ export function CircularSubdivisionOverlay({
         );
       })}
 
+      <View
+        testID="circular-subdivision-center-reference"
+        accessible={false}
+        pointerEvents="none"
+        style={{
+          position: "absolute",
+          left: center - (compact ? 7 : 8),
+          top: center - (compact ? 7 : 8),
+          width: compact ? 14 : 16,
+          height: compact ? 14 : 16,
+          borderRadius: compact ? 7 : 8,
+          borderWidth: 1.5,
+          borderColor: C.textSecondary,
+          backgroundColor: C.surface,
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 5,
+        }}
+      >
+        <View
+          style={{
+            width: compact ? 4 : 5,
+            height: compact ? 4 : 5,
+            borderRadius: compact ? 2 : 2.5,
+            backgroundColor: C.accent,
+          }}
+        />
+      </View>
+
       {draft.atLimit ? (
         <View
           style={{
             position: "absolute",
-            top: center - 10,
-            alignSelf: "center",
+            top: compact ? 4 : 7,
+            left: 0,
+            right: 0,
+            alignItems: "center",
             paddingHorizontal: compact ? 5 : 7,
             paddingVertical: 2,
             borderRadius: 8,

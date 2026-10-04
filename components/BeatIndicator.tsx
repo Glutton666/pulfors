@@ -163,7 +163,8 @@ interface BeatIndicatorProps {
   barRowHeight?: number;
   showStaffNotation?: boolean;
   beatStaffNotation?: boolean;
-  circularSubdivisionEnabled?: boolean;
+  /** Availability guard for other modes and overlays, not a user preference. */
+  circularInputEnabled?: boolean;
   onCircularSubdivisionCommit?: (beat: number, pattern: BeatType[]) => void;
   beatStaffCellRectsRef?: React.MutableRefObject<BeatStaffCellRects>;
   onBeatStaffDelete?: (index: number) => void;
@@ -258,7 +259,7 @@ export function BeatIndicator({
   barRowHeight,
   showStaffNotation = false,
   beatStaffNotation = false,
-  circularSubdivisionEnabled = false,
+  circularInputEnabled = true,
   onCircularSubdivisionCommit,
   beatStaffCellRectsRef,
   onBeatStaffDelete,
@@ -328,7 +329,7 @@ export function BeatIndicator({
   const containerRef = useRef<View>(null);
   const circularDialRef = useRef<View>(null);
   const circular = useCircularSubdivision({
-    enabled: circularSubdivisionEnabled && !barMode && !beatStaffNotation && !isPlaying && !isPreparing && !isPatternDragging,
+    enabled: circularInputEnabled && !!onCircularSubdivisionCommit && !barMode && !beatStaffNotation && !isPlaying && !isPreparing && !isPatternDragging,
     dialRef: circularDialRef, size: S.dialSize, radius: S.dotRadiusFromCenter,
     width: S.screenWidth, height: S.screenHeight, total: beatsPerMeasure, beatTypes, beatDirection,
     onCommit: (beat, pattern) => onCircularSubdivisionCommit?.(beat, pattern),
@@ -1456,7 +1457,7 @@ export function BeatIndicator({
                 dDialRadius={S.dialRadius}
                 dDotRadiusFromCenter={S.dotRadiusFromCenter}
                 dDotSize={S.dotSize}
-                circularHandlers={Platform.OS !== "web" && circularSubdivisionEnabled && !barMode && !beatStaffNotation && !isPlaying && !isPreparing && !isPatternDragging ? circular.nativeHandlers[beat] : undefined}
+                circularHandlers={Platform.OS !== "web" && circularInputEnabled && !!onCircularSubdivisionCommit && !barMode && !beatStaffNotation && !isPlaying && !isPreparing && !isPatternDragging ? circular.nativeHandlers[beat] : undefined}
               />
             ))}
           </Animated.View>

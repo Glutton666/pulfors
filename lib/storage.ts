@@ -306,6 +306,7 @@ function sanitizeTonePositions(value: unknown): Partial<Record<SoundSet, TonePos
 export interface MetronomeSettings {
   bpm: number;
   beatTypes?: BeatType[];
+  /** Legacy compatibility field. Circular writing is now always available. */
   circularSubdivisionEnabled?: boolean;
   beatsPerMeasure: number;
   subdivisions: number;
@@ -436,7 +437,7 @@ const DEFAULT_SETTINGS: MetronomeSettings = {
   barStaffNotation: false,
   barRandomStrategy: "independent",
   beatStaffNotation: false,
-  circularSubdivisionEnabled: false,
+  circularSubdivisionEnabled: true,
 };
 
 function clampMetronomeVolume(value: unknown): number | undefined {
@@ -481,7 +482,8 @@ export async function loadSettings(): Promise<MetronomeSettings> {
         );
       const merged: MetronomeSettings = { ...DEFAULT_SETTINGS, ...parsed } as MetronomeSettings;
       merged.volume = clampMetronomeVolume(merged.volume) ?? DEFAULT_SETTINGS.volume;
-      merged.circularSubdivisionEnabled = parsed.circularSubdivisionEnabled === true;
+      // Ignore legacy opt-out values, including ones restored from old backups.
+      merged.circularSubdivisionEnabled = true;
       if (Array.isArray(parsed.beatTypes) && parsed.beatTypes.length === merged.beatsPerMeasure
         && parsed.beatTypes.every((type) => ["strong", "accent", "normal", "mute"].includes(type))) {
         merged.beatTypes = [...parsed.beatTypes] as BeatType[];

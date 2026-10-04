@@ -74,6 +74,7 @@ export const translations = {
     beatStaff: { ko: "비트 오선 표시", en: "Beat staff" },
     beatStaffHint: { ko: "비트 모드를 오선 셀로 표시합니다", en: "Show Beat mode as staff cells" },
     circularSubdivision: { ko: "원형 서브디비전 작성", en: "Circular subdivision writing" },
+    circularBeatLimit: { ko: "한 마디에는 최대 16개의 비트를 넣을 수 있습니다. 기존 비트를 줄인 후 다시 작성해 주세요. 작성 전 패턴은 그대로 유지됩니다.", en: "A measure can contain up to 16 beats. Remove a beat before writing again. Your existing rhythm has not been changed." },
     circularSubdivisionHint: { ko: "원형 비트 도트를 길게 누른 채 안팎으로 S·A·N·M 선택, 둘레로 이동해 노트 추가, 손을 떼어 확정합니다. 최대 9개.", en: "Hold a circular beat dot. Move inward/outward for S·A·N·M, around the dial to add notes, and release to save. Up to 9 notes." },
     barRowHeight: { ko: "바 행 높이", en: "Bar Row Height" },
     barRowHeightHint: { ko: "바 목록에서 각 행의 높이입니다", en: "Height of each row in the bar list" },

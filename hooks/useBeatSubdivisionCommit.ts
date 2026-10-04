@@ -2,7 +2,7 @@ import { useCallback, type Dispatch, type RefObject, type SetStateAction } from 
 import type { BeatType, MetronomeEngine } from "@/lib/metronome-engine";
 import type { BarConfig, DialConfig } from "@/lib/bar-config-helpers";
 import type { MetronomeSettings } from "@/lib/storage";
-import { circularPatternBeatType } from "@/lib/circular-subdivision";
+import { insertCircularBeat, MAX_CIRCULAR_BEATS } from "@/lib/circular-beat-insertion";
 
 interface Options {
   beatSubdivisions: Record<string, BeatType[]>;
@@ -14,17 +14,21 @@ interface Options {
   activeModeRef: RefObject<string>;
   isPlayingRef: RefObject<boolean>;
   isPreparingRef: RefObject<boolean>;
+  setBeatsPerMeasure: Dispatch<SetStateAction<number>>;
+  onInsertBeatSamples: (insertAt: number) => void;
+  onBeatLimit: () => void;
   setBeatTypes: Dispatch<SetStateAction<BeatType[]>>;
   setBeatSubdivisions: Dispatch<SetStateAction<Record<string, BeatType[]>>>;
   persistSettings: (settings?: Partial<MetronomeSettings>) => void;
   scheduleReRender: () => void;
 }
 
-/** One per-beat commit boundary shared by existing editors and circular input. */
+/** Existing editors replace patterns; circular input inserts a new beat. */
 export function useBeatSubdivisionCommit({
   beatSubdivisions, beatTypes, barModeRef, barConfigRef, dialConfigRef,
   engineRef, activeModeRef, isPlayingRef, isPreparingRef, setBeatTypes,
   setBeatSubdivisions, persistSettings, scheduleReRender,
+  setBeatsPerMeasure, onInsertBeatSamples, onBeatLimit,
 }: Options) {
   const handleBeatSubdivisionChange = useCallback(
     (beatIndex: number, pattern: BeatType[] | null) => {
@@ -64,17 +68,23 @@ export function useBeatSubdivisionCommit({
 
   const handleCircularSubdivisionCommit = useCallback((beatIndex: number, pattern: BeatType[]) => {
     if (activeModeRef.current !== "beat" || isPlayingRef.current || isPreparingRef.current) return;
-    // Align the override first: a previous S/M must not promote or silence the
-    // newly authored pattern (a leading M retains only its own silent slot).
-    const nextTypes = [...dialConfigRef.current.beatTypes];
-    nextTypes[beatIndex] = circularPatternBeatType(pattern);
-    dialConfigRef.current.beatTypes = nextTypes;
-    setBeatTypes(nextTypes);
-    engineRef.current?.setBeatTypes(nextTypes);
-    handleBeatSubdivisionChange(beatIndex, pattern);
-    persistSettings({ beatTypes: nextTypes });
+    const config = dialConfigRef.current;
+    if (config.beatsPerMeasure >= MAX_CIRCULAR_BEATS) { onBeatLimit(); return; }
+    const next = insertCircularBeat(config, beatIndex, pattern);
+    if (!next) return;
+    onInsertBeatSamples(beatIndex + 1);
+    Object.assign(config, next);
+    setBeatsPerMeasure(next.beatsPerMeasure);
+    setBeatTypes(next.beatTypes);
+    setBeatSubdivisions(next.beatSubdivisions);
+    engineRef.current?.setBeatsPerMeasure(next.beatsPerMeasure);
+    engineRef.current?.setBeatTypes(next.beatTypes);
+    engineRef.current?.setAllBeatSubdivisions(next.beatSubdivisions);
+    persistSettings(next);
+    scheduleReRender();
   }, [activeModeRef, isPlayingRef, isPreparingRef, dialConfigRef, setBeatTypes,
-    engineRef, handleBeatSubdivisionChange, persistSettings]);
+    engineRef, persistSettings, setBeatSubdivisions, setBeatsPerMeasure, onInsertBeatSamples,
+    onBeatLimit, scheduleReRender]);
 
   return { handleBeatSubdivisionChange, handleCircularSubdivisionCommit };
 }

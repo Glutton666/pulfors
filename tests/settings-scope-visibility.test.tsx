@@ -154,8 +154,9 @@ describe("theme settings scope visibility", () => {
     expect(view.getByText("landscapeReversed")).toBeTruthy();
     expect(view.getByText("showLandscapeImage")).toBeTruthy();
     expect(view.getByText("beatDirection")).toBeTruthy();
-    expect(view.getByText("circularSubdivision")).toBeTruthy();
-    expect(view.getByText("circularSubdivisionHint")).toBeTruthy();
+    expect(view.queryByText("circularSubdivision")).toBeNull();
+    expect(view.queryByText("circularSubdivisionHint")).toBeNull();
+    expect(view.queryByTestId("circular-subdivision-toggle")).toBeNull();
     expect(view.queryByText("themeMode")).toBeNull();
     expect(view.queryByText("barMetronomeChannel")).toBeNull();
     expect(view.queryByText("barCellOpacity")).toBeNull();

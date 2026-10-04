@@ -148,8 +148,6 @@ export interface UseSettingsResult {
   barRandomStrategy: BarRandomStrategy;
   setBarRandomStrategy: React.Dispatch<React.SetStateAction<BarRandomStrategy>>;
   beatStaffNotation: boolean;
-  circularSubdivisionEnabled: boolean;
-  setCircularSubdivisionEnabled: React.Dispatch<React.SetStateAction<boolean>>;
   setBeatStaffNotation: React.Dispatch<React.SetStateAction<boolean>>;
   // ── Stage mode ─────────────────────────────────────────────────────────────
   stageSettings: StageSettings;
@@ -262,7 +260,6 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
   const [barStaffNotation, setBarStaffNotation] = useState(false);
   const [barRandomStrategy, setBarRandomStrategy] = useState<BarRandomStrategy>("independent");
   const [beatStaffNotation, setBeatStaffNotation] = useState(false);
-  const [circularSubdivisionEnabled, setCircularSubdivisionEnabled] = useState(false);
   const [stageSettings, setStageSettings] = useState<StageSettings>(DEFAULT_STAGE_SETTINGS);
 
   // ── Persistence infrastructure ───────────────────────────────────────────────
@@ -292,7 +289,7 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
   const loadedSettingsRef = useRef<MetronomeSettings | null>(null);
   const snapshotModeRef = useRef(mode);
   const persistSnapshotRef = useRef<MetronomeSettings>({
-    circularSubdivisionEnabled, beatTypes,
+    circularSubdivisionEnabled: true, beatTypes,
     bpm, beatsPerMeasure, beatDenominator, subdivisions: 1, subdivisionPattern, beatSubdivisions,
     volume, sampleVolume, soundSet, soundSetTonePositions, layerSoundSets, flashMode, hapticMode,
     audioOffsetMs, timerStopMode, landscapeReversed, beatDirection, username, primaryInstrumentId: primaryInstrumentId ?? undefined,
@@ -310,7 +307,7 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
   // Inline update — runs on every render of useMetronomeScreen.
   const modeChangedThisRender = snapshotModeRef.current !== mode;
   persistSnapshotRef.current = {
-    circularSubdivisionEnabled,
+    circularSubdivisionEnabled: true,
     beatTypes: mode === "beat" && !modeChangedThisRender ? beatTypes : persistSnapshotRef.current.beatTypes,
     bpm, beatsPerMeasure, beatDenominator, subdivisions: 1, subdivisionPattern, beatSubdivisions,
     // These shared UI fields temporarily contain Bar/Note data. A settings
@@ -426,7 +423,6 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
         ...loadedSettings,
         ...(loadedSettings.modeSettings?.[mode] ?? {}),
       };
-      setCircularSubdivisionEnabled(loadedSettings.circularSubdivisionEnabled === true);
       const loadedDenom = settings.beatDenominator ?? 4;
       const engine = engineRef.current;
       // Bar mode owns a separate live BPM and rhythm document. Applying the
@@ -764,7 +760,6 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
     barRowHeight, setBarRowHeight,
     barStaffNotation, setBarStaffNotation,
     barRandomStrategy, setBarRandomStrategy, beatStaffNotation, setBeatStaffNotation,
-    circularSubdivisionEnabled, setCircularSubdivisionEnabled,
     stageSettings, updateStageSettings,
     persistSettings,
     invalidateSettingsLoad,

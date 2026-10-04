@@ -7,8 +7,10 @@ async function seed(page: Page) {
     if (!localStorage.getItem("circular_e2e_seeded")) {
       localStorage.setItem("metronome_onboarding_done", "1");
       localStorage.setItem("metronome_settings", JSON.stringify({
-        bpm: 120, beatsPerMeasure: 4, subdivisions: 1, circularSubdivisionEnabled: true,
+        // A restored legacy opt-out must not prevent the default gesture.
+        bpm: 120, beatsPerMeasure: 4, subdivisions: 1, circularSubdivisionEnabled: false,
         beatTypes: ["strong", "normal", "normal", "normal"], subdivisionPattern: ["accent"],
+        beatSubdivisions: { "0": ["strong", "normal"], "2": ["mute", "normal"] },
       }));
       localStorage.setItem("circular_e2e_seeded", "1");
     }
@@ -36,7 +38,7 @@ async function settings(page: Page) {
   return page.evaluate(() => JSON.parse(localStorage.getItem("metronome_settings") ?? "{}"));
 }
 
-test("real mouse writing ANANANANS commits once to a single beat and restores after reload", async ({ page }) => {
+test("default mouse writing inserts ANANANANS after its anchor and restores after reload", async ({ page }) => {
   await seed(page);
   const g = await hold(page, 2);
   await radial(page, g, g.angle, "accent");
@@ -46,29 +48,32 @@ test("real mouse writing ANANANANS commits once to a single beat and restores af
     await radial(page, g, angle, pattern[i]);
   }
   await expect(page.getByTestId("circular-subdivision-draft")).toHaveAttribute("aria-label", "ANANANANS");
+  const center = await page.getByTestId("circular-subdivision-center-reference").boundingBox();
+  expect(center).not.toBeNull();
+  expect(Math.abs(center!.x + center!.width / 2 - g.cx)).toBeLessThan(1);
+  expect(Math.abs(center!.y + center!.height / 2 - g.cy)).toBeLessThan(1);
+  expect(await page.getByTestId("circular-subdivision-center-reference").evaluate(el => getComputedStyle(el).pointerEvents)).toBe("none");
   await page.screenshot({ path: "test-results/circular-nine-notes.png" });
   await page.mouse.up();
   await expect(page.getByTestId("circular-subdivision-draft")).toHaveCount(0);
-  await expect.poll(async () => (await settings(page)).beatSubdivisions).toEqual({ "2": pattern });
+  await expect.poll(async () => (await settings(page)).beatSubdivisions).toEqual({
+    "0": ["strong", "normal"], "2": ["mute", "normal"], "3": pattern,
+  });
   let stored = await settings(page);
-  expect(stored.beatsPerMeasure).toBe(4);
+  expect(stored.beatsPerMeasure).toBe(5);
   expect(stored.subdivisionPattern).toEqual(["accent"]);
-  expect(stored.beatTypes).toEqual(["strong", "normal", "accent", "normal"]);
+  expect(stored.beatTypes).toEqual(["strong", "normal", "normal", "accent", "normal"]);
   await page.reload();
-  await expect(page.getByTestId("dial-beat-2")).toContainText("9");
+  await expect(page.getByTestId("dial-beat-3")).toContainText("9");
   await page.getByTestId("open-beat-settings").click();
-  await page.getByTestId("circular-subdivision-toggle").click();
+  await expect(page.getByTestId("circular-subdivision-toggle")).toHaveCount(0);
   await page.getByTestId("settings-close").click();
-  await expect.poll(async () => (await settings(page)).circularSubdivisionEnabled).toBe(false);
-  expect((await settings(page)).beatSubdivisions).toEqual({ "2": pattern });
+  expect((await settings(page)).beatSubdivisions["3"]).toEqual(pattern);
   await page.reload();
-  await expect(page.getByTestId("dial-beat-2")).toContainText("9");
-  const dot = await page.getByTestId("dial-beat-1").boundingBox();
-  if (!dot) throw new Error("Missing dot");
-  await page.mouse.move(dot.x + dot.width / 2, dot.y + dot.height / 2);
-  await page.mouse.down();
-  await page.waitForTimeout(500);
-  await expect(page.getByTestId("circular-subdivision-draft")).toHaveCount(0);
+  await expect(page.getByTestId("dial-beat-3")).toContainText("9");
+  await hold(page, 1);
+  // Cancel the repeat draft rather than accidentally inserting another beat.
+  await page.evaluate(() => window.dispatchEvent(new Event("blur")));
   await page.mouse.up();
   await page.getByTestId("play-button").click();
   await expect(page.getByTestId("play-button")).toHaveAttribute("aria-pressed", "true");
@@ -85,7 +90,7 @@ test("real mouse writing ANANANANS commits once to a single beat and restores af
   await expect(page.getByTestId("play-button")).toHaveAttribute("aria-pressed", "false");
 });
 
-test("radial-only input replaces existing pattern; rotation cancels without saving or playback", async ({ page }) => {
+test("radial-only input inserts a beat; rotation cancels without saving or playback", async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 568 });
   await seed(page);
   let g = await hold(page, 0);
@@ -93,7 +98,11 @@ test("radial-only input replaces existing pattern; rotation cancels without savi
   await expect(page.getByTestId("circular-subdivision-draft")).toHaveAttribute("aria-label", "N");
   await page.screenshot({ path: "test-results/circular-small-portrait.png" });
   await page.mouse.up();
-  await expect.poll(async () => (await settings(page)).beatTypes?.[0]).toBe("normal");
+  await expect.poll(async () => (await settings(page)).beatsPerMeasure).toBe(5);
+  expect((await settings(page)).beatTypes).toEqual(["strong", "normal", "normal", "normal", "normal"]);
+  expect((await settings(page)).beatSubdivisions).toEqual({
+    "0": ["strong", "normal"], "3": ["mute", "normal"],
+  });
   const before = await settings(page);
   g = await hold(page, 1);
   await radial(page, g, g.angle + Math.PI / 5 + 0.01, "mute");
@@ -102,6 +111,8 @@ test("radial-only input replaces existing pattern; rotation cancels without savi
   await page.mouse.up();
   await page.waitForTimeout(600);
   expect((await settings(page)).beatSubdivisions).toEqual(before.beatSubdivisions);
+  expect((await settings(page)).beatsPerMeasure).toBe(before.beatsPerMeasure);
+  expect((await settings(page)).beatTypes).toEqual(before.beatTypes);
   await expect(page.getByTestId("play-button")).toHaveAttribute("aria-pressed", "false");
   g = await hold(page, 3);
   await radial(page, g, g.angle, "accent");
@@ -134,7 +145,29 @@ test("web touch supports counterclockwise creation including M on tablet", async
   await expect(page.getByTestId("circular-subdivision-draft")).toHaveAttribute("aria-label", "MSN");
   await page.screenshot({ path: "test-results/circular-tablet-touch.png" });
   await touch("touchEnd", start, 0);
-  await expect.poll(async () => (await settings(page)).beatSubdivisions?.["3"]).toEqual(["mute", "strong", "normal"]);
-  expect((await settings(page)).beatTypes).toEqual(["strong", "normal", "normal", "normal"]);
+  await expect.poll(async () => (await settings(page)).beatSubdivisions?.["4"]).toEqual(["mute", "strong", "normal"]);
+  expect((await settings(page)).beatTypes).toEqual(["strong", "normal", "normal", "normal", "normal"]);
+  expect((await settings(page)).beatsPerMeasure).toBe(5);
   await expect(page.getByTestId("play-button")).toHaveAttribute("aria-pressed", "false");
+});
+
+test("16-beat limit explains why insertion cannot apply without changing the original rhythm", async ({ page }) => {
+  await seed(page);
+  await page.evaluate(() => {
+    const saved = JSON.parse(localStorage.getItem("metronome_settings")!);
+    saved.beatsPerMeasure = 16;
+    saved.beatTypes = Array(16).fill("normal");
+    localStorage.setItem("metronome_settings", JSON.stringify(saved));
+  });
+  await page.reload();
+  await expect(page.getByTestId("dial-beat-15")).toBeVisible();
+  const before = await settings(page);
+  const g = await hold(page, 3);
+  await radial(page, g, g.angle, "accent");
+  await page.mouse.up();
+  await expect(page.getByText(/A measure can contain up to 16 beats|한 마디에는 최대 16개의 비트/)).toBeVisible();
+  expect((await settings(page)).beatTypes).toEqual(before.beatTypes);
+  expect((await settings(page)).beatSubdivisions).toEqual(before.beatSubdivisions);
+  expect((await settings(page)).beatsPerMeasure).toBe(16);
+  await expect(page.getByTestId("dial-beat-16")).toHaveCount(0);
 });

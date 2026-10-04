@@ -113,6 +113,7 @@ import { useRandomBarSession } from "@/hooks/useRandomBarSession";
 import { useNoteSession } from "@/hooks/useNoteSession";
 import { useSubdivisionEditor } from "@/hooks/useSubdivisionEditor";
 import { useBeatSubdivisionCommit } from "@/hooks/useBeatSubdivisionCommit";
+import { useBeatSampleInsertion } from "@/hooks/useBeatSampleInsertion";
 import { useScreenNavigation } from "@/hooks/useScreenNavigation";
 import { applySwitchToMode, type ModeSwitchState, type ModeSwitchCallbacks } from "@/lib/stage-mode-logic";
 import { findBeatStaffCellTarget, type BeatStaffCellRects } from "@/lib/beat-staff-logic";
@@ -576,7 +577,6 @@ export function useMetronomeScreen() {
     barRowHeight, setBarRowHeight,
     barStaffNotation, setBarStaffNotation,
     beatStaffNotation, setBeatStaffNotation,
-    circularSubdivisionEnabled, setCircularSubdivisionEnabled,
     barRandomStrategy, setBarRandomStrategy,
     stageSettings, updateStageSettings,
     persistSettings,
@@ -1709,7 +1709,6 @@ export function useMetronomeScreen() {
       setBeatsPerMeasure(4);
       setBeatTypes(defaultBeatTypes(4));
       setSubdivisionPattern(["accent"]);
-      setCircularSubdivisionEnabled(false);
       setBeatSubdivisions({});
       setSoundSetTonePositions({});
       tonePositionRef.current = { ...NEUTRAL };
@@ -2727,9 +2726,17 @@ export function useMetronomeScreen() {
     tapTimesRef.current = taps;
   }, [handleBarBpmChange, updateBpm]);
 
+  const onInsertBeatSamples = useBeatSampleInsertion({
+    samples: noteSamplesHook, dialConfigRef, metroChannelsRef: noteSampleMetroChannelsRef,
+    setMetroChannels: setNoteSampleMetroChannels, releaseResources: releaseNoteSampleResources,
+  });
+  const onCircularBeatLimit = useCallback(() => {
+    Alert.alert(t("settings", "circularSubdivision"), t("settings", "circularBeatLimit"));
+  }, [t]);
   const { handleBeatSubdivisionChange, handleCircularSubdivisionCommit } = useBeatSubdivisionCommit({
     beatSubdivisions, beatTypes, barModeRef, barConfigRef, dialConfigRef, engineRef, activeModeRef,
     isPlayingRef, isPreparingRef, setBeatTypes, setBeatSubdivisions, persistSettings, scheduleReRender,
+    setBeatsPerMeasure, onInsertBeatSamples, onBeatLimit: onCircularBeatLimit,
   });
 
   const handlePatternChange = useCallback(
@@ -4071,7 +4078,6 @@ export function useMetronomeScreen() {
     setBarStaffNotation,
     beatStaffNotation,
     setBeatStaffNotation,
-    circularSubdivisionEnabled, setCircularSubdivisionEnabled,
     barMetronomeChannel,
     setBarMetronomeChannel,
     barMetronomeChannelRef,

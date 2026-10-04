@@ -82,8 +82,6 @@ interface SettingsModalProps {
   barStaffNotation: boolean;
   onBarStaffNotationChange: (val: boolean) => void;
   beatStaffNotation: boolean;
-  circularSubdivisionEnabled?: boolean;
-  onCircularSubdivisionEnabledChange?: (value: boolean) => void;
   onBeatStaffNotationChange: (val: boolean) => void;
   randomBarConfig: BarRandomConfig;
   onRandomBarConfigChange: (config: BarRandomConfig) => void;
@@ -151,8 +149,6 @@ export function SettingsModal({
   barStaffNotation,
   onBarStaffNotationChange,
   beatStaffNotation,
-  circularSubdivisionEnabled = false,
-  onCircularSubdivisionEnabledChange,
   onBeatStaffNotationChange,
   randomBarConfig,
   onRandomBarConfigChange,
@@ -275,8 +271,6 @@ export function SettingsModal({
             barStaffNotation={barStaffNotation}
             onBarStaffNotationChange={onBarStaffNotationChange}
             beatStaffNotation={beatStaffNotation}
-            circularSubdivisionEnabled={circularSubdivisionEnabled}
-            onCircularSubdivisionEnabledChange={onCircularSubdivisionEnabledChange}
             onBeatStaffNotationChange={onBeatStaffNotationChange}
             randomBarConfig={randomBarConfig}
             onRandomBarConfigChange={onRandomBarConfigChange}

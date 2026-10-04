@@ -161,17 +161,16 @@ afterEach(() => {
   jest.useRealTimers();
 });
 
-test("circular writing defaults off, persists through modes/reload, and disabling preserves rhythm", async () => {
+test("circular writing is not a preference, and rhythm persists through modes/reload", async () => {
   const params = buildParams();
   const { result, rerender, unmount } = renderHook(
     ({ mode }: { mode: "beat" | "bar" }) => useSettings({ ...params, mode }),
     { initialProps: { mode: "beat" as "beat" | "bar" } },
   );
   await act(async () => {});
-  expect(result.current.circularSubdivisionEnabled).toBe(false);
+  expect("setCircularSubdivisionEnabled" in result.current).toBe(false);
   const pattern = ["accent", "normal", "accent", "normal", "accent", "normal", "accent", "normal", "strong"] as any[];
   act(() => {
-    result.current.setCircularSubdivisionEnabled(true);
     result.current.setBeatSubdivisions({ "2": pattern });
     result.current.setBeatTypes(["normal", "mute", "accent", "strong"]);
   });
@@ -182,23 +181,20 @@ test("circular writing defaults off, persists through modes/reload, and disablin
     result.current.setBeatsPerMeasure(2);
     result.current.updateVolume(0.2);
   });
-  expect(result.current.circularSubdivisionEnabled).toBe(true);
+  expect(savedSettings.at(-1)?.circularSubdivisionEnabled).toBe(true);
   expect(savedSettings.at(-1)?.beatSubdivisions).toEqual({ "2": pattern });
   expect(savedSettings.at(-1)?.beatTypes).toEqual(["normal", "mute", "accent", "strong"]);
   expect(savedSettings.at(-1)?.beatsPerMeasure).toBe(4);
   const saved = savedSettings.at(-1);
   unmount();
   const { loadSettings } = require("@/lib/storage");
-  loadSettings.mockResolvedValueOnce(saved);
+  loadSettings.mockResolvedValueOnce({ ...saved, circularSubdivisionEnabled: false });
   const restored = renderHook(() => useSettings(buildParams()));
   await act(async () => {});
-  expect(restored.result.current.circularSubdivisionEnabled).toBe(true);
+  expect("setCircularSubdivisionEnabled" in restored.result.current).toBe(false);
   expect(restored.result.current.beatSubdivisions).toEqual({ "2": pattern });
-  act(() => {
-    restored.result.current.setCircularSubdivisionEnabled(false);
-  });
   act(() => restored.result.current.updateVolume(0.3));
-  expect(savedSettings.at(-1)?.circularSubdivisionEnabled).toBe(false);
+  expect(savedSettings.at(-1)?.circularSubdivisionEnabled).toBe(true);
   expect(savedSettings.at(-1)?.beatSubdivisions).toEqual({ "2": pattern });
 });
 

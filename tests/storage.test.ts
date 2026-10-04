@@ -31,10 +31,10 @@ test("loadSettings: 기본값 반환", async () => {
   assert.equal(s.bpm, 120);
   assert.equal(s.beatsPerMeasure, 4);
   assert.equal(s.themeColor, "gold");
-  assert.equal(s.circularSubdivisionEnabled, false);
+  assert.equal(s.circularSubdivisionEnabled, true);
 });
 
-test("circular writing validates boolean preference and restores beat types without deleting saved patterns", async () => {
+test("legacy circular-writing preferences cannot disable the default gesture or delete patterns", async () => {
   const base = { bpm: 120, beatsPerMeasure: 4, subdivisions: 1,
     beatTypes: ["accent", "mute", "normal", "strong"], beatSubdivisions: { "1": ["mute", "normal"] } };
   await AsyncStorage.setItem("metronome_settings", JSON.stringify({ ...base, circularSubdivisionEnabled: true }));
@@ -43,7 +43,12 @@ test("circular writing validates boolean preference and restores beat types with
   assert.deepEqual(loaded.beatTypes, base.beatTypes);
   await AsyncStorage.setItem("metronome_settings", JSON.stringify({ ...base, circularSubdivisionEnabled: "true" }));
   const disabled = await loadSettings();
-  assert.equal(disabled.circularSubdivisionEnabled, false);
+  assert.equal(disabled.circularSubdivisionEnabled, true);
+  await AsyncStorage.setItem("metronome_settings", JSON.stringify({ ...base, circularSubdivisionEnabled: false }));
+  const legacyOff = await loadSettings();
+  assert.equal(legacyOff.circularSubdivisionEnabled, true);
+  assert.deepEqual(legacyOff.beatTypes, base.beatTypes);
+  assert.deepEqual(legacyOff.beatSubdivisions, base.beatSubdivisions);
   assert.deepEqual(disabled.beatSubdivisions, base.beatSubdivisions);
 });
 
