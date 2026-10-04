@@ -177,6 +177,67 @@ test("stopping before an audible scheduled beat does not publish a late visual",
   });
 });
 
+for (const offset of [-200, -100, 0, 100, 200]) {
+  for (const rendered of [false, true]) {
+    test(`web ${rendered ? "rendered" : "realtime"} offset ${offset}ms adjusts visuals, not sound deadlines`, () => {
+      withFakeNow(1000, (advance) => {
+        const e = new MetronomeEngine();
+        e.setBpm(120);
+        e.setAudioOffsetMs(offset);
+        e.buildScheduleOnly();
+        const deadlines: number[] = [];
+        if (rendered) e.setPreRenderedAudio(true);
+        else e.setRealtimeAudioScheduler((_tick, at) => { deadlines.push(at); return true; });
+        e.setVisualTimingProvider((elapsed) => elapsed - 80);
+        const visuals: number[] = [];
+        const clicks: number[] = [];
+        e.setOnBeat((beat) => { visuals.push(beat); });
+        e.setAudioCallbacks(() => clicks.push(1), () => clicks.push(1), () => clicks.push(1));
+        e.start();
+        const loop = (e as unknown as EngineInternals).loop;
+        for (let ms = 10; ms <= 600; ms += 10) {
+          advance(10);
+          loop();
+          if (ms === 300) assert.equal(e.getMeasureElapsedMs(), 220 + offset);
+          if (ms === 500) assert.equal(visuals.includes(1), offset >= 100);
+        }
+        assert.equal(visuals.includes(1), offset >= 0);
+        assert.deepEqual(clicks, [], "visual callbacks must not duplicate or advance scheduled sound");
+        if (!rendered) assert.deepEqual(deadlines, [1000, 1500]);
+        e.stop();
+      });
+    });
+  }
+}
+
+test("web timing installation preserves the requested range without changing native offset limits", () => {
+  const e = new MetronomeEngine();
+  const state = e as unknown as { audioOffsetMs: number };
+  for (const sign of [-1, 1]) {
+    e.setAudioOffsetMs(sign * 200);
+    assert.equal(state.audioOffsetMs, sign * 100);
+    e.setVisualTimingProvider((elapsed) => elapsed);
+    assert.equal(state.audioOffsetMs, sign * 200);
+    e.setVisualTimingProvider(null);
+    assert.equal(state.audioOffsetMs, sign * 100);
+  }
+});
+
+test("web offset retains visual correction between look-ahead reservations", () => {
+  withFakeNow(1000, (advance) => {
+    const e = new MetronomeEngine();
+    e.setRealtimeAudioScheduler(() => true);
+    e.setVisualTimingProvider((elapsed) => elapsed - 80);
+    e.setAudioOffsetMs(-200);
+    e.start();
+    advance(280);
+    (e as unknown as EngineInternals).loop();
+    advance(20);
+    assert.equal(e.getMeasureElapsedMs(), 20);
+    e.stop();
+  });
+});
+
 test("pre-rendered timeline resync follows audio phase after a JS stall", () => {
   withFakeNow(1000, (advance) => {
     const e = new MetronomeEngine();

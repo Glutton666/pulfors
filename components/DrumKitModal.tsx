@@ -5,12 +5,12 @@ import {
   Text,
   StyleSheet,
   Platform,
-  Alert,
   FlatList,
   ScrollView,
   type NativeSyntheticEvent,
   type NativeTouchEvent,
 } from "react-native";
+import { Alert } from "@/lib/alert";
 import { AnimatedModal } from "@/components/AnimatedModal";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";

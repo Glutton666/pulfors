@@ -5,7 +5,6 @@ import {
   StyleSheet,
   Pressable,
   Platform,
-  Alert,
   PanResponder,
   ActivityIndicator,
   TextInput,
@@ -13,6 +12,7 @@ import {
   KeyboardAvoidingView,
   useWindowDimensions,
 } from "react-native";
+import { Alert } from "@/lib/alert";
 import { AnimatedModal } from "@/components/AnimatedModal";
 import { ensurePermission } from "@/lib/permissions";
 import { Ionicons } from "@expo/vector-icons";

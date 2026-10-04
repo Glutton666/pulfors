@@ -4,8 +4,8 @@ import {
   Text,
   Pressable,
   Platform,
-  Alert,
 } from "react-native";
+import { Alert } from "@/lib/alert";
 import { Ionicons } from "@expo/vector-icons";
 import { useScale } from "@/lib/scale";
 import { useTheme } from "@/contexts/ThemeContext";

@@ -3,7 +3,8 @@
 // ============================================================
 
 import { useState, useRef, useCallback, useEffect } from "react";
-import { Alert, Platform } from "react-native";
+import { Platform } from "react-native";
+import { Alert } from "@/lib/alert";
 import { buildPlayTimeline, findCurrentEvent, totalTimelineMs } from "@/lib/score-playback";
 import type { PlayEvent } from "@/lib/score-playback";
 import type { ScoreDocument, DrumType } from "@/lib/score-types";

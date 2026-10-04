@@ -7,8 +7,8 @@ import {
   Platform,
   ScrollView,
   TextInput,
-  Alert,
 } from "react-native";
+import { Alert } from "@/lib/alert";
 import { Ionicons } from "@expo/vector-icons";
 import { confirmDestructive } from "@/lib/confirm";
 import * as Haptics from "expo-haptics";

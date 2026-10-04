@@ -11,13 +11,13 @@ import { useSettings } from "@/hooks/useSettings";
 import {
   View,
   Platform,
-  Alert,
   PanResponder,
   useWindowDimensions,
   AppState,
   type GestureResponderEvent,
   type PanResponderGestureState,
 } from "react-native";
+import { Alert } from "@/lib/alert";
 import * as ImagePicker from "expo-image-picker";
 import { ensurePermission } from "@/lib/permissions";
 import * as Linking from "expo-linking";
@@ -672,7 +672,7 @@ export function useMetronomeScreen() {
     handleBeatQuickSaveOpen, handleBeatQuickSaveCancel, handleBeatQuickSaveConfirm,
   } = useBeatQuickSave({ bpm, beatsPerMeasure, beatTypes, beatSubdivisions, subdivisionPattern, username, t });
 
-  // ── Audio pipeline (player pool + PCM cache + rendered player + audio session settings) ──
+  // Audio pipeline: output, PCM cache, session settings.
   const {
     // Player pool (now owned by the pipeline)
     allPlayersRef, highToggle, lowToggle, strongToggle,

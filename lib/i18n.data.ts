@@ -131,6 +131,14 @@ export const translations = {
     timerStopHintImmediate: { ko: "타이머가 끝나면 즉시 정지합니다", en: "Stops immediately when the timer ends" },
     backgroundPlay: { ko: "백그라운드 재생", en: "Background Play" },
     playbackNotifications: { ko: "재생·정지 팝업", en: "Play/Pause Popup" },
+    webNativeOnly: {
+      ko: "앱 전용 기능입니다. 웹에서는 적용되지 않습니다.",
+      en: "App-only feature. This setting does not apply on the web.",
+    },
+    webBackgroundHint: {
+      ko: "앱용 백그라운드 유지 설정은 웹에 적용되지 않습니다. 화면 꺼짐·탭 전환 시 재생은 브라우저 정책에 따라 중단될 수 있습니다.",
+      en: "The app's background keep-alive setting does not apply on the web. Playback may stop when the screen turns off or you switch tabs, depending on the browser.",
+    },
     playbackNotificationsHint: {
       ko: "재생 및 정지 상태 알림을 화면에 표시합니다.",
       en: "Shows playback status notifications when starting or stopping.",

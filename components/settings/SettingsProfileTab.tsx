@@ -7,9 +7,9 @@ import {
   TextInput,
   ScrollView,
   ActivityIndicator,
-  Alert,
   Linking,
 } from "react-native";
+import { Alert } from "@/lib/alert";
 import * as Clipboard from "expo-clipboard";
 import { Ionicons } from "@expo/vector-icons";
 import { Share } from "react-native";
@@ -133,11 +133,6 @@ export function SettingsProfileTab({
     const { importBackup } = await import("@/lib/backup");
     const result = await importBackup();
     if (result.success) {
-      if (Platform.OS === "web") {
-        alertInfo(t("settings", "complete"), t("settings", "restoreSuccess"));
-        window.location.reload();
-        return;
-      }
       Alert.alert(t("settings", "complete"), t("settings", "restoreSuccess"), [{
         text: "OK",
         onPress: async () => {

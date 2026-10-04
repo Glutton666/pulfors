@@ -180,6 +180,11 @@ async function verifyBuiltAppInBrowser() {
       }
       console.log("Web audio sync smoke passed: playback reads output timestamps, and stop cancels scheduling.");
     }
+    if (process.argv.includes("--web-parity")) {
+      const { verifyWebDialogs, seedBackupAudio } = await import("./web-parity-browser.mjs");
+      await verifyWebDialogs(page);
+      await seedBackupAudio(page);
+    }
     // Global settings retain Profile; mode-specific settings intentionally don't.
     await page.locator('[data-testid="mode-cycle-label"]').click();
     await page.waitForTimeout(400);
@@ -194,15 +199,22 @@ async function verifyBuiltAppInBrowser() {
     const downloadPromise = page.waitForEvent("download");
     await page.locator('[data-testid="settings-backup-export"]').click();
     const download = await downloadPromise;
+    await page.locator('[data-testid="web-alert-action-0"]').click();
+    await page.locator('[data-testid="web-alert"]').waitFor({ state: "hidden" });
     const backupJson = await readFile(await download.path(), "utf8");
     const backup = JSON.parse(backupJson);
+    if (process.argv.includes("--web-parity") && Object.keys(backup.audioFiles ?? {}).length !== 2) {
+      throw new Error("Web backup dropped audio assets.");
+    }
     if (!backup.data?.metronome_settings?.includes("web-release-backup-check")) {
       throw new Error("Backup download did not include the locally saved profile.");
     }
     await username.fill("changed-after-export");
     await page.waitForFunction(() => localStorage.getItem("metronome_settings")?.includes("changed-after-export"));
     const pickerPromise = page.waitForEvent("filechooser");
+    pickerPromise.catch(() => {});
     await page.locator('[data-testid="settings-backup-import"]').click();
+    await page.locator('[data-testid="web-alert-action-1"]').click();
     const picker = await pickerPromise;
     const reloadPromise = page.waitForEvent("framenavigated", {
       predicate: (frame) => frame === page.mainFrame(),
@@ -212,9 +224,14 @@ async function verifyBuiltAppInBrowser() {
       mimeType: "application/json",
       buffer: Buffer.from(backupJson),
     });
+    await page.locator('[data-testid="web-alert-action-0"]').click();
     await reloadPromise;
     await page.waitForFunction(() => localStorage.getItem("metronome_settings")?.includes("web-release-backup-check"));
     await page.locator('[data-testid="mode-cycle-label"]').waitFor({ timeout: 20_000 });
+    if (process.argv.includes("--web-parity")) {
+      const { verifyRestoredAudio } = await import("./web-parity-browser.mjs");
+      await verifyRestoredAudio(page);
+    }
     if (consoleErrors.length > 0) {
       throw new Error(`Built web app reported browser errors:\n${consoleErrors.join("\n")}`);
     }

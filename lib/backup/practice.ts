@@ -186,7 +186,7 @@ async function parsePracticeJson(
       return { success: false };
     }
 
-    if (data.audioFiles && Object.keys(data.audioFiles).length > 0 && Platform.OS !== "web") {
+    if (data.audioFiles && Object.keys(data.audioFiles).length > 0) {
       const uriMapping = await restoreAudioFiles(data.audioFiles);
       if (uriMapping.size > 0) sanitized = remapEntryAudioUris(sanitized, uriMapping);
     }

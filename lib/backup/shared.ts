@@ -10,6 +10,7 @@ import {
   type SampleChannel,
 } from "../stereo-channel";
 import { normalizeNoteImageCrop } from "../note-image-crop";
+import { audioDataUri, readWebAudioBase64 } from "../web-audio-asset";
 
 export const ALL_KEYS = [
   "metronome_settings",
@@ -198,7 +199,8 @@ export function audioAssetKey(uri: string): string {
     hash ^= baseUri.charCodeAt(i);
     hash = Math.imul(hash, 16777619);
   }
-  return `audio_${(hash >>> 0).toString(36)}_${filenameFromUri(baseUri)}`;
+  const filename = baseUri.startsWith("data:") ? "inline.audio" : filenameFromUri(baseUri);
+  return `audio_${(hash >>> 0).toString(36)}_${filename}`;
 }
 
 export async function ensureSamplesDir(): Promise<string> {
@@ -218,8 +220,8 @@ export async function ensureImagesDir(): Promise<string> {
 }
 
 export async function readAudioAsBase64(uri: string): Promise<string | null> {
-  if (Platform.OS === "web") return null;
   const baseUri = extractBaseUri(uri);
+  if (Platform.OS === "web") return readWebAudioBase64(baseUri, MAX_AUDIO_FILE_B64_CHARS);
   if (!baseUri.startsWith("file://")) return null;
   try {
     const info = await FileSystem.getInfoAsync(baseUri);
@@ -567,6 +569,7 @@ export function sanitizeBackupData(
 }
 
 export async function writeAudioFromBase64(filename: string, base64: string): Promise<string> {
+  if (Platform.OS === "web") return audioDataUri(base64);
   const dir = await ensureSamplesDir();
   const safe = sanitizeAudioFilename(filename);
   const fileUri = dir + safe;
@@ -713,6 +716,7 @@ export function collectAllImageUris(data: Record<string, string | null>): Map<st
 export async function readAllAudioFiles(
   uris: Map<string, string>,
 ): Promise<Record<string, string>> {
+  if (uris.size > MAX_AUDIO_FILE_COUNT) throw new Error("Too many audio files in backup");
   const audioFiles: Record<string, string> = {};
   for (const [fname, baseUri] of uris) {
     const base64 = await readAudioAsBase64(baseUri);
@@ -783,11 +787,13 @@ export async function restoreAudioFiles(
   const uriMapping = new Map<string, string>();
   const entries = Object.entries(audioFiles);
   if (entries.length > MAX_AUDIO_FILE_COUNT) {
+    if (Platform.OS === "web") throw new Error("Too many audio files in backup");
     logger.warn("[Backup] Audio file count exceeds limit:", entries.length);
     return uriMapping;
   }
   for (const [fname, base64] of entries) {
     if (typeof base64 !== "string" || base64.length > MAX_AUDIO_FILE_B64_CHARS) {
+      if (Platform.OS === "web") throw new Error("Invalid or oversized audio in backup");
       logger.warn("[Backup] Audio file too large, skipping:", fname, base64?.length);
       continue;
     }
@@ -795,6 +801,7 @@ export async function restoreAudioFiles(
       const newUri = await writeAudioFromBase64(fname, base64);
       uriMapping.set(fname, newUri);
     } catch (e) {
+      if (Platform.OS === "web") throw e;
       logger.warn("[Backup] Failed to restore audio file:", fname, e);
     }
   }

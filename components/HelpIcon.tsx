@@ -1,5 +1,6 @@
 import React from "react";
-import { Alert, Platform, Pressable } from "react-native";
+import { Platform, Pressable } from "react-native";
+import { Alert } from "@/lib/alert";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useScale } from "@/lib/scale";

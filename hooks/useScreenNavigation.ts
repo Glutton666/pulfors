@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef } from "react";
-import { Alert, BackHandler, Platform } from "react-native";
+import { BackHandler, Platform } from "react-native";
+import { Alert } from "@/lib/alert";
 import type { Dispatch, MutableRefObject, SetStateAction } from "react";
 import {
   getMenuItemCloseTarget,

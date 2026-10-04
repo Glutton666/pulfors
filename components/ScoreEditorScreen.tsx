@@ -7,13 +7,13 @@
 import React, { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import {
   View,
-  Alert,
   Platform,
   Animated,
   PanResponder,
   useWindowDimensions,
   ScrollView,
 } from "react-native";
+import { Alert } from "@/lib/alert";
 import { captureRef } from "react-native-view-shot";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Crypto from "expo-crypto";

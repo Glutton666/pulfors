@@ -8,8 +8,8 @@ import {
   PanResponder,
   LayoutChangeEvent,
   Switch,
-  Alert,
 } from "react-native";
+import { Alert } from "@/lib/alert";
 import { TextInput } from "react-native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
@@ -899,12 +899,14 @@ export function SettingsSoundTab({
           <Text style={[styles.sectionLabel, { color: C.text }]}>{t("settings", "backgroundPlay")}</Text>
           <Switch
             value={backgroundPlay}
+            disabled={Platform.OS === "web"}
             onValueChange={onBackgroundPlayChange}
             trackColor={{ false: C.surfaceLight, true: C.accentMuted }}
             thumbColor={backgroundPlay ? C.accent : C.textSecondary}
             style={{ transform: [{ scale: 0.85 }] }}
           />
         </View>
+        {Platform.OS === "web" && <Text style={[styles.offsetHint, { color: C.textTertiary }]}>{t("settings", "webBackgroundHint")}</Text>}
       </View>
 
       <View style={[styles.divider, { backgroundColor: C.border }]} />
@@ -916,13 +918,14 @@ export function SettingsSoundTab({
           <Text style={[styles.sectionLabel, { color: C.text }]}>{t("settings", "playbackNotifications")}</Text>
           <Switch
             value={playbackNotifications}
+            disabled={Platform.OS === "web"}
             onValueChange={onPlaybackNotificationsChange}
             trackColor={{ false: C.surfaceLight, true: C.accentMuted }}
             thumbColor={playbackNotifications ? C.accent : C.textSecondary}
             style={{ transform: [{ scale: 0.85 }] }}
           />
         </View>
-        <Text style={[styles.offsetHint, { color: C.textTertiary }]}>{t("settings", "playbackNotificationsHint")}</Text>
+        <Text style={[styles.offsetHint, { color: C.textTertiary }]}>{t("settings", Platform.OS === "web" ? "webNativeOnly" : "playbackNotificationsHint")}</Text>
       </View>
 
       <View style={[styles.divider, { backgroundColor: C.border }]} />

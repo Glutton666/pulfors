@@ -9,10 +9,10 @@ import {
   FlatList,
   StyleSheet,
   Pressable,
-  Alert,
   Platform,
   ActivityIndicator,
 } from "react-native";
+import { Alert } from "@/lib/alert";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useTheme } from "@/contexts/ThemeContext";

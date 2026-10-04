@@ -21,13 +21,16 @@ export function createWebVisualTimingProvider(readPresentedPosition: () => numbe
   return (elapsedMs: number, durationMs: number, rendered: boolean): number | null => {
     const ctx = getWebAudioContext();
     if (!ctx || ctx.state !== "running") return null;
+    const outputDelayMs = (ctx.currentTime - getWebAudioPresentationTime(ctx)) * 1000;
     if (rendered) {
       const position = readPresentedPosition();
       return position !== undefined
-        ? alignVisualElapsedToAudio(elapsedMs, position * 1000, durationMs)
+        // Resolve the measure against graph phase first. Output latency can be
+        // longer than half a fast measure, so it must not be circularly wrapped.
+        ? alignVisualElapsedToAudio(elapsedMs, position * 1000 + outputDelayMs, durationMs) - outputDelayMs
         : null;
     }
-    return elapsedMs - (ctx.currentTime - getWebAudioPresentationTime(ctx)) * 1000;
+    return elapsedMs - outputDelayMs;
   };
 }
 

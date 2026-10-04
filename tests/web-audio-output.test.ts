@@ -28,6 +28,13 @@ import { createAudioOutputOwner } from "@/lib/audio-output-owner";
 import { createWebAudioOutput, createWebVisualTimingProvider } from "@/lib/web-audio-output";
 
 describe("web audio output handoff", () => {
+  it("does not wrap a long output delay into the wrong fast measure", () => {
+    const timing = createWebVisualTimingProvider(() => -0.08);
+    expect(timing(0, 100, true)).toBeCloseTo(-80);
+    context.outputLatency = 0.3;
+    const slowerOutput = createWebVisualTimingProvider(() => 0.02);
+    expect(slowerOutput(320, 100, true)).toBeCloseTo(20);
+  });
   it("uses the latest output phase and leaves a suspended context uncorrected", () => {
     let position = -0.08;
     const timing = createWebVisualTimingProvider(() => position);
@@ -48,6 +55,7 @@ describe("web audio output handoff", () => {
     renderedEnded.length = 0;
     context.currentTime = 10;
     context.state = "running";
+    context.outputLatency = 0.08;
   });
 
   afterEach(() => {

@@ -668,7 +668,9 @@ export function SettingsThemeTab({
           <Text style={[styles.sectionLabel, { color: C.text }]}>{t("settings", "hapticFeedback")}</Text>
           <HelpIcon title={t("settings", "hapticFeedback")} message={t("settings", "hapticFeedbackHelp")} />
         </View>
-        <TripleSelector value={hapticMode} onChange={onHapticModeChange} accentColor={C.accent} accentDimColor={C.accentDim} options={TRIPLE_OPTS} />
+        {Platform.OS === "web"
+          ? <Text style={[styles.offsetHint, { color: C.textTertiary }]}>{t("settings", "webNativeOnly")}</Text>
+          : <TripleSelector value={hapticMode} onChange={onHapticModeChange} accentColor={C.accent} accentDimColor={C.accentDim} options={TRIPLE_OPTS} />}
       </View>
 
       {isGlobal && <>

@@ -5,8 +5,8 @@ import {
   ScrollView,
   Pressable,
   StyleSheet,
-  Alert,
 } from "react-native";
+import { Alert } from "@/lib/alert";
 import { AnimatedModal } from "@/components/AnimatedModal";
 import * as Clipboard from "expo-clipboard";
 import { Ionicons } from "@expo/vector-icons";

@@ -19,6 +19,7 @@ import { DeepLinkProvider } from "@/contexts/DeepLinkContext";
 import { VoiceAssistantProvider } from "@/contexts/VoiceAssistantContext";
 import { initErrorTracking } from "@/lib/error-tracking";
 import { StorageErrorAlert } from "@/components/StorageErrorAlert";
+import { WebAlertHost } from "@/components/WebAlertHost";
 import { rollbackPendingRestoreIfAny } from "@/lib/backup/full";
 import {
   notifyInterruptionBegin,
@@ -240,6 +241,7 @@ export default function RootLayout() {
               <GestureHandlerRootView style={{ flex: 1 }}>
                 <PlatformKeyboardProvider>
                   <StorageErrorAlert />
+                  <WebAlertHost />
                   <Stack screenOptions={{ headerShown: false }}>
                     <Stack.Screen name="index" />
                     <Stack.Screen name="practice" />

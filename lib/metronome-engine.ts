@@ -162,6 +162,7 @@ export class MetronomeEngine {
   private playCustomSample: ((beat: number, subBeat: number) => boolean) | null = null;
   private hapticMode: HapticMode = "all";
   private audioOffsetMs: number = 0;
+  private requestedAudioOffsetMs: number = 0;
   private loopBlocks: { startBeat: number; endBeat: number; type: "count" | "duration"; value: number; jumpToBlock?: number; jumpCount?: number; bpm?: number; soundSet?: string; layerOf?: number; ownBeatTypes?: Record<number, string>; ownSubdivisions?: Record<string, string[]> }[] = [];
   private blockPlayMode: "sequential" | "loop" | "random" = "loop";
   private randomBarOrder: number[] | null = null;
@@ -192,6 +193,7 @@ export class MetronomeEngine {
   private realtimeAudioScheduler: ((tick: ScheduledTick, atPerformanceTime: number) => boolean) | null = null;
   private clearRealtimeAudio: (() => void) | null = null;
   private realtimeScheduledTicks = new Set<ScheduledTick>();
+  private hasRealtimeAudioOutput = false;
 
   private static readonly SCHEDULE_CACHE_MAX = 16;
   private scheduleCache: Map<string, { ticks: ScheduledTick[]; durationMs: number }> = new Map();
@@ -233,7 +235,10 @@ export class MetronomeEngine {
   }
 
   setAudioOffsetMs(offset: number) {
-    this.audioOffsetMs = Math.max(-100, Math.min(100, offset));
+    this.requestedAudioOffsetMs = Number.isFinite(offset) ? Math.max(-200, Math.min(200, offset)) : 0;
+    // Web visuals support the full UI range; keep native's existing timing bound.
+    const limit = this.visualTimingProvider ? 200 : 100;
+    this.audioOffsetMs = Math.max(-limit, Math.min(limit, this.requestedAudioOffsetMs));
   }
 
   /** Read-only visual alignment; never seek audio or change its scheduling epoch. */
@@ -241,6 +246,7 @@ export class MetronomeEngine {
     provider: ((elapsedMs: number, durationMs: number, rendered: boolean) => number | null) | null,
   ) {
     this.visualTimingProvider = provider;
+    this.setAudioOffsetMs(this.requestedAudioOffsetMs);
   }
 
   setPreRenderedAudio(enabled: boolean) {
@@ -259,6 +265,7 @@ export class MetronomeEngine {
 
   private clearRealtimeAudioQueue() {
     this.realtimeScheduledTicks.clear();
+    this.hasRealtimeAudioOutput = false;
     try { this.clearRealtimeAudio?.(); } catch {}
   }
 
@@ -1318,9 +1325,12 @@ export class MetronomeEngine {
     const elapsed = performance.now() - this.measureStartTime;
     // Callback-driven audio (e.g. Polygon/native) must not be delayed together
     // with its visuals. Only independently clocked output can be compensated.
-    if (!this.preRenderedAudio && this.realtimeScheduledTicks.size === 0) return elapsed;
+    if (!this.preRenderedAudio && (!this.hasRealtimeAudioOutput || this.baseClickMuted)) return elapsed;
     const aligned = this.visualTimingProvider?.(elapsed, this.measureDurationMs, this.preRenderedAudio);
-    return aligned !== null && aligned !== undefined && Number.isFinite(aligned) ? aligned : elapsed;
+    // Positive means sound follows the display; negative means display follows sound.
+    // Move only the web visual clock, never the pre-rendered PCM/audio deadlines.
+    return aligned !== null && aligned !== undefined && Number.isFinite(aligned)
+      ? aligned + this.audioOffsetMs : elapsed;
   }
 
   getMeasureElapsedMs(): number {
@@ -1418,10 +1428,11 @@ export class MetronomeEngine {
 
   private fillRealtimeAudioLookAhead(now: number) {
     if (this.preRenderedAudio || !this.realtimeAudioScheduler) return;
-    const horizon = now + MetronomeEngine.REALTIME_LOOKAHEAD_MS;
+    const visualLead = this.visualTimingProvider ? Math.max(0, this.audioOffsetMs) : 0;
+    const horizon = now + MetronomeEngine.REALTIME_LOOKAHEAD_MS + visualLead;
     for (let i = this.scheduleIndex; i < this.schedule.length; i++) {
       const tick = this.schedule[i];
-      const at = this.measureStartTime + tick.time + Math.max(0, this.audioOffsetMs);
+      const at = this.measureStartTime + tick.time + (this.visualTimingProvider ? 0 : Math.max(0, this.audioOffsetMs));
       if (at > horizon) break;
       const hasSpecializedAudio =
         tick.layerIndex > 0 ||
@@ -1434,7 +1445,10 @@ export class MetronomeEngine {
         this.realtimeScheduledTicks.has(tick)
       ) continue;
       try {
-        if (this.realtimeAudioScheduler(tick, at)) this.realtimeScheduledTicks.add(tick);
+        if (this.realtimeAudioScheduler(tick, at)) {
+          this.realtimeScheduledTicks.add(tick);
+          this.hasRealtimeAudioOutput = true;
+        }
       } catch {}
     }
   }

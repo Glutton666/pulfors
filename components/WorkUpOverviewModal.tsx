@@ -7,12 +7,12 @@ import {
   Platform,
   ScrollView,
   TextInput,
-  Alert,
   ActivityIndicator,
   Dimensions,
   Image,
   useWindowDimensions,
 } from "react-native";
+import { Alert } from "@/lib/alert";
 import { AnimatedModal, AnimatedSlideModal } from "@/components/AnimatedModal";
 import { logger } from "@/lib/logger";
 import { useSafeAreaInsets } from "react-native-safe-area-context";

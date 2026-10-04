@@ -1,10 +1,10 @@
 // ============================================================
 // confirm.ts — Alert 유틸 (웹/네이티브 분기 통합)
-// 웹: window.confirm / window.alert
+// 웹: 앱 내부의 WebAlertHost
 // 네이티브: Alert.alert
 // ============================================================
 
-import { Alert, Platform } from "react-native";
+import { Alert } from "./alert";
 
 export interface ConfirmDestructiveOptions {
   title?: string;
@@ -15,7 +15,7 @@ export interface ConfirmDestructiveOptions {
 
 /**
  * 파괴적 작업(삭제·초기화 등) 확인 다이얼로그
- * 웹에서는 window.confirm(), 네이티브에서는 Alert.alert()를 사용한다.
+ * 웹에서는 앱 내부 확인창, 네이티브에서는 Alert.alert()를 사용한다.
  */
 export function confirmDestructive(
   message: string,
@@ -27,14 +27,6 @@ export function confirmDestructive(
     cancelText = "취소",
     onConfirm,
   } = options;
-
-  if (Platform.OS === "web") {
-    const fullMsg = title ? `${title}\n\n${message}` : message;
-    if (window.confirm(fullMsg)) {
-      void Promise.resolve(onConfirm());
-    }
-    return;
-  }
 
   const alertTitle = title || message;
   const alertMsg = title ? message : undefined;
@@ -48,10 +40,6 @@ export function confirmDestructive(
  * 단순 정보 알림 (확인 버튼 1개)
  */
 export function alertInfo(title: string, message?: string): void {
-  if (Platform.OS === "web") {
-    window.alert(message ? `${title}\n\n${message}` : title);
-    return;
-  }
   Alert.alert(title, message);
 }
 

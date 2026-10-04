@@ -1,4 +1,5 @@
-import { Alert, Linking, Platform } from "react-native";
+import { Linking, Platform } from "react-native";
+import { Alert } from "./alert";
 import * as ImagePicker from "expo-image-picker";
 import * as Location from "expo-location";
 import { requestRecordingPermissionsAsync } from "expo-audio";

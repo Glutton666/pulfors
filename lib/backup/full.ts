@@ -239,7 +239,7 @@ async function restoreFromJsonInternal(
       throw e;
     }
 
-    if (backup.audioFiles && Object.keys(backup.audioFiles).length > 0 && Platform.OS !== "web") {
+    if (backup.audioFiles && Object.keys(backup.audioFiles).length > 0) {
       const uriMapping = await restoreAudioFiles(backup.audioFiles);
       if (uriMapping.size > 0) {
         data = remapDataUris(data, uriMapping);

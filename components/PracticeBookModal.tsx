@@ -6,12 +6,12 @@ import {
   Pressable,
   FlatList,
   TextInput,
-  Alert,
   Platform,
   Animated,
   PanResponder,
   Dimensions,
 } from "react-native";
+import { Alert } from "@/lib/alert";
 import { confirmDestructive } from "@/lib/confirm";
 import { AnimatedSlideModal } from "@/components/AnimatedModal";
 import AsyncStorage from "@react-native-async-storage/async-storage";
