@@ -1,5 +1,51 @@
 {pkgs}: {
   deps = [
+    pkgs.gst_all_1.gst-plugins-good
+    pkgs.gst_all_1.gst-libav
+    pkgs.libglvnd
+    pkgs.x264
+    pkgs.nghttp2
+    pkgs.libpsl
+    pkgs.hyphen
+    pkgs.libtasn1
+    pkgs.libdrm
+    pkgs.wayland
+    pkgs.zlib
+    pkgs.libpng
+    pkgs.libjpeg
+    pkgs.libwebp
+    pkgs.flite
+    pkgs.gst_all_1.gst-plugins-bad
+    pkgs.libgpg-error
+    pkgs.libgcrypt
+    pkgs.libopus
+    pkgs.libevent
+    pkgs.lcms2
+    pkgs.libxslt
+    pkgs.sqlite
+    pkgs.libxml2
+    pkgs.graphene
+    pkgs.vulkan-loader
+    pkgs.harfbuzz
+    pkgs.gcc
+    pkgs.fontconfig
+    pkgs.freetype
+    pkgs.xorg.libXrender
+    pkgs.gdk-pixbuf
+    pkgs.cairo
+    pkgs.xorg.libXi
+    pkgs.xorg.libXcursor
+    pkgs.gst_all_1.gst-plugins-base
+    pkgs.gst_all_1.gstreamer
+    pkgs.libepoxy
+    pkgs.libsecret
+    pkgs.enchant2
+    pkgs.libmanette
+    pkgs.libavif
+    pkgs.icu
+    pkgs.pango
+    pkgs.gtk4
+    pkgs.gtk3
     pkgs.android-tools
     pkgs.atk
     pkgs.alsa-lib

@@ -465,6 +465,7 @@ function GridItem({
         }
       }}
       onLongPress={handleLongPressActions}
+      testID={`practice-grid-${item.id}`}
       delayLongPress={500}
     >
       <View style={gridStyles.cardHeader}>
@@ -754,6 +755,7 @@ export function PracticeBookModal({
           </Pressable>
           <Pressable
             onPress={toggleViewMode}
+            testID="practice-view-toggle"
             hitSlop={8}
             style={styles.viewToggleBtn}
           >

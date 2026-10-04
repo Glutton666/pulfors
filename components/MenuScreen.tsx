@@ -78,6 +78,7 @@ export function MenuScreen({
       icon: <MaterialCommunityIcons name="chart-line" size={ICON_SIZE} color={C.accent} />,
       label: t("main", "menuWorkUp"),
       onPress: onWorkUp,
+      testID: "menu-work-up",
     },
     ...(labUnlocked ? [{
       icon: <Ionicons name="flask-outline" size={ICON_SIZE} color={C.accent} />,

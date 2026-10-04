@@ -83,3 +83,4 @@
 - [Web visual presentation clock](web-visual-presentation-clock.md) — align visuals to audible output, not render-ahead time; never move audio deadlines to fix a visual mismatch.
 - [Dense subdivision visuals](dense-subdivision-visuals.md) — isolate per-slot display updates, sample latest position at the frame, and expire pulses within their slot.
 - [원형 서브디비전 그림 해석](circular-writing-reference.md) — 사용자가 확정한 두 번째 그림은 ANANANANS 9개이며, 마지막 S는 시작점이 아니다.
+- [Nix WebKit runtime](nix-webkit-runtime.md) — ldconfig checks, overwritten library paths and mixed soup plugins can fail before the app; Linux WebKit is not device Safari.

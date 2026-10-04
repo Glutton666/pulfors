@@ -44,13 +44,13 @@ jobs:
 
       # Playwright 브라우저가 필요로 하는 Ubuntu 공유 라이브러리를 설치한다.
       - name: Playwright 시스템 의존성 설치
-        run: npx playwright install-deps chromium
+        run: npx playwright install-deps chromium firefox webkit
 
-      - name: Playwright Chromium 설치
-        run: npx playwright install chromium
+      - name: Playwright 브라우저 설치
+        run: npx playwright install chromium firefox webkit
 
       - name: 프로덕션 웹 빌드와 브라우저 실행 검사
-        run: npm run release:web:build && node scripts/verify-web-release.mjs --browser
+        run: npm run release:web:build && node scripts/verify-web-release.mjs --browser --audio-sync --web-parity --browsers=chromium,firefox,webkit
 
       # playwright.config.ts의 webServer가 Expo 웹 앱을 포트 8081에서 기동한다.
       - name: 웹 E2E 테스트 실행

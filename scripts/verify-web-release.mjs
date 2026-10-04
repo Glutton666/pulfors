@@ -8,6 +8,11 @@ import process from "node:process";
 const port = 5197;
 const baseUrl = `http://127.0.0.1:${port}`;
 const verifyBrowserRuntime = process.argv.includes("--browser");
+const browserArg = process.argv.find((arg) => arg.startsWith("--browsers="));
+const browserNames = (browserArg?.split("=")[1] ?? "chromium").split(",");
+if (browserNames.some((name) => !["chromium", "firefox", "webkit"].includes(name))) {
+  throw new Error("--browsers must be a comma-separated list of chromium,firefox,webkit.");
+}
 
 await access("static-build/index.html");
 await access("dist/server/index.js");
@@ -105,15 +110,43 @@ async function verifyReferencedFiles(html) {
   }
 }
 
-async function verifyBuiltAppInBrowser() {
-  const { chromium } = await import("playwright");
-  const browser = await chromium.launch({ headless: true });
+async function verifyBuiltAppInBrowser(browserName) {
+  const engines = await import("playwright");
+  // Optional Nix runtime paths apply to browser validation/children, never Node servers.
+  const originalLibraryPath = process.env.LD_LIBRARY_PATH;
+  if (process.env.PLAYWRIGHT_LD_LIBRARY_PATH) {
+    process.env.LD_LIBRARY_PATH = process.env.PLAYWRIGHT_LD_LIBRARY_PATH;
+  }
+  let browser;
+  try {
+    browser = await engines[browserName].launch({ headless: true });
+  } finally {
+    if (originalLibraryPath === undefined) delete process.env.LD_LIBRARY_PATH;
+    else process.env.LD_LIBRARY_PATH = originalLibraryPath;
+  }
+  console.log(`Browser verification: ${browserName} ${browser.version()}`);
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
   const consoleErrors = [];
   const loadedScripts = [];
+  if (process.argv.includes("--web-parity")) {
+    await page.addInitScript(() => {
+      window.__filePickerGestures = [];
+      const click = HTMLInputElement.prototype.click;
+      HTMLInputElement.prototype.click = function (...args) {
+        if (this.type === "file") {
+          window.__filePickerGestures.push({
+            activationSupported: !!navigator.userActivation,
+            active: navigator.userActivation?.isActive,
+          });
+        }
+        return click.apply(this, args);
+      };
+    });
+  }
   if (process.argv.includes("--audio-sync")) {
     await page.addInitScript(() => {
-      const probe = { starts: 0, presentationReads: 0 };
+      const probe = { starts: 0, presentationReads: 0, fallbackReads: 0,
+        timestampSupported: typeof window.AudioContext?.prototype.getOutputTimestamp === "function" };
       window.__audioSyncProbe = probe;
       const source = window.AudioBufferSourceNode?.prototype;
       if (source) {
@@ -130,6 +163,15 @@ async function verifyBuiltAppInBrowser() {
           probe.presentationReads += 1;
           return timestamp.apply(this, args);
         };
+      }
+      for (const property of ["baseLatency", "outputLatency"]) {
+        const descriptor = context && Object.getOwnPropertyDescriptor(context, property);
+        if (descriptor?.get && descriptor.configurable) {
+          Object.defineProperty(context, property, {
+            ...descriptor,
+            get() { probe.fallbackReads += 1; return descriptor.get.call(this); },
+          });
+        }
       }
     });
   }
@@ -164,12 +206,15 @@ async function verifyBuiltAppInBrowser() {
       await page.waitForTimeout(300);
     }
     if (process.argv.includes("--screenshot")) {
-      await page.screenshot({ path: path.join(tmpdir(), "pulfors-built-web.jpg") });
+      await page.screenshot({ path: path.join(tmpdir(), `pulfors-built-web-${browserName}.jpg`) });
     }
     if (process.argv.includes("--audio-sync")) {
       await page.locator('[data-testid="play-button"]').click();
       await page.waitForFunction(() =>
-        window.__audioSyncProbe.starts >= 4 && window.__audioSyncProbe.presentationReads >= 10,
+        window.__audioSyncProbe.starts >= 4 &&
+        (window.__audioSyncProbe.timestampSupported
+          ? window.__audioSyncProbe.presentationReads >= 10
+          : window.__audioSyncProbe.fallbackReads >= 10),
       undefined, { timeout: 10_000 });
       await page.locator('[data-testid="play-button"]').click();
       await page.waitForTimeout(200);
@@ -178,11 +223,13 @@ async function verifyBuiltAppInBrowser() {
       if (await page.evaluate(() => window.__audioSyncProbe.starts) !== stoppedStarts) {
         throw new Error("Web audio continued scheduling clicks after stop.");
       }
-      console.log("Web audio sync smoke passed: playback reads output timestamps, and stop cancels scheduling.");
+      console.log("Web audio sync passed (API only; not physical output latency):",
+        await page.evaluate(() => window.__audioSyncProbe));
     }
     if (process.argv.includes("--web-parity")) {
-      const { verifyWebDialogs, seedBackupAudio } = await import("./web-parity-browser.mjs");
+      const { verifyWebDialogs, verifyPracticeAndActivity, seedBackupAudio } = await import("./web-parity-browser.mjs");
       await verifyWebDialogs(page);
+      await verifyPracticeAndActivity(page, baseUrl);
       await seedBackupAudio(page);
     }
     // Global settings retain Profile; mode-specific settings intentionally don't.
@@ -206,6 +253,12 @@ async function verifyBuiltAppInBrowser() {
     if (process.argv.includes("--web-parity") && Object.keys(backup.audioFiles ?? {}).length !== 2) {
       throw new Error("Web backup dropped audio assets.");
     }
+    if (process.argv.includes("--web-parity")) {
+      const expected = await page.evaluate(() => window.__expectedBackupAudio);
+      if (expected.some((bytes) => !Object.values(backup.audioFiles).includes(bytes))) {
+        throw new Error("Blob/data audio bytes changed during backup.");
+      }
+    }
     if (!backup.data?.metronome_settings?.includes("web-release-backup-check")) {
       throw new Error("Backup download did not include the locally saved profile.");
     }
@@ -216,6 +269,13 @@ async function verifyBuiltAppInBrowser() {
     await page.locator('[data-testid="settings-backup-import"]').click();
     await page.locator('[data-testid="web-alert-action-1"]').click();
     const picker = await pickerPromise;
+    if (process.argv.includes("--web-parity")) {
+      const gestures = await page.evaluate(() => window.__filePickerGestures);
+      if (!gestures.length || gestures.some((gesture) => gesture.activationSupported && !gesture.active)) {
+        throw new Error(`Backup file picker lost the user gesture: ${JSON.stringify(gestures)}`);
+      }
+      console.log("Backup file picker opened from a user gesture:", gestures);
+    }
     const reloadPromise = page.waitForEvent("framenavigated", {
       predicate: (frame) => frame === page.mainFrame(),
     });
@@ -261,7 +321,7 @@ try {
   }
 
   if (verifyBrowserRuntime) {
-    await verifyBuiltAppInBrowser();
+    for (const browserName of browserNames) await verifyBuiltAppInBrowser(browserName);
   }
 
   console.log(

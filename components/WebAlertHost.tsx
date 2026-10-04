@@ -8,22 +8,35 @@ export function WebAlertHost() {
   const request = useSyncExternalStore(subscribeWebAlert, getWebAlert, () => null);
   const { colors: C } = useTheme();
   useEffect(() => {
-    if (!request || Platform.OS !== "web") return;
+    if (Platform.OS !== "web") return;
+    // RN Web closes the underlying Modal on keyup. Keep this listener alive
+    // after keydown dismisses the alert so one Escape cannot close two layers.
+    let awaitingEscapeRelease = false;
     const keydown = (event: KeyboardEvent) => {
+      const active = getWebAlert();
+      if (!active && !(awaitingEscapeRelease && event.key === "Escape")) return;
       event.stopImmediatePropagation();
       if (event.key === "Escape") {
         event.preventDefault();
-        cancelWebAlert(request.id);
+        awaitingEscapeRelease = true;
+        if (active) cancelWebAlert(active.id);
       }
     };
-    const keyup = (event: KeyboardEvent) => event.stopImmediatePropagation();
+    const keyup = (event: KeyboardEvent) => {
+      if (!getWebAlert() && !(awaitingEscapeRelease && event.key === "Escape")) return;
+      event.stopImmediatePropagation();
+      if (event.key === "Escape") {
+        event.preventDefault();
+        awaitingEscapeRelease = false;
+      }
+    };
     window.addEventListener("keydown", keydown, true);
     window.addEventListener("keyup", keyup, true);
     return () => {
       window.removeEventListener("keydown", keydown, true);
       window.removeEventListener("keyup", keyup, true);
     };
-  }, [request]);
+  }, []);
   if (Platform.OS !== "web" || !request) return null;
 
   return (

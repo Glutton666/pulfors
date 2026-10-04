@@ -31,6 +31,10 @@ npm run release:web:check
 
 이 명령은 공통 검사, 정적 분석, Expo Web 정적 빌드, 서버 빌드 후 프로덕션 서버를 임시 포트로 실행한다. `/`, SPA 직접 경로, `/api/time`, 알 수 없는 API 경계를 검사한다. CI는 같은 프로덕션 빌드를 Chromium으로 열어 실제 JavaScript 번들이 로드되고 앱 루트가 렌더링되는지도 확인한다.
 
+CI의 릴리스 브라우저 검사는 Chromium·Firefox·WebKit에서 메뉴와 음원 백업/복원까지 검사한다.
+직접 실행하는 명령과 실제 Safari/물리적 오디오 출력의 검증 한계는
+[브라우저 검증 기록](web-browser-parity-verification.md)을 참고한다.
+
 검사가 통과하면 Replit에서 Publish한다. Publish 후에는 실제 공개 주소에서 다음을 확인한다.
 
 - 루트와 직접 경로 새로고침
