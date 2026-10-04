@@ -305,6 +305,8 @@ function sanitizeTonePositions(value: unknown): Partial<Record<SoundSet, TonePos
 
 export interface MetronomeSettings {
   bpm: number;
+  beatTypes?: BeatType[];
+  circularSubdivisionEnabled?: boolean;
   beatsPerMeasure: number;
   subdivisions: number;
   subdivisionPattern?: BeatType[];
@@ -434,6 +436,7 @@ const DEFAULT_SETTINGS: MetronomeSettings = {
   barStaffNotation: false,
   barRandomStrategy: "independent",
   beatStaffNotation: false,
+  circularSubdivisionEnabled: false,
 };
 
 function clampMetronomeVolume(value: unknown): number | undefined {
@@ -478,6 +481,13 @@ export async function loadSettings(): Promise<MetronomeSettings> {
         );
       const merged: MetronomeSettings = { ...DEFAULT_SETTINGS, ...parsed } as MetronomeSettings;
       merged.volume = clampMetronomeVolume(merged.volume) ?? DEFAULT_SETTINGS.volume;
+      merged.circularSubdivisionEnabled = parsed.circularSubdivisionEnabled === true;
+      if (Array.isArray(parsed.beatTypes) && parsed.beatTypes.length === merged.beatsPerMeasure
+        && parsed.beatTypes.every((type) => ["strong", "accent", "normal", "mute"].includes(type))) {
+        merged.beatTypes = [...parsed.beatTypes] as BeatType[];
+      } else {
+        delete merged.beatTypes;
+      }
       const knownInstrumentIds = new Set(
         TUNING_DATA.flatMap((category) => category.instruments.map((instrument) => instrument.id)),
       );

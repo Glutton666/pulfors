@@ -112,6 +112,7 @@ import { useBeatTypeControls } from "@/hooks/useBeatTypeControls";
 import { useRandomBarSession } from "@/hooks/useRandomBarSession";
 import { useNoteSession } from "@/hooks/useNoteSession";
 import { useSubdivisionEditor } from "@/hooks/useSubdivisionEditor";
+import { useBeatSubdivisionCommit } from "@/hooks/useBeatSubdivisionCommit";
 import { useScreenNavigation } from "@/hooks/useScreenNavigation";
 import { applySwitchToMode, type ModeSwitchState, type ModeSwitchCallbacks } from "@/lib/stage-mode-logic";
 import { findBeatStaffCellTarget, type BeatStaffCellRects } from "@/lib/beat-staff-logic";
@@ -575,6 +576,7 @@ export function useMetronomeScreen() {
     barRowHeight, setBarRowHeight,
     barStaffNotation, setBarStaffNotation,
     beatStaffNotation, setBeatStaffNotation,
+    circularSubdivisionEnabled, setCircularSubdivisionEnabled,
     barRandomStrategy, setBarRandomStrategy,
     stageSettings, updateStageSettings,
     persistSettings,
@@ -1707,6 +1709,7 @@ export function useMetronomeScreen() {
       setBeatsPerMeasure(4);
       setBeatTypes(defaultBeatTypes(4));
       setSubdivisionPattern(["accent"]);
+      setCircularSubdivisionEnabled(false);
       setBeatSubdivisions({});
       setSoundSetTonePositions({});
       tonePositionRef.current = { ...NEUTRAL };
@@ -2724,46 +2727,10 @@ export function useMetronomeScreen() {
     tapTimesRef.current = taps;
   }, [handleBarBpmChange, updateBpm]);
 
-  const handleBeatSubdivisionChange = useCallback(
-    (beatIndex: number, pattern: BeatType[] | null) => {
-      const newSubs = { ...beatSubdivisions };
-      if (pattern && pattern.length > 1) {
-        newSubs[String(beatIndex)] = pattern;
-        engineRef.current?.setBeatSubdivision(beatIndex, pattern);
-      } else if (pattern?.length === 1) {
-        // A one-note pattern is the beat itself, not a subdivision. Promote its
-        // note type to the visible beat so UI, engine schedule, and audio agree.
-        delete newSubs[String(beatIndex)];
-        engineRef.current?.setBeatSubdivision(beatIndex, null);
-        const type = pattern[0];
-        const nextTypes = [...beatTypes];
-        nextTypes[beatIndex] = type;
-        setBeatTypes(nextTypes);
-        if (barModeRef.current) barConfigRef.current.beatTypes = nextTypes;
-        else dialConfigRef.current.beatTypes = nextTypes;
-        engineRef.current?.setBeatTypes(nextTypes);
-      } else {
-        delete newSubs[String(beatIndex)];
-        engineRef.current?.setBeatSubdivision(beatIndex, null);
-      }
-      setBeatSubdivisions(newSubs);
-      if (barModeRef.current) {
-        barConfigRef.current.beatSubdivisions = newSubs;
-      } else {
-        dialConfigRef.current.beatSubdivisions = newSubs;
-        persistSettings({
-          beatSubdivisions: newSubs,
-          ...(pattern?.length === 1
-            ? {
-                beatTypes: dialConfigRef.current.beatTypes,
-              }
-            : {}),
-        });
-      }
-      scheduleReRender();
-    },
-    [beatSubdivisions, beatTypes, persistSettings, scheduleReRender]
-  );
+  const { handleBeatSubdivisionChange, handleCircularSubdivisionCommit } = useBeatSubdivisionCommit({
+    beatSubdivisions, beatTypes, barModeRef, barConfigRef, dialConfigRef, engineRef, activeModeRef,
+    isPlayingRef, isPreparingRef, setBeatTypes, setBeatSubdivisions, persistSettings, scheduleReRender,
+  });
 
   const handlePatternChange = useCallback(
     (pattern: BeatType[]) => {
@@ -3938,6 +3905,7 @@ export function useMetronomeScreen() {
     updateTimeSignature,
     handleBeatTypeChange,
     handleBeatSubdivisionChange,
+    handleCircularSubdivisionCommit,
     handleBeatDenominatorCycle,
     handleTapTempo,
     handleReset,
@@ -4103,6 +4071,7 @@ export function useMetronomeScreen() {
     setBarStaffNotation,
     beatStaffNotation,
     setBeatStaffNotation,
+    circularSubdivisionEnabled, setCircularSubdivisionEnabled,
     barMetronomeChannel,
     setBarMetronomeChannel,
     barMetronomeChannelRef,

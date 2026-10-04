@@ -63,14 +63,14 @@ export function createInitialDialConfig(beats = 4): DialConfig {
 export function hydrateDialConfigFromSettings(
   config: DialConfig,
   settings: Pick<
-    { beatsPerMeasure: number; subdivisionPattern?: BeatType[]; beatSubdivisions?: Record<string, BeatType[]> },
-    "beatsPerMeasure" | "subdivisionPattern" | "beatSubdivisions"
+    { beatsPerMeasure: number; beatTypes?: BeatType[]; subdivisionPattern?: BeatType[]; beatSubdivisions?: Record<string, BeatType[]> },
+    "beatsPerMeasure" | "beatTypes" | "subdivisionPattern" | "beatSubdivisions"
   >,
 ): DialConfig {
   return {
     ...config,
     beatsPerMeasure: settings.beatsPerMeasure,
-    beatTypes: defaultBeatTypes(settings.beatsPerMeasure),
+    beatTypes: settings.beatTypes?.length === settings.beatsPerMeasure ? [...settings.beatTypes] : defaultBeatTypes(settings.beatsPerMeasure),
     subdivisionPattern: [...(settings.subdivisionPattern ?? ["accent"])],
     beatSubdivisions: Object.fromEntries(
       Object.entries(settings.beatSubdivisions ?? {}).map(([beat, pattern]) => [beat, [...pattern]]),

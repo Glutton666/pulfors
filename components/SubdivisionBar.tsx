@@ -51,7 +51,8 @@ interface SubdivisionBarProps {
   currentBeatType?: BeatType | null;
 }
 
-export const MAX_SUBDIVISION_CELLS = 9;
+import { MAX_SUBDIVISION_CELLS } from "@/lib/subdivision-limits";
+export { MAX_SUBDIVISION_CELLS } from "@/lib/subdivision-limits";
 const MIN_CELLS = 1;
 const SWIPE_THRESHOLD = 30;
 

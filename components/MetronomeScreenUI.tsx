@@ -102,6 +102,7 @@ export function MetronomeScreenUI(props: Props) {
     layerProgressMap, halfTime,
     togglePlayPause, updateBpm, updateTimeSignature, handleBeatTypeChange, handleBeatStaffDelete,
     handleBeatSubdivisionChange, handleBeatDenominatorCycle, handleTapTempo,
+    handleCircularSubdivisionCommit,
     handleReset, startMetronome, startScheduledMetronome, cancelScheduledMetronome, handleTimerExpired,
     beatSubdivisionCounts, beatDirection, setBeatDirection,
     isDragging, dragPos, dragPattern, dropTargetBeat,
@@ -150,6 +151,7 @@ export function MetronomeScreenUI(props: Props) {
     barCellOpacity, setBarCellOpacity, barRowHeight, setBarRowHeight,
     barStaffNotation, setBarStaffNotation,
     beatStaffNotation, setBeatStaffNotation,
+    circularSubdivisionEnabled, setCircularSubdivisionEnabled,
     barMetronomeChannel, setBarMetronomeChannel, barMetronomeChannelRef,
     stageSettings, updateStageSettings,
     currentBarConfig,
@@ -587,6 +589,9 @@ export function MetronomeScreenUI(props: Props) {
             position: "absolute",
             top: (insets.top || webTopInset) + 2,
             alignSelf: "center" as const,
+            ...(circularSubdivisionEnabled && currentMode === "beat" && !beatStaffNotation && !isLandscape && windowHeight <= 600
+              ? { left: 4, alignSelf: "flex-start" as const }
+              : {}),
             zIndex: 99999,
             paddingHorizontal: 16,
             paddingVertical: 8,
@@ -1118,6 +1123,11 @@ export function MetronomeScreenUI(props: Props) {
           persistSettings({ barStaffNotation: val });
         }}
         beatStaffNotation={beatStaffNotation}
+        circularSubdivisionEnabled={circularSubdivisionEnabled}
+        onCircularSubdivisionEnabledChange={(val) => {
+          setCircularSubdivisionEnabled(val);
+          persistSettings({ circularSubdivisionEnabled: val });
+        }}
         onBeatStaffNotationChange={(val) => {
           setBeatStaffNotation(val);
           persistSettings({ beatStaffNotation: val });
@@ -1399,6 +1409,8 @@ export function MetronomeScreenUI(props: Props) {
             barRowHeight={barRowHeight}
             showStaffNotation={barStaffNotation}
             beatStaffNotation={beatStaffNotation}
+            circularSubdivisionEnabled={circularSubdivisionEnabled && currentMode === "beat" && activeModal === null && !isModeDialOpen && !showLabMenu}
+            onCircularSubdivisionCommit={handleCircularSubdivisionCommit}
             subdivisionPattern={subdivisionPattern}
             beatStaffCellRectsRef={beatStaffCellRectsRef}
             onBeatStaffDelete={(...args) => {

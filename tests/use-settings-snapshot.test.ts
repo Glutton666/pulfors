@@ -161,6 +161,47 @@ afterEach(() => {
   jest.useRealTimers();
 });
 
+test("circular writing defaults off, persists through modes/reload, and disabling preserves rhythm", async () => {
+  const params = buildParams();
+  const { result, rerender, unmount } = renderHook(
+    ({ mode }: { mode: "beat" | "bar" }) => useSettings({ ...params, mode }),
+    { initialProps: { mode: "beat" as "beat" | "bar" } },
+  );
+  await act(async () => {});
+  expect(result.current.circularSubdivisionEnabled).toBe(false);
+  const pattern = ["accent", "normal", "accent", "normal", "accent", "normal", "accent", "normal", "strong"] as any[];
+  act(() => {
+    result.current.setCircularSubdivisionEnabled(true);
+    result.current.setBeatSubdivisions({ "2": pattern });
+    result.current.setBeatTypes(["normal", "mute", "accent", "strong"]);
+  });
+  rerender({ mode: "bar" });
+  act(() => {
+    result.current.setBeatSubdivisions({ "0": ["strong", "normal"] });
+    result.current.setBeatTypes(["strong", "normal"]);
+    result.current.setBeatsPerMeasure(2);
+    result.current.updateVolume(0.2);
+  });
+  expect(result.current.circularSubdivisionEnabled).toBe(true);
+  expect(savedSettings.at(-1)?.beatSubdivisions).toEqual({ "2": pattern });
+  expect(savedSettings.at(-1)?.beatTypes).toEqual(["normal", "mute", "accent", "strong"]);
+  expect(savedSettings.at(-1)?.beatsPerMeasure).toBe(4);
+  const saved = savedSettings.at(-1);
+  unmount();
+  const { loadSettings } = require("@/lib/storage");
+  loadSettings.mockResolvedValueOnce(saved);
+  const restored = renderHook(() => useSettings(buildParams()));
+  await act(async () => {});
+  expect(restored.result.current.circularSubdivisionEnabled).toBe(true);
+  expect(restored.result.current.beatSubdivisions).toEqual({ "2": pattern });
+  act(() => {
+    restored.result.current.setCircularSubdivisionEnabled(false);
+  });
+  act(() => restored.result.current.updateVolume(0.3));
+  expect(savedSettings.at(-1)?.circularSubdivisionEnabled).toBe(false);
+  expect(savedSettings.at(-1)?.beatSubdivisions).toEqual({ "2": pattern });
+});
+
 test("beatDenominator is present in the snapshot when volume is changed after setting denominator", () => {
   const params = buildParams();
   const { result } = renderHook(() => useSettings(params));

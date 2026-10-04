@@ -38,6 +38,8 @@ import { useScale } from "@/lib/scale";
 import type { ScaleValues } from "@/lib/scale";
 import { make_styles } from "./BeatIndicator.styles";
 import { DialBeatDot } from "./DialBeatDot";
+import { useCircularSubdivision } from "@/hooks/useCircularSubdivision";
+import { CircularSubdivisionOverlay } from "./CircularSubdivisionOverlay";
 import { BlockPill } from "./BlockPill";
 import { BarPlayButton } from "./BarPlayButton";
 import { BeatStepperButton } from "./BeatStepperButton";
@@ -161,6 +163,8 @@ interface BeatIndicatorProps {
   barRowHeight?: number;
   showStaffNotation?: boolean;
   beatStaffNotation?: boolean;
+  circularSubdivisionEnabled?: boolean;
+  onCircularSubdivisionCommit?: (beat: number, pattern: BeatType[]) => void;
   beatStaffCellRectsRef?: React.MutableRefObject<BeatStaffCellRects>;
   onBeatStaffDelete?: (index: number) => void;
   onEasterEggTrigger?: (isHighRange: boolean) => void;
@@ -254,6 +258,8 @@ export function BeatIndicator({
   barRowHeight,
   showStaffNotation = false,
   beatStaffNotation = false,
+  circularSubdivisionEnabled = false,
+  onCircularSubdivisionCommit,
   beatStaffCellRectsRef,
   onBeatStaffDelete,
   onEasterEggTrigger,
@@ -320,6 +326,19 @@ export function BeatIndicator({
   const beatsRef = useRef(beatsPerMeasure);
   const onBeatsChangeRef = useRef(onBeatsChange);
   const containerRef = useRef<View>(null);
+  const circularDialRef = useRef<View>(null);
+  const circular = useCircularSubdivision({
+    enabled: circularSubdivisionEnabled && !barMode && !beatStaffNotation && !isPlaying && !isPreparing && !isPatternDragging,
+    dialRef: circularDialRef, size: S.dialSize, radius: S.dotRadiusFromCenter,
+    width: S.screenWidth, height: S.screenHeight, total: beatsPerMeasure, beatTypes, beatDirection,
+    onCommit: (beat, pattern) => onCircularSubdivisionCommit?.(beat, pattern),
+    onTap: (beat) => cycleBeatType(beat),
+    onClaim: () => {
+      isDraggingRef.current = false;
+      lastDeltaAngleRef.current = 0;
+      resetVisuals();
+    },
+  });
 
   useEffect(() => {
     beatsRef.current = beatsPerMeasure;
@@ -471,6 +490,7 @@ export function BeatIndicator({
     };
 
     const handleMouseDown = (e: MouseEvent) => {
+      if (circular.ownedRef.current) return;
       const el = containerRef.current as unknown as HTMLElement | null;
       if (el) centerRef.current = getCenter(el);
       startPosRef.current = { x: e.clientX, y: e.clientY };
@@ -490,6 +510,7 @@ export function BeatIndicator({
       commitAndResetRef.current();
     };
     const handleTouchStart = (e: TouchEvent) => {
+      if (circular.ownedRef.current) return;
       if (e.touches.length === 0) return;
       const el = containerRef.current as unknown as HTMLElement | null;
       if (el) centerRef.current = getCenter(el);
@@ -565,7 +586,7 @@ export function BeatIndicator({
           onStartShouldSetPanResponder: () => false,
           onStartShouldSetPanResponderCapture: () => false,
           onMoveShouldSetPanResponder: (_, gs) =>
-            Math.sqrt(gs.dx * gs.dx + gs.dy * gs.dy) > 20,
+            !circular.ownedRef.current && Math.sqrt(gs.dx * gs.dx + gs.dy * gs.dy) > 20,
           onMoveShouldSetPanResponderCapture: () => false,
           onShouldBlockNativeResponder: () => false,
           onPanResponderGrant: (e, gs) => {
@@ -1412,11 +1433,15 @@ export function BeatIndicator({
       )}
       <View style={styles.dialContainer}>
         <View
-          ref={dialRef}
+          ref={(view) => {
+            circularDialRef.current = view;
+            if (dialRef) dialRef.current = view;
+          }}
+          testID="circular-subdivision-dial"
           style={{ width: S.dialSize, height: S.dialSize }}
           collapsable={false}
         >
-          <Animated.View style={[styles.dial, dialStyle]}>
+          <Animated.View style={[styles.dial, dialStyle, circular.draft && { opacity: 0 }]}>
             {beats.map((beat) => (
               <DialBeatDot
                 key={`beat-${beat}`}
@@ -1431,13 +1456,17 @@ export function BeatIndicator({
                 dDialRadius={S.dialRadius}
                 dDotRadiusFromCenter={S.dotRadiusFromCenter}
                 dDotSize={S.dotSize}
+                circularHandlers={Platform.OS !== "web" && circularSubdivisionEnabled && !barMode && !beatStaffNotation && !isPlaying && !isPreparing && !isPatternDragging ? circular.nativeHandlers[beat] : undefined}
               />
             ))}
           </Animated.View>
+          {circular.draft && <View pointerEvents="none" style={{ position: "absolute", top: 0, left: 0, zIndex: 1000 }}>
+            <CircularSubdivisionOverlay draft={circular.draft} size={S.dialSize} />
+          </View>}
         </View>
 
 
-        <View style={styles.centerArea} pointerEvents="box-none">
+        <View style={[styles.centerArea, circular.draft && { opacity: 0 }]} pointerEvents={circular.draft ? "none" : "box-none"}>
           {hubImages.length > 0 && (() => {
             const currentBeatType = isPlaying && currentBeat >= 0 ? (beatTypes[currentBeat] || "normal") : (beatTypes[0] || "normal");
             const activeUri = getImageForBeatType(currentBeatType);
@@ -1505,6 +1534,7 @@ export function BeatIndicator({
               isPreparing && { opacity: 0.5 },
             ]}
             testID="play-button"
+            {...(Platform.OS === "web" ? { "aria-pressed": isPlaying } as any : {})}
             disabled={isPreparing}
             accessibilityRole="button"
             accessibilityLabel={t("a11y", "playButton")}

@@ -49,6 +49,8 @@ interface SettingsThemeTabProps {
   barStaffNotation: boolean;
   onBarStaffNotationChange: (val: boolean) => void;
   beatStaffNotation?: boolean;
+  circularSubdivisionEnabled?: boolean;
+  onCircularSubdivisionEnabledChange?: (value: boolean) => void;
   onBeatStaffNotationChange?: (val: boolean) => void;
   randomBarConfig: BarRandomConfig;
   onRandomBarConfigChange: (config: BarRandomConfig) => void;
@@ -80,6 +82,8 @@ export function SettingsThemeTab({
   barStaffNotation,
   onBarStaffNotationChange,
   beatStaffNotation = false,
+  circularSubdivisionEnabled = false,
+  onCircularSubdivisionEnabledChange,
   onBeatStaffNotationChange = () => {},
   randomBarConfig,
   onRandomBarConfigChange,
@@ -352,6 +356,18 @@ export function SettingsThemeTab({
       </>}
 
       {showsBeatControls && <>
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Text style={[styles.sectionLabel, { color: C.text, flex: 1 }]}>{t("settings", "circularSubdivision")}</Text>
+          <Switch testID="circular-subdivision-toggle"
+            accessibilityLabel={t("settings", "circularSubdivision")}
+            value={circularSubdivisionEnabled} onValueChange={onCircularSubdivisionEnabledChange}
+            trackColor={{ false: C.surfaceLight, true: C.accentMuted }}
+            thumbColor={circularSubdivisionEnabled ? C.accent : C.textSecondary} />
+        </View>
+        <Text style={[styles.offsetHint, { color: C.textTertiary }]}>{t("settings", "circularSubdivisionHint")}</Text>
+      </View>
+      <View style={[styles.divider, { backgroundColor: C.border }]} />
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Ionicons name="musical-notes-outline" size={S.ms(18, 0.4)} color={C.accent} />

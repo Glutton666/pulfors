@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect } from "react";
-import { View, Text, Pressable } from "react-native";
+import { View, Text, Pressable, Platform, type GestureResponderHandlers } from "react-native";
 import Animated, {
   useAnimatedStyle,
   useAnimatedReaction,
@@ -27,6 +27,7 @@ export interface DialBeatDotProps {
   dDialRadius: number;
   dDotRadiusFromCenter: number;
   dDotSize: number;
+  circularHandlers?: GestureResponderHandlers;
 }
 
 export function DialBeatDot({
@@ -41,6 +42,7 @@ export function DialBeatDot({
   dDialRadius,
   dDotRadiusFromCenter,
   dDotSize,
+  circularHandlers,
 }: DialBeatDotProps) {
   const { colors: C } = useTheme();
   const isStrong = beatType === "strong";
@@ -145,16 +147,24 @@ export function DialBeatDot({
   }));
 
   return (
-    <Pressable
-      onPress={handlePress}
+    <View
+      {...circularHandlers}
       style={{
         position: "absolute",
-        left: x,
-        top: y,
-        width: size,
-        height: size,
+        // Keep the original 10px hit slop inside the responder's parent bounds.
+        left: x - 10,
+        top: y - 10,
+        width: size + 20,
+        height: size + 20,
+        padding: 10,
         zIndex: 10,
       }}
+    >
+    <Pressable
+      testID={`dial-beat-${index}`}
+      {...(Platform.OS === "web" ? { dataSet: { circularBeat: String(index) } } as any : {})}
+      onPress={handlePress}
+      style={{ width: size, height: size, ...(Platform.OS === "web" ? { touchAction: "none" } as any : {}) }}
       hitSlop={10}
       pressRetentionOffset={{ top: 20, left: 20, right: 20, bottom: 20 }}
     >
@@ -251,5 +261,6 @@ export function DialBeatDot({
         </View>
       )}
     </Pressable>
+    </View>
   );
 }

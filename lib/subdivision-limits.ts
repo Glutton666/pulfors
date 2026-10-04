@@ -1,0 +1,1 @@
+export const MAX_SUBDIVISION_CELLS = 9;

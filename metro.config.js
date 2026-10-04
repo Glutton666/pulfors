@@ -8,6 +8,9 @@ const additionalBlockList = [
   // yarn/npm cache dirs don't need to be watched — excluding them prevents
   // ENOSPC (inotify file-watcher limit) from crashing Metro on this host.
   /\.cache\/.*/,
+  // Browser/device tool state is transient and is not application source.
+  // Chromium deletes blob_storage directories while Metro is walking them.
+  /\.config\/.*/,
   /node_modules\/.cache\/.*/,
 ];
 

@@ -144,6 +144,7 @@ describe("theme settings scope visibility", () => {
     expect(view.queryByText("hubImages")).toBeNull();
     expect(view.queryByText("barMetronomeChannel")).toBeNull();
     expect(view.queryByText("barCellOpacity")).toBeNull();
+    expect(view.queryByText("circularSubdivision")).toBeNull();
   });
 
   test("beat settings contain only beat-specific appearance controls", () => {
@@ -153,6 +154,8 @@ describe("theme settings scope visibility", () => {
     expect(view.getByText("landscapeReversed")).toBeTruthy();
     expect(view.getByText("showLandscapeImage")).toBeTruthy();
     expect(view.getByText("beatDirection")).toBeTruthy();
+    expect(view.getByText("circularSubdivision")).toBeTruthy();
+    expect(view.getByText("circularSubdivisionHint")).toBeTruthy();
     expect(view.queryByText("themeMode")).toBeNull();
     expect(view.queryByText("barMetronomeChannel")).toBeNull();
     expect(view.queryByText("barCellOpacity")).toBeNull();
@@ -162,6 +165,7 @@ describe("theme settings scope visibility", () => {
     const view = renderTheme("bar");
 
     expect(view.getByText("barMetronomeChannel")).toBeTruthy();
+    expect(view.queryByText("circularSubdivision")).toBeNull();
     expect(view.getByText("barCellOpacity")).toBeTruthy();
     expect(view.getByText("barRowHeight")).toBeTruthy();
     expect(view.getByText("barStaffNotation")).toBeTruthy();

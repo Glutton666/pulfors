@@ -148,6 +148,8 @@ export interface UseSettingsResult {
   barRandomStrategy: BarRandomStrategy;
   setBarRandomStrategy: React.Dispatch<React.SetStateAction<BarRandomStrategy>>;
   beatStaffNotation: boolean;
+  circularSubdivisionEnabled: boolean;
+  setCircularSubdivisionEnabled: React.Dispatch<React.SetStateAction<boolean>>;
   setBeatStaffNotation: React.Dispatch<React.SetStateAction<boolean>>;
   // ── Stage mode ─────────────────────────────────────────────────────────────
   stageSettings: StageSettings;
@@ -260,6 +262,7 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
   const [barStaffNotation, setBarStaffNotation] = useState(false);
   const [barRandomStrategy, setBarRandomStrategy] = useState<BarRandomStrategy>("independent");
   const [beatStaffNotation, setBeatStaffNotation] = useState(false);
+  const [circularSubdivisionEnabled, setCircularSubdivisionEnabled] = useState(false);
   const [stageSettings, setStageSettings] = useState<StageSettings>(DEFAULT_STAGE_SETTINGS);
 
   // ── Persistence infrastructure ───────────────────────────────────────────────
@@ -289,6 +292,7 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
   const loadedSettingsRef = useRef<MetronomeSettings | null>(null);
   const snapshotModeRef = useRef(mode);
   const persistSnapshotRef = useRef<MetronomeSettings>({
+    circularSubdivisionEnabled, beatTypes,
     bpm, beatsPerMeasure, beatDenominator, subdivisions: 1, subdivisionPattern, beatSubdivisions,
     volume, sampleVolume, soundSet, soundSetTonePositions, layerSoundSets, flashMode, hapticMode,
     audioOffsetMs, timerStopMode, landscapeReversed, beatDirection, username, primaryInstrumentId: primaryInstrumentId ?? undefined,
@@ -306,7 +310,16 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
   // Inline update — runs on every render of useMetronomeScreen.
   const modeChangedThisRender = snapshotModeRef.current !== mode;
   persistSnapshotRef.current = {
+    circularSubdivisionEnabled,
+    beatTypes: mode === "beat" && !modeChangedThisRender ? beatTypes : persistSnapshotRef.current.beatTypes,
     bpm, beatsPerMeasure, beatDenominator, subdivisions: 1, subdivisionPattern, beatSubdivisions,
+    // These shared UI fields temporarily contain Bar/Note data. A settings
+    // save in those modes must not overwrite the persistent Beat document.
+    ...(mode !== "beat" || modeChangedThisRender ? {
+      beatsPerMeasure: persistSnapshotRef.current.beatsPerMeasure,
+      beatSubdivisions: persistSnapshotRef.current.beatSubdivisions,
+      subdivisionPattern: persistSnapshotRef.current.subdivisionPattern,
+    } : {}),
     volume, sampleVolume, soundSet, soundSetTonePositions, layerSoundSets, flashMode, hapticMode,
     audioOffsetMs, timerStopMode, landscapeReversed, beatDirection, username, primaryInstrumentId: primaryInstrumentId ?? undefined,
     barMetronomeChannel, barCellOpacity, barRowHeight, barStaffNotation, barRandomStrategy, beatStaffNotation,
@@ -413,6 +426,7 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
         ...loadedSettings,
         ...(loadedSettings.modeSettings?.[mode] ?? {}),
       };
+      setCircularSubdivisionEnabled(loadedSettings.circularSubdivisionEnabled === true);
       const loadedDenom = settings.beatDenominator ?? 4;
       const engine = engineRef.current;
       // Bar mode owns a separate live BPM and rhythm document. Applying the
@@ -422,6 +436,10 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
         setBpm(settings.bpm);
         baseBpmRef.current = Math.round(settings.bpm * (loadedDenom / 4));
         setBeatsPerMeasure(settings.beatsPerMeasure);
+        if (settings.beatTypes) {
+          setBeatTypes(settings.beatTypes);
+          engine?.setBeatTypes(settings.beatTypes);
+        }
         if (settings.beatDenominator) {
           setBeatDenominator(settings.beatDenominator);
         }
@@ -746,6 +764,7 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
     barRowHeight, setBarRowHeight,
     barStaffNotation, setBarStaffNotation,
     barRandomStrategy, setBarRandomStrategy, beatStaffNotation, setBeatStaffNotation,
+    circularSubdivisionEnabled, setCircularSubdivisionEnabled,
     stageSettings, updateStageSettings,
     persistSettings,
     invalidateSettingsLoad,
