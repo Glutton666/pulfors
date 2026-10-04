@@ -36,7 +36,7 @@ import {
   type AudioOutputResource,
 } from "@/lib/audio-output-owner";
 import type { NativeAudioOutput } from "@/lib/native-audio-output";
-import type { WebAudioOutput } from "@/lib/web-audio-output";
+import { createWebVisualTimingProvider, type WebAudioOutput } from "@/lib/web-audio-output";
 import { isSafeNoteSampleUri } from "@/lib/index.helpers";
 import type {
   ClickPCMs,
@@ -69,7 +69,6 @@ import {
 } from "@/lib/audio-lifecycle";
 import type { TranslationFn } from "@/lib/i18n";
 import {
-  AUDIO_TIMING_LIMITS,
   AudioClockAdapter,
   AudioTimingDiagnostics,
 } from "@/lib/audio-clock";
@@ -263,7 +262,12 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
   const setActiveAudioToneSnapshot = useCallback((snapshot: AudioToneSnapshot) => {
     activeToneSnapshotRef.current = snapshot;
     setPoolsVolume(snapshot.realtimeGain);
-  }, [setPoolsVolume]);
+    engineRef.current?.setVisualTimingProvider?.(
+      Platform.OS === "web"
+        ? createWebVisualTimingProvider(() => outputOwner.active()?.getPresentedPositionSeconds?.())
+        : null,
+    );
+  }, [engineRef, outputOwner, setPoolsVolume]);
 
   // ── Audio-session settings (moved from useMetronomeScreen) ─────────────────
   const [backgroundPlay, setBackgroundPlay] = useState(true);
@@ -1275,13 +1279,8 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
         const sample = webClockAdapterRef.current?.now();
         if (sample) {
           timingDiagnosticsRef.current.record(sample);
-          const positionSeconds = outputOwner.active()?.getPositionSeconds?.();
-          if (positionSeconds !== undefined && outputOwner.snapshot().mode === "prerender") {
-            engine.syncToMeasureElapsedMs(
-              positionSeconds * 1000,
-              AUDIO_TIMING_LIMITS.uiResyncThresholdMs,
-            );
-          }
+          // Visuals now read the presented audio phase on each engine tick.
+          // A watchdog must not periodically re-anchor that same timeline.
           if (__DEV__) {
             const summary = timingDiagnosticsRef.current.summary(sample.performanceTimeMs);
             if (summary && summary.sampleCount % 20 === 0) {

@@ -248,6 +248,7 @@ function makeEngine() {
     setBlockPlayMode: jest.fn(),
     setAllBarBpmOverrides: jest.fn(),
     setPreRenderedAudio: jest.fn(),
+    setVisualTimingProvider: jest.fn(),
     setPendingMeasureStartAction: jest.fn(),
     requestStopAfterMeasure: jest.fn(),
   };
@@ -272,6 +273,19 @@ describe("pre-rendered playback reliability", () => {
       nextBoundaryWallClockTimeMillis: mockSparseStartWallClock + 250,
     }));
     mockSparseStop.mockResolvedValue({ status: "stopped" });
+  });
+
+  it("installs visual clock alignment for web startup only", () => {
+    (Platform as unknown as { OS: string }).OS = "web";
+    const engine = makeEngine();
+    const { result, unmount } = renderHook(() => useAudioPipeline(makePipelineParams(engine) as any));
+    const snapshot = createAudioToneSnapshot({ volume: 0.75, defaultSoundSet: "classic" });
+    act(() => { result.current.setActiveAudioToneSnapshot(snapshot); });
+    expect(engine.setVisualTimingProvider).toHaveBeenLastCalledWith(expect.any(Function));
+    (Platform as unknown as { OS: string }).OS = "ios";
+    act(() => { result.current.setActiveAudioToneSnapshot(snapshot); });
+    expect(engine.setVisualTimingProvider).toHaveBeenLastCalledWith(null);
+    unmount();
   });
 
   it("keeps active pool gain unchanged until an explicit snapshot replacement", () => {

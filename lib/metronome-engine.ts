@@ -168,6 +168,7 @@ export class MetronomeEngine {
   private barRepeats: Map<number, BarRepeatSpec> = new Map();
   private barBpmOverrides: Map<number, number> = new Map();
   private preRenderedAudio = false;
+  private visualTimingProvider: ((elapsedMs: number, durationMs: number, rendered: boolean) => number | null) | null = null;
   // 폴리곤 모드처럼 엔진 타이밍/콜백은 유지하면서 기본 클릭만 끌 때 사용한다.
   // bar-layer 클릭은 독립 채널이므로 이 플래그의 영향을 받지 않는다.
   private baseClickMuted = false;
@@ -233,6 +234,13 @@ export class MetronomeEngine {
 
   setAudioOffsetMs(offset: number) {
     this.audioOffsetMs = Math.max(-100, Math.min(100, offset));
+  }
+
+  /** Read-only visual alignment; never seek audio or change its scheduling epoch. */
+  setVisualTimingProvider(
+    provider: ((elapsedMs: number, durationMs: number, rendered: boolean) => number | null) | null,
+  ) {
+    this.visualTimingProvider = provider;
   }
 
   setPreRenderedAudio(enabled: boolean) {
@@ -1307,12 +1315,17 @@ export class MetronomeEngine {
   }
 
   private getElapsed(): number {
-    return performance.now() - this.measureStartTime;
+    const elapsed = performance.now() - this.measureStartTime;
+    // Callback-driven audio (e.g. Polygon/native) must not be delayed together
+    // with its visuals. Only independently clocked output can be compensated.
+    if (!this.preRenderedAudio && this.realtimeScheduledTicks.size === 0) return elapsed;
+    const aligned = this.visualTimingProvider?.(elapsed, this.measureDurationMs, this.preRenderedAudio);
+    return aligned !== null && aligned !== undefined && Number.isFinite(aligned) ? aligned : elapsed;
   }
 
   getMeasureElapsedMs(): number {
     if (!this.isRunning) return 0;
-    return performance.now() - this.measureStartTime;
+    return this.getElapsed();
   }
 
   getMeasureDurationMs(): number {
@@ -1358,8 +1371,8 @@ export class MetronomeEngine {
     }
 
     const now = performance.now();
-    const elapsed = now - this.measureStartTime;
     this.fillRealtimeAudioLookAhead(now);
+    const elapsed = this.getElapsed();
 
     // The last scheduled tick is an onset, not the end of the measure. A
     // finite playback must keep the scheduler alive until the true boundary
@@ -1430,14 +1443,12 @@ export class MetronomeEngine {
     const nextTick = this.schedule[this.scheduleIndex];
     if (!nextTick) {
       if (this.shouldStopAtMeasureBoundary()) {
-        const boundaryAt = this.measureStartTime + this.measureDurationMs;
-        const wait = Math.max(0, boundaryAt - performance.now());
+        const wait = Math.max(0, this.measureDurationMs - this.getElapsed());
         this.timerId = setTimeout(this.loop, wait);
       }
       return;
     }
-    const nextAbsolute = this.measureStartTime + nextTick.time;
-    const wait = nextAbsolute - performance.now();
+    const wait = nextTick.time - this.getElapsed();
 
     if (wait > 100) {
       this.timerId = setTimeout(this.loop, wait - 80);

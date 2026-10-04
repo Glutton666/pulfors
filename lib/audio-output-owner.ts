@@ -9,6 +9,7 @@ export type AudioOutputResource = {
   setVolume?: (volume: number, atAudioTime?: number) => void;
   isRunning?: () => boolean;
   getPositionSeconds?: () => number;
+  getPresentedPositionSeconds?: () => number;
   getNextBoundaryTime?: () => number;
   getDurationSeconds?: () => number;
   playAndConfirm?: (label?: string) => Promise<boolean>;

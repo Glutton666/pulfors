@@ -1,5 +1,6 @@
 import { getWebAudioContext, playWebRenderedLoop, scheduleWebClickAt, type ScheduledWebAudio, type WebRenderedLoop } from "./audio-renderer";
 import type { SampleChannel, MetroChannel } from "./stereo-channel";
+import { alignVisualElapsedToAudio, getWebAudioPresentationTime } from "./web-audio-timing";
 
 export type WebPCM = Float32Array | { left: Float32Array; right: Float32Array };
 
@@ -9,9 +10,25 @@ export interface WebOutputResource {
   isRunning?: () => boolean;
   setVolume?: (volume: number, atAudioTime?: number) => void;
   getPositionSeconds?: () => number;
+  getPresentedPositionSeconds?: () => number;
   getNextBoundaryTime?: () => number;
   getDurationSeconds?: () => number;
   onEnded?: (listener: () => void) => void;
+}
+
+/** Read the current output dynamically, including after a boundary replacement. */
+export function createWebVisualTimingProvider(readPresentedPosition: () => number | undefined) {
+  return (elapsedMs: number, durationMs: number, rendered: boolean): number | null => {
+    const ctx = getWebAudioContext();
+    if (!ctx || ctx.state !== "running") return null;
+    if (rendered) {
+      const position = readPresentedPosition();
+      return position !== undefined
+        ? alignVisualElapsedToAudio(elapsedMs, position * 1000, durationMs)
+        : null;
+    }
+    return elapsedMs - (ctx.currentTime - getWebAudioPresentationTime(ctx)) * 1000;
+  };
 }
 
 /** Adapter around Web Audio output primitives. No resource is retained globally. */
@@ -71,6 +88,7 @@ export function createWebAudioOutput() {
       isRunning: () => loop.isRunning(),
       setVolume: loop.setVolume,
       getPositionSeconds: loop.getPositionSeconds,
+      getPresentedPositionSeconds: loop.getPresentedPositionSeconds,
       getNextBoundaryTime: loop.getNextBoundaryTime,
       getDurationSeconds: loop.getDurationSeconds,
       onEnded: (listener) => { endedListeners.add(listener); },

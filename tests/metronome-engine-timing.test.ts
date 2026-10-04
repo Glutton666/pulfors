@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import { MetronomeEngine } from "../lib/metronome-engine";
+import { alignVisualElapsedToAudio } from "../lib/web-audio-timing";
 
 type EngineInternals = {
   measureStartTime: number;
@@ -75,6 +76,104 @@ test("measureStartTime: 비정수 BPM 장시간 rollover도 callback 지연을 �
     }
     assert.equal(internals.measureStartTime, anchor + 10000 * duration);
     e.stop();
+  });
+});
+
+test("rendered beat indicators wait for the audible first beat and follow its clock", () => {
+  withFakeNow(1000, (advance) => {
+    const e = new MetronomeEngine();
+    e.setBpm(120);
+    e.setBeatsPerMeasure(4);
+    e.buildScheduleOnly();
+    e.setPreRenderedAudio(true);
+    let presentedMs = -80;
+    e.setVisualTimingProvider((wall, duration) =>
+      alignVisualElapsedToAudio(wall, presentedMs, duration));
+    const beats: number[] = [];
+    e.setOnBeat((beat) => { beats.push(beat); });
+    e.start();
+    const internals = e as unknown as EngineInternals;
+    assert.deepEqual(beats, []);
+    advance(80);
+    presentedMs = 0;
+    internals.loop();
+    assert.deepEqual(beats, [0]);
+    advance(500);
+    presentedMs = 500;
+    internals.loop();
+    assert.deepEqual(beats, [0, 1]);
+    assert.equal(e.getMeasureElapsedMs(), 500);
+    // A stalled UI catches up without seeking sound or dropping the current beat.
+    advance(800);
+    presentedMs = 1300;
+    internals.loop();
+    assert.deepEqual(beats, [0, 1, 2]);
+    advance(200);
+    presentedMs = 1500;
+    internals.loop();
+    assert.deepEqual(beats, [0, 1, 2, 3]);
+    advance(500);
+    presentedMs = 2000;
+    internals.loop();
+    assert.deepEqual(beats, [0, 1, 2, 3, 0]);
+    e.stop();
+  });
+});
+
+test("web realtime audio keeps its original deadlines while visuals wait for output", () => {
+  withFakeNow(1000, (advance) => {
+    const e = new MetronomeEngine();
+    e.setBpm(120);
+    const reserved: number[] = [];
+    const beats: number[] = [];
+    e.setRealtimeAudioScheduler((_tick, at) => { reserved.push(at); return true; });
+    e.setVisualTimingProvider((elapsed) => elapsed - 80);
+    e.setOnBeat((beat) => { beats.push(beat); });
+    e.start();
+    const internals = e as unknown as EngineInternals;
+    assert.deepEqual(reserved, [1000]);
+    assert.deepEqual(beats, []);
+    advance(80);
+    internals.loop();
+    assert.deepEqual(beats, [0]);
+    advance(340);
+    internals.loop();
+    assert.deepEqual(reserved, [1000, 1500]);
+    assert.deepEqual(beats, [0]);
+    advance(160);
+    internals.loop();
+    assert.deepEqual(beats, [0, 1]);
+    e.stop();
+  });
+});
+
+test("callback-driven native or Polygon output does not delay both sound and visuals", () => {
+  withFakeNow(1000, () => {
+    const e = new MetronomeEngine();
+    let reads = 0;
+    e.setVisualTimingProvider((elapsed) => { reads += 1; return elapsed - 80; });
+    const beats: number[] = [];
+    e.setOnBeat((beat) => { beats.push(beat); });
+    e.start();
+    assert.deepEqual(beats, [0]);
+    assert.equal(reads, 0);
+    e.stop();
+  });
+});
+
+test("stopping before an audible scheduled beat does not publish a late visual", () => {
+  withFakeNow(1000, (advance) => {
+    const e = new MetronomeEngine();
+    e.buildScheduleOnly();
+    e.setPreRenderedAudio(true);
+    e.setVisualTimingProvider((elapsed) => elapsed - 100);
+    const beats: number[] = [];
+    e.setOnBeat((beat) => { beats.push(beat); });
+    e.start();
+    e.stop();
+    advance(500);
+    (e as unknown as EngineInternals).loop();
+    assert.deepEqual(beats, []);
   });
 });
 

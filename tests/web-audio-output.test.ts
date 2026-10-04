@@ -1,6 +1,6 @@
 const loopStops: jest.Mock[] = [];
 const renderedEnded: Array<() => void> = [];
-const context = { currentTime: 10, sampleRate: 48000 };
+const context = { currentTime: 10, sampleRate: 48000, state: "running", outputLatency: 0.08 };
 
 jest.mock("@/lib/audio-renderer", () => ({
   getWebAudioContext: jest.fn(() => context),
@@ -16,6 +16,7 @@ jest.mock("@/lib/audio-renderer", () => ({
       isRunning: () => true,
       setVolume: jest.fn(),
       getPositionSeconds: () => 0,
+      getPresentedPositionSeconds: () => -0.08,
       getNextBoundaryTime: () => 12,
       getDurationSeconds: () => 2,
     };
@@ -24,14 +25,29 @@ jest.mock("@/lib/audio-renderer", () => ({
 }));
 
 import { createAudioOutputOwner } from "@/lib/audio-output-owner";
-import { createWebAudioOutput } from "@/lib/web-audio-output";
+import { createWebAudioOutput, createWebVisualTimingProvider } from "@/lib/web-audio-output";
 
 describe("web audio output handoff", () => {
+  it("uses the latest output phase and leaves a suspended context uncorrected", () => {
+    let position = -0.08;
+    const timing = createWebVisualTimingProvider(() => position);
+    expect(timing(0, 2000, true)).toBeCloseTo(-80);
+    position = 0.5;
+    expect(timing(580, 2000, true)).toBeCloseTo(500);
+    expect(timing(80, 2000, false)).toBeCloseTo(0);
+    context.state = "suspended";
+    expect(timing(80, 2000, false)).toBeNull();
+  });
+  it("retains the audible presentation clock, including a future-start delay", () => {
+    const loop = createWebAudioOutput().rendered(new Float32Array([1]));
+    expect(loop.getPresentedPositionSeconds?.()).toBe(-0.08);
+  });
   beforeEach(() => {
     jest.useFakeTimers();
     loopStops.length = 0;
     renderedEnded.length = 0;
     context.currentTime = 10;
+    context.state = "running";
   });
 
   afterEach(() => {

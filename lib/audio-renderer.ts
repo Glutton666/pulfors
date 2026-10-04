@@ -5,6 +5,7 @@ import type { BeatType } from "./metronome-engine";
 import { logger } from "./logger";
 import { limitLinkedPCM } from "./metronome-tone-dsp";
 import type { SampleChannel, MetroChannel } from "./stereo-channel";
+import { getWebAudioPresentationTime } from "./web-audio-timing";
 
 const RENDER_SR = 44100;
 
@@ -1034,6 +1035,7 @@ export interface WebRenderedLoop {
   setVolume?: (volume: number, atAudioTime?: number) => void;
   getStartTime?: () => number;
   getPositionSeconds?: () => number;
+  getPresentedPositionSeconds?: () => number;
   getNextBoundaryTime?: () => number;
   getDurationSeconds?: () => number;
 }
@@ -1114,6 +1116,7 @@ export function playWebRenderedLoop(
     },
     getStartTime: () => startTime,
     getPositionSeconds: () => Math.max(0, ctx.currentTime - startTime),
+    getPresentedPositionSeconds: () => getWebAudioPresentationTime(ctx) - startTime,
     getDurationSeconds: () => durationSeconds,
     getNextBoundaryTime: () => {
       if (durationSeconds <= 0) return ctx.currentTime;

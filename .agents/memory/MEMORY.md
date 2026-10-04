@@ -80,3 +80,4 @@
 - [Native random-pass handoff](native-random-pass-handoff.md) — freeze the next visual/audio order before a native boundary; a late JS rollover cannot safely schedule the pass after the fact.
 - [웹·앱 공동 사용](web-app-parity.md) — 공통 화면·기능과 기존 주소 유지; 현재 계정·자동 동기화는 보류하고 수동 백업을 사용한다.
 - [Public web verification](public-web-verification.md) — 배포 성공 상태만으로 웹 앱 링크라고 안내하지 말고 실제 공개 응답을 확인한다.
+- [Web visual presentation clock](web-visual-presentation-clock.md) — align visuals to audible output, not render-ahead time; never move audio deadlines to fix a visual mismatch.

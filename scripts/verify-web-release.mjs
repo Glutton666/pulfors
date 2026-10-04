@@ -111,6 +111,28 @@ async function verifyBuiltAppInBrowser() {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
   const consoleErrors = [];
   const loadedScripts = [];
+  if (process.argv.includes("--audio-sync")) {
+    await page.addInitScript(() => {
+      const probe = { starts: 0, presentationReads: 0 };
+      window.__audioSyncProbe = probe;
+      const source = window.AudioBufferSourceNode?.prototype;
+      if (source) {
+        const start = source.start;
+        source.start = function (...args) {
+          probe.starts += 1;
+          return start.apply(this, args);
+        };
+      }
+      const context = window.AudioContext?.prototype;
+      if (context?.getOutputTimestamp) {
+        const timestamp = context.getOutputTimestamp;
+        context.getOutputTimestamp = function (...args) {
+          probe.presentationReads += 1;
+          return timestamp.apply(this, args);
+        };
+      }
+    });
+  }
 
   page.on("console", (message) => {
     if (message.type() === "error") {
@@ -143,6 +165,20 @@ async function verifyBuiltAppInBrowser() {
     }
     if (process.argv.includes("--screenshot")) {
       await page.screenshot({ path: path.join(tmpdir(), "pulfors-built-web.jpg") });
+    }
+    if (process.argv.includes("--audio-sync")) {
+      await page.locator('[data-testid="play-button"]').click();
+      await page.waitForFunction(() =>
+        window.__audioSyncProbe.starts >= 4 && window.__audioSyncProbe.presentationReads >= 10,
+      undefined, { timeout: 10_000 });
+      await page.locator('[data-testid="play-button"]').click();
+      await page.waitForTimeout(200);
+      const stoppedStarts = await page.evaluate(() => window.__audioSyncProbe.starts);
+      await page.waitForTimeout(350);
+      if (await page.evaluate(() => window.__audioSyncProbe.starts) !== stoppedStarts) {
+        throw new Error("Web audio continued scheduling clicks after stop.");
+      }
+      console.log("Web audio sync smoke passed: playback reads output timestamps, and stop cancels scheduling.");
     }
     // Global settings retain Profile; mode-specific settings intentionally don't.
     await page.locator('[data-testid="mode-cycle-label"]').click();
