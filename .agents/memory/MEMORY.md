@@ -57,7 +57,7 @@
 - [Native dense-pattern playback](native-dense-pattern-playback.md) — native Beat playback is rendered-first; async per-tick seek/play can reorder accent and normal output.
 - [Metronome boost path](metronome-boost-path.md) — volumes above unity and XY tone shaping require pre-rendered PCM; realtime is only the neutral ≤100% path.
 - [RN Web ScrollView parent sizing](rn-web-scrollview-parent-sizing.md) — a bounded card is insufficient; the ScrollView's direct parent also needs flex:1/minHeight:0 or short screens cannot scroll.
-- [Deployment npm peer resolution](deployment-npm-peer-resolution.md) — publishing installs with npm even when yarn.lock is canonical; direct optional peers must still form a resolvable npm graph.
+- [Deployment npm compatibility](deployment-npm-peer-resolution.md) — publishing ignores Yarn-only resolutions; verify fresh npm peers and parent-pinned security dependencies.
 - [Scheduled playback ownership](scheduled-playback-ownership.md) — preloaded starts need token ownership; modal unmount cleanup must use a latest-callback ref.
 - [Expo web static image URLs](expo-web-static-image-urls.md) — RN Image.resolveAssetSource is unavailable on web; use Expo asset metadata and Metro's unstable_path URL for CSS masks.
 - [Microphone lifecycle test harness](microphone-lifecycle-test-harness.md) — compare Web Audio resource counts to a pre-test baseline; native component tests need RN FlatList and KeyboardAvoidingView stubs.
