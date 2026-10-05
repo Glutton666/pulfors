@@ -19,6 +19,7 @@ import * as Haptics from "expo-haptics";
 import type { FlashMode, HapticMode, SoundSet, BuiltinSoundSet, SoundRole, CustomSoundSetConfig } from "@/lib/storage";
 import type { BarRandomConfig } from "@/lib/bar-random-session";
 import type { TonePosition } from "@/lib/metronome-tone-dsp";
+import type { PrepareTonePreview } from "@/hooks/useTonePreview";
 import { SoundPreviewPlayers, type SoundPreviewHandle } from "./settings/SoundPreviewPlayers";
 import { SettingsThemeTab } from "./settings/SettingsThemeTab";
 import { SettingsSoundTab } from "./settings/SettingsSoundTab";
@@ -46,6 +47,7 @@ interface SettingsModalProps {
   onSoundSetChange: (value: SoundSet) => void;
   tonePosition: TonePosition;
   onTonePositionChange: (value: TonePosition) => void;
+  prepareTonePreview: PrepareTonePreview;
   layerSoundSets: Record<number, SoundSet>;
   onLayerSoundSetsChange: (value: Record<number, SoundSet>) => void;
   flashMode: FlashMode;
@@ -112,6 +114,7 @@ export function SettingsModal({
   soundSet,
   onSoundSetChange,
   tonePosition,
+  prepareTonePreview,
   onTonePositionChange,
   layerSoundSets,
   onLayerSoundSetsChange,
@@ -449,6 +452,8 @@ export function SettingsModal({
         <SoundPreviewPlayers
           ref={soundPreviewRef}
           customSoundSets={customSoundSets}
+          prepareTonePreview={prepareTonePreview}
+          toneIdentity={JSON.stringify([soundSet, tonePosition, volume, customSoundSets])}
         />
       )}
     </AnimatedModal>

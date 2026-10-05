@@ -123,6 +123,34 @@ function buildParams(): UseSettingsParams {
   };
 }
 
+test("both tone axes survive sound-set and Beat/Bar/Note profile transitions", async () => {
+  const { loadSettings } = require("@/lib/storage");
+  loadSettings.mockResolvedValueOnce({
+    bpm: 120, beatsPerMeasure: 4, subdivisions: 1,
+    modeSettings: {
+      beat: { volume: 0.7, soundSet: "classic", soundSetTonePositions: { classic: { x: -0.8, y: -0.6 }, woodblock: { x: 0.7, y: 0.4 } } },
+      bar: { volume: 0.6, soundSet: "classic", soundSetTonePositions: { classic: { x: 0.5, y: -0.9 } } },
+      note: { volume: 0.5, soundSet: "classic", soundSetTonePositions: { classic: { x: -0.3, y: 0.8 } } },
+    },
+  });
+  const params = buildParams();
+  const hook = renderHook(({ mode }: { mode: "beat" | "bar" | "note" }) => useSettings({ ...params, mode }), {
+    initialProps: { mode: "beat" },
+  });
+  await waitFor(() => expect(hook.result.current.tonePosition).toEqual({ x: -0.8, y: -0.6 }));
+  act(() => hook.result.current.updateSoundSet("woodblock"));
+  expect(params.tonePositionRef.current).toEqual({ x: 0.7, y: 0.4 });
+  act(() => hook.result.current.updateSoundSet("classic"));
+  act(() => hook.result.current.updateTonePosition({ x: -0.9, y: 0.9 }));
+  hook.rerender({ mode: "bar" });
+  await waitFor(() => expect(hook.result.current.tonePosition).toEqual({ x: 0.5, y: -0.9 }));
+  hook.rerender({ mode: "note" });
+  await waitFor(() => expect(hook.result.current.tonePosition).toEqual({ x: -0.3, y: 0.8 }));
+  hook.rerender({ mode: "beat" });
+  await waitFor(() => expect(hook.result.current.tonePosition).toEqual({ x: -0.9, y: 0.9 }));
+  expect(params.tonePositionRef.current).toEqual({ x: -0.9, y: 0.9 });
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Tests
 // ─────────────────────────────────────────────────────────────────────────────

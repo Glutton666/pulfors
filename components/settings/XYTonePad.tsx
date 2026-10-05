@@ -1,4 +1,4 @@
-import React, { useCallback, useRef } from "react";
+import React, { useCallback, useEffect, useRef } from "react";
 import {
   PanResponder,
   Platform,
@@ -45,8 +45,16 @@ export function XYTonePad({
   const widthRef = useRef(0);
   const heightRef = useRef(0);
   const onChangeRef = useRef(onTonePositionChange);
-  const lastTapRef = useRef(0);
+  const padRef = useRef<View>(null);
+  const lastTapRef = useRef<{ time: number; x: number; y: number } | null>(null);
+  const gestureRef = useRef<{ time: number; x: number; y: number; moved: boolean; localX: number; localY: number } | null>(null);
+  const webCleanupRef = useRef<(() => void) | null>(null);
   onChangeRef.current = onTonePositionChange;
+
+  useEffect(() => () => {
+    webCleanupRef.current?.();
+    gestureRef.current = null;
+  }, []);
 
   const emitPosition = useCallback((x: number, y: number) => {
     if (!Number.isFinite(x) || !Number.isFinite(y)) return;
@@ -65,16 +73,22 @@ export function XYTonePad({
     emitPosition((localX / width) * 2 - 1, (localY / height) * 2 - 1);
   }, [emitPosition]);
 
-  const handleTap = useCallback((localX: number, localY: number) => {
-    const now = Date.now();
-    if (now - lastTapRef.current < 300) {
-      lastTapRef.current = 0;
-      emitPosition(0, 0);
+  const finishGesture = useCallback((cancelled = false) => {
+    const gesture = gestureRef.current;
+    gestureRef.current = null;
+    if (!gesture || cancelled || gesture.moved || Date.now() - gesture.time > 300) {
+      lastTapRef.current = null;
       return;
     }
-    lastTapRef.current = now;
-    updateFromLocalPoint(localX, localY);
-  }, [emitPosition, updateFromLocalPoint]);
+    const last = lastTapRef.current;
+    const now = Date.now();
+    if (last && now - last.time < 300 && Math.hypot(last.x - gesture.x, last.y - gesture.y) <= 20) {
+      lastTapRef.current = null;
+      emitPosition(0, 0);
+    } else {
+      lastTapRef.current = { time: now, x: gesture.x, y: gesture.y };
+    }
+  }, [emitPosition]);
 
   const panResponder = useRef(
     PanResponder.create({
@@ -82,27 +96,41 @@ export function XYTonePad({
       onMoveShouldSetPanResponder: () => true,
       onPanResponderGrant: (event) => {
         const { locationX, locationY, pageX, pageY } = event.nativeEvent;
-        handleTap(
-          Number.isFinite(locationX) ? locationX : pageX,
-          Number.isFinite(locationY) ? locationY : pageY,
-        );
+        const gesture = { time: Date.now(), x: pageX, y: pageY, moved: false, localX: locationX, localY: locationY };
+        gestureRef.current = gesture;
+        if (Number.isFinite(locationX) && Number.isFinite(locationY)) {
+          updateFromLocalPoint(locationX, locationY);
+        } else {
+          // Absolute page coordinates are not local coordinates.
+          padRef.current?.measureInWindow((left, top) => {
+            if (gestureRef.current !== gesture) return;
+            gesture.localX = pageX - left;
+            gesture.localY = pageY - top;
+            updateFromLocalPoint(gesture.localX, gesture.localY);
+          });
+        }
       },
-      onPanResponderMove: (event) => {
-        const { locationX, locationY, pageX, pageY } = event.nativeEvent;
-        updateFromLocalPoint(
-          Number.isFinite(locationX) ? locationX : pageX,
-          Number.isFinite(locationY) ? locationY : pageY,
-        );
+      onPanResponderMove: (_event, state) => {
+        const gesture = gestureRef.current;
+        if (!gesture) return;
+        if (Math.hypot(state.dx, state.dy) > 8) gesture.moved = true;
+        // Child targets can change locationX/Y; use displacement from grant.
+        updateFromLocalPoint(gesture.localX + state.dx, gesture.localY + state.dy);
       },
-      onPanResponderRelease: () => {},
-      onPanResponderTerminate: () => {},
+      onPanResponderRelease: () => finishGesture(),
+      onPanResponderTerminate: () => finishGesture(true),
     }),
   ).current;
 
-  const handleWebMouseDown = useCallback((event: any) => {
+  const handleWebPointerDown = useCallback((event: any) => {
     if (Platform.OS !== "web") return;
+    if (event.button !== undefined && event.button !== 0) return;
+    if (event.isPrimary === false) return;
+    webCleanupRef.current?.();
+    event.preventDefault();
     const element = event.currentTarget as HTMLElement;
     const rect = element.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return;
     const updateFromClientPoint = (clientX: number, clientY: number) => {
       emitPosition(
         ((clientX - rect.left) / rect.width) * 2 - 1,
@@ -110,24 +138,37 @@ export function XYTonePad({
       );
     };
 
-    const now = Date.now();
-    if (now - lastTapRef.current < 300) {
-      lastTapRef.current = 0;
-      emitPosition(0, 0);
-      return;
-    }
-    lastTapRef.current = now;
-    updateFromClientPoint(event.nativeEvent.clientX, event.nativeEvent.clientY);
-    const handleMouseMove = (moveEvent: MouseEvent) => {
+    const pointerId = event.pointerId;
+    const gesture = { time: Date.now(), x: event.clientX, y: event.clientY, moved: false, localX: 0, localY: 0 };
+    gestureRef.current = gesture;
+    updateFromClientPoint(event.clientX, event.clientY);
+    const handlePointerMove = (moveEvent: PointerEvent) => {
+      if (moveEvent.pointerId !== pointerId) return;
+      if (Math.hypot(moveEvent.clientX - gesture.x, moveEvent.clientY - gesture.y) > 8) gesture.moved = true;
       updateFromClientPoint(moveEvent.clientX, moveEvent.clientY);
     };
-    const handleMouseUp = () => {
-      document.removeEventListener("mousemove", handleMouseMove);
-      document.removeEventListener("mouseup", handleMouseUp);
+    const cleanup = () => {
+      document.removeEventListener("pointermove", handlePointerMove);
+      document.removeEventListener("pointerup", handlePointerUp);
+      document.removeEventListener("pointercancel", handlePointerCancel);
+      webCleanupRef.current = null;
     };
-    document.addEventListener("mousemove", handleMouseMove);
-    document.addEventListener("mouseup", handleMouseUp);
-  }, [emitPosition]);
+    const handlePointerUp = (upEvent: PointerEvent) => {
+      if (upEvent.pointerId !== pointerId) return;
+      handlePointerMove(upEvent);
+      finishGesture();
+      cleanup();
+    };
+    const handlePointerCancel = (cancelEvent: PointerEvent) => {
+      if (cancelEvent.pointerId !== pointerId) return;
+      finishGesture(true);
+      cleanup();
+    };
+    webCleanupRef.current = cleanup;
+    document.addEventListener("pointermove", handlePointerMove);
+    document.addEventListener("pointerup", handlePointerUp);
+    document.addEventListener("pointercancel", handlePointerCancel);
+  }, [emitPosition, finishGesture]);
 
   const x = normalize(tonePosition.x);
   const y = normalize(tonePosition.y);
@@ -144,6 +185,7 @@ export function XYTonePad({
     <View style={styles.container} testID="xy-tone-pad">
       <Text style={[styles.title, { color: C.text }]}>{labels.title}</Text>
       <View
+        ref={padRef}
         testID="xy-tone-pad-control"
         style={[
           styles.pad,
@@ -151,13 +193,21 @@ export function XYTonePad({
             backgroundColor: C.surfaceLight,
             borderColor: C.border,
           },
+          Platform.OS === "web" ? { touchAction: "none" } as any : undefined,
         ]}
         onLayout={(event) => {
           widthRef.current = event.nativeEvent.layout.width;
           heightRef.current = event.nativeEvent.layout.height;
         }}
         {...(Platform.OS !== "web" ? panResponder.panHandlers : {})}
-        {...(Platform.OS === "web" ? { onMouseDown: handleWebMouseDown } as any : {})}
+        {...(Platform.OS === "web" ? {
+          onPointerDown: handleWebPointerDown,
+          role: "slider",
+          "aria-valuemin": -1,
+          "aria-valuemax": 1,
+          "aria-valuenow": y,
+          "aria-valuetext": `x ${x.toFixed(2)}, y ${y.toFixed(2)}`,
+        } as any : {})}
         accessible
         accessibilityRole="adjustable"
         accessibilityLabel={labels.accessibilityLabel || labels.title}
@@ -223,7 +273,12 @@ export function XYTonePad({
           { borderColor: C.border, backgroundColor: C.overlay08 },
           pressed && { opacity: 0.7 },
         ]}
-        onPress={() => emitPosition(0, 0)}
+        onPress={() => {
+          webCleanupRef.current?.();
+          gestureRef.current = null;
+          lastTapRef.current = null;
+          emitPosition(0, 0);
+        }}
       >
         <Text style={[styles.resetText, { color: C.textSecondary }]}>{labels.reset}</Text>
       </Pressable>

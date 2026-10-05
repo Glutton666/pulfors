@@ -185,7 +185,7 @@ export function MetronomeScreenUI(props: Props) {
     flashOpacity, beatProgress, flashStyle, halfTimeFlashStyle, modeSlideStyle, fullScreenResetFlashStyle,
     currentMode, cycleToNextMode, switchToMode,
     completedGoalPopups, dismissGoalPopup,
-    getClickPCMs, recordAudioActivity, captureAudioToneSnapshot,
+    getClickPCMs, recordAudioActivity, captureAudioToneSnapshot, prepareTonePreview,
     polygonOnBeatRef,
     scheduleReRender, stopRenderedAudio, clearSamplePlayStates, resetPlaybackVisuals,
     notifyVoicePlayState, persistSettings, persistStatus, noteSamplePersistStatus,
@@ -1030,6 +1030,7 @@ export function MetronomeScreenUI(props: Props) {
           if (!playbackEditsLocked) updateVolume(value);
         }}
         tonePosition={tonePosition}
+        prepareTonePreview={prepareTonePreview}
         onTonePositionChange={(value) => {
           if (!playbackEditsLocked) updateTonePosition(value);
         }}

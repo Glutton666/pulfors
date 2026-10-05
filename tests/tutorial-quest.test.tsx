@@ -182,6 +182,7 @@ const settingsProps = (overrides: Record<string, unknown> = {}) => ({
   soundSet: "classic" as const,
   onSoundSetChange: jest.fn(),
   tonePosition: { x: 0, y: 0 },
+    prepareTonePreview: jest.fn(),
   onTonePositionChange: jest.fn(),
   layerSoundSets: {},
   onLayerSoundSetsChange: jest.fn(),

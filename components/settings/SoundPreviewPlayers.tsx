@@ -1,9 +1,10 @@
-import React, { useRef, useImperativeHandle } from "react";
+import React, { useRef, useImperativeHandle, useEffect, useState } from "react";
 import { useAudioPlayer, createAudioPlayer, type AudioPlayer as ExpoAudioPlayer } from "expo-audio";
 import type { SoundSet, BuiltinSoundSet, SoundRole, CustomSoundSetConfig } from "@/lib/storage";
 import { soundSets } from "@/lib/metronome-engine";
 import { safePlay } from "@/lib/audio-utils";
 import { logger } from "@/lib/logger";
+import { useTonePreview, type PrepareTonePreview } from "@/hooks/useTonePreview";
 
 export interface SoundPreviewHandle {
   playSoundPreview: (set: SoundSet) => void;
@@ -13,10 +14,20 @@ export interface SoundPreviewHandle {
 
 interface SoundPreviewPlayersProps {
   customSoundSets: Record<string, CustomSoundSetConfig>;
+  prepareTonePreview: PrepareTonePreview;
+  toneIdentity: string;
 }
 
 export const SoundPreviewPlayers = React.forwardRef<SoundPreviewHandle, SoundPreviewPlayersProps>(
-  function SoundPreviewPlayers({ customSoundSets }, ref) {
+  function SoundPreviewPlayers({ customSoundSets, prepareTonePreview, toneIdentity }, ref) {
+    const tonePreview = useTonePreview(prepareTonePreview, toneIdentity);
+    const [previewRequest, setPreviewRequest] = useState<{ set: SoundSet; role: number } | null>(null);
+    useEffect(() => {
+      // Sound selection and preview happen in the same event. Start only after
+      // that selection commits, so identity invalidation cannot cancel the
+      // new preview or leave it using the outgoing sound's position.
+      if (previewRequest) void tonePreview.play(previewRequest.set, previewRequest.role);
+    }, [previewRequest, tonePreview.play]);
     const classicStrong = useAudioPlayer(soundSets.classic.strong);
     const classicHigh = useAudioPlayer(soundSets.classic.high);
     const classicLow = useAudioPlayer(soundSets.classic.low);
@@ -72,34 +83,8 @@ export const SoundPreviewPlayers = React.forwardRef<SoundPreviewHandle, SoundPre
     useImperativeHandle(ref, () => ({
       playSoundPreview(set: SoundSet) {
         const idx = previewIndexRef.current[set] ?? 0;
-        let list = players[set];
-        if (!list) {
-          const cfg = customSoundSets[set];
-          if (cfg) {
-            const samples = [cfg.strong, cfg.accent, cfg.normal];
-            const sample = samples[idx % 3];
-            if (sample.type === "custom" && sample.sampleUri) {
-              void this.playCustomSampleUri(sample.sampleUri, sample.duration);
-              previewIndexRef.current[set] = (idx + 1) % 3;
-              return;
-            }
-            const srcSet = sample.sourceSet || "classic";
-            const srcRole = sample.sourceRole || "strong";
-            list = players[srcSet];
-            if (list) {
-              const roleIdx = srcRole === "strong" ? 0 : srcRole === "high" ? 1 : 2;
-              try { list[roleIdx].seekTo(0); } catch {}
-              safePlay(list[roleIdx], "settings.previewSample.custom");
-              previewIndexRef.current[set] = (idx + 1) % 3;
-              return;
-            }
-          }
-          list = players.classic;
-        }
-        if (!list) return;
-        const player = list[idx];
-        try { player.seekTo(0); } catch {}
-        safePlay(player, "settings.previewSample.builtin");
+        tonePreview.unlock();
+        setPreviewRequest({ set, role: idx });
         previewIndexRef.current[set] = (idx + 1) % 3;
       },
       previewCustomSample(sourceSet: BuiltinSoundSet, sourceRole: SoundRole) {

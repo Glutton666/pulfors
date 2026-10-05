@@ -74,26 +74,25 @@ export function sanitizeTonePosition(position?: Partial<TonePosition> | null): T
  *                 |
  *              low (+y)
  *
- * Each active axis contributes in proportion to its distance from the centre.
- * This keeps pure directions focused on one sound and blends both axes on
- * diagonal positions. Processing treats NEUTRAL specially, so the fallback
- * centre weights do not add coloration.
+ * Each axis has its own smooth intensity. These are effect amounts, not
+ * normalized mixing shares: moving vertically must not weaken the horizontal
+ * setting (or vice versa). Neutral has no active effects.
  */
 export function mapTonePositionToWeights(position?: TonePosition | null): ToneWeights {
   const p = sanitizeTonePosition(position);
-  const horizontalDistance = Math.abs(p.x);
-  const verticalDistance = Math.abs(p.y);
-  const totalDistance = horizontalDistance + verticalDistance;
-  if (totalDistance === 0) {
-    return { attack: 0.25, high: 0.25, resonance: 0.25, low: 0.25 };
-  }
-
   return {
-    attack: Math.max(0, -p.x) / totalDistance,
-    high: Math.max(0, -p.y) / totalDistance,
-    resonance: Math.max(0, p.x) / totalDistance,
-    low: Math.max(0, p.y) / totalDistance,
+    attack: axisEffectIntensity(Math.max(0, -p.x)),
+    high: axisEffectIntensity(Math.max(0, -p.y)),
+    resonance: axisEffectIntensity(Math.max(0, p.x)),
+    low: axisEffectIntensity(Math.max(0, p.y)),
   };
+}
+
+function axisEffectIntensity(distance: number): number {
+  const deadZone = 0.05;
+  if (distance <= deadZone) return 0;
+  const t = Math.min(1, (distance - deadZone) / (1 - deadZone));
+  return t * t * (3 - 2 * t);
 }
 
 /**
@@ -104,10 +103,7 @@ export function mapTonePositionToWeights(position?: TonePosition | null): ToneWe
 export function toneEffectIntensity(position?: TonePosition | null): number {
   const p = sanitizeTonePosition(position);
   const distance = Math.max(Math.abs(p.x), Math.abs(p.y));
-  const deadZone = 0.05;
-  if (distance <= deadZone) return 0;
-  const t = Math.min(1, (distance - deadZone) / (1 - deadZone));
-  return t * t * (3 - 2 * t);
+  return axisEffectIntensity(distance);
 }
 
 function isStereo(pcm: ClickPCM): pcm is StereoPCM {
@@ -208,7 +204,6 @@ function processChannel(
   source: Float32Array,
   weights: ToneWeights,
   sampleRate: number,
-  intensity: number,
 ): Float32Array {
   const tailSamples = Math.round(sampleRate * 0.075);
   const out = new Float32Array(source.length + tailSamples);
@@ -229,16 +224,12 @@ function processChannel(
 
   for (let i = 0; i < out.length; i++) {
     const input = i < source.length && Number.isFinite(source[i]) ? source[i] : 0;
-    lowPass = (1 - lowAlpha) * input + lowAlpha * lowPass;
-    const highPass = input - lowPass;
-
-    // Each corner is a complete, deliberately distinct voicing. Interpolating
-    // between the four outputs is more audible than adding small EQ offsets to
-    // the same dry click.
+    // Horizontal controls temporal character; vertical controls the spectrum
+    // of that result, including resonance tails. Serial composition preserves
+    // both settings on diagonals instead of averaging two complete voicings.
+    // A bypassed axis is exactly unity, retaining the existing cardinal sound.
     const attackEnvelope = Math.exp(-i / (sampleRate * 0.0018));
     const attackShape = input * (0.12 + 3.4 * attackEnvelope);
-    const highShape = 3 * highPass + 0.08 * lowPass;
-    const lowShape = 2.4 * lowPass + 0.08 * highPass;
 
     const resonator = resonanceFeedback * previousResonator
       - resonanceRadius * resonanceRadius * previousResonator2
@@ -246,11 +237,16 @@ function processChannel(
     previousResonator2 = previousResonator;
     previousResonator = Number.isFinite(resonator) ? resonator : 0;
     const resonanceShape = 0.35 * input + 8 * previousResonator;
-    const blended = weights.attack * attackShape
-      + weights.high * highShape
-      + weights.resonance * resonanceShape
-      + weights.low * lowShape;
-    const value = input + intensity * (blended - input);
+    const horizontal = input
+      + weights.attack * (attackShape - input)
+      + weights.resonance * (resonanceShape - input);
+    lowPass = (1 - lowAlpha) * horizontal + lowAlpha * lowPass;
+    const highPass = horizontal - lowPass;
+    const highShape = 3 * highPass + 0.08 * lowPass;
+    const lowShape = 2.4 * lowPass + 0.08 * highPass;
+    const value = horizontal
+      + weights.high * (highShape - horizontal)
+      + weights.low * (lowShape - horizontal);
     out[i] = Number.isFinite(value) ? value : 0;
   }
   return out;
@@ -306,9 +302,9 @@ export function processClickPCM(
   if (intensity === 0) return limitLinkedPCM(pcm, parsed.ceiling);
   const shaped: ClickPCM = isStereo(pcm)
     ? {
-        left: processChannel(pcm.left, weights, parsed.sampleRate, intensity),
-        right: processChannel(pcm.right, weights, parsed.sampleRate, intensity),
+        left: processChannel(pcm.left, weights, parsed.sampleRate),
+        right: processChannel(pcm.right, weights, parsed.sampleRate),
       }
-    : processChannel(pcm, weights, parsed.sampleRate, intensity);
+    : processChannel(pcm, weights, parsed.sampleRate);
   return limitLinkedPCM(shaped, parsed.ceiling);
 }

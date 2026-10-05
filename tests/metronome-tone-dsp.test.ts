@@ -17,18 +17,18 @@ test("sanitizeTonePosition clamps coordinates and treats non-finite values as ne
   assert.deepEqual(sanitizeTonePosition(undefined), NEUTRAL);
 });
 
-test("sound-fader directions map to cardinal weights and sum to one", () => {
+test("sound-fader directions have independent effect amounts, not shared mixing weights", () => {
   assert.deepEqual(mapTonePositionToWeights({ x: -1, y: -1 }), {
-    attack: 0.5,
-    high: 0.5,
+    attack: 1,
+    high: 1,
     resonance: 0,
     low: 0,
   });
   assert.deepEqual(mapTonePositionToWeights({ x: 1, y: 1 }), {
     attack: 0,
     high: 0,
-    resonance: 0.5,
-    low: 0.5,
+    resonance: 1,
+    low: 1,
   });
   assert.deepEqual(mapTonePositionToWeights({ x: -1, y: 0 }), {
     attack: 1,
@@ -56,13 +56,12 @@ test("sound-fader directions map to cardinal weights and sum to one", () => {
   });
   assert.deepEqual(mapTonePositionToWeights({ x: 0.25, y: -0.75 }), {
     attack: 0,
-    high: 0.75,
-    resonance: 0.25,
+    high: toneEffectIntensity({ x: 0, y: -0.75 }),
+    resonance: toneEffectIntensity({ x: 0.25, y: 0 }),
     low: 0,
   });
   const middle = mapTonePositionToWeights({ x: 0, y: 0 });
-  assert.deepEqual(middle, { attack: 0.25, high: 0.25, resonance: 0.25, low: 0.25 });
-  assert.equal(Object.values(middle).reduce((a, b) => a + b, 0), 1);
+  assert.deepEqual(middle, { attack: 0, high: 0, resonance: 0, low: 0 });
 });
 
 test("neutral processing bypasses finite PCM exactly when no limiting is needed", () => {
@@ -193,6 +192,10 @@ test("every bundled metronome click remains finite, audible, limited, and direct
       processClickPCM(source, { x: 0, y: -1 }) as Float32Array,
       processClickPCM(source, { x: 1, y: 0 }) as Float32Array,
       processClickPCM(source, { x: 0, y: 1 }) as Float32Array,
+      processClickPCM(source, { x: -1, y: -1 }) as Float32Array,
+      processClickPCM(source, { x: -1, y: 1 }) as Float32Array,
+      processClickPCM(source, { x: 1, y: -1 }) as Float32Array,
+      processClickPCM(source, { x: 1, y: 1 }) as Float32Array,
     ];
     for (const output of outputs) {
       assert.ok(Array.from(output).every(Number.isFinite), `${filename} contains non-finite output`);

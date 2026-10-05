@@ -545,7 +545,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
         const trimmed = trimPCM({ pcm: raw, trimStartSamples: 0, trimLenSamples: raw.length }, cfg.duration);
         return trimmed.pcm;
       };
-      const key = `click:${set}:${JSON.stringify(customCfg)}:${JSON.stringify(snapshot)}`;
+      const key = `click:${set}:independent-axes:${JSON.stringify(customCfg)}:${JSON.stringify(snapshot)}`;
       return getClickPCM(key, async (preparationSignal) => {
         const [strong, high, low] = await Promise.all([
           loadSample(customCfg.strong, preparationSignal),
@@ -556,7 +556,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
       }, signal);
     }
     const src = soundSets[set as keyof typeof soundSets] || soundSets.classic;
-    const key = `click:${set}:${JSON.stringify(snapshot)}`;
+    const key = `click:${set}:independent-axes:${JSON.stringify(snapshot)}`;
     return getClickPCM(key, async (preparationSignal) => {
       const [strong, high, low] = await Promise.all([
         getDecodedPCM(`raw:asset:${String(src.strong)}`, loadSignal => loadPCM({ kind: "asset", source: src.strong }, loadSignal), preparationSignal),

@@ -7,6 +7,7 @@ import {
   type BarSymbolShortcut,
 } from "@/hooks/useKeyboardShortcuts";
 import { useAudioPipeline } from "@/hooks/useAudioPipeline";
+import { useTonePreview, usePrepareTonePreview } from "@/hooks/useTonePreview";
 import { useSettings } from "@/hooks/useSettings";
 import {
   View,
@@ -159,7 +160,6 @@ import {
   playWebRenderedLoop,
   getWebAudioContext,
   installAudioPlayInterruptHandler,
-  previewClickOnWeb,
 } from "@/lib/audio-renderer";
 import { syncStereoArtifact } from "@/lib/sample-cache";
 import { invalidatePCMCache } from "@/lib/pcm-cache";
@@ -1629,24 +1629,22 @@ export function useMetronomeScreen() {
   // persistSnapshotRef / persistSettings / updateVolume / updateSampleVolume /
   // updateSoundSet → useSettings 소유 (위에서 destructure된 persistSettings 사용)
 
+  const prepareTonePreview = usePrepareTonePreview(getClickPCMs, captureAudioToneSnapshot);
+  const soundSetPreview = useTonePreview(
+    prepareTonePreview,
+    JSON.stringify([soundSet, soundSetTonePositions, volume, customSoundSets, isPlaying, coreMode]),
+  );
+  const [soundSetPreviewRequest, setSoundSetPreviewRequest] = useState<{ key: string } | null>(null);
+  useEffect(() => {
+    if (soundSetPreviewRequest && !engineRef.current?.getIsRunning()) {
+      void soundSetPreview.play(soundSetPreviewRequest.key, 0);
+    }
+  }, [soundSetPreviewRequest, soundSetPreview.play]);
   const previewSoundSet = useCallback((key: string) => {
     if (engineRef.current?.getIsRunning()) return;
-    if (Platform.OS === "web") {
-      const soundSetDef = soundSets[key as keyof typeof soundSets];
-      if (soundSetDef) {
-        previewClickOnWeb(key, soundSetDef.strong).catch(() => {});
-      }
-    } else {
-      const customCfg = customSoundSetsRef.current[key];
-      const builtinKey: string = (customCfg?.strong?.sourceSet ?? key) || "classic";
-      const pool = (allPlayersRef.current as any)[builtinKey] || allPlayersRef.current.classic;
-      if (pool?.strongA) {
-        pool.strongA.seekTo(0).then(() => {
-          safePlay(pool.strongA, "preview.soundset");
-        }).catch(() => {});
-      }
-    }
-  }, []);
+    soundSetPreview.unlock();
+    setSoundSetPreviewRequest({ key });
+  }, [soundSetPreview.unlock]);
 
   // updateFlashMode / updateHapticMode / updateAudioOffset → useSettings 소유
 
@@ -4192,6 +4190,7 @@ export function useMetronomeScreen() {
     dismissGoalPopup,
     // Audio helpers used inline in JSX
     getClickPCMs,
+    prepareTonePreview,
     recordAudioActivity,
     captureAudioToneSnapshot,
     polygonOnBeatRef,
