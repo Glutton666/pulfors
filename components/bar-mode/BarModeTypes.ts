@@ -50,6 +50,7 @@ export const SYMBOL_INFO: Record<
 
 export const SOUND_SET_OPTIONS: { key: string; labelKey: BarModeViewKey }[] = [
   { key: "classic",   labelKey: "ssClassic" },
+  { key: "tempo",     labelKey: "ssTempo" },
   { key: "woodblock", labelKey: "ssWoodblock" },
   { key: "cowbell",   labelKey: "ssCowbell" },
   { key: "digital",   labelKey: "ssDigital" },

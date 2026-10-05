@@ -7,7 +7,7 @@ import {
   type BarSymbolShortcut,
 } from "@/hooks/useKeyboardShortcuts";
 import { useAudioPipeline } from "@/hooks/useAudioPipeline";
-import { useTonePreview, usePrepareTonePreview } from "@/hooks/useTonePreview";
+import { useSoundSetPreview } from "@/hooks/useSoundSetPreview";
 import { useSettings } from "@/hooks/useSettings";
 import {
   View,
@@ -568,6 +568,9 @@ export function useMetronomeScreen() {
     volume, setVolume,
     sampleVolume, setSampleVolume,
     soundSet, setSoundSet, tonePosition, soundSetTonePositions, setSoundSetTonePositions,
+    voiceCountLanguage, voiceCountLanguageRef, updateVoiceCountLanguage,
+    soundSetOverlays, soundSetOverlaysRef, updateSoundSetOverlays,
+    resetSoundEnhancements,
     layerSoundSets, setLayerSoundSets, layerSoundSetsRef,
     flashMode, setFlashMode, flashModeRef,
     hapticMode, setHapticMode,
@@ -703,6 +706,7 @@ export function useMetronomeScreen() {
     layerSoundSetsRef, noteSamplesRef, noteSampleChannelsRef, noteSampleVolumesRef, noteSampleSpeedsRef, barModeRef,
     barMetronomeChannelRef, noteSampleMetroChannelsRef, volumeRef, sampleVolumeRef,
     webClickReadyRef, noteSampleSoundsRef, tonePositionRef, tonePositionsRef,
+    soundSetOverlaysRef, voiceCountLanguageRef,
     isPlayingRef, isPreparingRef, bpmRef, t, showRecoveryToast, persistAudioSettingsCallbackRef,
     fatalRenderFailureRef,
   });
@@ -1601,9 +1605,10 @@ export function useMetronomeScreen() {
     });
 
     engine.setOnScheduleRebuild(() => {
-      if (isSparsePlaybackActive()) return;
+      if (isSparsePlaybackActive() || polygonOnBeatRef.current) return;
       stopRenderedAudio();
-      if (Platform.OS === "web") {
+      if (Platform.OS === "web" || voiceCountLanguageRef.current !== "off"
+        || Object.keys(soundSetOverlaysRef.current).length > 0) {
         // A random pass or failed/replaced schedule must not leave the previous
         // PCM loop owning output. Hand audio to the look-ahead fallback now;
         // the debounced render can reclaim ownership at a later boundary.
@@ -1629,22 +1634,10 @@ export function useMetronomeScreen() {
   // persistSnapshotRef / persistSettings / updateVolume / updateSampleVolume /
   // updateSoundSet → useSettings 소유 (위에서 destructure된 persistSettings 사용)
 
-  const prepareTonePreview = usePrepareTonePreview(getClickPCMs, captureAudioToneSnapshot);
-  const soundSetPreview = useTonePreview(
-    prepareTonePreview,
-    JSON.stringify([soundSet, soundSetTonePositions, volume, customSoundSets, isPlaying, coreMode]),
+  const { prepareTonePreview, previewSoundSet } = useSoundSetPreview(
+    getClickPCMs, captureAudioToneSnapshot, engineRef,
+    JSON.stringify([soundSet, soundSetTonePositions, soundSetOverlays, volume, customSoundSets, isPlaying, coreMode]),
   );
-  const [soundSetPreviewRequest, setSoundSetPreviewRequest] = useState<{ key: string } | null>(null);
-  useEffect(() => {
-    if (soundSetPreviewRequest && !engineRef.current?.getIsRunning()) {
-      void soundSetPreview.play(soundSetPreviewRequest.key, 0);
-    }
-  }, [soundSetPreviewRequest, soundSetPreview.play]);
-  const previewSoundSet = useCallback((key: string) => {
-    if (engineRef.current?.getIsRunning()) return;
-    soundSetPreview.unlock();
-    setSoundSetPreviewRequest({ key });
-  }, [soundSetPreview.unlock]);
 
   // updateFlashMode / updateHapticMode / updateAudioOffset → useSettings 소유
 
@@ -1717,6 +1710,7 @@ export function useMetronomeScreen() {
       setSubdivisionPattern(["accent"]);
       setBeatSubdivisions({});
       setSoundSetTonePositions({});
+      resetSoundEnhancements();
       tonePositionRef.current = { ...NEUTRAL };
       tonePositionsRef.current = {};
       invalidatePCMCache();
@@ -3979,6 +3973,7 @@ export function useMetronomeScreen() {
     updateVolume,
     tonePosition,
     soundSetTonePositions,
+    voiceCountLanguage, updateVoiceCountLanguage, soundSetOverlays, updateSoundSetOverlays,
     updateTonePosition,
     sampleVolume,
     updateSampleVolume,

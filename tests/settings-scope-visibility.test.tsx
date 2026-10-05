@@ -1,6 +1,6 @@
 /** @jest-environment jsdom */
 import React from "react";
-import { cleanup, render } from "@testing-library/react";
+import { cleanup, fireEvent, render } from "@testing-library/react";
 
 import { SettingsThemeTab } from "@/components/settings/SettingsThemeTab";
 import { SettingsSoundTab } from "@/components/settings/SettingsSoundTab";
@@ -187,6 +187,23 @@ describe("theme settings scope visibility", () => {
 });
 
 describe("sound settings scope visibility", () => {
+  test("every existing built-in plus Tempo remains selectable with its own overlay edit control", () => {
+    const choose = jest.fn();
+    const view = render(<SettingsSoundTab scope="global" {...soundProps} onSoundSetChange={choose} />);
+    // Explicit historical catalog: deriving this expectation from the UI's
+    // own list would let a future catalog reduction silently pass.
+    const sets = ["classic", "woodblock", "cowbell", "digital", "jamblock",
+      "sine", "blip", "clave", "cajon", "marimba", "stick", "tempo"];
+    for (const set of sets) {
+      const row = view.getByTestId(`sound-set-row-${set}`);
+      expect((row as HTMLButtonElement).disabled).toBe(false);
+      expect((view.getByTestId(`sound-overlay-open-${set}`) as HTMLButtonElement).disabled).toBe(false);
+      fireEvent.click(row);
+      expect(choose).toHaveBeenLastCalledWith(set);
+    }
+    expect(choose).toHaveBeenCalledTimes(sets.length);
+  });
+
   test("built-in volume displays a 0-100% range without boost messaging", () => {
     const view = render(
       <SettingsSoundTab scope="global" {...soundProps} volume={1.5} />,

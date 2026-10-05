@@ -27,7 +27,7 @@ jest.mock("expo-audio", () => ({
 }));
 jest.mock("@/lib/metronome-engine", () => ({
   soundSets: Object.fromEntries(
-    ["classic", "woodblock", "cowbell", "digital", "jamblock", "sine", "blip", "clave", "cajon", "marimba", "stick"]
+    ["classic", "tempo", "woodblock", "cowbell", "digital", "jamblock", "sine", "blip", "clave", "cajon", "marimba", "stick"]
       .map(set => [set, { strong: 1, high: 2, low: 3 }]),
   ),
 }));

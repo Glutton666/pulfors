@@ -6,6 +6,7 @@ import { logger } from "./logger";
 import { limitLinkedPCM } from "./metronome-tone-dsp";
 import type { SampleChannel, MetroChannel } from "./stereo-channel";
 import { getWebAudioPresentationTime } from "./web-audio-timing";
+import { voiceCountEvent } from "./voice-count";
 
 const RENDER_SR = 44100;
 
@@ -433,6 +434,8 @@ export interface RenderMeasureParams {
   metronomeChannel?: SampleChannel;
   sampleChannels?: Record<string, SampleChannel>;
   layerClickPCMs?: Map<string, ClickPCMs>;
+  voiceCountPCMs?: ReadonlyMap<number, ClickPCMs>;
+  voiceCountLanguage?: import("./voice-count").VoiceCountLanguage;
   metroChannelsByBeat?: Record<string, MetroChannel>;
   shouldAbort?: () => boolean;
 }
@@ -452,6 +455,7 @@ export function renderMeasure(params: RenderMeasureParams): Float32Array | { lef
     layerClickPCMs,
     metroChannelsByBeat,
     shouldAbort,
+    voiceCountPCMs, voiceCountLanguage = "off",
   } = params;
   const stereoMode =
     metronomeChannel !== "both" ||
@@ -474,6 +478,7 @@ export function renderMeasure(params: RenderMeasureParams): Float32Array | { lef
     clickPCMs.high.length,
     clickPCMs.low.length,
     layerMaxClickLen,
+    ...Array.from(voiceCountPCMs?.values() ?? [], p => Math.max(p.strong.length, p.high.length, p.low.length)),
     Math.ceil(RENDER_SR * 0.15),
   );
   const totalSamples = loopSamples + maxClickLen;
@@ -525,6 +530,14 @@ export function renderMeasure(params: RenderMeasureParams): Float32Array | { lef
           } else {
             mixInto(left, clickPCM, offsetSamples, clickVolume, shouldAbort);
           }
+          const event = voiceCountEvent(tick, voiceCountLanguage);
+          if (event) {
+            const roles = voiceCountPCMs?.get(event.clip);
+            if (!roles) throw new Error(`Voice count PCM unavailable: ${voiceCountLanguage}/${event.clip}`);
+            const speech = roles[event.role];
+            if (right) mixToChannel(left, right, speech, offsetSamples, clickVolume, effectiveMetroChannel as SampleChannel);
+            else mixInto(left, speech, offsetSamples, clickVolume, shouldAbort);
+          }
         }
 
         if (tick.repeatIteration === 0 && tick.barRepeatIteration === 0) {
@@ -556,7 +569,7 @@ export function renderMeasure(params: RenderMeasureParams): Float32Array | { lef
   const finalize = (buf: Float32Array): Float32Array => {
     for (let i = loopSamples; i < totalSamples; i++) {
       if ((i & 8191) === 0 && shouldAbort?.()) throw new Error("EXPORT_ABORTED");
-      buf[i - loopSamples] += buf[i];
+      buf[(i - loopSamples) % loopSamples] += buf[i];
     }
     const out = buf.subarray(0, loopSamples);
     return out;
@@ -621,6 +634,7 @@ export async function renderMeasureAbortable(
     sampleChannels = {},
     layerClickPCMs,
     metroChannelsByBeat,
+    voiceCountPCMs, voiceCountLanguage = "off",
   } = params;
   await renderYield(signal);
   const stereoMode =
@@ -643,6 +657,7 @@ export async function renderMeasureAbortable(
     clickPCMs.high.length,
     clickPCMs.low.length,
     layerMaxClickLen,
+    ...Array.from(voiceCountPCMs?.values() ?? [], p => Math.max(p.strong.length, p.high.length, p.low.length)),
     Math.ceil(RENDER_SR * 0.15),
   );
   const totalSamples = loopSamples + maxClickLen;
@@ -693,6 +708,14 @@ export async function renderMeasureAbortable(
           } else {
             await mixIntoAbortable(left, clickPCM, offsetSamples, clickVolume, signal);
           }
+          const event = voiceCountEvent(tick, voiceCountLanguage);
+          if (event) {
+            const roles = voiceCountPCMs?.get(event.clip);
+            if (!roles) throw new Error(`Voice count PCM unavailable: ${voiceCountLanguage}/${event.clip}`);
+            const speech = roles[event.role];
+            if (right) await mixToChannel(left, right, speech, offsetSamples, clickVolume, effectiveMetroChannel as SampleChannel);
+            else await mixIntoAbortable(left, speech, offsetSamples, clickVolume, signal);
+          }
         }
         if (tick.repeatIteration === 0 && tick.barRepeatIteration === 0) {
           for (const key of [cellKey, `${cellKey}~1`, `${cellKey}~2`]) {
@@ -719,7 +742,7 @@ export async function renderMeasureAbortable(
     const chunkSize = 8192;
     for (let start = loopSamples; start < totalSamples; start += chunkSize) {
       const end = Math.min(start + chunkSize, totalSamples);
-      for (let i = start; i < end; i++) buffer[i - loopSamples] += buffer[i];
+      for (let i = start; i < end; i++) buffer[(i - loopSamples) % loopSamples] += buffer[i];
       await renderYield(signal);
     }
     const out = buffer.subarray(0, loopSamples);

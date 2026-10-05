@@ -13,6 +13,7 @@ export type TripleOption = { value: TripleValue; label: string };
 export function getSoundSetOptions(t: TranslationFn): SoundSetOption[] {
   return [
     { value: "classic", label: t("soundSets", "classic"), icon: "music-note" },
+    { value: "tempo", label: t("soundSets", "tempo"), icon: "metronome" },
     { value: "woodblock", label: t("soundSets", "woodblock"), icon: "music-box" },
     { value: "digital", label: t("soundSets", "digital"), icon: "sine-wave" },
     { value: "jamblock", label: t("soundSets", "jamblock"), icon: "music-circle-outline" },

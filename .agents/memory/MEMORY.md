@@ -12,7 +12,7 @@
 - [Gesture flows resist Playwright e2e](gesture-flows-resist-e2e.md) — swipe-up-to-add-bar + long-press-to-open-recorder chained together reliably stall the testing subagent; verify via TS compile + unit tests + manual trace instead of forcing e2e.
 - [Expo Go orphaned EAS projectId](expo-go-orphaned-eas-project-id.md) — unused `extra.eas.projectId`/`updates.url` in app.json makes Expo Go demand manifest code-signing, hanging or failing dev connections; just delete them if EAS/expo-updates isn't used.
 - [Metronome beat accent is a single source of truth](metronome-beat-accent-single-source.md) — `defaultBeatTypes` alone drives both audio role and dial color; the engine already maps strong/accent/normal to distinct sounds, so meter-grouping fixes belong there, not in the engine.
-- [Jest pre-existing failures unrelated to change](jest-preexisting-failures.md) — ~12 suites (46 tests) fail in this repo's Jest run as a stable baseline (was ~22 before expo/virtual/env.js stub was added); not a regression signal.
+- [Jest baseline verification](jest-preexisting-failures.md) — historical failures are not a permanent baseline; verify current evidence before dismissing a failure.
 - [Jest stub __esModule for import * as](jest-stub-esmodule.md) — stubs used with `import * as Foo` must set `stub.__esModule = true` or Babel copies them frozen at import time, making test-time mutations invisible.
 - [Jest notification dynamic import](jest-notification-dynamic-import.md) — Jest's CJS runner cannot execute expo-notifications dynamic imports; preserve its require fallback for notification unit tests.
 - [Plain Node i18n import test](i18n-node-import-test.md) — parallel Jest startup can make an isolated tsx import intermittently empty; parse an explicit marker and retry the subprocess briefly.
@@ -84,3 +84,4 @@
 - [Dense subdivision visuals](dense-subdivision-visuals.md) — isolate per-slot display updates, sample latest position at the frame, and expire pulses within their slot.
 - [원형 서브디비전 그림 해석](circular-writing-reference.md) — 사용자가 확정한 두 번째 그림은 ANANANANS 9개이며, 마지막 S는 시작점이 아니다.
 - [Nix WebKit runtime](nix-webkit-runtime.md) — ldconfig checks, overwritten library paths and mixed soup plugins can fail before the app; Linux WebKit is not device Safari.
+- [Metronome count language](metronome-count-language.md) — 한국어 지정 발음·끝자리 규칙, 영어 전체 숫자, 오프라인 음성과 독립 합성 범위를 유지한다.

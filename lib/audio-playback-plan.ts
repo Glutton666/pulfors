@@ -207,13 +207,15 @@ function outputFor(input: MetronomeInputBase, mode: "beat" | "bar" | "note"): Pl
     input.audio.soundSet,
     ...Object.values(input.audio.layerSoundSets),
   ]);
+  const enhanced = input.audio.tone.voiceCountLanguage && input.audio.tone.voiceCountLanguage !== "off"
+    || [...relevantSoundSets].some(set => !!input.audio.tone.overlays?.[set as SoundSet]);
   const toneShaped = [...relevantSoundSets].some(
     (soundSet) => readAudioToneSnapshot(input.audio.tone, soundSet).active,
   );
   const boosted = input.audio.tone.boosted;
   const strategy: PlaybackOutputStrategy = input.platform === "native"
     || (input.platform === "web"
-      && (mode === "bar" || String(input.audio.soundSet).startsWith("custom") || boosted || toneShaped))
+      && (mode === "bar" || String(input.audio.soundSet).startsWith("custom") || boosted || toneShaped || enhanced))
     ? "prerender"
     : "realtime";
   return { strategy, boosted, toneShaped };

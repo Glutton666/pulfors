@@ -55,6 +55,9 @@ import {
   type AudioToneSnapshot,
 } from "@/lib/audio-tone-snapshot";
 import type { MetronomePlaybackPlan } from "@/lib/audio-playback-plan";
+import { mixOverlayPCM, overlaySoundSet, type SoundSetOverlays } from "@/lib/sound-overlays";
+import { prepareVoiceCountPCMs } from "@/lib/voice-count-assets";
+import type { VoiceCountLanguage } from "@/lib/voice-count";
 import { useAudioPlayers } from "@/hooks/useAudioPlayers";
 import type { BuiltinPlayers } from "@/hooks/useAudioPlayers";
 import {
@@ -102,6 +105,8 @@ export interface UseAudioPipelineParams {
   volumeRef: React.MutableRefObject<number>;
   tonePositionRef?: React.MutableRefObject<TonePosition>;
   tonePositionsRef?: React.MutableRefObject<Partial<Record<SoundSet, TonePosition>>>;
+  soundSetOverlaysRef?: React.MutableRefObject<SoundSetOverlays>;
+  voiceCountLanguageRef?: React.MutableRefObject<VoiceCountLanguage>;
   sampleVolumeRef: React.MutableRefObject<number>;
   /** Web click-ready flag — created in useMetronomeScreen, shared with useSettings. */
   webClickReadyRef: React.MutableRefObject<boolean>;
@@ -178,6 +183,7 @@ export interface UseAudioPipelineResult {
     signal?: AbortSignal,
     toneSnapshot?: AudioToneSnapshot,
     customConfigOverride?: Readonly<CustomSoundSetConfig> | null,
+    customSetsSnapshot?: Readonly<Record<string, Readonly<CustomSoundSetConfig>>>,
   ) => Promise<ClickPCMs>;
   getSamplePCMs: (samples: NoteSampleMap, signal?: AbortSignal) => Promise<Map<string, SamplePCMEntry>>;
   getLayerClickPCMsForSchedule: (
@@ -225,7 +231,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
   const {
     engineRef, soundSet, volume, customSoundSetsRef,
     layerSoundSetsRef, noteSamplesRef, noteSampleChannelsRef, noteSampleVolumesRef, noteSampleSpeedsRef, barModeRef,
-    barMetronomeChannelRef, noteSampleMetroChannelsRef, volumeRef, sampleVolumeRef, tonePositionRef, tonePositionsRef,
+    barMetronomeChannelRef, noteSampleMetroChannelsRef, volumeRef, sampleVolumeRef, tonePositionRef, tonePositionsRef, soundSetOverlaysRef, voiceCountLanguageRef,
     isPlayingRef, isPreparingRef, bpmRef, t, showRecoveryToast, persistAudioSettingsCallbackRef,
     fatalRenderFailureRef,
   } = params;
@@ -258,7 +264,9 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
     defaultSoundSet: soundSetRef.current,
     defaultPosition: tonePositionRef?.current,
     positions: tonePositionsRef?.current,
-  }), [soundSetRef, tonePositionRef, tonePositionsRef, volumeRef]);
+    overlays: soundSetOverlaysRef?.current,
+    voiceCountLanguage: voiceCountLanguageRef?.current,
+  }), [soundSetRef, tonePositionRef, tonePositionsRef, volumeRef, soundSetOverlaysRef, voiceCountLanguageRef]);
   const setActiveAudioToneSnapshot = useCallback((snapshot: AudioToneSnapshot) => {
     activeToneSnapshotRef.current = snapshot;
     setPoolsVolume(snapshot.realtimeGain);
@@ -497,7 +505,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
   }, []);
 
 
-  const getClickPCMs = useCallback(async (
+  const getBaseClickPCMs = useCallback(async (
     set: SoundSet,
     signal?: AbortSignal,
     toneSnapshot?: AudioToneSnapshot,
@@ -566,6 +574,31 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
       return { strong: shape(strong), high: shape(high), low: shape(low) };
     }, signal);
   }, [customSoundSetsRef, soundSetRef, tonePositionRef, tonePositionsRef, trimPCM, volumeRef]);
+
+  const getClickPCMs = useCallback(async (
+    set: SoundSet, signal?: AbortSignal, toneSnapshot?: AudioToneSnapshot,
+    customConfigOverride?: Readonly<CustomSoundSetConfig> | null,
+    customSetsSnapshot?: Readonly<Record<string, Readonly<CustomSoundSetConfig>>>,
+  ): Promise<ClickPCMs> => {
+    const tone = toneSnapshot ?? captureAudioToneSnapshot();
+    const extra = overlaySoundSet(tone.overlays, set);
+    if (!extra) return getBaseClickPCMs(set, signal, tone, customConfigOverride);
+    const customSets = customSetsSnapshot ?? customSoundSetsRef.current;
+    const extraConfig = customSets[extra] ?? null;
+    const baseConfig = customConfigOverride === undefined ? customSets[set] ?? null : customConfigOverride;
+    const key = `click:${set}:overlay:${extra}:${JSON.stringify([tone, baseConfig, extraConfig])}`;
+    return getClickPCM(key, async preparationSignal => {
+      const [base, secondary] = await Promise.all([
+        getBaseClickPCMs(set, preparationSignal, tone, baseConfig),
+        getBaseClickPCMs(extra, preparationSignal, tone, extraConfig),
+      ]);
+      return {
+        strong: mixOverlayPCM(base.strong, secondary.strong),
+        high: mixOverlayPCM(base.high, secondary.high),
+        low: mixOverlayPCM(base.low, secondary.low),
+      };
+    }, signal);
+  }, [captureAudioToneSnapshot, customSoundSetsRef, getBaseClickPCMs]);
 
   // Warm only decoded/shaped PCM. Playback-owned WebAudio buffers are created
   // later at the explicit playback-start boundary.
@@ -664,6 +697,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
         signal,
         snapshot?.tone,
         snapshot ? snapshot.customSoundSets[ss] ?? null : undefined,
+        snapshot?.customSoundSets,
       );
       loaded.set(ss, pcms);
     }));
@@ -718,12 +752,13 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
       };
       const scheduleInfo = engine.getScheduleInfo();
       const ticks = scheduleInfo.ticks as TickInfo[];
-      const [clickPCMs, layerClickPCMs, samplePCMs] = await Promise.all([
+      const [clickPCMs, layerClickPCMs, samplePCMs, voiceCountPCMs] = await Promise.all([
         getClickPCMs(
           audio.soundSet,
           signal,
           audio.tone,
           plan ? audio.customSoundSets[audio.soundSet] ?? null : undefined,
+          audio.customSoundSets,
         ),
         getLayerClickPCMsForSchedule(ticks, signal, plan ? {
           defaultSoundSet: audio.soundSet,
@@ -732,6 +767,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
           customSoundSets: audio.customSoundSets,
         } : undefined),
         getSamplePCMs(audio.noteSamples, signal),
+        prepareVoiceCountPCMs(ticks, audio.tone.voiceCountLanguage, signal),
       ]);
       if (!session.isCurrent()) return session.interruption();
       await new Promise(r => setTimeout(r, 0));
@@ -751,6 +787,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
           ? plan.mode === "bar" ? audio.noteSampleMetroChannels : undefined
           : barModeRef.current ? audio.noteSampleMetroChannels : undefined,
         layerClickPCMs,
+        voiceCountPCMs, voiceCountLanguage: audio.tone.voiceCountLanguage,
       }, signal);
       const wavUri = await saveRenderedWav(
         pcm,
@@ -845,6 +882,8 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
         !String(soundSetRef.current).startsWith("custom") &&
         !toneSnapshot.boosted &&
         !toneSnapshot.toneShaped &&
+        (!toneSnapshot.voiceCountLanguage || toneSnapshot.voiceCountLanguage === "off") &&
+        ![soundSetRef.current, ...Object.values(layerSoundSetsRef.current)].some(set => overlaySoundSet(toneSnapshot.overlays, set)) &&
         Platform.OS === "web";
       if (realtimeBeatMode) {
         stopRenderedAudio();
@@ -859,7 +898,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
         try {
           const scheduleInfo = engine.getScheduleInfo();
           const ticks = scheduleInfo.ticks as TickInfo[];
-          const [clickPCMs, layerClickPCMs, samplePCMs] = await Promise.all([
+          const [clickPCMs, layerClickPCMs, samplePCMs, voiceCountPCMs] = await Promise.all([
             getClickPCMs(soundSetRef.current, signal, toneSnapshot),
             getLayerClickPCMsForSchedule(ticks, signal, {
               defaultSoundSet: soundSetRef.current,
@@ -868,6 +907,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
               customSoundSets: customSoundSetsRef.current,
             }),
             getSamplePCMs(noteSamplesRef.current, signal),
+            prepareVoiceCountPCMs(ticks, toneSnapshot.voiceCountLanguage, signal),
           ]);
           if (!session.isCurrent()) return;
           if (!engine.getIsRunning()) {
@@ -887,6 +927,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
             metronomeChannel: barModeRef.current ? barMetronomeChannelRef.current : "both",
             metroChannelsByBeat: barModeRef.current ? noteSampleMetroChannelsRef.current : undefined,
             layerClickPCMs,
+            voiceCountPCMs, voiceCountLanguage: toneSnapshot.voiceCountLanguage,
           }, signal);
           if (!session.isCurrent()) return;
           if (!engine.getIsRunning()) {

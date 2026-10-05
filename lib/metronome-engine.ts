@@ -28,6 +28,11 @@ import {
 } from "./metronome-engine-pure";
 
 export const soundSets = {
+  tempo: {
+    high: require("@/assets/sounds/tempo-high.wav"),
+    low: require("@/assets/sounds/tempo-low.wav"),
+    strong: require("@/assets/sounds/tempo-strong.wav"),
+  },
   classic: {
     high: require("@/assets/sounds/click-high.wav"),
     low: require("@/assets/sounds/click-low.wav"),

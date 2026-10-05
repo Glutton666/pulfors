@@ -9,6 +9,7 @@ import {
   isRenderAborted,
 } from "@/lib/audio-renderer";
 import type { ClickPCMs, SamplePCMEntry, TickInfo } from "@/lib/audio-renderer";
+import { prepareVoiceCountPCMs } from "@/lib/voice-count-assets";
 import type { BeatType, MetronomeEngine } from "@/lib/metronome-engine";
 import type { BarConfig, DialConfig } from "@/lib/index.helpers";
 import type { CustomSoundSetConfig, PracticeEntry, SoundSet } from "@/lib/storage";
@@ -133,6 +134,7 @@ export interface UsePlaybackControlParams {
     signal?: AbortSignal,
     toneSnapshot?: AudioToneSnapshot,
     customConfigOverride?: Readonly<CustomSoundSetConfig> | null,
+    customSetsSnapshot?: Readonly<Record<string, Readonly<CustomSoundSetConfig>>>,
   ) => Promise<ClickPCMs>;
   getSamplePCMs: (samples: NoteSampleMap, signal?: AbortSignal) => Promise<Map<string, SamplePCMEntry>>;
   getLayerClickPCMsForSchedule: (
@@ -457,12 +459,13 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
       const scheduleInfo = engine.getScheduleInfo();
       const ticks = scheduleInfo.ticks as TickInfo[];
       readAudioToneSnapshot(plan.audio.tone, plan.audio.soundSet);
-      const [clickPCMs, layerClickPCMs, samplePCMs] = await Promise.all([
+      const [clickPCMs, layerClickPCMs, samplePCMs, voiceCountPCMs] = await Promise.all([
         p.getClickPCMs(
           plan.audio.soundSet,
           signal,
           plan.audio.tone,
           plan.audio.customSoundSets[plan.audio.soundSet] ?? null,
+          plan.audio.customSoundSets,
         ),
         p.getLayerClickPCMsForSchedule(ticks, signal, {
           defaultSoundSet: plan.audio.soundSet,
@@ -471,6 +474,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
           customSoundSets: plan.audio.customSoundSets,
         }),
         p.getSamplePCMs(plan.audio.noteSamples, signal),
+        prepareVoiceCountPCMs(ticks, plan.audio.tone.voiceCountLanguage, signal),
       ]);
       if (
         !session.isCurrent() ||
@@ -492,6 +496,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
         metronomeChannel: plan.audio.metronomeChannel,
         metroChannelsByBeat: plan.mode === "bar" ? plan.audio.noteSampleMetroChannels : undefined,
         layerClickPCMs,
+        voiceCountPCMs, voiceCountLanguage: plan.audio.tone.voiceCountLanguage,
       }, signal);
       const preparedPcm = session.complete(pcm, () => {});
       if (preparedPcm.status !== "completed") return preparedPcm;
@@ -652,6 +657,8 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
     const useSparseAndroid =
       Platform.OS === "android" &&
       (plan.mode === "beat" || plan.mode === "bar") &&
+      (!plan.audio.tone.voiceCountLanguage || plan.audio.tone.voiceCountLanguage === "off") &&
+      !Object.values(plan.audio.tone.overlays ?? {}).some(Boolean) &&
       process.env.EXPO_PUBLIC_ENABLE_ANDROID_SPARSE_AUDIO === "1";
     // Select notification ownership before any preparation/start await.
     // Failed starts must never leave the legacy MediaSession selected.

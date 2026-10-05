@@ -46,6 +46,10 @@ interface SettingsModalProps {
   soundSet: SoundSet;
   onSoundSetChange: (value: SoundSet) => void;
   tonePosition: TonePosition;
+  voiceCountLanguage?: import("@/lib/voice-count").VoiceCountLanguage;
+  onVoiceCountLanguageChange?: (value: import("@/lib/voice-count").VoiceCountLanguage) => void;
+  soundSetOverlays?: import("@/lib/sound-overlays").SoundSetOverlays;
+  onSoundSetOverlaysChange?: (value: import("@/lib/sound-overlays").SoundSetOverlays) => void;
   onTonePositionChange: (value: TonePosition) => void;
   prepareTonePreview: PrepareTonePreview;
   layerSoundSets: Record<number, SoundSet>;
@@ -114,6 +118,7 @@ export function SettingsModal({
   soundSet,
   onSoundSetChange,
   tonePosition,
+  voiceCountLanguage, onVoiceCountLanguageChange, soundSetOverlays, onSoundSetOverlaysChange,
   prepareTonePreview,
   onTonePositionChange,
   layerSoundSets,
@@ -297,6 +302,10 @@ export function SettingsModal({
             soundSet={soundSet}
             onSoundSetChange={onSoundSetChange}
             tonePosition={tonePosition}
+            voiceCountLanguage={voiceCountLanguage}
+            onVoiceCountLanguageChange={onVoiceCountLanguageChange}
+            soundSetOverlays={soundSetOverlays}
+            onSoundSetOverlaysChange={onSoundSetOverlaysChange}
             onTonePositionChange={onTonePositionChange}
             layerSoundSets={layerSoundSets}
             onLayerSoundSetsChange={onLayerSoundSetsChange}
@@ -453,7 +462,7 @@ export function SettingsModal({
           ref={soundPreviewRef}
           customSoundSets={customSoundSets}
           prepareTonePreview={prepareTonePreview}
-          toneIdentity={JSON.stringify([soundSet, tonePosition, volume, customSoundSets])}
+          toneIdentity={JSON.stringify([soundSet, tonePosition, soundSetOverlays, volume, customSoundSets])}
         />
       )}
     </AnimatedModal>

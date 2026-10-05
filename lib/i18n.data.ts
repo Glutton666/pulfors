@@ -229,6 +229,7 @@ export const translations = {
     off: { ko: "끄기", en: "Off" },
   },
   soundSets: {
+    tempo: { ko: "Tempo 스타일", en: "Tempo-inspired" },
     classic: { ko: "클래식", en: "Classic" },
     woodblock: { ko: "우드블럭", en: "Woodblock" },
     cowbell: { ko: "카우벨", en: "Cowbell" },
@@ -1069,6 +1070,7 @@ export const translations = {
     sampleBadge:        { ko: "샘플", en: "Sample" },
     sampleBadgeAccessibility: { ko: "바 {{n}}에 오디오 샘플 연결됨", en: "Audio sample attached to bar {{n}}" },
     ssClassic:          { ko: "클래식", en: "Classic" },
+    ssTempo:            { ko: "Tempo 스타일", en: "Tempo-inspired" },
     ssWoodblock:        { ko: "우드블록", en: "Woodblock" },
     ssCowbell:          { ko: "카우벨", en: "Cowbell" },
     ssDigital:          { ko: "디지털", en: "Digital" },

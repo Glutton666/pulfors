@@ -31,10 +31,10 @@ import { confirmDestructive } from "@/lib/confirm";
 import { logger } from "@/lib/logger";
 import { ensurePermission } from "@/lib/permissions";
 import { make_styles, make_csStyles } from "@/components/SettingsModal.styles";
-import { getSoundSetOptions } from "@/components/SettingsModal.helpers";
 import { HelpIcon } from "@/components/HelpIcon";
 import type { SettingsScope } from "@/components/SettingsModal";
 import { XYTonePad } from "@/components/settings/XYTonePad";
+import { SoundSetOverlayPicker, VoiceCountControl, type VoiceCountLanguage } from "@/components/settings/SoundSetExtras";
 import type { TonePosition } from "@/lib/metronome-tone-dsp";
 
 interface SettingsSoundTabProps {
@@ -47,6 +47,10 @@ interface SettingsSoundTabProps {
   onSampleVolumeChange: (volume: number) => void;
   soundSet: SoundSet;
   onSoundSetChange: (value: SoundSet) => void;
+  soundSetOverlays?: Partial<Record<SoundSet, SoundSet>>;
+  onSoundSetOverlaysChange?: (value: Partial<Record<SoundSet, SoundSet>>) => void;
+  voiceCountLanguage?: VoiceCountLanguage;
+  onVoiceCountLanguageChange?: (value: VoiceCountLanguage) => void;
   layerSoundSets: Record<number, SoundSet>;
   onLayerSoundSetsChange: (value: Record<number, SoundSet>) => void;
   customSoundSets: Record<string, CustomSoundSetConfig>;
@@ -76,6 +80,10 @@ export function SettingsSoundTab({
   onSampleVolumeChange,
   soundSet,
   onSoundSetChange,
+  soundSetOverlays = {},
+  onSoundSetOverlaysChange = () => {},
+  voiceCountLanguage = "off",
+  onVoiceCountLanguageChange = () => {},
   layerSoundSets,
   customSoundSets,
   onCustomSoundSetsChange,
@@ -97,7 +105,7 @@ export function SettingsSoundTab({
   const S = useScale();
   const styles = make_styles(C);
   const csStyles = make_csStyles(C);
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const isGlobal = scope === "global";
   const showsBarControls = scope === "bar";
   const handleTonePositionChange = useCallback((position: TonePosition) => {
@@ -122,6 +130,8 @@ export function SettingsSoundTab({
   const initialLayerCount = layerKeys.length > 0 ? Math.max(...layerKeys) : 1;
   const [layerSoundRowCount] = useState(initialLayerCount);
   const [editingCustomSlot, setEditingCustomSlot] = useState<string | null>(null);
+  const [overlayBase, setOverlayBase] = useState<SoundSet | null>(null);
+  const suppressSoundRowPressRef = useRef(false);
   const [customName, setCustomName] = useState("");
   const defaultSample = (role: SoundRole): CustomSoundSample => ({ type: "builtin", sourceSet: "classic", sourceRole: role, duration: 0.5 });
   const [customStrong, setCustomStrong] = useState<CustomSoundSample>(defaultSample("strong"));
@@ -334,11 +344,35 @@ export function SettingsSoundTab({
         delete updated[slot];
         onCustomSoundSetsChange(updated);
         saveCustomSoundSets(updated);
+        const nextOverlays = Object.fromEntries(
+          Object.entries(soundSetOverlays).filter(([base, overlay]) => base !== slot && overlay !== slot),
+        ) as Partial<Record<SoundSet, SoundSet>>;
+        onSoundSetOverlaysChange(nextOverlays);
         if (soundSet === slot) onSoundSetChange("classic");
         if (editingCustomSlot === slot) setEditingCustomSlot(null);
       },
     });
-  }, [customSoundSets, onCustomSoundSetsChange, soundSet, onSoundSetChange, editingCustomSlot, t]);
+  }, [customSoundSets, onCustomSoundSetsChange, soundSetOverlays, onSoundSetOverlaysChange, soundSet, onSoundSetChange, editingCustomSlot, t]);
+
+  const soundOptions = [
+    ...BUILTIN_SOUND_SETS.map(key => ({ key, label: t("soundSets", key as keyof typeof import("@/lib/i18n.data").translations.soundSets), isCustom: false })),
+    ...Object.entries(customSoundSets).map(([key, config]) => ({ key: key as SoundSet, label: config.name, isCustom: true })),
+  ];
+  const overlayPickerOptions = [
+    ...BUILTIN_SOUND_SETS.map(value => ({ value, label: t("soundSets", value as keyof typeof import("@/lib/i18n.data").translations.soundSets) })),
+    ...soundOptions.filter(option => option.isCustom).map(option => ({ value: option.key, label: option.label })),
+  ];
+  // Other bases may own their own links; the audio resolver reads only this
+  // direct edge and never recursively follows the selected extra's link.
+  const selectableOverlayOptions = overlayPickerOptions;
+  const updateOverlay = (base: SoundSet, overlay?: SoundSet) => {
+    const next = { ...soundSetOverlays };
+    if (overlay && overlay !== base) next[base] = overlay;
+    else delete next[base];
+    onSoundSetOverlaysChange(next);
+    setOverlayBase(null);
+  };
+  const overlayLabel = (key?: SoundSet) => key ? overlayPickerOptions.find(option => option.value === key)?.label ?? key : undefined;
 
   const getNextCustomSlot = useCallback((): string | null => {
     const slots = ["custom1", "custom2", "custom3"];
@@ -554,26 +588,53 @@ export function SettingsSoundTab({
 
         {!editingCustomSlot && (
           <View style={{ marginTop: Spacing.sm, gap: Spacing.xxs }}>
-            {[
-              ...BUILTIN_SOUND_SETS.map((key) => ({ key, label: t("soundSets", key as any), isCustom: false })),
-              ...Object.entries(customSoundSets).map(([k, cfg]) => ({ key: k, label: cfg.name, isCustom: true })),
-            ].map((opt) => {
+            {soundOptions.map((opt) => {
               const isMain = soundSet === opt.key;
+              const overlay = soundSetOverlays[opt.key];
               const usedInLayers = Object.entries(layerSoundSets)
                 .filter(([, v]) => v === opt.key)
                 .map(([k]) => Number(k))
                 .sort((a, b) => a - b);
               return (
-                <Pressable
+                <View
                   key={opt.key}
-                  style={{ flexDirection: "row", alignItems: "center", paddingVertical: 10, paddingHorizontal: 12, borderRadius: Radius.md, backgroundColor: isMain ? C.accentDim : C.overlay08, gap: Spacing.sm }}
-                  onPress={() => { onSoundSetChange(opt.key as any); playSoundPreview(opt.key as SoundSet); if (Platform.OS !== "web") Haptics.selectionAsync(); }}
+                  style={{ borderRadius: Radius.md, backgroundColor: isMain ? C.accentDim : C.overlay08, overflow: "hidden" }}
                 >
-                  <Ionicons name={isMain ? "checkmark-circle" : "ellipse-outline"} size={S.ms(16, 0.4)} color={isMain ? C.accent : C.textTertiary} />
-                  <Text style={{ flex: 1, color: isMain ? C.accent : C.text, fontSize: FontSize.small, fontFamily: "SpaceGrotesk_600SemiBold" }}>
-                    {opt.label}
-                  </Text>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.xs }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", minHeight: 46, paddingLeft: 12, paddingRight: 4, gap: Spacing.xs }}>
+                    <Pressable
+                      testID={`sound-set-row-${opt.key}`}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: isMain }}
+                      aria-pressed={isMain}
+                      onPressIn={() => { suppressSoundRowPressRef.current = false; }}
+                      onLongPress={() => {
+                        suppressSoundRowPressRef.current = true;
+                        setOverlayBase(opt.key);
+                      }}
+                      delayLongPress={450}
+                      onPress={() => {
+                        if (suppressSoundRowPressRef.current) {
+                          suppressSoundRowPressRef.current = false;
+                          return;
+                        }
+                        onSoundSetChange(opt.key);
+                        playSoundPreview(opt.key);
+                        if (Platform.OS !== "web") Haptics.selectionAsync();
+                      }}
+                      style={{ flex: 1, minHeight: 42, flexDirection: "row", alignItems: "center", gap: Spacing.sm }}
+                    >
+                      <Ionicons name={isMain ? "checkmark-circle" : "ellipse-outline"} size={S.ms(16, 0.4)} color={isMain ? C.accent : C.textTertiary} />
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        <Text numberOfLines={1} style={{ color: isMain ? C.accent : C.text, fontSize: FontSize.small, fontFamily: "SpaceGrotesk_600SemiBold" }}>
+                          {opt.label}
+                        </Text>
+                        {overlay ? (
+                          <Text numberOfLines={1} style={{ color: C.textSecondary, fontSize: 10, marginTop: 2 }}>
+                            + {overlayLabel(overlay)}
+                          </Text>
+                        ) : null}
+                      </View>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.xs }}>
                     {isMain && (
                       <View style={{ backgroundColor: C.accent, borderRadius: Radius.xs, paddingHorizontal: 6, paddingVertical: Spacing.xxs }}>
                         <Text style={{ color: onAccentColor(C.accent), fontSize: 9, fontFamily: "SpaceGrotesk_600SemiBold" }}>{t("settings", "soundSetMain")}</Text>
@@ -584,13 +645,35 @@ export function SettingsSoundTab({
                         <Text style={{ color: C.textSecondary, fontSize: 9 }}>{t("settings", "soundSetLayerBadge").replace("%s", String(ln))}</Text>
                       </View>
                     ))}
+                      </View>
+                    </Pressable>
+                    {overlay ? (
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={`Preview ${opt.label} with ${overlayLabel(overlay)}`}
+                        testID={`sound-overlay-preview-${opt.key}`}
+                        onPress={() => playSoundPreview(opt.key)}
+                        style={{ padding: 7 }}
+                      >
+                        <Ionicons name="play-circle-outline" size={S.ms(18, 0.4)} color={C.accent} />
+                      </Pressable>
+                    ) : null}
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`Edit extra click for ${opt.label}`}
+                      testID={`sound-overlay-open-${opt.key}`}
+                      onPress={() => setOverlayBase(opt.key)}
+                      style={{ padding: 7 }}
+                    >
+                      <Ionicons name="layers-outline" size={S.ms(16, 0.4)} color={overlay ? C.accent : C.textSecondary} />
+                    </Pressable>
                     {isGlobal && opt.isCustom && (
                       <Pressable hitSlop={8} onPress={() => openCustomEditor(opt.key)} style={{ padding: Spacing.xs }}>
                         <Ionicons name="pencil-outline" size={S.ms(14, 0.4)} color={C.textSecondary} />
                       </Pressable>
                     )}
                   </View>
-                </Pressable>
+                </View>
               );
             })}
 
@@ -825,6 +908,27 @@ export function SettingsSoundTab({
             </View>
           </View>
         )}
+        <View style={{ marginTop: Spacing.md, gap: Spacing.sm }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.sm }}>
+            <Ionicons name="chatbubble-ellipses-outline" size={S.ms(16, 0.4)} color={C.accent} />
+            <Text style={{ color: C.text, fontSize: FontSize.small, fontFamily: "SpaceGrotesk_600SemiBold", flex: 1 }}>
+              {language === "ko" ? "음성 카운트" : "Voice count"}
+            </Text>
+          </View>
+          <VoiceCountControl
+            value={voiceCountLanguage}
+            onChange={onVoiceCountLanguageChange}
+            language={language}
+          />
+        </View>
+        <SoundSetOverlayPicker
+          visible={overlayBase !== null}
+          base={overlayBase}
+          selected={overlayBase ? soundSetOverlays[overlayBase] : undefined}
+          options={selectableOverlayOptions}
+          onSelect={(value) => { if (overlayBase) updateOverlay(overlayBase, value); }}
+          onClose={() => setOverlayBase(null)}
+        />
       </View>
 
       <View style={[styles.divider, { backgroundColor: C.border }]} />

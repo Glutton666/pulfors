@@ -31,6 +31,9 @@ export const SoundPreviewPlayers = React.forwardRef<SoundPreviewHandle, SoundPre
     const classicStrong = useAudioPlayer(soundSets.classic.strong);
     const classicHigh = useAudioPlayer(soundSets.classic.high);
     const classicLow = useAudioPlayer(soundSets.classic.low);
+    const tempoStrong = useAudioPlayer(soundSets.tempo.strong);
+    const tempoHigh = useAudioPlayer(soundSets.tempo.high);
+    const tempoLow = useAudioPlayer(soundSets.tempo.low);
     const woodblockStrong = useAudioPlayer(soundSets.woodblock.strong);
     const woodblockHigh = useAudioPlayer(soundSets.woodblock.high);
     const woodblockLow = useAudioPlayer(soundSets.woodblock.low);
@@ -68,6 +71,7 @@ export const SoundPreviewPlayers = React.forwardRef<SoundPreviewHandle, SoundPre
     type PlayerList = typeof classicStrong[];
     const players: Partial<Record<string, PlayerList>> = {
       classic: [classicStrong, classicHigh, classicLow],
+      tempo: [tempoStrong, tempoHigh, tempoLow],
       woodblock: [woodblockStrong, woodblockHigh, woodblockLow],
       cowbell: [cowbellStrong, cowbellHigh, cowbellLow],
       digital: [digitalStrong, digitalHigh, digitalLow],

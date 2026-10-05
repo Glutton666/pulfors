@@ -8,3 +8,9 @@ In this Expo + Express project (frontend on port 8081, backend on port 5000), th
 **Why:** Wasted several retries assuming the app was down (502) when it was actually a tool/routing quirk unrelated to the app's health.
 
 **How to apply:** If `app_preview` screenshots show the "Download Expo Go" / QR code page instead of the real app, don't keep retrying the screenshot tool. Verify the app is actually up with `curl localhost:8081/`, then prefer `runTest()` (the Playwright e2e testing tool) for visual/behavioral verification — it reliably reaches the real app even when the screenshot tool doesn't.
+
+The testing-subagent configuration can be unavailable even when its skill is present: the runtime may reject `$kind: "testing"` as unknown. Use the project's local Playwright tests in that case, including iframe embedding for audio checks, rather than retrying the unsupported configuration.
+
+**Why:** The available skill text and the active runtime's supported subagent kinds can differ.
+
+**How to apply:** Treat a rejected configuration as an interface mismatch, not an app failure. Existing Playwright infrastructure can verify the same browser journey and save screenshots for inspection.

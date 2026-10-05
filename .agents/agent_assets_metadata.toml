@@ -6,3 +6,192 @@ id = "80Tsa_3l8_Xtw9y6lqFig"
 uri = "file://.local/prioritized-review-rerank.md"
 type = "text"
 title = "Pulfors 잔여 작업 단일 우선순위 (37개)"
+
+[[outputs]]
+id = "QgtQ4fvgU0MhoOjZDosvJ"
+uri = "file://attached_assets/generated_audio/count_ko_1.mp3"
+type = "audio"
+title = "metronome_ko_1"
+description = "Text-to-speech audio: 일."
+
+[[outputs]]
+id = "DCQhPNerAWQYNcdA7WJPA"
+uri = "file://attached_assets/generated_audio/count_ko_0.mp3"
+type = "audio"
+title = "metronome_ko_0"
+description = "Text-to-speech audio: 공."
+
+[[outputs]]
+id = "q0mbp9Dw4bmqMLvSJ125H"
+uri = "file://attached_assets/generated_audio/count_ko_3.mp3"
+type = "audio"
+title = "metronome_ko_3"
+description = "Text-to-speech audio: 삼."
+
+[[outputs]]
+id = "GZOYNqAw6xoa7H5K_B7wF"
+uri = "file://attached_assets/generated_audio/count_ko_4.mp3"
+type = "audio"
+title = "metronome_ko_4"
+description = "Text-to-speech audio: 넷."
+
+[[outputs]]
+id = "-IelfHG0r9ppcAcyRPeGJ"
+uri = "file://attached_assets/generated_audio/count_ko_5.mp3"
+type = "audio"
+title = "metronome_ko_5"
+description = "Text-to-speech audio: 오."
+
+[[outputs]]
+id = "Lye8KJZlxt1huf09OHYhN"
+uri = "file://attached_assets/generated_audio/count_ko_9.mp3"
+type = "audio"
+title = "metronome_ko_9"
+description = "Text-to-speech audio: 구."
+
+[[outputs]]
+id = "xb5irxeq0D-VQS_gycKOF"
+uri = "file://attached_assets/generated_audio/count_ko_6.mp3"
+type = "audio"
+title = "metronome_ko_6"
+description = "Text-to-speech audio: 육."
+
+[[outputs]]
+id = "LvmEl8YeXLt0-CYrjy588"
+uri = "file://attached_assets/generated_audio/count_ko_8.mp3"
+type = "audio"
+title = "metronome_ko_8"
+description = "Text-to-speech audio: 팔."
+
+[[outputs]]
+id = "ZZoXLQ8pt3rxep5zmFvc3"
+uri = "file://attached_assets/generated_audio/count_ko_7.mp3"
+type = "audio"
+title = "metronome_ko_7"
+description = "Text-to-speech audio: 칠."
+
+[[outputs]]
+id = "07-7_QoRKCsV_r9E_yi5R"
+uri = "file://attached_assets/generated_audio/count_ko_2.mp3"
+type = "audio"
+title = "metronome_ko_2"
+description = "Text-to-speech audio: 둘."
+
+[[outputs]]
+id = "yCT6stJbmA8tkyYJNn1Fr"
+uri = "file://attached_assets/generated_audio/count_en_1.mp3"
+type = "audio"
+title = "metronome_en_1"
+description = "Text-to-speech audio: one."
+
+[[outputs]]
+id = "A6UgthnXhK5dJpDNhcIYe"
+uri = "file://attached_assets/generated_audio/count_en_5.mp3"
+type = "audio"
+title = "metronome_en_5"
+description = "Text-to-speech audio: five."
+
+[[outputs]]
+id = "buD0x1Zv0l70hCbA1UUeM"
+uri = "file://attached_assets/generated_audio/count_en_8.mp3"
+type = "audio"
+title = "metronome_en_8"
+description = "Text-to-speech audio: eight."
+
+[[outputs]]
+id = "pYSfPOWExRRS6zrVRk7Gx"
+uri = "file://attached_assets/generated_audio/count_en_9.mp3"
+type = "audio"
+title = "metronome_en_9"
+description = "Text-to-speech audio: nine."
+
+[[outputs]]
+id = "mLpBdHN-GntzPSSZLkYK0"
+uri = "file://attached_assets/generated_audio/count_en_6.mp3"
+type = "audio"
+title = "metronome_en_6"
+description = "Text-to-speech audio: six."
+
+[[outputs]]
+id = "D08tdh-PTcicbCUVexlKl"
+uri = "file://attached_assets/generated_audio/count_en_3.mp3"
+type = "audio"
+title = "metronome_en_3"
+description = "Text-to-speech audio: three."
+
+[[outputs]]
+id = "sZ2FL5HNvt_xGyWffkpeV"
+uri = "file://attached_assets/generated_audio/count_en_4.mp3"
+type = "audio"
+title = "metronome_en_4"
+description = "Text-to-speech audio: four."
+
+[[outputs]]
+id = "Th-6UH-yjTAt3_A5_LAGQ"
+uri = "file://attached_assets/generated_audio/count_en_0.mp3"
+type = "audio"
+title = "metronome_en_0"
+description = "Text-to-speech audio: zero."
+
+[[outputs]]
+id = "aQswKZDWHwpDDCe_FUo09"
+uri = "file://attached_assets/generated_audio/count_en_7.mp3"
+type = "audio"
+title = "metronome_en_7"
+description = "Text-to-speech audio: seven."
+
+[[outputs]]
+id = "PGVl7dD6U40Y3O_oWsYUX"
+uri = "file://attached_assets/generated_audio/count_en_2.mp3"
+type = "audio"
+title = "metronome_en_2"
+description = "Text-to-speech audio: two."
+
+[[outputs]]
+id = "A0m4GhBwg7XNFCAhyYC6t"
+uri = "file://attached_assets/generated_audio/count_en_13.mp3"
+type = "audio"
+title = "metronome_en_13"
+description = "Text-to-speech audio: thirteen."
+
+[[outputs]]
+id = "WGAd5HdQ57KhqLTjtRHFM"
+uri = "file://attached_assets/generated_audio/count_en_12.mp3"
+type = "audio"
+title = "metronome_en_12"
+description = "Text-to-speech audio: twelve."
+
+[[outputs]]
+id = "Uloxtos4CMkgmh_tac62Y"
+uri = "file://attached_assets/generated_audio/count_en_11.mp3"
+type = "audio"
+title = "metronome_en_11"
+description = "Text-to-speech audio: eleven."
+
+[[outputs]]
+id = "yeiwbtIiPclk5AmjI6qm6"
+uri = "file://attached_assets/generated_audio/count_en_10.mp3"
+type = "audio"
+title = "metronome_en_10"
+description = "Text-to-speech audio: ten."
+
+[[outputs]]
+id = "K5ZB-vqgz1e3Lr3bOw0it"
+uri = "file://attached_assets/generated_audio/count_en_15.mp3"
+type = "audio"
+title = "metronome_en_15"
+description = "Text-to-speech audio: fifteen."
+
+[[outputs]]
+id = "ydzebj39_aOnRz9nL6L2V"
+uri = "file://attached_assets/generated_audio/count_en_14.mp3"
+type = "audio"
+title = "metronome_en_14"
+description = "Text-to-speech audio: fourteen."
+
+[[outputs]]
+id = "DMjcP0XeW4TKiReDInySB"
+uri = "file://attached_assets/generated_audio/count_en_16.mp3"
+type = "audio"
+title = "metronome_en_16"
+description = "Text-to-speech audio: sixteen."

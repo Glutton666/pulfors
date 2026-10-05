@@ -9,6 +9,8 @@ import { notifyStorageError } from "./storage-notifier";
 import { logger } from "./logger";
 import { sanitizeTonePosition, type TonePosition } from "./metronome-tone-dsp";
 import { TUNING_DATA } from "./tuning-data";
+import { sanitizeSoundSetOverlays, type SoundSetOverlays } from "./sound-overlays";
+import { sanitizeVoiceCountLanguage, type VoiceCountLanguage } from "./voice-count";
 
 const SETTINGS_KEY = "metronome_settings";
 const PRACTICE_BOOK_KEY = "practice_book";
@@ -80,7 +82,7 @@ export async function saveFadeOutSettings(s: FadeOutSettings): Promise<void> {
 
 export type FlashMode = "all" | "accent" | "both" | "off";
 export type HapticMode = "all" | "accent" | "off";
-export type BuiltinSoundSet = "classic" | "woodblock" | "cowbell" | "digital" | "jamblock" | "sine" | "blip" | "clave" | "cajon" | "marimba" | "stick"
+export type BuiltinSoundSet = "classic" | "woodblock" | "cowbell" | "digital" | "jamblock" | "sine" | "blip" | "clave" | "cajon" | "marimba" | "stick" | "tempo"
   | "kick" | "snare" | "clap" | "openhat" | "tom" | "crash" | "rimshot" | "triangle" | "hihat";
 export type SoundSet = BuiltinSoundSet | "custom1" | "custom2" | "custom3";
 export type MetronomeMode = "beat" | "bar" | "note" | "stage";
@@ -291,7 +293,7 @@ export async function saveCustomSoundSets(configs: Record<string, CustomSoundSet
   }
 }
 
-export const BUILTIN_SOUND_SETS: BuiltinSoundSet[] = ["classic", "woodblock", "cowbell", "digital", "jamblock", "sine", "blip", "clave", "cajon", "marimba", "stick"];
+export const BUILTIN_SOUND_SETS: BuiltinSoundSet[] = ["classic", "woodblock", "cowbell", "digital", "jamblock", "sine", "blip", "clave", "cajon", "marimba", "stick", "tempo"];
 export const CUSTOM_SOUND_SET_SLOTS: SoundSet[] = ["custom1", "custom2", "custom3"];
 
 function sanitizeTonePositions(value: unknown): Partial<Record<SoundSet, TonePosition>> {
@@ -318,6 +320,8 @@ export interface MetronomeSettings {
   playbackNotifications?: boolean;
   soundSet?: SoundSet;
   soundSetTonePositions?: Partial<Record<SoundSet, TonePosition>>;
+  soundSetOverlays?: SoundSetOverlays;
+  voiceCountLanguage?: VoiceCountLanguage;
   flashMode?: FlashMode;
   hapticMode?: HapticMode;
   audioOffsetMs?: number;
@@ -419,6 +423,8 @@ const DEFAULT_SETTINGS: MetronomeSettings = {
   playbackNotifications: false,
   soundSet: "classic",
   soundSetTonePositions: {},
+  soundSetOverlays: {},
+  voiceCountLanguage: "off",
   flashMode: "accent",
   hapticMode: "all",
   audioOffsetMs: 0,
@@ -468,9 +474,10 @@ function normalizeSettingsVolumes(settings: MetronomeSettings): MetronomeSetting
 
 export async function loadSettings(): Promise<MetronomeSettings> {
   try {
-    const [data, legacyStageData] = await Promise.all([
+    const [data, legacyStageData, customSoundSets] = await Promise.all([
       AsyncStorage.getItem(SETTINGS_KEY),
       AsyncStorage.getItem(LEGACY_STAGE_SETTINGS_KEY),
+      loadCustomSoundSets(),
     ]);
     if (data) {
       const parsed: unknown = JSON.parse(data);
@@ -498,6 +505,10 @@ export async function loadSettings(): Promise<MetronomeSettings> {
           ? merged.primaryInstrumentId
           : undefined;
       merged.soundSetTonePositions = sanitizeTonePositions(merged.soundSetTonePositions);
+      merged.voiceCountLanguage = sanitizeVoiceCountLanguage(parsed.voiceCountLanguage);
+      merged.soundSetOverlays = sanitizeSoundSetOverlays(parsed.soundSetOverlays, [
+        ...BUILTIN_SOUND_SETS, ...CUSTOM_SOUND_SET_SLOTS.filter(key => !!customSoundSets[key]),
+      ]);
       merged.barMetronomeChannel = normalizeSampleChannel(merged.barMetronomeChannel);
       const legacyProfile: ModeSettings = {
         volume: merged.volume,
