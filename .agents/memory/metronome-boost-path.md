@@ -24,3 +24,9 @@ Sound-set selection and its preview may occur in the same event; start the previ
 **Why:** Cancelling preview work on an identity change can cancel the newly requested, correct preview when the same event also changes the selected sound.
 
 **How to apply:** Cancel superseded/closed preview requests, but do not start a new selection preview until its identity commit. Physical phone touch and acoustic response still require device testing.
+
+Native one-shot previews must distinguish metadata availability from playback readiness and actual completion. Keep inactive preview sounds as PCM/assets, not an eagerly constructed native player for every role.
+
+**Why:** Android's Expo Audio/Media3 duration metadata can be available while the player is still buffering; its loaded flag corresponds to the ready state. Native output startup also adds time that is not represented by PCM sample length. A large idle preview-player pool adds native resource pressure without helping the selected one-shot.
+
+**How to apply:** Wait for native readiness, retain output through the completion notification with bounded failure cleanup, and keep preview-only startup accommodation separate from metronome scheduling. Automated mocked status tests and Android bundle exports do not verify physical speaker output.

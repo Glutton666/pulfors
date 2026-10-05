@@ -177,17 +177,7 @@ export function SettingsModal({
   const [activeTab, setActiveTab] = useState<SettingsTab>("theme");
   const tabFadeAnim = useRef(new Animated.Value(1)).current;
   const tabSlideAnim = useRef(new Animated.Value(0)).current;
-  const [previewPlayersReady, setPreviewPlayersReady] = useState(false);
   const soundPreviewRef = useRef<SoundPreviewHandle>(null);
-
-  useEffect(() => {
-    if (visible) {
-      const tid = setTimeout(() => setPreviewPlayersReady(true), 300);
-      return () => clearTimeout(tid);
-    } else {
-      setPreviewPlayersReady(false);
-    }
-  }, [visible]);
 
   useEffect(() => {
     const practiceAvailable = !!practiceBookContent
@@ -457,7 +447,7 @@ export function SettingsModal({
         </ScrollView>
       </Pressable>
 
-      {previewPlayersReady && (
+      {visible && (
         <SoundPreviewPlayers
           ref={soundPreviewRef}
           customSoundSets={customSoundSets}

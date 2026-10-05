@@ -93,31 +93,52 @@ export function useTonePreview(prepare: PrepareTonePreview, identity: string) {
         source.onended = cleanup;
         source.start();
       } else {
-        const uri = await saveRenderedWav(pcm, `tone_preview_${++previewFileSequence}.wav`);
+        // Android's cold AudioTrack/focus startup can consume the entire onset
+        // of a very short click. Keep its voice intact inside a padded one-shot,
+        // rather than releasing the player on a JS estimate of clip duration.
+        let nativePCM = pcm;
+        if (Platform.OS === "android") {
+          const lead = Math.round(0.1 * 44_100);
+          nativePCM = new Float32Array(lead + pcm.length + Math.round(0.25 * 44_100));
+          nativePCM.set(pcm, lead);
+        }
+        const uri = await saveRenderedWav(nativePCM, `tone_preview_${++previewFileSequence}.wav`);
         if (!current()) {
           releaseRenderedWav(uri);
           return;
         }
         let player: ReturnType<typeof createAudioPlayer>;
         try {
-          player = createAudioPlayer({ uri });
+          player = createAudioPlayer({ uri }, { updateInterval: 50, keepAudioSessionActive: Platform.OS === "android" });
         } catch (error) {
           releaseRenderedWav(uri);
           throw error;
         }
         let timer: ReturnType<typeof setTimeout> | null = null;
+        let subscription: { remove(): void } | null = null;
+        let cleaned = false;
         const cleanup = () => {
+          if (cleaned) return;
+          cleaned = true;
           if (timer) clearTimeout(timer);
+          subscription?.remove();
           try { player.pause(); } catch {}
           try { player.remove(); } catch {}
           releaseRenderedWav(uri);
           if (stopRef.current === cleanup) stopRef.current = null;
+          if (pendingRef.current === request) pendingRef.current = null;
         };
         stopRef.current = cleanup;
         try {
           player.volume = outputGain;
-          const deadline = Date.now() + 1500;
-          while (!player.isLoaded && !(player.duration > 0)) {
+          if (typeof player.addListener === "function") {
+            subscription = player.addListener("playbackStatusUpdate", status => {
+              if (current() && status.didJustFinish) cleanup();
+            });
+          }
+          const deadline = Date.now() + 3000;
+          // Known metadata duration is not proof that Android has buffered.
+          while (!player.isLoaded) {
             if (!current()) return;
             if (Date.now() >= deadline) throw new Error("Preview player did not load");
             await new Promise(resolve => setTimeout(resolve, 30));
@@ -125,8 +146,11 @@ export function useTonePreview(prepare: PrepareTonePreview, identity: string) {
           if (!current()) return;
           await player.seekTo(0);
           if (!current()) return;
-          player.play();
-          timer = setTimeout(cleanup, pcm.length / 44.1 + 150);
+          await Promise.resolve(player.play());
+          if (!current()) return;
+          // Completion status owns normal release. Bound resources if the
+          // native module never reports completion, without clipping startup.
+          timer = setTimeout(cleanup, Math.max(5000, nativePCM.length / 44.1 + 3000));
         } catch (error) {
           cleanup();
           throw error;

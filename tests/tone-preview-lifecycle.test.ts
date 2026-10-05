@@ -23,7 +23,7 @@ jest.mock("@/lib/audio-renderer", () => ({
 }));
 jest.mock("expo-audio", () => ({
   createAudioPlayer: (...args: any[]) => mockCreate(...args),
-  useAudioPlayer: () => ({ seekTo: jest.fn(), play: jest.fn() }),
+  useAudioPlayer: jest.fn(() => ({ seekTo: jest.fn(), play: jest.fn() })),
 }));
 jest.mock("@/lib/metronome-engine", () => ({
   soundSets: Object.fromEntries(
@@ -115,6 +115,83 @@ test("native output uses captured volume, stops on identity change, and uses uni
   await act(async () => { await hook.result.current.play("classic", 0); });
   expect(mockSave.mock.calls[0][1]).not.toBe(mockSave.mock.calls[1][1]);
   hook.unmount();
+});
+
+test("Android short clicks keep their PCM intact and release on real completion, not an early duration timer", async () => {
+  Platform.OS = "android";
+  jest.useFakeTimers();
+  let status!: (value: { didJustFinish: boolean }) => void;
+  const subscription = { remove: jest.fn() };
+  const player = {
+    isLoaded: true, duration: 0.35, volume: 1,
+    seekTo: jest.fn().mockResolvedValue(undefined), play: jest.fn(),
+    pause: jest.fn(), remove: jest.fn(),
+    addListener: jest.fn((_event, callback) => { status = callback; return subscription; }),
+  };
+  mockCreate.mockReturnValue(player);
+  const prepare = jest.fn().mockResolvedValue(prepared);
+  const hook = renderHook(() => useTonePreview(prepare, "android-click"));
+  try {
+    await act(async () => { await hook.result.current.play("tempo", 0); });
+    const written: Float32Array = mockSave.mock.calls[0][0];
+    expect(written.length).toBe(4410 + prepared.pcm.length + 11025);
+    expect(written.slice(0, 4410).every(sample => sample === 0)).toBe(true);
+    expect(Array.from(written.slice(4410, 4410 + prepared.pcm.length))).toEqual(Array.from(prepared.pcm));
+    expect(mockCreate).toHaveBeenCalledWith(
+      { uri: "file:///preview.wav" }, { updateInterval: 50, keepAudioSessionActive: true },
+    );
+    await act(async () => { await jest.advanceTimersByTimeAsync(200); });
+    expect(player.play).toHaveBeenCalledTimes(1);
+    expect(player.remove).not.toHaveBeenCalled();
+    expect(mockRelease).not.toHaveBeenCalled();
+    act(() => { status({ didJustFinish: true }); status({ didJustFinish: true }); });
+    expect(player.remove).toHaveBeenCalledTimes(1);
+    expect(subscription.remove).toHaveBeenCalledTimes(1);
+    expect(mockRelease).toHaveBeenCalledTimes(1);
+  } finally {
+    hook.unmount();
+    jest.useRealTimers();
+  }
+});
+
+test("Android metadata duration alone cannot start an unbuffered preview", async () => {
+  Platform.OS = "android";
+  jest.useFakeTimers();
+  const player = {
+    isLoaded: false, duration: 0.35, volume: 1,
+    seekTo: jest.fn().mockResolvedValue(undefined), play: jest.fn(),
+    pause: jest.fn(), remove: jest.fn(),
+  };
+  mockCreate.mockReturnValue(player);
+  const prepare = jest.fn().mockResolvedValue(prepared);
+  const hook = renderHook(() => useTonePreview(prepare, "loading"));
+  let playing!: Promise<void>;
+  try {
+    await act(async () => { playing = hook.result.current.play("classic", 0); });
+    await act(async () => { await jest.advanceTimersByTimeAsync(180); });
+    expect(player.seekTo).not.toHaveBeenCalled();
+    expect(player.play).not.toHaveBeenCalled();
+    player.isLoaded = true;
+    await act(async () => { await jest.advanceTimersByTimeAsync(30); await playing; });
+    expect(player.play).toHaveBeenCalledTimes(1);
+  } finally {
+    hook.unmount();
+    jest.useRealTimers();
+  }
+});
+
+test("settings previews do not preload thirty-six native players before a click", async () => {
+  Platform.OS = "android";
+  const handle = React.createRef<SoundPreviewHandle>();
+  const view = render(React.createElement(SoundPreviewPlayers, {
+    ref: handle, customSoundSets: {}, prepareTonePreview: jest.fn().mockResolvedValue(prepared), toneIdentity: "classic",
+  }));
+  expect(jest.requireMock("expo-audio").useAudioPlayer).not.toHaveBeenCalled();
+  expect(mockCreate).not.toHaveBeenCalled();
+  await act(async () => { handle.current!.playSoundPreview("classic"); });
+  expect(mockCreate).toHaveBeenCalledTimes(1);
+  expect(mockCreate.mock.results[0].value.play).toHaveBeenCalledTimes(1);
+  view.unmount();
 });
 
 test("selecting a different sound and previewing in the same event survives identity invalidation", async () => {

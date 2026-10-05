@@ -1,10 +1,12 @@
-import React, { useRef, useImperativeHandle, useEffect, useState } from "react";
-import { useAudioPlayer, createAudioPlayer, type AudioPlayer as ExpoAudioPlayer } from "expo-audio";
+import React, { useRef, useImperativeHandle, useEffect, useState, useCallback } from "react";
+import { createAudioPlayer, type AudioPlayer as ExpoAudioPlayer } from "expo-audio";
 import type { SoundSet, BuiltinSoundSet, SoundRole, CustomSoundSetConfig } from "@/lib/storage";
 import { soundSets } from "@/lib/metronome-engine";
 import { safePlay } from "@/lib/audio-utils";
 import { logger } from "@/lib/logger";
 import { useTonePreview, type PrepareTonePreview } from "@/hooks/useTonePreview";
+import { loadPCM } from "@/lib/pcm-loader";
+import { getDecodedPCM } from "@/lib/pcm-cache";
 
 export interface SoundPreviewHandle {
   playSoundPreview: (set: SoundSet) => void;
@@ -21,6 +23,18 @@ interface SoundPreviewPlayersProps {
 export const SoundPreviewPlayers = React.forwardRef<SoundPreviewHandle, SoundPreviewPlayersProps>(
   function SoundPreviewPlayers({ customSoundSets, prepareTonePreview, toneIdentity }, ref) {
     const tonePreview = useTonePreview(prepareTonePreview, toneIdentity);
+    const prepareSourcePreview = useCallback<PrepareTonePreview>(async (set, role, signal) => {
+      const sources = soundSets[set as keyof typeof soundSets];
+      if (!sources) throw new Error(`Unknown preview source: ${set}`);
+      const asset = [sources.strong, sources.high, sources.low][role % 3];
+      const pcm = await getDecodedPCM(
+        `raw:asset:${String(asset)}`,
+        loadSignal => loadPCM({ kind: "asset", source: asset }, loadSignal),
+        signal,
+      );
+      return { pcm, outputGain: 1 };
+    }, []);
+    const sourcePreview = useTonePreview(prepareSourcePreview, toneIdentity);
     const [previewRequest, setPreviewRequest] = useState<{ set: SoundSet; role: number } | null>(null);
     useEffect(() => {
       // Sound selection and preview happen in the same event. Start only after
@@ -28,75 +42,24 @@ export const SoundPreviewPlayers = React.forwardRef<SoundPreviewHandle, SoundPre
       // new preview or leave it using the outgoing sound's position.
       if (previewRequest) void tonePreview.play(previewRequest.set, previewRequest.role);
     }, [previewRequest, tonePreview.play]);
-    const classicStrong = useAudioPlayer(soundSets.classic.strong);
-    const classicHigh = useAudioPlayer(soundSets.classic.high);
-    const classicLow = useAudioPlayer(soundSets.classic.low);
-    const tempoStrong = useAudioPlayer(soundSets.tempo.strong);
-    const tempoHigh = useAudioPlayer(soundSets.tempo.high);
-    const tempoLow = useAudioPlayer(soundSets.tempo.low);
-    const woodblockStrong = useAudioPlayer(soundSets.woodblock.strong);
-    const woodblockHigh = useAudioPlayer(soundSets.woodblock.high);
-    const woodblockLow = useAudioPlayer(soundSets.woodblock.low);
-    const cowbellStrong = useAudioPlayer(soundSets.cowbell.strong);
-    const cowbellHigh = useAudioPlayer(soundSets.cowbell.high);
-    const cowbellLow = useAudioPlayer(soundSets.cowbell.low);
-    const digitalStrong = useAudioPlayer(soundSets.digital.strong);
-    const digitalHigh = useAudioPlayer(soundSets.digital.high);
-    const digitalLow = useAudioPlayer(soundSets.digital.low);
-    const jamblockStrong = useAudioPlayer(soundSets.jamblock.strong);
-    const jamblockHigh = useAudioPlayer(soundSets.jamblock.high);
-    const jamblockLow = useAudioPlayer(soundSets.jamblock.low);
-    const sineStrong = useAudioPlayer(soundSets.sine.strong);
-    const sineHigh = useAudioPlayer(soundSets.sine.high);
-    const sineLow = useAudioPlayer(soundSets.sine.low);
-    const blipStrong = useAudioPlayer(soundSets.blip.strong);
-    const blipHigh = useAudioPlayer(soundSets.blip.high);
-    const blipLow = useAudioPlayer(soundSets.blip.low);
-    const claveStrong = useAudioPlayer(soundSets.clave.strong);
-    const claveHigh = useAudioPlayer(soundSets.clave.high);
-    const claveLow = useAudioPlayer(soundSets.clave.low);
-    const cajonStrong = useAudioPlayer(soundSets.cajon.strong);
-    const cajonHigh = useAudioPlayer(soundSets.cajon.high);
-    const cajonLow = useAudioPlayer(soundSets.cajon.low);
-    const marimbaStrong = useAudioPlayer(soundSets.marimba.strong);
-    const marimbaHigh = useAudioPlayer(soundSets.marimba.high);
-    const marimbaLow = useAudioPlayer(soundSets.marimba.low);
-    const stickStrong = useAudioPlayer(soundSets.stick.strong);
-    const stickHigh = useAudioPlayer(soundSets.stick.high);
-    const stickLow = useAudioPlayer(soundSets.stick.low);
     const previewIndexRef = useRef<Record<string, number>>({});
     const previewProbePlayerRef = useRef<ExpoAudioPlayer | null>(null);
     const previewStopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    type PlayerList = typeof classicStrong[];
-    const players: Partial<Record<string, PlayerList>> = {
-      classic: [classicStrong, classicHigh, classicLow],
-      tempo: [tempoStrong, tempoHigh, tempoLow],
-      woodblock: [woodblockStrong, woodblockHigh, woodblockLow],
-      cowbell: [cowbellStrong, cowbellHigh, cowbellLow],
-      digital: [digitalStrong, digitalHigh, digitalLow],
-      jamblock: [jamblockStrong, jamblockHigh, jamblockLow],
-      sine: [sineStrong, sineHigh, sineLow],
-      blip: [blipStrong, blipHigh, blipLow],
-      clave: [claveStrong, claveHigh, claveLow],
-      cajon: [cajonStrong, cajonHigh, cajonLow],
-      marimba: [marimbaStrong, marimbaHigh, marimbaLow],
-      stick: [stickStrong, stickHigh, stickLow],
-    };
-
     useImperativeHandle(ref, () => ({
       playSoundPreview(set: SoundSet) {
+        sourcePreview.stop();
         const idx = previewIndexRef.current[set] ?? 0;
         tonePreview.unlock();
         setPreviewRequest({ set, role: idx });
         previewIndexRef.current[set] = (idx + 1) % 3;
       },
       previewCustomSample(sourceSet: BuiltinSoundSet, sourceRole: SoundRole) {
-        const list = players[sourceSet];
-        if (!list) return;
         const idx = sourceRole === "strong" ? 0 : sourceRole === "high" ? 1 : 2;
-        try { list[idx].seekTo(0); } catch {}
-        safePlay(list[idx], "settings.previewCustomSource");
+        setPreviewRequest(null);
+        tonePreview.stop();
+        sourcePreview.unlock();
+        void sourcePreview.play(sourceSet, idx);
       },
       async playCustomSampleUri(uri: string, duration: number) {
         if (previewStopTimerRef.current) {
