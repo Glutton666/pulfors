@@ -1,6 +1,6 @@
 ---
 name: Bar TTS file delivery
-description: User-confirmed file-based TTS, rather than synthesis during each bar playback.
+description: File-based Bar TTS generated inside the app; web local generation or explicit unsupported status.
 ---
 
 바 모드 TTS는 글로 음성 파일을 생성해 해당 마디의 기존 샘플처럼 저장·재생하는 방식이다. 마디가 재생될 때마다 실시간으로 TTS를 호출하는 방식으로 바꾸지 않는다.
@@ -8,3 +8,9 @@ description: User-confirmed file-based TTS, rather than synthesis during each ba
 **Why:** 사용자는 글을 음성 파일로 만들어 마디에 넣는 방식을 선택했다.
 
 **How to apply:** TTS 생성과 저장된 파일의 재생을 분리한다. 이후 재생·반복·미리듣기가 새 음성 생성 요청을 필요로 하지 않도록 하고, 생성한 음원은 기존 파일 편집·보관 흐름에 연결한다.
+
+외부 계정 연결을 기본 요구로 안내하지 않고 앱 자체에서 생성하는 방향을 따른다. 웹도 자체 생성 방법을 찾되, 적절한 방법이 없으면 생성 미지원으로 표시할 수 있다.
+
+**Why:** 사용자는 “앱자체에서 생성하게 할수 있잖아”라고 요청했고, 웹 범위를 “웹에서는 미지원하거나 자체적으로 할수 있는 방법 강구 필요”라고 명시했다.
+
+**How to apply:** 휴대폰 내장 TTS의 파일 생성 경로와 브라우저 로컬 음성 엔진을 우선 검토한다. 외부 서비스·유료 생성으로 임의 대체하지 않는다. 웹 생성 미지원은 기존 녹음·파일 가져오기·저장 음원 재생까지 제거하는 뜻이 아니다.
