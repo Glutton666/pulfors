@@ -27,6 +27,12 @@ let keepalivePlayer: AudioPlayer | null = null;
 let activationPromise: Promise<boolean> | null = null;
 let activationGeneration = -1;
 let generation = 0;
+let lastActivationFailure: string | null = null;
+
+/** Reason the most recent lease activation failed (for field diagnostics). */
+export function getBackgroundPlaybackLeaseFailure(): string | null {
+  return lastActivationFailure;
+}
 
 function disposePlayer(player: AudioPlayer | null): void {
   if (player) {
@@ -48,6 +54,7 @@ function stopKeepalive(): void {
 async function activate(expectedGeneration: number): Promise<boolean> {
   let player: AudioPlayer | null = null;
   try {
+    lastActivationFailure = null;
     await ensureBackgroundPlaybackAudioMode();
     if (Platform.OS === "android") {
       await requestForegroundPlayback(ACTIVE_PLAYBACK_OWNER);
@@ -86,6 +93,7 @@ async function activate(expectedGeneration: number): Promise<boolean> {
   } catch (error) {
     disposePlayer(player);
     if (owners.size === 0) relinquishForegroundPlayback(ACTIVE_PLAYBACK_OWNER);
+    lastActivationFailure = error instanceof Error ? error.message : String(error);
     logger.warn("[background-playback] lease activation failed:", error);
     return false;
   }

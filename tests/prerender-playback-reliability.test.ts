@@ -66,6 +66,7 @@ jest.mock("expo-audio", () => ({
 jest.mock("@/lib/background-playback-lease", () => ({
   beginBackgroundPlaybackLease: () => mockBeginBackgroundPlaybackLease(),
   endBackgroundPlaybackLease: jest.fn(),
+  getBackgroundPlaybackLeaseFailure: () => null,
   releaseDormantBackgroundPlaybackControls: () => mockReleaseDormantBackgroundPlaybackControls(),
 }));
 

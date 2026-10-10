@@ -2055,7 +2055,14 @@ export function useMetronomeScreen() {
     notifyUserToggle: notifyUserMetronomeToggle,
     showPlayingNotification,
     showPausedNotification,
-    showPlaybackStartFailure: () => showRecoveryToast(t("main", "audioRecoveryFailed")),
+    // The failing startup step is appended so field builds (which strip JS
+    // logs) can identify why playback did not start.
+    showPlaybackStartFailure: (reason) =>
+      showRecoveryToast(
+        reason
+          ? `${t("main", "audioRecoveryFailed")}\n[${reason.slice(0, 90)}]`
+          : t("main", "audioRecoveryFailed"),
+      ),
     easterEggActiveRef,
     handleEasterEggGiveUpRef,
     loggingEnabled,
