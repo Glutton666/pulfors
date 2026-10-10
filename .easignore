@@ -26,8 +26,8 @@ android/
 !modules/audio-decoder/ios/**
 !modules/audio-decoder/android/
 !modules/audio-decoder/android/**
-# Same for sparse-metronome: its Kotlin sources + BackgroundPlaybackService
-# are required for the no-MediaSession foreground service used by playback.
+# sparse-metronome도 손으로 작성한 로컬 Expo 모듈이다(.gitignore와 동일 예외).
+# 이 예외가 없으면 android/ 소스가 EAS 업로드에서 빠져 네이티브 모듈이 빌드에 안 들어간다.
 !modules/sparse-metronome/android/
 !modules/sparse-metronome/android/**
 *.orig.*
@@ -62,3 +62,12 @@ yarn-error.*
 test-results/
 playwright-report/
 .cache/ms-playwright/
+
+# .gitignore와 동기화 (.easignore가 있으면 .gitignore는 업로드에 쓰이지 않는다).
+# package-lock.json: 로컬에 남은 npm lockfile이 업로드되면 EAS 서버의
+# yarn install / expo doctor에서 "multiple lock files" 경고가 난다.
+package-lock.json
+static-build/
+/generated-artifacts/
+# 개발용 참고 자료(녹음/스크린샷, 약 50MB). 앱 코드는 참조하지 않으므로 업로드 제외.
+attached_assets/
