@@ -86,3 +86,4 @@
 - [원형 서브디비전 그림 해석](circular-writing-reference.md) — 사용자가 확정한 두 번째 그림은 ANANANANS 9개이며, 마지막 S는 시작점이 아니다.
 - [Nix WebKit runtime](nix-webkit-runtime.md) — ldconfig checks, overwritten library paths and mixed soup plugins can fail before the app; Linux WebKit is not device Safari.
 - [Metronome count language](metronome-count-language.md) — 한국어 지정 발음·끝자리 규칙, 영어 전체 숫자, 오프라인 음성과 독립 합성 범위를 유지한다.
+- [Bar TTS file delivery](bar-tts-file-delivery.md) — 바 TTS는 생성한 음성 파일을 저장·재생한다; 마디 재생마다 실시간 합성하는 방식은 사용자가 선택하지 않았다.
