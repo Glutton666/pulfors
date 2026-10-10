@@ -55,6 +55,7 @@ import {
 import {
   beginBackgroundPlaybackLease,
   endBackgroundPlaybackLease,
+  getBackgroundPlaybackLeaseFailure,
   releaseDormantBackgroundPlaybackControls,
   type BackgroundPlaybackLease,
 } from "@/lib/background-playback-lease";
@@ -155,7 +156,7 @@ export interface UsePlaybackControlParams {
   notifyUserToggle: () => Promise<unknown> | undefined;
   showPlayingNotification: (bpm: number, mode: string, language?: Language) => void | Promise<void>;
   showPausedNotification: (bpm: number, mode: string, language?: Language) => void | Promise<void>;
-  showPlaybackStartFailure: () => void;
+  showPlaybackStartFailure: (reason?: string) => void;
   easterEggActiveRef: Ref<boolean>;
   handleEasterEggGiveUpRef: Ref<(stopEngine?: boolean) => void>;
   loggingEnabled: boolean;
@@ -579,6 +580,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
   const cancelPlaybackAttempt = useCallback((
     notifyFailure = false,
     preserveLifecycle = false,
+    failureReason?: string,
   ) => {
     scheduledStartTokenRef.current = null;
     startAttemptRef.current += 1;
@@ -592,7 +594,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
     p.notifyVoicePlayState(false);
     p.resetPlaybackVisuals();
     if (!preserveLifecycle) markAudioStopped();
-    if (notifyFailure) p.showPlaybackStartFailure();
+    if (notifyFailure) p.showPlaybackStartFailure(failureReason);
     p.onPlaybackStopped?.();
     releaseBackgroundLease();
   }, [p, releaseBackgroundLease, stopSparsePlayback]);
@@ -732,7 +734,10 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
         if (Platform.OS === "android" && backgroundLease.token) {
           const ready = await awaitWithin(backgroundLease.ready, "Android background service");
           if (!ready) {
-            throw new Error("Android background playback service could not start; no MediaSession fallback is permitted.");
+            const reason = getBackgroundPlaybackLeaseFailure();
+            throw new Error(
+              `Android background service failed${reason ? `: ${reason}` : ""}`,
+            );
           }
         } else {
           void backgroundLease.ready;
@@ -1067,7 +1072,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
     } catch (error) {
       if (cancelled()) return false;
       p.capturePlaybackError("Audio startup failed", error, "warning");
-      cancelPlaybackAttempt(true);
+      cancelPlaybackAttempt(true, false, error instanceof Error ? error.message : String(error));
       return false;
     }
   }, [cancelPlaybackAttempt, disposeSparseSession, p, prepareSparseSchedule, renderWebLoop, startOrResumePracticeSession, stopSparsePlayback, releaseBackgroundLease]);
