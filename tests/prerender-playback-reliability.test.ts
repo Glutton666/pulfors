@@ -205,6 +205,8 @@ import {
 import { usePlaybackControl } from "../hooks/usePlaybackControl";
 import {
   PCM_CACHE_MAX_ENTRIES,
+  PCM_CACHE_MAX_BYTES,
+  getPCMCacheStats,
   peekPCM,
   resetPCMCacheForTests,
 } from "../lib/pcm-cache";
@@ -400,6 +402,118 @@ describe("pre-rendered playback reliability", () => {
     expect(filenames[1]).toMatch(/^rendered_measure_\d+\.wav$/);
     expect(filenames[0]).not.toBe(filenames[1]);
     unmount();
+  });
+
+  it("bounds voice/overlay preparation and releases every native WAV/player over 120 stop/change/restart cycles", async () => {
+    const engine = makeEngine();
+    engine.getScheduleInfo.mockReturnValue({
+      durationMs: 1000,
+      ticks: Array.from({ length: 36 }, (_, index) => ({
+        time: index * 250 / 9, beat: Math.floor(index / 9), subBeat: index % 9,
+        type: index === 0 ? "strong" : "normal", repeatIteration: 0, barRepeatIteration: 0,
+      })),
+    } as any);
+    const params = makePipelineParams(engine);
+    params.noteSamplesRef = { current: {} as typeof sampleMap };
+    const language = { current: "en" as "en" | "ko" };
+    const overlays = { current: { classic: "tempo" as "tempo" | "digital" } };
+    const players = new Set<object>();
+    const files = new Set<string>();
+    let created = 0;
+    let released = 0;
+    let peakPlayers = 0;
+    let peakFiles = 0;
+    mockCreateAudioPlayer.mockImplementation(() => {
+      const player = {
+        ...mockPlayer, play: jest.fn(), pause: jest.fn(),
+        release: jest.fn(() => {
+          expect(players.delete(player)).toBe(true);
+          released++;
+        }),
+      };
+      players.add(player);
+      created++;
+      peakPlayers = Math.max(peakPlayers, players.size);
+      return player;
+    });
+    mockSaveRenderedWav.mockImplementation(async (_pcm, filename) => {
+      const uri = `file:///${filename}`;
+      expect(files.has(uri)).toBe(false);
+      files.add(uri);
+      peakFiles = Math.max(peakFiles, files.size);
+      return uri;
+    });
+    mockReleaseRenderedWav.mockImplementation(uri => {
+      expect(files.delete(uri)).toBe(true);
+    });
+    const { result, unmount } = renderHook(() => useAudioPipeline({
+      ...params, voiceCountLanguageRef: language, soundSetOverlaysRef: overlays,
+    } as any));
+    const baseline = { players: players.size, files: files.size };
+    try {
+      for (let cycle = 0; cycle < 120; cycle++) {
+        language.current = cycle % 2 ? "ko" : "en";
+        overlays.current = { classic: cycle % 4 < 2 ? "tempo" : "digital" };
+        params.barModeRef.current = cycle % 3 !== 0;
+        const built = await result.current.prepareRenderedPlayer();
+        expect(built.status).toBe("completed");
+        if (built.status !== "completed") throw new Error("Expected prepared output");
+        expect(built.prepared.commit(output => result.current.outputOwner.publish(output))).toBe(true);
+        await result.current.outputOwner.active()?.playAndConfirm?.();
+        const render = mockRenderMeasure.mock.calls.at(-1)![0];
+        expect(render.voiceCountLanguage).toBe(language.current);
+        expect([...render.voiceCountPCMs.keys()].sort()).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+        expect(getPCMCacheStats().entries).toBeLessThanOrEqual(PCM_CACHE_MAX_ENTRIES);
+        expect(getPCMCacheStats().bytes).toBeLessThanOrEqual(PCM_CACHE_MAX_BYTES);
+        act(() => { result.current.stopPlaybackAudio(); });
+        // Repeated stop and discard must not double-release either resource.
+        act(() => { result.current.stopPlaybackAudio(); });
+        built.prepared.discard();
+        expect(players.size).toBe(baseline.players);
+        expect(files.size).toBe(baseline.files);
+      }
+      expect({ created, released, peakPlayers, peakFiles })
+        .toEqual({ created: 120, released: 120, peakPlayers: 1, peakFiles: 1 });
+    } finally {
+      unmount();
+      mockCreateAudioPlayer.mockImplementation(() => ({ ...mockPlayer }));
+      mockSaveRenderedWav.mockImplementation(async () => "file:///rendered.wav");
+      mockReleaseRenderedWav.mockReset();
+    }
+  });
+
+  it("discards late WAV preparation after stop without starting or retaining an old voice player", async () => {
+    const engine = makeEngine();
+    const params = makePipelineParams(engine);
+    params.noteSamplesRef = { current: {} as typeof sampleMap };
+    const { result, unmount } = renderHook(() => useAudioPipeline({
+      ...params, voiceCountLanguageRef: { current: "ko" },
+      soundSetOverlaysRef: { current: { classic: "tempo" } },
+    } as any));
+    try {
+      for (let cycle = 0; cycle < 24; cycle++) {
+        let finish!: (uri: string) => void;
+        let entered!: () => void;
+        const saving = new Promise<void>(resolve => { entered = resolve; });
+        mockSaveRenderedWav.mockImplementationOnce(() => {
+          entered();
+          return new Promise(resolve => { finish = resolve; });
+        });
+        const pending = result.current.prepareRenderedPlayer();
+        await saving;
+        act(() => { result.current.stopPlaybackAudio(); });
+        const uri = `file:///cancelled-count-${cycle}.wav`;
+        finish(uri);
+        const stale = await pending;
+        expect(stale.status).not.toBe("completed");
+        expect(mockReleaseRenderedWav.mock.calls.filter(([released]) => released === uri)).toHaveLength(1);
+        expect(result.current.outputOwner.active()).toBeNull();
+      }
+      expect(mockPlayer.play).not.toHaveBeenCalled();
+      expect(mockPlayer.release).toHaveBeenCalledTimes(24);
+    } finally {
+      unmount();
+    }
   });
 
   it("uses distinct native artifact filenames across concurrent pipeline instances", async () => {

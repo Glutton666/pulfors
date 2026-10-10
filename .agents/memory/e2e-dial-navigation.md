@@ -7,7 +7,8 @@ Playwright CAN drive the ModeSwitcherDial with plain clicks (no drags needed), c
 
 **How to apply:**
 - Recipe: click `mode-cycle-label` → fan opens at top-center anchor `(winW/2, 0)`, `centAng=90°`, `ANGLE_STEP=34°`, `ICON_R=104`, MODES=[beat,bar,note,stage,score,practice,menu]. Since 2026-08 the fan lays out in READING order: `deg = 90 − off·34°` (next mode to the RIGHT on top wall). Click at `(winW/2 + cos(deg)·104, sin(deg)·104)` to select (tap radius 52px), then click the overlay (e.g. `(winW/2, h·0.75)`) to confirm.
-- From beat: bar = +1 → `(cx+58, 86)`; note = +2 → `(cx+96, 39)`; stage = +3; score = −3; practice = −2 → `(cx−96, 39)`; menu = −1 → `(cx−58, 86)`.
+- From beat: bar = +1 → `(cx+58, 86)`; note = +2 → `(cx+96, 39)`; practice = −2 → `(cx−96, 39)`; menu = −1 → `(cx−58, 86)`. For coordinate-based navigation to farther modes, step through a nearer mode first: ±3 can put the calculated click above the viewport at the top wall.
+- **Why:** A direct Bar→Practice offset −3 selected nothing in a real browser, while Bar→Beat→Practice worked. A timeout looking for library content was a navigation failure, not an audio failure. **How to apply:** keep each calculated top-wall click within offsets −2…+2 and await the destination screen.
 - The dial D-tab handle may persist on any wall (`metronome_dial_wall_v2`); the top-center `mode-cycle-label` route is the reliable one for e2e.
 - Onboarding skip: the 건너뛰기 control is a Pressable+Text with NO accessibilityRole — use `getByText(/건너뛰기|Skip/i)`, not `getByRole("button")`.
 - RNW `Switch`: wrapper div has no `aria-checked`; read/assert via the inner `<input type=checkbox>`'s `checked` property.
