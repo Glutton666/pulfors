@@ -1108,12 +1108,14 @@ class SparseMetronomeService : Service() {
     private const val MAX_PREPARED_SESSIONS = 2
     private const val MAX_CLIP_BYTES = 128 * 1024 * 1024L
     private const val MAX_TOTAL_PRELOADED_BYTES = 256 * 1024 * 1024L
+    // Must precede the constants derived from it: a const val cannot reference
+    // a later declaration ("Variable 'SAMPLE_RATE' must be initialized").
+    private const val SAMPLE_RATE = 44_100L
     private const val MAX_CLIP_DURATION_FRAMES = SAMPLE_RATE * 60L * 30L
     private const val MAX_LATE_NANOS = 50_000_000L
     private const val START_LEAD_NANOS = 120_000_000L
     private const val RETIREMENT_GRACE_NANOS = 150_000_000L
     private const val OVERRUN_REPORT_INTERVAL_NANOS = 1_000_000_000L
-    private const val SAMPLE_RATE = 44_100L
     private const val NANOS_PER_SECOND = 1_000_000_000L
     private const val MAX_PERIOD_FRAMES = SAMPLE_RATE * 60L * 60L
     private const val NOTIFICATION_ID = 7412
