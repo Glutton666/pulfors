@@ -26,6 +26,10 @@ android/
 !modules/audio-decoder/ios/**
 !modules/audio-decoder/android/
 !modules/audio-decoder/android/**
+# Same for sparse-metronome: its Kotlin sources + BackgroundPlaybackService
+# are required for the no-MediaSession foreground service used by playback.
+!modules/sparse-metronome/android/
+!modules/sparse-metronome/android/**
 *.orig.*
 *.jks
 *.p8
