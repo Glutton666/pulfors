@@ -23,6 +23,7 @@ export interface ScaleValues {
   maxDim: number;
   isTablet: boolean;
   isLandscape: boolean;
+  isWideWebDesktop?: boolean;
   scale: number;
   dialSize: number;
   dialRadius: number;
@@ -42,9 +43,17 @@ export function useScale(): ScaleValues {
     const isTablet = minDim >= 600;
     const isLandscape = width > height;
     const isWeb = Platform.OS === "web";
+    // A landscape phone or a short browser window should keep the existing
+    // compact layout. Only genuinely roomy browser viewports get the desktop
+    // composition; both dimensions are live values so zoom/resize falls back.
+    const isWideWebDesktop = isWeb && isLandscape && width >= 1100 && height >= 650;
 
     const scaleBase = isLandscape ? minDim : width;
-    const maxScale = isTablet ? (isWeb ? 4.5 : 2.4) : 1.6;
+    const maxScale = isWideWebDesktop
+      ? 1.35
+      : isTablet
+        ? (isWeb ? 4.5 : 2.4)
+        : 1.6;
     const s = Math.min(scaleBase / BASE_WIDTH, maxScale);
 
     const ms = (size: number, factor = 0.5): number =>
@@ -55,7 +64,15 @@ export function useScale(): ScaleValues {
     const availH = safeH - paddingVert;
 
     let dialSize: number;
-    if (isTablet) {
+    if (isWideWebDesktop) {
+      // Leave room for the beat controls and rhythm editor beneath the dial,
+      // especially on a 720px-tall laptop viewport.
+      dialSize = Math.min(
+        520,
+        width * 0.34,
+        Math.max(240, (availH - 72) * 0.78),
+      );
+    } else if (isTablet) {
       const maxDial = isWeb ? Math.min(minDim * 0.65, 1200) : 520;
       dialSize = Math.min(minDim - 80, maxDial, availH * 0.55);
     } else if (isLandscape) {
@@ -92,7 +109,9 @@ export function useScale(): ScaleValues {
     let contentMaxWidth: number | undefined;
     if (isTablet) {
       if (isWeb) {
-        contentMaxWidth = Math.min(Math.max(560, width * 0.85), 1400);
+        contentMaxWidth = isWideWebDesktop
+          ? Math.min(Math.max(560, width - 64), 1600)
+          : Math.min(Math.max(560, width * 0.85), 1400);
       } else {
         contentMaxWidth = 560;
       }
@@ -106,6 +125,7 @@ export function useScale(): ScaleValues {
       maxDim,
       isTablet,
       isLandscape,
+      isWideWebDesktop,
       scale: s,
       dialSize,
       dialRadius,

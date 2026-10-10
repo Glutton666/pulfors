@@ -244,7 +244,7 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo, onDenominatorCycle, is
   // retain their existing semantics.
   const webFocusProps =
     Platform.OS === "web"
-      ? ({ tabIndex: 0, onKeyDown: handleKeyDown } as unknown as React.ComponentProps<typeof View>)
+      ? ({ tabIndex: 0, onKeyDown: handleKeyDown, dataSet: { capturesKeys: "true" } } as unknown as React.ComponentProps<typeof View>)
       : {};
 
   return (

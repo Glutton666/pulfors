@@ -141,6 +141,7 @@ interface BeatIndicatorProps {
   halfTime?: boolean;
   beatDenominator?: 2 | 4 | 8;
   isLandscape?: boolean;
+  isDesktopWeb?: boolean;
   beatDirection?: "cw" | "ccw";
   onEnterNoteMode?: () => void;
   tempoLabel?: string;
@@ -238,6 +239,7 @@ export function BeatIndicator({
   halfTime,
   beatDenominator = 4,
   isLandscape = false,
+  isDesktopWeb = false,
   beatDirection = "cw",
   onEnterNoteMode,
   tempoLabel,
@@ -1428,7 +1430,7 @@ export function BeatIndicator({
           zIndex: 999,
         }, resetFlashStyle]}
       />
-      {onOpenSettings && (
+      {onOpenSettings && !isDesktopWeb && (
         <Pressable
           onPress={onOpenSettings}
           hitSlop={10}
@@ -1589,12 +1591,57 @@ export function BeatIndicator({
   if (isLandscape) {
     return (
       <>
-        <View style={[styles.touchArea, { flexDirection: "row" as const, gap: 12 }]} testID="beat-indicator-swipe" {...nativePanHandlers}>
+        <View
+          style={[
+            styles.touchArea,
+            { flexDirection: "row" as const, gap: isDesktopWeb ? 20 : 12 },
+          ]}
+          testID="beat-indicator-swipe"
+          {...nativePanHandlers}
+        >
           {dialContent}
-          <View style={{ flexDirection: "column" as const, alignItems: "center" as const, justifyContent: "center" as const, gap: Spacing.sm }}>
+          <View
+            testID={isDesktopWeb ? "beat-utility-rail" : undefined}
+            style={{
+              flexDirection: "column" as const,
+              alignItems: "center" as const,
+              justifyContent: "center" as const,
+              gap: isDesktopWeb ? 14 : Spacing.sm,
+              paddingVertical: isDesktopWeb ? 10 : 0,
+            }}
+          >
+            {isDesktopWeb && onOpenSettings && (
+              <Pressable
+                onPress={onOpenSettings}
+                style={{
+                  width: 44,
+                  height: 44,
+                  borderRadius: 14,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: C.surface,
+                  borderWidth: 1,
+                  borderColor: C.border,
+                }}
+                testID="open-beat-settings"
+                accessibilityRole="button"
+                accessibilityLabel={t("settings", "title")}
+              >
+                <Ionicons name="settings-outline" size={19} color={C.textSecondary} />
+              </Pressable>
+            )}
             <Pressable
               onPress={() => onBarModeChange(true)}
-              style={styles.landscapeModeBtn}
+              style={[
+                styles.landscapeModeBtn,
+                isDesktopWeb && {
+                  width: 44,
+                  height: 44,
+                  paddingVertical: 0,
+                  paddingHorizontal: 0,
+                  borderRadius: 14,
+                },
+              ]}
               testID="open-bar-mode"
               hitSlop={{ top: 6, bottom: 6, left: 10, right: 10 }}
               accessibilityRole="button"
@@ -1605,7 +1652,16 @@ export function BeatIndicator({
             {onEnterNoteMode && (
               <Pressable
                 onPress={onEnterNoteMode}
-                style={styles.landscapeModeBtn}
+                style={[
+                  styles.landscapeModeBtn,
+                  isDesktopWeb && {
+                    width: 44,
+                    height: 44,
+                    paddingVertical: 0,
+                    paddingHorizontal: 0,
+                    borderRadius: 14,
+                  },
+                ]}
                 testID="open-note-mode"
                 hitSlop={{ top: 6, bottom: 6, left: 10, right: 10 }}
                 accessibilityRole="button"

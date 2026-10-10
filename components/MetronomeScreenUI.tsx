@@ -211,6 +211,7 @@ export function MetronomeScreenUI(props: Props) {
     allPlayersRef,
     outputOwner,
   } = props;
+  const isDesktopWeb = Platform.OS === "web" && S.isWideWebDesktop === true;
 
   const { nativeGestureHandlers: easterEggGestureHandlers } = useEasterEggGesture({
     enabled: !easterEggActive && usesSharedEasterEggGesture(currentMode, showPolygon),
@@ -1136,7 +1137,7 @@ export function MetronomeScreenUI(props: Props) {
         }}
         randomBarConfig={randomBarConfig}
         onRandomBarConfigChange={onRandomBarConfigChange}
-        onEnterNoteMode={handleEnterNoteMode}
+        onEnterNoteMode={() => void handleEnterNoteMode()}
         onShowOnboarding={() => openExclusive("onboarding")}
         keyBindings={keyBindings}
         onKeyBindingsChange={(kb) => {
@@ -1161,9 +1162,12 @@ export function MetronomeScreenUI(props: Props) {
       )}
 
       <Animated.View
+        testID={isDesktopWeb ? "metronome-desktop-layout" : undefined}
         style={[
-          isLandscape
-            ? styles.contentLandscape
+          isDesktopWeb
+            ? styles.contentWebDesktop
+            : isLandscape
+              ? styles.contentLandscape
             : barMode
               ? styles.contentBarMode
               : styles.content,
@@ -1173,7 +1177,9 @@ export function MetronomeScreenUI(props: Props) {
                 ? (insets.top || 8)
                 : (insets.top || webTopInset) + (noteIsPlaying ? 4 : 48))
               : (insets.top || webTopInset) + (isLandscape ? 8 : 12),
-            paddingBottom: noteMode
+            paddingBottom: isDesktopWeb
+              ? 24
+              : noteMode
               ? (isLandscape ? (insets.bottom || 4) : (insets.bottom || webBottomInset) + 4)
               : (insets.bottom || webBottomInset) + (isLandscape ? 8 : 12),
           },
@@ -1214,16 +1220,22 @@ export function MetronomeScreenUI(props: Props) {
           />
         ) : (
         <>
-        <View style={
+        <View
+          testID={isDesktopWeb && !barMode ? "metronome-desktop-workspace" : undefined}
+          style={
           isLandscape && !barMode
-            ? { flexDirection: landscapeReversed ? "row-reverse" as const : "row" as const, flex: 1 }
+            ? { flexDirection: landscapeReversed ? "row-reverse" as const : "row" as const, flex: 1, ...(isDesktopWeb ? { gap: 28 } : {}) }
             : { flex: 1 }
         }>
-        <View style={
+        <View
+          testID={isDesktopWeb && !barMode ? "metronome-primary-practice" : undefined}
+          style={
           isLandscape
             ? barMode
               ? { flex: 1, justifyContent: "flex-start" as const, alignItems: "stretch" as const }
-              : { flex: 5, justifyContent: "center" as const, alignItems: "center" as const, transform: [{ translateY: windowHeight > 400 || S.isTablet ? S.ms(8, 0.3) : 0 }] }
+              : isDesktopWeb
+                ? { flex: 1.2, minWidth: 0, justifyContent: "center" as const, alignItems: "center" as const }
+                : { flex: 5, justifyContent: "center" as const, alignItems: "center" as const, transform: [{ translateY: windowHeight > 400 || S.isTablet ? S.ms(8, 0.3) : 0 }] }
             : barMode
               ? { flex: 5, justifyContent: "flex-start" as const, alignItems: "stretch" as const }
               : {
@@ -1316,6 +1328,7 @@ export function MetronomeScreenUI(props: Props) {
             beatDenominator={beatDenominator}
             onDenominatorCycle={guardedDenominatorCycle}
             isLandscape={isLandscape}
+            isDesktopWeb={isDesktopWeb}
             beatDirection={beatDirection}
             subdivisionBarElement={barMode ? (
               <SubdivisionBar
@@ -1367,7 +1380,7 @@ export function MetronomeScreenUI(props: Props) {
                 />
               )
             ) : undefined}
-            onEnterNoteMode={handleEnterNoteMode}
+            onEnterNoteMode={() => void handleEnterNoteMode()}
             onAddBar={(draft) => {
               if (playbackEditsLocked) return;
               handleAddBar(draft);
@@ -1471,11 +1484,26 @@ export function MetronomeScreenUI(props: Props) {
           </View>
         )}
         {isLandscape && !barMode && (
-          <View style={[{ flex: 3, justifyContent: "center" as const, alignItems: "center" as const, gap: 6 }, S.isTablet && { maxWidth: Math.min(windowWidth * 0.38, 420) }]}>
+          <View
+            testID={isDesktopWeb ? "metronome-secondary-tools" : undefined}
+            style={[
+              {
+                flex: isDesktopWeb ? 0.82 : 3,
+                minWidth: 0,
+                justifyContent: "center" as const,
+                alignItems: "center" as const,
+                gap: isDesktopWeb ? 14 : 6,
+              },
+              S.isTablet && { maxWidth: isDesktopWeb ? Math.min(windowWidth * 0.42, 460) : Math.min(windowWidth * 0.38, 420) },
+            ]}
+          >
             {!noteMode && (
               <>
                 {showLandscapeImage && (
-                  <View style={{ width: "100%" as any, flex: 0.8, minHeight: 48 }}>
+                  <View
+                    testID={isDesktopWeb ? "metronome-photo-or-stats" : undefined}
+                    style={{ width: "100%" as any, flex: isDesktopWeb ? 0.72 : 0.8, minHeight: 48, maxHeight: isDesktopWeb ? 260 : undefined }}
+                  >
                     <View
                       style={{
                         position: "absolute" as const,
