@@ -4,28 +4,56 @@ import { Ionicons } from "@expo/vector-icons";
 import type { SoundSet } from "@/lib/storage";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useLanguage } from "@/contexts/LanguageContext";
+import catalogDurations from "@/assets/sounds/count/catalog-durations.json";
 
 export type VoiceCountLanguage = "off" | "ko" | "en";
+export type VoiceCountOutput = "mixed" | "voice-only";
+export type VoiceCountSpeaker = "male" | "female";
 export type OverlayOption = { value: SoundSet; label: string };
 
 export function VoiceCountControl({
   value,
   onChange,
   language,
+  output = "mixed",
+  onOutputChange,
+  speaker = "female",
+  onSpeakerChange,
 }: {
   value: VoiceCountLanguage;
   onChange: (value: VoiceCountLanguage) => void;
   language: string;
+  output?: VoiceCountOutput;
+  onOutputChange?: (value: VoiceCountOutput) => void;
+  speaker?: VoiceCountSpeaker;
+  onSpeakerChange?: (value: VoiceCountSpeaker) => void;
 }) {
   const { colors: C } = useTheme();
+  const ko = language === "ko";
+  const voiceEnabled = value !== "off";
+  const durations = Object.entries(catalogDurations)
+    .filter(([key]) => value === "off" || key.startsWith(`${value}-${speaker}-`))
+    .map(([, clip]) => clip.durationMs);
+  const durationRange = `${Math.min(...durations)}–${Math.max(...durations)}ms`;
   const choices: { value: VoiceCountLanguage; label: string; detail: string }[] = [
-    { value: "off", label: language === "ko" ? "끔" : "Off", detail: language === "ko" ? "음성 카운트 끔" : "No spoken count" },
+    { value: "off", label: ko ? "끔" : "Off", detail: ko ? "음성 카운트 끔" : "No spoken count" },
     { value: "ko", label: "한국어", detail: "공 · 일 · 둘 · 삼…" },
     { value: "en", label: "English", detail: "One · two · three…" },
   ];
+  const toggleStyle = (active: boolean, disabled = false) => ({
+    flex: 1,
+    minWidth: 78,
+    paddingVertical: 9,
+    paddingHorizontal: 8,
+    borderRadius: 9,
+    borderWidth: 1,
+    borderColor: active ? C.accent : C.border,
+    backgroundColor: active ? C.accentDim : C.surfaceLight,
+    opacity: disabled ? 0.46 : 1,
+  });
 
   return (
-    <View style={{ gap: 10 }}>
+    <View style={{ gap: 9 }}>
       <View style={{ flexDirection: "row", gap: 7 }}>
         {choices.map((choice) => {
           const active = value === choice.value;
@@ -37,16 +65,7 @@ export function VoiceCountControl({
               accessibilityState={{ selected: active }}
               aria-pressed={active}
               onPress={() => onChange(choice.value)}
-              style={{
-                flex: 1,
-                minWidth: 78,
-                paddingVertical: 9,
-                paddingHorizontal: 8,
-                borderRadius: 9,
-                borderWidth: 1,
-                borderColor: active ? C.accent : C.border,
-                backgroundColor: active ? C.accentDim : C.surfaceLight,
-              }}
+              style={toggleStyle(active)}
             >
               <Text style={{ color: active ? C.accent : C.text, fontSize: 12, fontFamily: "SpaceGrotesk_600SemiBold", textAlign: "center" }}>
                 {choice.label}
@@ -58,19 +77,79 @@ export function VoiceCountControl({
           );
         })}
       </View>
+      <View style={{ flexDirection: "row", gap: 8 }}>
+        <View style={{ flex: 1, gap: 5 }}>
+          <Text style={{ color: C.textSecondary, fontSize: 10, fontFamily: "SpaceGrotesk_600SemiBold" }}>
+            {ko ? "출력" : "Output"}
+          </Text>
+          <View style={{ flexDirection: "row", gap: 5 }}>
+            {([
+              { value: "mixed" as const, label: ko ? "클릭 + 음성" : "Click + voice" },
+              { value: "voice-only" as const, label: ko ? "음성만" : "Voice only" },
+            ]).map((choice) => {
+              const active = output === choice.value;
+              return (
+                <Pressable
+                  key={choice.value}
+                  testID={`voice-count-output-${choice.value}`}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: active, disabled: !voiceEnabled }}
+                  aria-pressed={active}
+                  disabled={!voiceEnabled}
+                  onPress={() => onOutputChange?.(choice.value)}
+                  style={[toggleStyle(active, !voiceEnabled), { minWidth: 0, paddingHorizontal: 4 }]}
+                >
+                  <Text numberOfLines={1} style={{ color: active ? C.accent : C.text, fontSize: 10, fontFamily: "SpaceGrotesk_600SemiBold", textAlign: "center" }}>
+                    {choice.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+        <View style={{ flex: 0.72, gap: 5 }}>
+          <Text style={{ color: C.textSecondary, fontSize: 10, fontFamily: "SpaceGrotesk_600SemiBold" }}>
+            {ko ? "음성" : "Voice"}
+          </Text>
+          <View style={{ flexDirection: "row", gap: 5 }}>
+            {([
+              { value: "male" as const, label: ko ? "남성" : "Male" },
+              { value: "female" as const, label: ko ? "여성" : "Female" },
+            ]).map((choice) => {
+              const active = speaker === choice.value;
+              return (
+                <Pressable
+                  key={choice.value}
+                  testID={`voice-count-speaker-${choice.value}`}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: active, disabled: !voiceEnabled }}
+                  aria-pressed={active}
+                  disabled={!voiceEnabled}
+                  onPress={() => onSpeakerChange?.(choice.value)}
+                  style={[toggleStyle(active, !voiceEnabled), { minWidth: 0, paddingHorizontal: 4 }]}
+                >
+                  <Text style={{ color: active ? C.accent : C.text, fontSize: 10, fontFamily: "SpaceGrotesk_600SemiBold", textAlign: "center" }}>
+                    {choice.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+      </View>
       <View style={{ borderRadius: 10, padding: 11, backgroundColor: C.overlay08, gap: 5 }}>
         <Text style={{ color: C.text, fontSize: 12, lineHeight: 18, fontFamily: "SpaceGrotesk_500Medium" }}>
-          {language === "ko" ? "한국어: 공 · 일 · 둘 · 삼 · 넷 · 오 · 육 · 칠 · 팔 · 구" : "Korean: 공 · 일 · 둘 · 삼 · 넷 · 오 · 육 · 칠 · 팔 · 구"}
+          {ko ? "한국어: 공 · 일 · 둘 · 삼 · 넷 · 오 · 육 · 칠 · 팔 · 구" : "Korean: 공 · 일 · 둘 · 삼 · 넷 · 오 · 육 · 칠 · 팔 · 구"}
         </Text>
         <Text style={{ color: C.textSecondary, fontSize: 11, lineHeight: 16 }}>
-          {language === "ko"
+          {ko
             ? "첫 분할은 기본 박 번호, 그 뒤는 분할 번호입니다: 일·둘·삼·넷 / 둘·둘·삼·넷. 10은 공, 12는 둘, 14는 넷, 16은 육. 강·중·약은 각 칸의 설정을 따르며 무음 칸은 건너뛰어도 번호가 밀리지 않습니다."
             : "First subdivision: beat number; later subdivisions: subdivision number (one-two-three-four / two-two-three-four). Korean uses the ones digit: 10 공, 12 둘, 14 넷, 16 육. Emphasis follows each slot; muted slots never renumber later counts."}
         </Text>
         <Text style={{ color: C.textTertiary, fontSize: 10, lineHeight: 15 }}>
-          {language === "ko"
-            ? "짧은 분할에서는 발음이 겹쳐 명료도가 떨어집니다(예: 240 BPM·9분할 = 27.8ms, 음성 약 221~569ms). 숫자를 생략하거나 템포를 바꾸거나 말끝을 자르지 않습니다."
-            : "Short subdivisions overlap and may be unintelligible (240 BPM × 9 = 27.8ms; clips ~221–569ms). Counts are never omitted, tempo stays fixed and syllable endings are not cut."}
+          {ko
+            ? `현재 음성 길이는 ${durationRange}입니다. 짧은 분할에서는 발음이 겹칩니다(240 BPM·9분할 = 27.8ms). 숫자는 생략하지 않고 템포를 바꾸거나 말끝을 자르지 않습니다.`
+            : `Current clips: ${durationRange}. Short slots overlap (240 BPM × 9 = 27.8ms). Counts are never omitted, tempo stays fixed and syllable endings are not cut.`}
         </Text>
       </View>
     </View>

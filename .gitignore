@@ -68,3 +68,4 @@ test-results/
 playwright-report/
 .cache/ms-playwright/
 static-build/
+/generated-artifacts/

@@ -65,6 +65,7 @@ import { MODE_TUTORIALS_ENABLED } from "@/lib/tutorial-config";
 import { NEUTRAL, type TonePosition } from "@/lib/metronome-tone-dsp";
 import type { FlashMode, HapticMode, SoundSet, BuiltinSoundSet, CustomSoundSetConfig, CustomSoundSample, FadeOutSettings, PracticeEntry, MetronomeMode } from "@/lib/storage";
 import type { BarRepeat, LoopBlock } from "@/components/BeatIndicator";
+import { clampLoopBlocksToMeter } from "@/lib/bar-config-helpers";
 import type { StopwatchTimerHandle } from "@/components/StopwatchTimer";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useDeepLink } from "@/contexts/DeepLinkContext";
@@ -569,6 +570,8 @@ export function useMetronomeScreen() {
     sampleVolume, setSampleVolume,
     soundSet, setSoundSet, tonePosition, soundSetTonePositions, setSoundSetTonePositions,
     voiceCountLanguage, voiceCountLanguageRef, updateVoiceCountLanguage,
+    voiceCountOutput, voiceCountOutputRef, updateVoiceCountOutput,
+    voiceCountSpeaker, voiceCountSpeakerRef, updateVoiceCountSpeaker,
     soundSetOverlays, soundSetOverlaysRef, updateSoundSetOverlays,
     resetSoundEnhancements,
     layerSoundSets, setLayerSoundSets, layerSoundSetsRef,
@@ -707,6 +710,7 @@ export function useMetronomeScreen() {
     barMetronomeChannelRef, noteSampleMetroChannelsRef, volumeRef, sampleVolumeRef,
     webClickReadyRef, noteSampleSoundsRef, tonePositionRef, tonePositionsRef,
     soundSetOverlaysRef, voiceCountLanguageRef,
+    voiceCountOutputRef, voiceCountSpeakerRef,
     isPlayingRef, isPreparingRef, bpmRef, t, showRecoveryToast, persistAudioSettingsCallbackRef,
     fatalRenderFailureRef,
   });
@@ -3692,15 +3696,7 @@ export function useMetronomeScreen() {
   }, [username, t]);
 
   useEffect(() => {
-    if (loopBlocks.length === 0) return;
-    const clamped = loopBlocks
-      .map(b => ({
-        ...b,
-        startBeat: Math.min(b.startBeat, beatsPerMeasure - 1),
-        endBeat: Math.min(b.endBeat, beatsPerMeasure - 1),
-      }))
-      .filter(b => b.startBeat <= b.endBeat);
-    const changed = clamped.length !== loopBlocks.length || clamped.some((b, i) => b.startBeat !== loopBlocks[i].startBeat || b.endBeat !== loopBlocks[i].endBeat);
+    const { clamped, changed } = clampLoopBlocksToMeter(loopBlocks, beatsPerMeasure);
     if (changed) {
       handleLoopBlocksChange(clamped);
     }
@@ -3981,6 +3977,7 @@ export function useMetronomeScreen() {
     tonePosition,
     soundSetTonePositions,
     voiceCountLanguage, updateVoiceCountLanguage, soundSetOverlays, updateSoundSetOverlays,
+    voiceCountOutput, updateVoiceCountOutput, voiceCountSpeaker, updateVoiceCountSpeaker,
     updateTonePosition,
     sampleVolume,
     updateSampleVolume,

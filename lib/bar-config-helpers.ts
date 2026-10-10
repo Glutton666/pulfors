@@ -16,6 +16,19 @@ export interface DialConfig {
   noteSampleVolumes?: NoteSampleVolumeMap;
   noteSampleSpeeds?: NoteSampleSpeedMap;
 }
+/** Constrain existing loop blocks when the meter shrinks, retaining metadata. */
+export function clampLoopBlocksToMeter(blocks: LoopBlock[], beats: number) {
+  const clamped = blocks
+    .map(b => ({
+      ...b,
+      startBeat: Math.min(b.startBeat, beats - 1),
+      endBeat: Math.min(b.endBeat, beats - 1),
+    }))
+    .filter(b => b.startBeat <= b.endBeat);
+  const changed = clamped.length !== blocks.length || clamped.some((b, i) =>
+    b.startBeat !== blocks[i].startBeat || b.endBeat !== blocks[i].endBeat);
+  return { clamped, changed };
+}
 
 export interface BarConfig {
   beatsPerMeasure: number;

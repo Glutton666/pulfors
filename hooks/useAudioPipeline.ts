@@ -57,7 +57,7 @@ import {
 import type { MetronomePlaybackPlan } from "@/lib/audio-playback-plan";
 import { mixOverlayPCM, overlaySoundSet, type SoundSetOverlays } from "@/lib/sound-overlays";
 import { prepareVoiceCountPCMs } from "@/lib/voice-count-assets";
-import type { VoiceCountLanguage } from "@/lib/voice-count";
+import type { VoiceCountLanguage, VoiceCountOutput, VoiceCountSpeaker } from "@/lib/voice-count";
 import { useAudioPlayers } from "@/hooks/useAudioPlayers";
 import type { BuiltinPlayers } from "@/hooks/useAudioPlayers";
 import {
@@ -107,6 +107,8 @@ export interface UseAudioPipelineParams {
   tonePositionsRef?: React.MutableRefObject<Partial<Record<SoundSet, TonePosition>>>;
   soundSetOverlaysRef?: React.MutableRefObject<SoundSetOverlays>;
   voiceCountLanguageRef?: React.MutableRefObject<VoiceCountLanguage>;
+  voiceCountOutputRef?: React.MutableRefObject<VoiceCountOutput>;
+  voiceCountSpeakerRef?: React.MutableRefObject<VoiceCountSpeaker>;
   sampleVolumeRef: React.MutableRefObject<number>;
   /** Web click-ready flag — created in useMetronomeScreen, shared with useSettings. */
   webClickReadyRef: React.MutableRefObject<boolean>;
@@ -232,6 +234,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
     engineRef, soundSet, volume, customSoundSetsRef,
     layerSoundSetsRef, noteSamplesRef, noteSampleChannelsRef, noteSampleVolumesRef, noteSampleSpeedsRef, barModeRef,
     barMetronomeChannelRef, noteSampleMetroChannelsRef, volumeRef, sampleVolumeRef, tonePositionRef, tonePositionsRef, soundSetOverlaysRef, voiceCountLanguageRef,
+    voiceCountOutputRef, voiceCountSpeakerRef,
     isPlayingRef, isPreparingRef, bpmRef, t, showRecoveryToast, persistAudioSettingsCallbackRef,
     fatalRenderFailureRef,
   } = params;
@@ -266,7 +269,9 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
     positions: tonePositionsRef?.current,
     overlays: soundSetOverlaysRef?.current,
     voiceCountLanguage: voiceCountLanguageRef?.current,
-  }), [soundSetRef, tonePositionRef, tonePositionsRef, volumeRef, soundSetOverlaysRef, voiceCountLanguageRef]);
+    voiceCountOutput: voiceCountOutputRef?.current,
+    voiceCountSpeaker: voiceCountSpeakerRef?.current,
+  }), [soundSetRef, tonePositionRef, tonePositionsRef, volumeRef, soundSetOverlaysRef, voiceCountLanguageRef, voiceCountOutputRef, voiceCountSpeakerRef]);
   const setActiveAudioToneSnapshot = useCallback((snapshot: AudioToneSnapshot) => {
     activeToneSnapshotRef.current = snapshot;
     setPoolsVolume(snapshot.realtimeGain);
@@ -767,7 +772,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
           customSoundSets: audio.customSoundSets,
         } : undefined),
         getSamplePCMs(audio.noteSamples, signal),
-        prepareVoiceCountPCMs(ticks, audio.tone.voiceCountLanguage, signal),
+        prepareVoiceCountPCMs(ticks, audio.tone.voiceCountLanguage, signal, audio.tone.voiceCountSpeaker),
       ]);
       if (!session.isCurrent()) return session.interruption();
       await new Promise(r => setTimeout(r, 0));
@@ -788,6 +793,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
           : barModeRef.current ? audio.noteSampleMetroChannels : undefined,
         layerClickPCMs,
         voiceCountPCMs, voiceCountLanguage: audio.tone.voiceCountLanguage,
+        voiceCountOutput: audio.tone.voiceCountOutput,
       }, signal);
       const wavUri = await saveRenderedWav(
         pcm,
@@ -907,7 +913,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
               customSoundSets: customSoundSetsRef.current,
             }),
             getSamplePCMs(noteSamplesRef.current, signal),
-            prepareVoiceCountPCMs(ticks, toneSnapshot.voiceCountLanguage, signal),
+            prepareVoiceCountPCMs(ticks, toneSnapshot.voiceCountLanguage, signal, toneSnapshot.voiceCountSpeaker),
           ]);
           if (!session.isCurrent()) return;
           if (!engine.getIsRunning()) {
@@ -928,6 +934,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
             metroChannelsByBeat: barModeRef.current ? noteSampleMetroChannelsRef.current : undefined,
             layerClickPCMs,
             voiceCountPCMs, voiceCountLanguage: toneSnapshot.voiceCountLanguage,
+            voiceCountOutput: toneSnapshot.voiceCountOutput,
           }, signal);
           if (!session.isCurrent()) return;
           if (!engine.getIsRunning()) {

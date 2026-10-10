@@ -1,36 +1,63 @@
 import { loadPCM } from "./pcm-loader";
 import { getDecodedPCM } from "./pcm-cache";
-import { emphasizeCountPCM, voiceCountEvent, type VoiceCountLanguage, type VoiceCountSlot } from "./voice-count";
+import { emphasizeCountPCM, voiceCountEvent, type VoiceCountLanguage, type VoiceCountSlot, type VoiceCountSpeaker } from "./voice-count";
 import type { ClickPCMs } from "./audio-renderer";
 
-const korean = [
-  require("@/assets/sounds/count/ko-0.wav"), require("@/assets/sounds/count/ko-1.wav"),
-  require("@/assets/sounds/count/ko-2.wav"), require("@/assets/sounds/count/ko-3.wav"),
-  require("@/assets/sounds/count/ko-4.wav"), require("@/assets/sounds/count/ko-5.wav"),
-  require("@/assets/sounds/count/ko-6.wav"), require("@/assets/sounds/count/ko-7.wav"),
-  require("@/assets/sounds/count/ko-8.wav"), require("@/assets/sounds/count/ko-9.wav"),
-];
-const english = [
-  require("@/assets/sounds/count/en-0.wav"), require("@/assets/sounds/count/en-1.wav"),
-  require("@/assets/sounds/count/en-2.wav"), require("@/assets/sounds/count/en-3.wav"),
-  require("@/assets/sounds/count/en-4.wav"), require("@/assets/sounds/count/en-5.wav"),
-  require("@/assets/sounds/count/en-6.wav"), require("@/assets/sounds/count/en-7.wav"),
-  require("@/assets/sounds/count/en-8.wav"), require("@/assets/sounds/count/en-9.wav"),
-  require("@/assets/sounds/count/en-10.wav"), require("@/assets/sounds/count/en-11.wav"),
-  require("@/assets/sounds/count/en-12.wav"), require("@/assets/sounds/count/en-13.wav"),
-  require("@/assets/sounds/count/en-14.wav"), require("@/assets/sounds/count/en-15.wav"),
-  require("@/assets/sounds/count/en-16.wav"),
-];
+// Static requires are intentional: Metro must include every offline speaker.
+const catalog = {
+  ko: {
+    male: [
+      require("@/assets/sounds/count/ko-male-0.wav"), require("@/assets/sounds/count/ko-male-1.wav"),
+      require("@/assets/sounds/count/ko-male-2.wav"), require("@/assets/sounds/count/ko-male-3.wav"),
+      require("@/assets/sounds/count/ko-male-4.wav"), require("@/assets/sounds/count/ko-male-5.wav"),
+      require("@/assets/sounds/count/ko-male-6.wav"), require("@/assets/sounds/count/ko-male-7.wav"),
+      require("@/assets/sounds/count/ko-male-8.wav"), require("@/assets/sounds/count/ko-male-9.wav"),
+    ],
+    female: [
+      require("@/assets/sounds/count/ko-female-0.wav"), require("@/assets/sounds/count/ko-female-1.wav"),
+      require("@/assets/sounds/count/ko-female-2.wav"), require("@/assets/sounds/count/ko-female-3.wav"),
+      require("@/assets/sounds/count/ko-female-4.wav"), require("@/assets/sounds/count/ko-female-5.wav"),
+      require("@/assets/sounds/count/ko-female-6.wav"), require("@/assets/sounds/count/ko-female-7.wav"),
+      require("@/assets/sounds/count/ko-female-8.wav"), require("@/assets/sounds/count/ko-female-9.wav"),
+    ],
+  },
+  en: {
+    male: [
+      require("@/assets/sounds/count/en-male-0.wav"), require("@/assets/sounds/count/en-male-1.wav"),
+      require("@/assets/sounds/count/en-male-2.wav"), require("@/assets/sounds/count/en-male-3.wav"),
+      require("@/assets/sounds/count/en-male-4.wav"), require("@/assets/sounds/count/en-male-5.wav"),
+      require("@/assets/sounds/count/en-male-6.wav"), require("@/assets/sounds/count/en-male-7.wav"),
+      require("@/assets/sounds/count/en-male-8.wav"), require("@/assets/sounds/count/en-male-9.wav"),
+      require("@/assets/sounds/count/en-male-10.wav"), require("@/assets/sounds/count/en-male-11.wav"),
+      require("@/assets/sounds/count/en-male-12.wav"), require("@/assets/sounds/count/en-male-13.wav"),
+      require("@/assets/sounds/count/en-male-14.wav"), require("@/assets/sounds/count/en-male-15.wav"),
+      require("@/assets/sounds/count/en-male-16.wav"),
+    ],
+    female: [
+      require("@/assets/sounds/count/en-female-0.wav"), require("@/assets/sounds/count/en-female-1.wav"),
+      require("@/assets/sounds/count/en-female-2.wav"), require("@/assets/sounds/count/en-female-3.wav"),
+      require("@/assets/sounds/count/en-female-4.wav"), require("@/assets/sounds/count/en-female-5.wav"),
+      require("@/assets/sounds/count/en-female-6.wav"), require("@/assets/sounds/count/en-female-7.wav"),
+      require("@/assets/sounds/count/en-female-8.wav"), require("@/assets/sounds/count/en-female-9.wav"),
+      require("@/assets/sounds/count/en-female-10.wav"), require("@/assets/sounds/count/en-female-11.wav"),
+      require("@/assets/sounds/count/en-female-12.wav"), require("@/assets/sounds/count/en-female-13.wav"),
+      require("@/assets/sounds/count/en-female-14.wav"), require("@/assets/sounds/count/en-female-15.wav"),
+      require("@/assets/sounds/count/en-female-16.wav"),
+    ],
+  },
+};
 
 /** Per-render immutable inputs; canonical decoding cache owns reuse/cancellation. */
 export async function prepareVoiceCountPCMs(
   schedule: readonly VoiceCountSlot[], language: VoiceCountLanguage = "off", signal?: AbortSignal,
+  speaker: VoiceCountSpeaker = "female",
 ): Promise<Map<number, ClickPCMs>> {
+  if (language === "off") return new Map();
   const clips = new Set(schedule.map(tick => voiceCountEvent(tick, language)?.clip).filter(n => n !== undefined));
   const prepared = await Promise.all([...clips].map(async number => {
-    const asset = (language === "ko" ? korean : english)[number!];
+    const asset = catalog[language][speaker][number!];
     if (asset === undefined) throw new Error(`Missing ${language} voice count ${number}`);
-    const pcm = await getDecodedPCM(`voice:${language}:${number}`, s => loadPCM({ kind: "asset", source: asset }, s), signal);
+    const pcm = await getDecodedPCM(`voice:${language}:${speaker}:${number}`, s => loadPCM({ kind: "asset", source: asset }, s), signal);
     return [number!, {
       strong: emphasizeCountPCM(pcm, "strong"),
       high: emphasizeCountPCM(pcm, "high"),

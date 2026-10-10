@@ -46,6 +46,37 @@ describe("offline count identity and emphasis", () => {
 });
 describe("count speech shares rendered onset, stereo routing, limiter and cancellation", () => {
   const base = { clickPCMs: silent, samplePCMs: new Map(), clickVolume: 1, sampleVolume: 0 };
+  it.each(["ko", "en"] as const)("voice-only %s removes primary/layer clicks without removing samples", async language => {
+    const clicks = { strong: new Float32Array([0.1]), high: new Float32Array([0.1]), low: new Float32Array([0.1]) };
+    const params = { ...base, clickPCMs: clicks,
+      layerClickPCMs: new Map([["#1", clicks]]),
+      schedule: [{ ...slot(0), time: 0 }, { ...slot(0, 1, "normal", 1), time: 100 }],
+      measureDurationMs: 500, voiceCountLanguage: language, voiceCountOutput: "voice-only" as const,
+      voiceCountPCMs: new Map([[1, roles(1)]]),
+      sampleVolume: 1, samplePCMs: new Map([["0-0", { pcm: new Float32Array([0.02]), trimStartMs: 0, trimDurationMs: 0 }]]) };
+    const pcm = renderMeasure(params) as Float32Array;
+    expect(pcm[0]).toBeCloseTo(0.021);
+    expect(pcm[4410]).toBe(0);
+    expect(await renderMeasureAbortable(params)).toEqual(pcm);
+    const mixed = renderMeasure({ ...params, voiceCountOutput: "mixed" }) as Float32Array;
+    expect(mixed[0]).toBeCloseTo(0.121);
+    expect(mixed[4410]).toBeCloseTo(0.1);
+    const off = renderMeasure({ ...params, voiceCountLanguage: "off" }) as Float32Array;
+    expect(off[0]).toBeCloseTo(0.12);
+    expect(off[4410]).toBeCloseTo(0.1);
+  });
+  it("voice-only respects metro-off while independent samples retain their channel", async () => {
+    const params = { ...base, schedule: [{ ...slot(0), time: 0 }], measureDurationMs: 500,
+      voiceCountLanguage: "ko" as const, voiceCountOutput: "voice-only" as const,
+      voiceCountPCMs: new Map([[1, roles(1)]]),
+      metroChannelsByBeat: { "0": "off" as const }, sampleVolume: 1,
+      sampleChannels: { "0-0": "right" as const },
+      samplePCMs: new Map([["0-0", { pcm: new Float32Array([0.02]), trimStartMs: 0, trimDurationMs: 0 }]]) };
+    const pcm = renderMeasure(params) as { left: Float32Array; right: Float32Array };
+    expect(pcm.left.every(v => v === 0)).toBe(true);
+    expect(pcm.right[0]).toBeCloseTo(0.02);
+    expect(await renderMeasureAbortable(params)).toEqual(pcm);
+  });
   it("speaks once per primary slot and preserves a muted first beat", async () => {
     const schedule = [slot(0, 0, "mute"), slot(0, 1, "strong"), slot(1), slot(1, 0, "strong", 1)];
     const params = { ...base, schedule, measureDurationMs: 2000, voiceCountLanguage: "ko" as const,

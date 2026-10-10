@@ -12,6 +12,7 @@ import type {
 } from "./audio-renderer";
 import type { MetroChannel, SampleChannel } from "./stereo-channel";
 import type { SparseClipDescriptor } from "../modules/sparse-metronome/src";
+import { shouldPlayCountClicks, voiceCountEvent } from "./voice-count";
 
 const MAX_EVENTS = 256;
 const MAX_WAV_BYTES = 128 * 1024 * 1024;
@@ -270,16 +271,26 @@ export async function prepareSparseEvents(
       const metroChannel: MetroChannel =
         params.metroChannelsByBeat?.[String(tick.beat)] ?? params.metronomeChannel ?? "both";
       if (metroChannel !== "off" && clickGain > 0) {
-        const click = clickPCMForTick(tick, params.clickPCMs, params.layerClickPCMs);
+        const event = voiceCountEvent(tick, params.voiceCountLanguage ?? "off");
+        let speech: Float32Array | undefined;
+        if (event) {
+          const roles = params.voiceCountPCMs?.get(event.clip);
+          if (!roles) throw new Error(`Voice count PCM unavailable: ${params.voiceCountLanguage}/${event.clip}`);
+          speech = roles[event.role];
+        }
+        const click = shouldPlayCountClicks(params.voiceCountLanguage, params.voiceCountOutput)
+          ? clickPCMForTick(tick, params.clickPCMs, params.layerClickPCMs) : undefined;
         const channel = metroChannel as SampleChannel;
-        await addEvent(
-          tick,
-          "click",
-          `click:${objectId(click)}:${clickGain}:${channel}`,
-          click,
-          clickGain,
-          channel,
-        );
+        if (click || speech) {
+          // One descriptor per metro slot, including dense 16×16 schedules.
+          const key = `metro:${click ? objectId(click) : "none"}:${speech ? objectId(speech) : "none"}:${clickGain}:${channel}`;
+          let pcm = click ?? speech!;
+          if (click && speech) {
+            pcm = new Float32Array(Math.max(click.length, speech.length));
+            for (let i = 0; i < pcm.length; i++) pcm[i] = (click[i] ?? 0) + (speech[i] ?? 0);
+          }
+          await addEvent(tick, "metro", key, pcm, clickGain, channel);
+        }
       }
 
       if (tick.repeatIteration !== 0 || tick.barRepeatIteration !== 0) continue;

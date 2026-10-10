@@ -47,6 +47,10 @@ interface SettingsModalProps {
   onSoundSetChange: (value: SoundSet) => void;
   tonePosition: TonePosition;
   voiceCountLanguage?: import("@/lib/voice-count").VoiceCountLanguage;
+  voiceCountOutput?: import("@/lib/voice-count").VoiceCountOutput;
+  voiceCountSpeaker?: import("@/lib/voice-count").VoiceCountSpeaker;
+  onVoiceCountOutputChange?: (value: import("@/lib/voice-count").VoiceCountOutput) => void;
+  onVoiceCountSpeakerChange?: (value: import("@/lib/voice-count").VoiceCountSpeaker) => void;
   onVoiceCountLanguageChange?: (value: import("@/lib/voice-count").VoiceCountLanguage) => void;
   soundSetOverlays?: import("@/lib/sound-overlays").SoundSetOverlays;
   onSoundSetOverlaysChange?: (value: import("@/lib/sound-overlays").SoundSetOverlays) => void;
@@ -119,6 +123,7 @@ export function SettingsModal({
   onSoundSetChange,
   tonePosition,
   voiceCountLanguage, onVoiceCountLanguageChange, soundSetOverlays, onSoundSetOverlaysChange,
+  voiceCountOutput, onVoiceCountOutputChange, voiceCountSpeaker, onVoiceCountSpeakerChange,
   prepareTonePreview,
   onTonePositionChange,
   layerSoundSets,
@@ -293,6 +298,10 @@ export function SettingsModal({
             onSoundSetChange={onSoundSetChange}
             tonePosition={tonePosition}
             voiceCountLanguage={voiceCountLanguage}
+            voiceCountOutput={voiceCountOutput}
+            voiceCountSpeaker={voiceCountSpeaker}
+            onVoiceCountOutputChange={onVoiceCountOutputChange}
+            onVoiceCountSpeakerChange={onVoiceCountSpeakerChange}
             onVoiceCountLanguageChange={onVoiceCountLanguageChange}
             soundSetOverlays={soundSetOverlays}
             onSoundSetOverlaysChange={onSoundSetOverlaysChange}

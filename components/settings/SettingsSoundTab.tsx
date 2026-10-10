@@ -34,7 +34,13 @@ import { make_styles, make_csStyles } from "@/components/SettingsModal.styles";
 import { HelpIcon } from "@/components/HelpIcon";
 import type { SettingsScope } from "@/components/SettingsModal";
 import { XYTonePad } from "@/components/settings/XYTonePad";
-import { SoundSetOverlayPicker, VoiceCountControl, type VoiceCountLanguage } from "@/components/settings/SoundSetExtras";
+import {
+  SoundSetOverlayPicker,
+  VoiceCountControl,
+  type VoiceCountLanguage,
+  type VoiceCountOutput,
+  type VoiceCountSpeaker,
+} from "@/components/settings/SoundSetExtras";
 import type { TonePosition } from "@/lib/metronome-tone-dsp";
 
 interface SettingsSoundTabProps {
@@ -51,6 +57,10 @@ interface SettingsSoundTabProps {
   onSoundSetOverlaysChange?: (value: Partial<Record<SoundSet, SoundSet>>) => void;
   voiceCountLanguage?: VoiceCountLanguage;
   onVoiceCountLanguageChange?: (value: VoiceCountLanguage) => void;
+  voiceCountOutput?: VoiceCountOutput;
+  onVoiceCountOutputChange?: (value: VoiceCountOutput) => void;
+  voiceCountSpeaker?: VoiceCountSpeaker;
+  onVoiceCountSpeakerChange?: (value: VoiceCountSpeaker) => void;
   layerSoundSets: Record<number, SoundSet>;
   onLayerSoundSetsChange: (value: Record<number, SoundSet>) => void;
   customSoundSets: Record<string, CustomSoundSetConfig>;
@@ -84,6 +94,10 @@ export function SettingsSoundTab({
   onSoundSetOverlaysChange = () => {},
   voiceCountLanguage = "off",
   onVoiceCountLanguageChange = () => {},
+  voiceCountOutput = "mixed",
+  onVoiceCountOutputChange = () => {},
+  voiceCountSpeaker = "female",
+  onVoiceCountSpeakerChange = () => {},
   layerSoundSets,
   customSoundSets,
   onCustomSoundSetsChange,
@@ -579,6 +593,29 @@ export function SettingsSoundTab({
 
       <View style={[styles.divider, { backgroundColor: C.border }]} />
 
+      {/* Voice count */}
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Ionicons name="chatbubble-ellipses-outline" size={S.ms(18, 0.4)} color={C.accent} />
+          <Text style={[styles.sectionLabel, { color: C.text, flex: 1 }]}>
+            {language === "ko" ? "음성 카운트" : "Voice count"}
+          </Text>
+        </View>
+        <View style={{ marginTop: Spacing.sm }}>
+          <VoiceCountControl
+            value={voiceCountLanguage}
+            onChange={onVoiceCountLanguageChange}
+            language={language}
+            output={voiceCountOutput}
+            onOutputChange={onVoiceCountOutputChange}
+            speaker={voiceCountSpeaker}
+            onSpeakerChange={onVoiceCountSpeakerChange}
+          />
+        </View>
+      </View>
+
+      <View style={[styles.divider, { backgroundColor: C.border }]} />
+
       {/* Sound Set */}
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
@@ -908,19 +945,6 @@ export function SettingsSoundTab({
             </View>
           </View>
         )}
-        <View style={{ marginTop: Spacing.md, gap: Spacing.sm }}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.sm }}>
-            <Ionicons name="chatbubble-ellipses-outline" size={S.ms(16, 0.4)} color={C.accent} />
-            <Text style={{ color: C.text, fontSize: FontSize.small, fontFamily: "SpaceGrotesk_600SemiBold", flex: 1 }}>
-              {language === "ko" ? "음성 카운트" : "Voice count"}
-            </Text>
-          </View>
-          <VoiceCountControl
-            value={voiceCountLanguage}
-            onChange={onVoiceCountLanguageChange}
-            language={language}
-          />
-        </View>
         <SoundSetOverlayPicker
           visible={overlayBase !== null}
           base={overlayBase}

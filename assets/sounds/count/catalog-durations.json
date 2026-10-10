@@ -1,0 +1,434 @@
+{
+  "ko-male-0": {
+    "durationMs": 313,
+    "previousDurationMs": 315,
+    "sourceDurationMs": 367,
+    "removedLeadMs": 9,
+    "source": "attached_assets/generated_audio/count_sequence_ko_male.mp3",
+    "pitchPreservingTempo": 1.15
+  },
+  "ko-male-1": {
+    "durationMs": 256,
+    "previousDurationMs": 272,
+    "sourceDurationMs": 292,
+    "removedLeadMs": 9,
+    "source": "attached_assets/generated_audio/count_sequence_ko_male.mp3",
+    "pitchPreservingTempo": 1.15
+  },
+  "ko-male-2": {
+    "durationMs": 267,
+    "previousDurationMs": 386,
+    "sourceDurationMs": 310,
+    "removedLeadMs": 6,
+    "source": "attached_assets/generated_audio/count_sequence_ko_male.mp3",
+    "pitchPreservingTempo": 1.15
+  },
+  "ko-male-3": {
+    "durationMs": 345,
+    "previousDurationMs": 359,
+    "sourceDurationMs": 411,
+    "removedLeadMs": 17,
+    "source": "attached_assets/generated_audio/count_sequence_ko_male.mp3",
+    "pitchPreservingTempo": 1.15
+  },
+  "ko-male-4": {
+    "durationMs": 357,
+    "previousDurationMs": 497,
+    "sourceDurationMs": 409,
+    "removedLeadMs": 6,
+    "source": "attached_assets/generated_audio/count_sequence_ko_male.mp3",
+    "pitchPreservingTempo": 1.15
+  },
+  "ko-male-5": {
+    "durationMs": 218,
+    "previousDurationMs": 221,
+    "sourceDurationMs": 248,
+    "removedLeadMs": 6,
+    "source": "attached_assets/generated_audio/count_sequence_ko_male.mp3",
+    "pitchPreservingTempo": 1.15
+  },
+  "ko-male-6": {
+    "durationMs": 241,
+    "previousDurationMs": 254,
+    "sourceDurationMs": 280,
+    "removedLeadMs": 6,
+    "source": "attached_assets/generated_audio/count_sequence_ko_male.mp3",
+    "pitchPreservingTempo": 1.15
+  },
+  "ko-male-7": {
+    "durationMs": 316,
+    "previousDurationMs": 352,
+    "sourceDurationMs": 376,
+    "removedLeadMs": 14,
+    "source": "attached_assets/generated_audio/count_sequence_ko_male.mp3",
+    "pitchPreservingTempo": 1.15
+  },
+  "ko-male-8": {
+    "durationMs": 264,
+    "previousDurationMs": 415,
+    "sourceDurationMs": 312,
+    "removedLeadMs": 6,
+    "source": "attached_assets/generated_audio/count_sequence_ko_male.mp3",
+    "pitchPreservingTempo": 1.15
+  },
+  "ko-male-9": {
+    "durationMs": 209,
+    "previousDurationMs": 263,
+    "sourceDurationMs": 244,
+    "removedLeadMs": 9,
+    "source": "attached_assets/generated_audio/count_sequence_ko_male.mp3",
+    "pitchPreservingTempo": 1.15
+  },
+  "ko-female-0": {
+    "durationMs": 325,
+    "previousDurationMs": 315,
+    "sourceDurationMs": 374,
+    "removedLeadMs": 3,
+    "source": "attached_assets/generated_audio/count_sequence_ko_female.mp3",
+    "pitchPreservingTempo": 1.15
+  },
+  "ko-female-1": {
+    "durationMs": 230,
+    "previousDurationMs": 272,
+    "sourceDurationMs": 298,
+    "removedLeadMs": 11,
+    "source": "attached_assets/generated_audio/count_sequence_ko_female.mp3",
+    "pitchPreservingTempo": 1.15
+  },
+  "ko-female-2": {
+    "durationMs": 302,
+    "previousDurationMs": 386,
+    "sourceDurationMs": 367,
+    "removedLeadMs": 6,
+    "source": "attached_assets/generated_audio/count_sequence_ko_female.mp3",
+    "pitchPreservingTempo": 1.15
+  },
+  "ko-female-3": {
+    "durationMs": 402,
+    "previousDurationMs": 359,
+    "sourceDurationMs": 491,
+    "removedLeadMs": 17,
+    "source": "attached_assets/generated_audio/count_sequence_ko_female.mp3",
+    "pitchPreservingTempo": 1.15
+  },
+  "ko-female-4": {
+    "durationMs": 388,
+    "previousDurationMs": 497,
+    "sourceDurationMs": 445,
+    "removedLeadMs": 6,
+    "source": "attached_assets/generated_audio/count_sequence_ko_female.mp3",
+    "pitchPreservingTempo": 1.15
+  },
+  "ko-female-5": {
+    "durationMs": 218,
+    "previousDurationMs": 221,
+    "sourceDurationMs": 280,
+    "removedLeadMs": 11,
+    "source": "attached_assets/generated_audio/count_sequence_ko_female.mp3",
+    "pitchPreservingTempo": 1.15
+  },
+  "ko-female-6": {
+    "durationMs": 275,
+    "previousDurationMs": 254,
+    "sourceDurationMs": 343,
+    "removedLeadMs": 20,
+    "source": "attached_assets/generated_audio/count_sequence_ko_female.mp3",
+    "pitchPreservingTempo": 1.15
+  },
+  "ko-female-7": {
+    "durationMs": 380,
+    "previousDurationMs": 352,
+    "sourceDurationMs": 452,
+    "removedLeadMs": 14,
+    "source": "attached_assets/generated_audio/count_sequence_ko_female.mp3",
+    "pitchPreservingTempo": 1.15
+  },
+  "ko-female-8": {
+    "durationMs": 293,
+    "previousDurationMs": 415,
+    "sourceDurationMs": 340,
+    "removedLeadMs": 6,
+    "source": "attached_assets/generated_audio/count_sequence_ko_female.mp3",
+    "pitchPreservingTempo": 1.15
+  },
+  "ko-female-9": {
+    "durationMs": 238,
+    "previousDurationMs": 263,
+    "sourceDurationMs": 281,
+    "removedLeadMs": 6,
+    "source": "attached_assets/generated_audio/count_sequence_ko_female.mp3",
+    "pitchPreservingTempo": 1.15
+  },
+  "en-male-0": {
+    "durationMs": 374,
+    "previousDurationMs": 452,
+    "sourceDurationMs": 557,
+    "removedLeadMs": 0,
+    "source": "attached_assets/generated_audio/count_en_male_0.mp3",
+    "pitchPreservingTempo": 1.15
+  },
+  "en-male-1": {
+    "durationMs": 206,
+    "previousDurationMs": 250,
+    "sourceDurationMs": 464,
+    "removedLeadMs": 0,
+    "source": "attached_assets/generated_audio/count_en_male_1.mp3",
+    "pitchPreservingTempo": 1.15
+  },
+  "en-male-2": {
+    "durationMs": 252,
+    "previousDurationMs": 327,
+    "sourceDurationMs": 372,
+    "removedLeadMs": 6,
+    "source": "attached_assets/generated_audio/count_en_male_2.mp3",
+    "pitchPreservingTempo": 1.15
+  },
+  "en-male-3": {
+    "durationMs": 270,
+    "previousDurationMs": 263,
+    "sourceDurationMs": 557,
+    "removedLeadMs": 23,
+    "source": "attached_assets/generated_audio/count_en_male_3.mp3",
+    "pitchPreservingTempo": 1.15
+  },
+  "en-male-4": {
+    "durationMs": 287,
+    "previousDurationMs": 310,
+    "sourceDurationMs": 464,
+    "removedLeadMs": 0,
+    "source": "attached_assets/generated_audio/count_en_male_4.mp3",
+    "pitchPreservingTempo": 1.15
+  },
+  "en-male-5": {
+    "durationMs": 322,
+    "previousDurationMs": 362,
+    "sourceDurationMs": 464,
+    "removedLeadMs": 0,
+    "source": "attached_assets/generated_audio/count_en_male_5.mp3",
+    "pitchPreservingTempo": 1.15
+  },
+  "en-male-6": {
+    "durationMs": 423,
+    "previousDurationMs": 427,
+    "sourceDurationMs": 511,
+    "removedLeadMs": 0,
+    "source": "attached_assets/generated_audio/count_en_male_6.mp3",
+    "pitchPreservingTempo": 1.15
+  },
+  "en-male-7": {
+    "durationMs": 473,
+    "previousDurationMs": 318,
+    "sourceDurationMs": 557,
+    "removedLeadMs": 0,
+    "source": "attached_assets/generated_audio/count_en_male_7.mp3",
+    "pitchPreservingTempo": 1.15
+  },
+  "en-male-8": {
+    "durationMs": 302,
+    "previousDurationMs": 298,
+    "sourceDurationMs": 511,
+    "removedLeadMs": 0,
+    "source": "attached_assets/generated_audio/count_en_male_8.mp3",
+    "pitchPreservingTempo": 1.15
+  },
+  "en-male-9": {
+    "durationMs": 293,
+    "previousDurationMs": 368,
+    "sourceDurationMs": 557,
+    "removedLeadMs": 0,
+    "source": "attached_assets/generated_audio/count_en_male_9.mp3",
+    "pitchPreservingTempo": 1.15
+  },
+  "en-male-10": {
+    "durationMs": 255,
+    "previousDurationMs": 318,
+    "sourceDurationMs": 557,
+    "removedLeadMs": 29,
+    "source": "attached_assets/generated_audio/count_en_male_10.mp3",
+    "pitchPreservingTempo": 1.15
+  },
+  "en-male-11": {
+    "durationMs": 342,
+    "previousDurationMs": 434,
+    "sourceDurationMs": 650,
+    "removedLeadMs": 14,
+    "source": "attached_assets/generated_audio/count_en_male_11.mp3",
+    "pitchPreservingTempo": 1.15
+  },
+  "en-male-12": {
+    "durationMs": 305,
+    "previousDurationMs": 437,
+    "sourceDurationMs": 604,
+    "removedLeadMs": 35,
+    "source": "attached_assets/generated_audio/count_en_male_12.mp3",
+    "pitchPreservingTempo": 1.15
+  },
+  "en-male-13": {
+    "durationMs": 412,
+    "previousDurationMs": 501,
+    "sourceDurationMs": 604,
+    "removedLeadMs": 3,
+    "source": "attached_assets/generated_audio/count_en_male_13.mp3",
+    "pitchPreservingTempo": 1.15
+  },
+  "en-male-14": {
+    "durationMs": 342,
+    "previousDurationMs": 402,
+    "sourceDurationMs": 511,
+    "removedLeadMs": 20,
+    "source": "attached_assets/generated_audio/count_en_male_14_2.mp3",
+    "pitchPreservingTempo": 1.15
+  },
+  "en-male-15": {
+    "durationMs": 395,
+    "previousDurationMs": 495,
+    "sourceDurationMs": 557,
+    "removedLeadMs": 6,
+    "source": "attached_assets/generated_audio/count_en_male_15.mp3",
+    "pitchPreservingTempo": 1.15
+  },
+  "en-male-16": {
+    "durationMs": 426,
+    "previousDurationMs": 569,
+    "sourceDurationMs": 604,
+    "removedLeadMs": 0,
+    "source": "attached_assets/generated_audio/count_en_male_16.mp3",
+    "pitchPreservingTempo": 1.15
+  },
+  "en-female-0": {
+    "durationMs": 398,
+    "previousDurationMs": 452,
+    "sourceDurationMs": 557,
+    "removedLeadMs": 6,
+    "source": "attached_assets/generated_audio/count_en_female_0.mp3",
+    "pitchPreservingTempo": 1.15
+  },
+  "en-female-1": {
+    "durationMs": 389,
+    "previousDurationMs": 250,
+    "sourceDurationMs": 464,
+    "removedLeadMs": 0,
+    "source": "attached_assets/generated_audio/count_en_female_1.mp3",
+    "pitchPreservingTempo": 1.15
+  },
+  "en-female-2": {
+    "durationMs": 296,
+    "previousDurationMs": 327,
+    "sourceDurationMs": 557,
+    "removedLeadMs": 49,
+    "source": "attached_assets/generated_audio/count_en_female_2.mp3",
+    "pitchPreservingTempo": 1.15
+  },
+  "en-female-3": {
+    "durationMs": 281,
+    "previousDurationMs": 263,
+    "sourceDurationMs": 418,
+    "removedLeadMs": 52,
+    "source": "attached_assets/generated_audio/count_en_female_3.mp3",
+    "pitchPreservingTempo": 1.15
+  },
+  "en-female-4": {
+    "durationMs": 296,
+    "previousDurationMs": 310,
+    "sourceDurationMs": 557,
+    "removedLeadMs": 9,
+    "source": "attached_assets/generated_audio/count_en_female_4.mp3",
+    "pitchPreservingTempo": 1.15
+  },
+  "en-female-5": {
+    "durationMs": 363,
+    "previousDurationMs": 362,
+    "sourceDurationMs": 464,
+    "removedLeadMs": 11,
+    "source": "attached_assets/generated_audio/count_en_female_5.mp3",
+    "pitchPreservingTempo": 1.15
+  },
+  "en-female-6": {
+    "durationMs": 374,
+    "previousDurationMs": 427,
+    "sourceDurationMs": 604,
+    "removedLeadMs": 0,
+    "source": "attached_assets/generated_audio/count_en_female_6.mp3",
+    "pitchPreservingTempo": 1.15
+  },
+  "en-female-7": {
+    "durationMs": 325,
+    "previousDurationMs": 318,
+    "sourceDurationMs": 604,
+    "removedLeadMs": 0,
+    "source": "attached_assets/generated_audio/count_en_female_7.mp3",
+    "pitchPreservingTempo": 1.15
+  },
+  "en-female-8": {
+    "durationMs": 264,
+    "previousDurationMs": 298,
+    "sourceDurationMs": 511,
+    "removedLeadMs": 9,
+    "source": "attached_assets/generated_audio/count_en_female_8.mp3",
+    "pitchPreservingTempo": 1.15
+  },
+  "en-female-9": {
+    "durationMs": 308,
+    "previousDurationMs": 368,
+    "sourceDurationMs": 604,
+    "removedLeadMs": 11,
+    "source": "attached_assets/generated_audio/count_en_female_9.mp3",
+    "pitchPreservingTempo": 1.15
+  },
+  "en-female-10": {
+    "durationMs": 299,
+    "previousDurationMs": 318,
+    "sourceDurationMs": 604,
+    "removedLeadMs": 55,
+    "source": "attached_assets/generated_audio/count_en_female_10.mp3",
+    "pitchPreservingTempo": 1.15
+  },
+  "en-female-11": {
+    "durationMs": 395,
+    "previousDurationMs": 434,
+    "sourceDurationMs": 697,
+    "removedLeadMs": 29,
+    "source": "attached_assets/generated_audio/count_en_female_11.mp3",
+    "pitchPreservingTempo": 1.15
+  },
+  "en-female-12": {
+    "durationMs": 418,
+    "previousDurationMs": 437,
+    "sourceDurationMs": 697,
+    "removedLeadMs": 35,
+    "source": "attached_assets/generated_audio/count_en_female_12.mp3",
+    "pitchPreservingTempo": 1.15
+  },
+  "en-female-13": {
+    "durationMs": 435,
+    "previousDurationMs": 501,
+    "sourceDurationMs": 789,
+    "removedLeadMs": 55,
+    "source": "attached_assets/generated_audio/count_en_female_13.mp3",
+    "pitchPreservingTempo": 1.15
+  },
+  "en-female-14": {
+    "durationMs": 427,
+    "previousDurationMs": 402,
+    "sourceDurationMs": 743,
+    "removedLeadMs": 35,
+    "source": "attached_assets/generated_audio/count_en_female_14.mp3",
+    "pitchPreservingTempo": 1.15
+  },
+  "en-female-15": {
+    "durationMs": 429,
+    "previousDurationMs": 495,
+    "sourceDurationMs": 789,
+    "removedLeadMs": 40,
+    "source": "attached_assets/generated_audio/count_en_female_15.mp3",
+    "pitchPreservingTempo": 1.15
+  },
+  "en-female-16": {
+    "durationMs": 511,
+    "previousDurationMs": 569,
+    "sourceDurationMs": 789,
+    "removedLeadMs": 0,
+    "source": "attached_assets/generated_audio/count_en_female_16.mp3",
+    "pitchPreservingTempo": 1.15
+  }
+}

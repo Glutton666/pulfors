@@ -34,7 +34,7 @@ import type { AudioPlayer as ExpoAudioPlayer } from "expo-audio";
 import type { PersistAudioSettingsFn } from "@/hooks/useAudioPipeline";
 import type { BarRandomStrategy } from "@/lib/bar-random-session";
 import { NEUTRAL, sanitizeTonePosition, type TonePosition } from "@/lib/metronome-tone-dsp";
-import { sanitizeVoiceCountLanguage, type VoiceCountLanguage } from "@/lib/voice-count";
+import { sanitizeVoiceCountLanguage, sanitizeVoiceCountOutput, sanitizeVoiceCountSpeaker, type VoiceCountLanguage, type VoiceCountOutput, type VoiceCountSpeaker } from "@/lib/voice-count";
 import { sanitizeSoundSetOverlays, type SoundSetOverlays } from "@/lib/sound-overlays";
 import { BUILTIN_SOUND_SETS, CUSTOM_SOUND_SET_SLOTS } from "@/lib/storage";
 
@@ -121,6 +121,12 @@ export interface UseSettingsResult {
   voiceCountLanguage: VoiceCountLanguage;
   voiceCountLanguageRef: React.MutableRefObject<VoiceCountLanguage>;
   updateVoiceCountLanguage: (value: VoiceCountLanguage) => void;
+  voiceCountOutput: VoiceCountOutput;
+  voiceCountOutputRef: React.MutableRefObject<VoiceCountOutput>;
+  updateVoiceCountOutput: (value: VoiceCountOutput) => void;
+  voiceCountSpeaker: VoiceCountSpeaker;
+  voiceCountSpeakerRef: React.MutableRefObject<VoiceCountSpeaker>;
+  updateVoiceCountSpeaker: (value: VoiceCountSpeaker) => void;
   soundSetOverlays: SoundSetOverlays;
   soundSetOverlaysRef: React.MutableRefObject<SoundSetOverlays>;
   updateSoundSetOverlays: (value: SoundSetOverlays) => void;
@@ -248,6 +254,10 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
   const [layerSoundSets, setLayerSoundSets] = useState<Record<number, SoundSet>>({});
   const [voiceCountLanguage, setVoiceCountLanguage] = useState<VoiceCountLanguage>("off");
   const voiceCountLanguageRef = useRef<VoiceCountLanguage>("off");
+  const [voiceCountOutput, setVoiceCountOutput] = useState<VoiceCountOutput>("mixed");
+  const voiceCountOutputRef = useRef<VoiceCountOutput>("mixed");
+  const [voiceCountSpeaker, setVoiceCountSpeaker] = useState<VoiceCountSpeaker>("female");
+  const voiceCountSpeakerRef = useRef<VoiceCountSpeaker>("female");
   const [soundSetOverlays, setSoundSetOverlays] = useState<SoundSetOverlays>({});
   const soundSetOverlaysRef = useRef<SoundSetOverlays>({});
   const layerSoundSetsRef = useRef<Record<number, SoundSet>>({});
@@ -317,7 +327,7 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
       },
     },
     ...externalSnapshotRef.current,
-    voiceCountLanguage, soundSetOverlays,
+    voiceCountLanguage, voiceCountOutput, voiceCountSpeaker, soundSetOverlays,
   });
   // Inline update — runs on every render of useMetronomeScreen.
   const modeChangedThisRender = snapshotModeRef.current !== mode;
@@ -348,7 +358,7 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
         } satisfies ModeSettings,
       },
     ...externalSnapshotRef.current,
-    voiceCountLanguage, soundSetOverlays,
+    voiceCountLanguage, voiceCountOutput, voiceCountSpeaker, soundSetOverlays,
   };
   snapshotModeRef.current = mode;
   if (loadedSettingsRef.current) {
@@ -497,6 +507,10 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
       }
       voiceCountLanguageRef.current = sanitizeVoiceCountLanguage(settings.voiceCountLanguage);
       setVoiceCountLanguage(voiceCountLanguageRef.current);
+      voiceCountOutputRef.current = sanitizeVoiceCountOutput(settings.voiceCountOutput);
+      setVoiceCountOutput(voiceCountOutputRef.current);
+      voiceCountSpeakerRef.current = sanitizeVoiceCountSpeaker(settings.voiceCountSpeaker);
+      setVoiceCountSpeaker(voiceCountSpeakerRef.current);
       soundSetOverlaysRef.current = settings.soundSetOverlays ?? {};
       setSoundSetOverlays(soundSetOverlaysRef.current);
       if (settings.flashMode) {
@@ -679,8 +693,26 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
     persistSettings({ soundSetOverlays: next });
     scheduleReRenderCallbackRef.current();
   }, [persistSettings, scheduleReRenderCallbackRef]);
+  const updateVoiceCountOutput = useCallback((value: VoiceCountOutput) => {
+    const next = sanitizeVoiceCountOutput(value);
+    voiceCountOutputRef.current = next;
+    setVoiceCountOutput(next);
+    persistSettings({ voiceCountOutput: next });
+    scheduleReRenderCallbackRef.current();
+  }, [persistSettings, scheduleReRenderCallbackRef]);
+  const updateVoiceCountSpeaker = useCallback((value: VoiceCountSpeaker) => {
+    const next = sanitizeVoiceCountSpeaker(value);
+    voiceCountSpeakerRef.current = next;
+    setVoiceCountSpeaker(next);
+    persistSettings({ voiceCountSpeaker: next });
+    scheduleReRenderCallbackRef.current();
+  }, [persistSettings, scheduleReRenderCallbackRef]);
   const resetSoundEnhancements = useCallback(() => {
     voiceCountLanguageRef.current = "off";
+    voiceCountOutputRef.current = "mixed";
+    voiceCountSpeakerRef.current = "female";
+    setVoiceCountOutput("mixed");
+    setVoiceCountSpeaker("female");
     soundSetOverlaysRef.current = {};
     setVoiceCountLanguage("off");
     setSoundSetOverlays({});
@@ -789,6 +821,8 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
     sampleVolume, setSampleVolume,
     soundSet, setSoundSet, soundSetTonePositions, setSoundSetTonePositions, tonePosition,
     voiceCountLanguage, voiceCountLanguageRef, updateVoiceCountLanguage,
+    voiceCountOutput, voiceCountOutputRef, updateVoiceCountOutput,
+    voiceCountSpeaker, voiceCountSpeakerRef, updateVoiceCountSpeaker,
     soundSetOverlays, soundSetOverlaysRef, updateSoundSetOverlays,
     resetSoundEnhancements,
     layerSoundSets, setLayerSoundSets, layerSoundSetsRef,

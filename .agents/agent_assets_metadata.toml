@@ -6,6 +6,7 @@ id = "80Tsa_3l8_Xtw9y6lqFig"
 uri = "file://.local/prioritized-review-rerank.md"
 type = "text"
 title = "Pulfors 잔여 작업 단일 우선순위 (37개)"
+logical_id = "946d3837-61c4-426a-aa76-6711eeca24dd"
 
 [[outputs]]
 id = "QgtQ4fvgU0MhoOjZDosvJ"
@@ -13,6 +14,7 @@ uri = "file://attached_assets/generated_audio/count_ko_1.mp3"
 type = "audio"
 title = "metronome_ko_1"
 description = "Text-to-speech audio: 일."
+logical_id = "65dcaedb-e24d-450d-8709-9b2a9210a3b3"
 
 [[outputs]]
 id = "DCQhPNerAWQYNcdA7WJPA"
@@ -20,6 +22,7 @@ uri = "file://attached_assets/generated_audio/count_ko_0.mp3"
 type = "audio"
 title = "metronome_ko_0"
 description = "Text-to-speech audio: 공."
+logical_id = "951659c7-d39e-4814-8710-6c89b14d5de4"
 
 [[outputs]]
 id = "q0mbp9Dw4bmqMLvSJ125H"
@@ -27,6 +30,7 @@ uri = "file://attached_assets/generated_audio/count_ko_3.mp3"
 type = "audio"
 title = "metronome_ko_3"
 description = "Text-to-speech audio: 삼."
+logical_id = "0baa6577-4bc1-4a8f-b8a4-f9d22bb7e01f"
 
 [[outputs]]
 id = "GZOYNqAw6xoa7H5K_B7wF"
@@ -34,6 +38,7 @@ uri = "file://attached_assets/generated_audio/count_ko_4.mp3"
 type = "audio"
 title = "metronome_ko_4"
 description = "Text-to-speech audio: 넷."
+logical_id = "68a6ee60-9c00-4a66-890b-1b5106b1aa72"
 
 [[outputs]]
 id = "-IelfHG0r9ppcAcyRPeGJ"
@@ -41,6 +46,7 @@ uri = "file://attached_assets/generated_audio/count_ko_5.mp3"
 type = "audio"
 title = "metronome_ko_5"
 description = "Text-to-speech audio: 오."
+logical_id = "6db2d11c-16e1-470d-b0d6-6e84d18658a9"
 
 [[outputs]]
 id = "Lye8KJZlxt1huf09OHYhN"
@@ -48,6 +54,7 @@ uri = "file://attached_assets/generated_audio/count_ko_9.mp3"
 type = "audio"
 title = "metronome_ko_9"
 description = "Text-to-speech audio: 구."
+logical_id = "a62c88d5-661b-48f7-a7d9-e3f1a298fba1"
 
 [[outputs]]
 id = "xb5irxeq0D-VQS_gycKOF"
@@ -55,6 +62,7 @@ uri = "file://attached_assets/generated_audio/count_ko_6.mp3"
 type = "audio"
 title = "metronome_ko_6"
 description = "Text-to-speech audio: 육."
+logical_id = "ff9a0a1a-1d15-4040-87f7-6dca38d99a40"
 
 [[outputs]]
 id = "LvmEl8YeXLt0-CYrjy588"
@@ -62,6 +70,7 @@ uri = "file://attached_assets/generated_audio/count_ko_8.mp3"
 type = "audio"
 title = "metronome_ko_8"
 description = "Text-to-speech audio: 팔."
+logical_id = "671acc62-eb93-4962-9244-7c2f10b0b9d3"
 
 [[outputs]]
 id = "ZZoXLQ8pt3rxep5zmFvc3"
@@ -69,6 +78,7 @@ uri = "file://attached_assets/generated_audio/count_ko_7.mp3"
 type = "audio"
 title = "metronome_ko_7"
 description = "Text-to-speech audio: 칠."
+logical_id = "5076d695-e718-4416-a54d-d8d6b1c4eb6a"
 
 [[outputs]]
 id = "07-7_QoRKCsV_r9E_yi5R"
@@ -76,6 +86,7 @@ uri = "file://attached_assets/generated_audio/count_ko_2.mp3"
 type = "audio"
 title = "metronome_ko_2"
 description = "Text-to-speech audio: 둘."
+logical_id = "ca84e693-99f4-4ba6-a5c0-4d87075823a8"
 
 [[outputs]]
 id = "yCT6stJbmA8tkyYJNn1Fr"
@@ -83,6 +94,7 @@ uri = "file://attached_assets/generated_audio/count_en_1.mp3"
 type = "audio"
 title = "metronome_en_1"
 description = "Text-to-speech audio: one."
+logical_id = "2dc7c62f-7740-40e7-a5d0-fe36fd3b8d28"
 
 [[outputs]]
 id = "A6UgthnXhK5dJpDNhcIYe"
@@ -90,6 +102,7 @@ uri = "file://attached_assets/generated_audio/count_en_5.mp3"
 type = "audio"
 title = "metronome_en_5"
 description = "Text-to-speech audio: five."
+logical_id = "3c30ff2b-695a-449b-8122-a1d599f5217c"
 
 [[outputs]]
 id = "buD0x1Zv0l70hCbA1UUeM"
@@ -97,6 +110,7 @@ uri = "file://attached_assets/generated_audio/count_en_8.mp3"
 type = "audio"
 title = "metronome_en_8"
 description = "Text-to-speech audio: eight."
+logical_id = "4d654bd2-b6d5-4393-aa72-d56c44c6a5ac"
 
 [[outputs]]
 id = "pYSfPOWExRRS6zrVRk7Gx"
@@ -104,6 +118,7 @@ uri = "file://attached_assets/generated_audio/count_en_9.mp3"
 type = "audio"
 title = "metronome_en_9"
 description = "Text-to-speech audio: nine."
+logical_id = "ca4b729f-d09d-4472-a719-7331e82fe9ad"
 
 [[outputs]]
 id = "mLpBdHN-GntzPSSZLkYK0"
@@ -111,6 +126,7 @@ uri = "file://attached_assets/generated_audio/count_en_6.mp3"
 type = "audio"
 title = "metronome_en_6"
 description = "Text-to-speech audio: six."
+logical_id = "fafb9330-3d43-4846-9e13-6b45000b8fce"
 
 [[outputs]]
 id = "D08tdh-PTcicbCUVexlKl"
@@ -118,6 +134,7 @@ uri = "file://attached_assets/generated_audio/count_en_3.mp3"
 type = "audio"
 title = "metronome_en_3"
 description = "Text-to-speech audio: three."
+logical_id = "d198e1b4-73a1-4857-93a1-a8cf338542eb"
 
 [[outputs]]
 id = "sZ2FL5HNvt_xGyWffkpeV"
@@ -125,6 +142,7 @@ uri = "file://attached_assets/generated_audio/count_en_4.mp3"
 type = "audio"
 title = "metronome_en_4"
 description = "Text-to-speech audio: four."
+logical_id = "04e1b959-0dc0-470c-bdfb-ede5fa405498"
 
 [[outputs]]
 id = "Th-6UH-yjTAt3_A5_LAGQ"
@@ -132,6 +150,7 @@ uri = "file://attached_assets/generated_audio/count_en_0.mp3"
 type = "audio"
 title = "metronome_en_0"
 description = "Text-to-speech audio: zero."
+logical_id = "aa9fb417-7a05-4b50-bd98-743528c539d9"
 
 [[outputs]]
 id = "aQswKZDWHwpDDCe_FUo09"
@@ -139,6 +158,7 @@ uri = "file://attached_assets/generated_audio/count_en_7.mp3"
 type = "audio"
 title = "metronome_en_7"
 description = "Text-to-speech audio: seven."
+logical_id = "ff1226b5-4c00-4405-9143-f5d4e66d67c5"
 
 [[outputs]]
 id = "PGVl7dD6U40Y3O_oWsYUX"
@@ -146,6 +166,7 @@ uri = "file://attached_assets/generated_audio/count_en_2.mp3"
 type = "audio"
 title = "metronome_en_2"
 description = "Text-to-speech audio: two."
+logical_id = "3b2f6400-2a38-45a6-83b1-6e6ca4b402d0"
 
 [[outputs]]
 id = "A0m4GhBwg7XNFCAhyYC6t"
@@ -153,6 +174,7 @@ uri = "file://attached_assets/generated_audio/count_en_13.mp3"
 type = "audio"
 title = "metronome_en_13"
 description = "Text-to-speech audio: thirteen."
+logical_id = "7c020a2b-5925-4f2c-bdd2-5773893097c6"
 
 [[outputs]]
 id = "WGAd5HdQ57KhqLTjtRHFM"
@@ -160,6 +182,7 @@ uri = "file://attached_assets/generated_audio/count_en_12.mp3"
 type = "audio"
 title = "metronome_en_12"
 description = "Text-to-speech audio: twelve."
+logical_id = "c16a3f65-a879-415e-8deb-1f3b795ef8f2"
 
 [[outputs]]
 id = "Uloxtos4CMkgmh_tac62Y"
@@ -167,6 +190,7 @@ uri = "file://attached_assets/generated_audio/count_en_11.mp3"
 type = "audio"
 title = "metronome_en_11"
 description = "Text-to-speech audio: eleven."
+logical_id = "def8d054-4417-474b-8fc0-d61fe0007440"
 
 [[outputs]]
 id = "yeiwbtIiPclk5AmjI6qm6"
@@ -174,6 +198,7 @@ uri = "file://attached_assets/generated_audio/count_en_10.mp3"
 type = "audio"
 title = "metronome_en_10"
 description = "Text-to-speech audio: ten."
+logical_id = "7b5bf68b-b06b-4b17-9477-368179bb07af"
 
 [[outputs]]
 id = "K5ZB-vqgz1e3Lr3bOw0it"
@@ -181,6 +206,7 @@ uri = "file://attached_assets/generated_audio/count_en_15.mp3"
 type = "audio"
 title = "metronome_en_15"
 description = "Text-to-speech audio: fifteen."
+logical_id = "d5c21ea9-f4f8-4193-952d-8307e80b6a76"
 
 [[outputs]]
 id = "ydzebj39_aOnRz9nL6L2V"
@@ -188,6 +214,7 @@ uri = "file://attached_assets/generated_audio/count_en_14.mp3"
 type = "audio"
 title = "metronome_en_14"
 description = "Text-to-speech audio: fourteen."
+logical_id = "885116c8-e819-40eb-a33e-fd0efb5715e0"
 
 [[outputs]]
 id = "DMjcP0XeW4TKiReDInySB"
@@ -195,3 +222,546 @@ uri = "file://attached_assets/generated_audio/count_en_16.mp3"
 type = "audio"
 title = "metronome_en_16"
 description = "Text-to-speech audio: sixteen."
+logical_id = "6db53fdf-4308-4b5d-83eb-1f1424a1ccfc"
+
+[[outputs]]
+id = "A8PlJo6qhUPH_EyT_cSaG"
+uri = "file://attached_assets/generated_audio/count_ko_male_2.mp3"
+type = "audio"
+title = "short ko male count 2"
+description = "Text-to-speech audio: 둘."
+logical_id = "b47913b1-af06-4972-8dbe-e3aa779542e8"
+
+[[outputs]]
+id = "TpraNB2isl2QiuLKKnFui"
+uri = "file://attached_assets/generated_audio/count_ko_male_0.mp3"
+type = "audio"
+title = "short ko male count 0"
+description = "Text-to-speech audio: 공."
+logical_id = "558903e5-706e-437b-aa39-311ff04a46a8"
+
+[[outputs]]
+id = "2N2npiLR9lgT3ck5-I8Fn"
+uri = "file://attached_assets/generated_audio/count_ko_male_1.mp3"
+type = "audio"
+title = "short ko male count 1"
+description = "Text-to-speech audio: 일."
+logical_id = "909cb09e-dcd6-4ef0-9f79-aaf30dafe83a"
+
+[[outputs]]
+id = "ZcDVKfvZn5HeJdg0axStd"
+uri = "file://attached_assets/generated_audio/count_ko_male_5.mp3"
+type = "audio"
+title = "short ko male count 5"
+description = "Text-to-speech audio: 오."
+logical_id = "5021c36d-7d00-4a7e-8067-7a99ec10a104"
+
+[[outputs]]
+id = "jetwg6V-JOTodSEakpkGt"
+uri = "file://attached_assets/generated_audio/count_ko_male_4.mp3"
+type = "audio"
+title = "short ko male count 4"
+description = "Text-to-speech audio: 넷."
+logical_id = "64cc4c33-4288-47a5-b3c2-905829ff7d4a"
+
+[[outputs]]
+id = "FjwNfQvAgYZYQzG8m62pq"
+uri = "file://attached_assets/generated_audio/count_ko_male_3.mp3"
+type = "audio"
+title = "short ko male count 3"
+description = "Text-to-speech audio: 삼."
+logical_id = "18154830-fa65-49eb-a424-4f772c2fd9e0"
+
+[[outputs]]
+id = "Acd3ziaZHDDoBoPGn21q8"
+uri = "file://attached_assets/generated_audio/count_ko_male_9.mp3"
+type = "audio"
+title = "short ko male count 9"
+description = "Text-to-speech audio: 구."
+logical_id = "d9740d80-a1aa-49e1-a0d3-5c673473068e"
+
+[[outputs]]
+id = "PvZICPqv_F0-119_czoav"
+uri = "file://attached_assets/generated_audio/count_ko_male_6.mp3"
+type = "audio"
+title = "short ko male count 6"
+description = "Text-to-speech audio: 육."
+logical_id = "7a0d640d-c4ef-427f-84fb-35f1c19419bf"
+
+[[outputs]]
+id = "HwKGXvjHRm19VQrUa976C"
+uri = "file://attached_assets/generated_audio/count_ko_male_8.mp3"
+type = "audio"
+title = "short ko male count 8"
+description = "Text-to-speech audio: 팔."
+logical_id = "a997925a-8020-4bf5-ac87-47e5a2ae2ac0"
+
+[[outputs]]
+id = "kPjp-lPcSbUrROETGhxrX"
+uri = "file://attached_assets/generated_audio/count_ko_male_7.mp3"
+type = "audio"
+title = "short ko male count 7"
+description = "Text-to-speech audio: 칠."
+logical_id = "0cb535af-78d5-4563-bf23-9e5d1f22ec11"
+
+[[outputs]]
+id = "Z394bIXnNLwqos5FGrXst"
+uri = "file://attached_assets/generated_audio/count_en_male_4.mp3"
+type = "audio"
+title = "short en male count 4"
+description = "Text-to-speech audio: four."
+logical_id = "5e28d1d5-7453-4d6b-99b5-ce68b9e1ccd8"
+
+[[outputs]]
+id = "aQ9KDjT_aaaaJ-15soqjT"
+uri = "file://attached_assets/generated_audio/count_en_male_3.mp3"
+type = "audio"
+title = "short en male count 3"
+description = "Text-to-speech audio: three."
+logical_id = "11b03192-5b64-4363-8fca-6f405d90248b"
+
+[[outputs]]
+id = "cJiJcjwEQYs-GQR28IxQ7"
+uri = "file://attached_assets/generated_audio/count_en_male_8.mp3"
+type = "audio"
+title = "short en male count 8"
+description = "Text-to-speech audio: eight."
+logical_id = "7e198ef1-a207-4ffb-abbb-8d26edb818e8"
+
+[[outputs]]
+id = "LG2vu8E6jFlEk6koxhL6N"
+uri = "file://attached_assets/generated_audio/count_en_male_9.mp3"
+type = "audio"
+title = "short en male count 9"
+description = "Text-to-speech audio: nine."
+logical_id = "4711a23e-7a5a-4b4c-9b4a-962405007590"
+
+[[outputs]]
+id = "vhBQApZidHaFuDKnWfbNU"
+uri = "file://attached_assets/generated_audio/count_en_male_7.mp3"
+type = "audio"
+title = "short en male count 7"
+description = "Text-to-speech audio: seven."
+logical_id = "240d0d61-9fbd-4d60-ae0e-cb783e313a76"
+
+[[outputs]]
+id = "sdLm0OLax7LIgvwgC3boy"
+uri = "file://attached_assets/generated_audio/count_en_male_6.mp3"
+type = "audio"
+title = "short en male count 6"
+description = "Text-to-speech audio: six."
+logical_id = "6bcd8b07-d4cd-4aa0-9cd0-b1965b101ed0"
+
+[[outputs]]
+id = "VOW-QV720hGm2POieVBMn"
+uri = "file://attached_assets/generated_audio/count_en_male_5.mp3"
+type = "audio"
+title = "short en male count 5"
+description = "Text-to-speech audio: five."
+logical_id = "31cde720-8c57-4cfa-aa1a-5755d2bf5b73"
+
+[[outputs]]
+id = "Jw3IXKcE4L3uX9q3JldFX"
+uri = "file://attached_assets/generated_audio/count_en_male_10.mp3"
+type = "audio"
+title = "short en male count 10"
+description = "Text-to-speech audio: ten."
+logical_id = "63755cf0-5055-4cd7-b889-0b61ad931201"
+
+[[outputs]]
+id = "sR-zQExQtaSc-7qHGJwgV"
+uri = "file://attached_assets/generated_audio/count_en_male_14.mp3"
+type = "audio"
+title = "short en male count 14"
+description = "Text-to-speech audio: fourteen."
+logical_id = "5ebabfc3-7589-44e3-aa71-67637e2070fe"
+
+[[outputs]]
+id = "eQQ-TwEqtUGefLq1rKFq_"
+uri = "file://attached_assets/generated_audio/count_en_male_11.mp3"
+type = "audio"
+title = "short en male count 11"
+description = "Text-to-speech audio: eleven."
+logical_id = "89495f98-fcf6-482d-af39-52f2751022ce"
+
+[[outputs]]
+id = "2R46fPW-kVIiz4zIEfIOz"
+uri = "file://attached_assets/generated_audio/count_en_female_11.mp3"
+type = "audio"
+title = "short en female count 11"
+description = "Text-to-speech audio: eleven."
+logical_id = "455f55c3-7b3a-4b85-941a-2777ae7fcc22"
+
+[[outputs]]
+id = "AR3v7kzNxtDu7nI-Rc93N"
+uri = "file://attached_assets/generated_audio/count_en_female_3.mp3"
+type = "audio"
+title = "short en female count 3"
+description = "Text-to-speech audio: three."
+logical_id = "6d9d61b7-4861-4648-9a5d-cfb6df13fdc3"
+
+[[outputs]]
+id = "8CBOi0FkS2C_VdS06kBv5"
+uri = "file://attached_assets/generated_audio/count_en_female_8.mp3"
+type = "audio"
+title = "short en female count 8"
+description = "Text-to-speech audio: eight."
+logical_id = "9935a534-4abd-4134-ab84-64c40199c8c8"
+
+[[outputs]]
+id = "6HZeDx2iBlzNDjWixUSHX"
+uri = "file://attached_assets/generated_audio/count_en_female_6.mp3"
+type = "audio"
+title = "short en female count 6"
+description = "Text-to-speech audio: six."
+logical_id = "20be15f4-f36b-4b4b-84f3-073a5b6e1175"
+
+[[outputs]]
+id = "4jjE0fq354OtyLkDugAbj"
+uri = "file://attached_assets/generated_audio/count_en_female_7.mp3"
+type = "audio"
+title = "short en female count 7"
+description = "Text-to-speech audio: seven."
+logical_id = "a7e8f9fb-d727-4a1e-8db9-e34a06f2335c"
+
+[[outputs]]
+id = "0HX7tZJpN7zWTc7k1VXsM"
+uri = "file://attached_assets/generated_audio/count_en_female_13.mp3"
+type = "audio"
+title = "short en female count 13"
+description = "Text-to-speech audio: thirteen."
+logical_id = "43eb07f5-3cc2-459f-941d-e96986b7d743"
+
+[[outputs]]
+id = "Lvh6tbej6zhxEq3uQHEBA"
+uri = "file://attached_assets/generated_audio/count_en_female_12.mp3"
+type = "audio"
+title = "short en female count 12"
+description = "Text-to-speech audio: twelve."
+logical_id = "cf79f46e-ab72-4a98-8053-c500bda9392c"
+
+[[outputs]]
+id = "txbp9L5fSd4TFu4WysH3M"
+uri = "file://attached_assets/generated_audio/count_en_female_15.mp3"
+type = "audio"
+title = "short en female count 15"
+description = "Text-to-speech audio: fifteen."
+logical_id = "57cbff57-4fab-44d6-b25d-e7b8dca1d931"
+
+[[outputs]]
+id = "wtAvpmVlOPCWfhfM7w-fq"
+uri = "file://attached_assets/generated_audio/count_en_female_10.mp3"
+type = "audio"
+title = "short en female count 10"
+description = "Text-to-speech audio: ten."
+logical_id = "5213bc4e-c51d-4729-bef8-db15715236fd"
+
+[[outputs]]
+id = "VNfVR2FeXOmnxXDhro9Ya"
+uri = "file://attached_assets/generated_audio/count_en_female_4.mp3"
+type = "audio"
+title = "short en female count 4"
+description = "Text-to-speech audio: four."
+logical_id = "2cc78060-1aaf-450c-911c-c0a7c61a9550"
+
+[[outputs]]
+id = "VZ0qlGaxNo3oPgrHIuCny"
+uri = "file://attached_assets/generated_audio/count_ko_female_0.mp3"
+type = "audio"
+title = "speech"
+description = "Text-to-speech audio: 공."
+logical_id = "73c0c15a-407d-4b2d-b7c9-b31aadf9eba7"
+
+[[outputs]]
+id = "gmPgYbyvwD9yvpJq9ec8f"
+uri = "file://attached_assets/generated_audio/count_ko_female_1.mp3"
+type = "audio"
+title = "speech"
+description = "Text-to-speech audio: 일."
+logical_id = "86510cda-c7ba-4400-8843-fa6240104f3a"
+
+[[outputs]]
+id = "FdgGG4O01b-61ONMlV3sI"
+uri = "file://attached_assets/generated_audio/count_ko_female_2.mp3"
+type = "audio"
+title = "speech"
+description = "Text-to-speech audio: 둘."
+logical_id = "47db110e-1194-41a6-964f-90104ce6e0a4"
+
+[[outputs]]
+id = "qMslcvnl00mAIPjAoCc4I"
+uri = "file://attached_assets/generated_audio/count_ko_female_3.mp3"
+type = "audio"
+title = "speech"
+description = "Text-to-speech audio: 삼."
+logical_id = "ecaf5c0b-7df5-4cd6-9f2c-0518838a011a"
+
+[[outputs]]
+id = "H3fMIeCXli0trulrzjpma"
+uri = "file://attached_assets/generated_audio/count_ko_female_4.mp3"
+type = "audio"
+title = "speech"
+description = "Text-to-speech audio: 넷."
+logical_id = "386ddef5-c768-486c-8622-8265fd776db4"
+
+[[outputs]]
+id = "w9GEGZKfES6C8FVFdV2UZ"
+uri = "file://attached_assets/generated_audio/count_ko_female_5.mp3"
+type = "audio"
+title = "speech"
+description = "Text-to-speech audio: 오."
+logical_id = "71da9934-73d3-4a75-a764-d1da7712d2d2"
+
+[[outputs]]
+id = "uxe5raWI087kDxoUzzQ-P"
+uri = "file://attached_assets/generated_audio/count_ko_female_6.mp3"
+type = "audio"
+title = "speech"
+description = "Text-to-speech audio: 육."
+logical_id = "f5a297fe-94c7-47a1-b348-d6d704fdf867"
+
+[[outputs]]
+id = "eR_l4r2cgO025c02HSuKk"
+uri = "file://attached_assets/generated_audio/count_ko_female_7.mp3"
+type = "audio"
+title = "speech"
+description = "Text-to-speech audio: 칠."
+logical_id = "27942f18-086f-45b3-99e5-c943e7d2f041"
+
+[[outputs]]
+id = "7WDsEE-XWZsPNgilALB3E"
+uri = "file://attached_assets/generated_audio/count_ko_female_8.mp3"
+type = "audio"
+title = "speech"
+description = "Text-to-speech audio: 팔."
+logical_id = "34abe0d3-42e0-474e-9ed1-250df18eb1b5"
+
+[[outputs]]
+id = "El8LqBcl99MMrj_GZTflM"
+uri = "file://attached_assets/generated_audio/count_ko_female_9.mp3"
+type = "audio"
+title = "speech"
+description = "Text-to-speech audio: 구."
+logical_id = "b7148867-5ceb-4ed5-a3c5-62006ab282ea"
+
+[[outputs]]
+id = "hfEPGc_mjn0oMEjRKaj2n"
+uri = "file://attached_assets/generated_audio/count_en_male_0.mp3"
+type = "audio"
+title = "speech"
+description = "Text-to-speech audio: zero."
+logical_id = "b5e530d6-c850-4dcd-a9ae-cb7ad76ea845"
+
+[[outputs]]
+id = "RTKuOr4vOyY-Pp60EXy2Z"
+uri = "file://attached_assets/generated_audio/count_en_male_1.mp3"
+type = "audio"
+title = "speech"
+description = "Text-to-speech audio: one."
+logical_id = "d971fb85-50a3-4aa3-add0-bd54fd4ad782"
+
+[[outputs]]
+id = "UQ_h1cSOPSdEltqeMdpzu"
+uri = "file://attached_assets/generated_audio/count_en_male_2.mp3"
+type = "audio"
+title = "speech"
+description = "Text-to-speech audio: two."
+logical_id = "21be6c2a-99b0-4b66-b60f-b34f700b2bf8"
+
+[[outputs]]
+id = "W_OK6Zdrqffnmr-b903ya"
+uri = "file://attached_assets/generated_audio/count_en_male_12.mp3"
+type = "audio"
+title = "speech"
+description = "Text-to-speech audio: twelve."
+logical_id = "93d922f2-9d57-4256-9e30-da536a1a38ac"
+
+[[outputs]]
+id = "9126fOxvRpUnQ7geBTI2l"
+uri = "file://attached_assets/generated_audio/count_en_male_13.mp3"
+type = "audio"
+title = "speech"
+description = "Text-to-speech audio: thirteen."
+logical_id = "3d6b151a-debc-4ff9-b94a-2e9e5c98702c"
+
+[[outputs]]
+id = "Ra-AAdrFf_PTeJJIu05u3"
+uri = "file://attached_assets/generated_audio/count_en_male_15.mp3"
+type = "audio"
+title = "speech"
+description = "Text-to-speech audio: fifteen."
+logical_id = "7b471f40-607a-4d14-8d81-fe41535dd485"
+
+[[outputs]]
+id = "0h9kE7X8hQ-CmRhGwx6kO"
+uri = "file://attached_assets/generated_audio/count_en_male_16.mp3"
+type = "audio"
+title = "speech"
+description = "Text-to-speech audio: sixteen."
+logical_id = "dd58f35d-86cc-4622-b857-c40dd73c43e4"
+
+[[outputs]]
+id = "8JV5VI-G9jtY2QmYZ2wI5"
+uri = "file://attached_assets/generated_audio/count_en_female_0.mp3"
+type = "audio"
+title = "speech"
+description = "Text-to-speech audio: zero."
+logical_id = "23fdee75-4417-47da-acd8-087470a08d80"
+
+[[outputs]]
+id = "OnsXBTGN-fRhJSmP2dcg0"
+uri = "file://attached_assets/generated_audio/count_en_female_1.mp3"
+type = "audio"
+title = "speech"
+description = "Text-to-speech audio: one."
+logical_id = "2c7f3cb8-65d0-4b28-8a5b-efa1389d322e"
+
+[[outputs]]
+id = "DgIIE1EnbYpUGNUxloDrC"
+uri = "file://attached_assets/generated_audio/count_en_female_2.mp3"
+type = "audio"
+title = "speech"
+description = "Text-to-speech audio: two."
+logical_id = "834fdda0-4820-47f0-a002-2f5c1336f304"
+
+[[outputs]]
+id = "xJkiwQrAL9R23dpKKxRIF"
+uri = "file://attached_assets/generated_audio/count_en_female_5.mp3"
+type = "audio"
+title = "speech"
+description = "Text-to-speech audio: five."
+logical_id = "2b3589aa-c159-4665-8536-b48f8c4a02e0"
+
+[[outputs]]
+id = "908sc7hag9-CE4swMAhPa"
+uri = "file://attached_assets/generated_audio/count_en_female_9.mp3"
+type = "audio"
+title = "speech"
+description = "Text-to-speech audio: nine."
+logical_id = "c343613d-16d6-4728-b6b7-b50c3ee844c5"
+
+[[outputs]]
+id = "0lmR3eoe_dP5bak9Y_ubt"
+uri = "file://attached_assets/generated_audio/count_en_female_14.mp3"
+type = "audio"
+title = "speech"
+description = "Text-to-speech audio: fourteen."
+logical_id = "3514103d-c173-4f19-a59e-b3f8300cd6d4"
+
+[[outputs]]
+id = "szWxah1TJiVGG7AC-YoVm"
+uri = "file://attached_assets/generated_audio/count_en_female_16.mp3"
+type = "audio"
+title = "speech"
+description = "Text-to-speech audio: sixteen."
+logical_id = "1ae26379-8a1f-446f-9f15-cf40645995e4"
+
+[[outputs]]
+id = "tDXOM8BR_xrBTW9I2aJs7"
+uri = "file://attached_assets/generated_audio/count_sequence_ko_male.mp3"
+type = "audio"
+title = "speech"
+description = "Text-to-speech audio: 공, 일, 둘, 삼, 넷, 오, 육, 칠, 팔, 구."
+logical_id = "bb92eb73-7d05-4f6e-a4b1-c4ab58675deb"
+
+[[outputs]]
+id = "cHjOSKDjrvRaasZY3lKYs"
+uri = "file://attached_assets/generated_audio/count_sequence_en_male.mp3"
+type = "audio"
+title = "speech"
+description = "Text-to-speech audio: zero, one, two, three, four, five, six, seven, eight, nine, ten, eleven, twelve, thirteen, fourteen, fifteen, sixteen."
+logical_id = "06129bb5-94bd-4dec-94fb-5e129defef01"
+
+[[outputs]]
+id = "377lM3rrrSsQSk63o1EPJ"
+uri = "file://attached_assets/generated_audio/count_sequence_en_female.mp3"
+type = "audio"
+title = "speech"
+description = "Text-to-speech audio: zero, one, two, three, four, five, six, seven, eight, nine, ten, eleven, twelve, thirteen, fourteen, fifteen, sixteen."
+logical_id = "65f4a4bb-4c14-4834-884a-92363f2693cf"
+
+[[outputs]]
+id = "KUgwBYIROaGVN2lbTE7mk"
+uri = "file://attached_assets/generated_audio/count_sequence_ko_female.mp3"
+type = "audio"
+title = "speech"
+description = "Text-to-speech audio: 공, 일, 둘, 삼, 넷, 오, 육, 칠, 팔, 구."
+logical_id = "a4d99a4b-5357-4ddd-9c24-6f87e2701f0f"
+
+[[outputs]]
+id = "7zWO7sjv3sxigF1TOXX2N"
+uri = "file://attached_assets/generated_audio/count_spaced_en_female.mp3"
+type = "audio"
+title = "speech"
+description = "Text-to-speech audio: zero. one. two. three. four. five. six. seven. eight. nine. ten. eleven. twelve. thirteen. fourteen. fifteen. sixteen."
+logical_id = "5342e78c-fe5e-4540-8565-45cfe99bdc13"
+
+[[outputs]]
+id = "CdARQedfdBXD7MHyjgAlJ"
+uri = "file://attached_assets/generated_audio/count_spaced_en_male.mp3"
+type = "audio"
+title = "speech"
+description = "Text-to-speech audio: zero. one. two. three. four. five. six. seven. eight. nine. ten. eleven. twelve. thirteen. fourteen. fifteen. sixteen."
+logical_id = "e3ff214c-4e86-4ba3-af5b-6b600bdf1f14"
+
+[[outputs]]
+id = "ypgT8pk_4525eMMSO0UV9"
+uri = "file://attached_assets/generated_audio/count_en_female_13_2.mp3"
+type = "audio"
+title = "speech"
+description = "Text-to-speech audio: thirteen"
+logical_id = "231c09fc-6c9d-497f-93e3-cd8504e11373"
+
+[[outputs]]
+id = "imj04hrAPlj1BeBQyAWlK"
+uri = "file://attached_assets/generated_audio/count_en_female_1_2.mp3"
+type = "audio"
+title = "speech"
+description = "Text-to-speech audio: one"
+logical_id = "d4156e74-ffe4-4b6f-bc0f-9a8cd1558a3a"
+
+[[outputs]]
+id = "ZGGMmvsU3busHqR6d4GxP"
+uri = "file://attached_assets/generated_audio/count_en_female_16_2.mp3"
+type = "audio"
+title = "speech"
+description = "Text-to-speech audio: sixteen"
+logical_id = "8812b64f-bde0-41d1-ae25-121d6642bf43"
+
+[[outputs]]
+id = "hQG4MruYswlIndUOBJfF3"
+uri = "file://attached_assets/generated_audio/count_en_female_14_2.mp3"
+type = "audio"
+title = "speech"
+description = "Text-to-speech audio: fourteen"
+logical_id = "1b45005b-eef4-4622-ad17-a56af7ceb9ee"
+
+[[outputs]]
+id = "YKR-1twdSYkAomTAxJ17S"
+uri = "file://attached_assets/generated_audio/count_en_female_15_2.mp3"
+type = "audio"
+title = "speech"
+description = "Text-to-speech audio: fifteen"
+logical_id = "e18675b1-e851-45d2-a120-8fd0734e82b9"
+
+[[outputs]]
+id = "XFYet_Evqp2qM-xzstoa4"
+uri = "file://attached_assets/generated_audio/count_en_male_14_2.mp3"
+type = "audio"
+title = "speech"
+description = "Text-to-speech audio: fourteen"
+logical_id = "a52def26-ef86-46cf-97ed-9c91c94ce9fa"
+
+[[outputs]]
+id = "eVt89PXUmyRO7WTE-STjp"
+uri = "file://generated-artifacts/voice-count-comparison/comparison.html"
+type = "html"
+title = "음성 카운트 변경 전후 비교"
+description = "넷·오, 일·둘·삼·넷·오와 영어 남녀 음성 청취 샘플, 가공 전 원본 및 숫자별 길이 비교표입니다."
+logical_id = "e9443591-9269-4bd7-9e6a-f89af187af0a"
+content_hash = "sha256:51b21adbd2974a00c4197cc9ad8e11c397166f4ed6d84298cf0262b9065c13f9"
+size = 3905028
+mtime_ms = 1791650221979
+storage_uri = "gcs://replit-rams-assets-pike/rams/assets/repl:93f1fe32-983d-4024-b65a-6bb27a9b1eb8/e9443591-9269-4bd7-9e6a-f89af187af0a/6b9a03ff-7c42-412a-9f38-4ef279c11810"
+storage_version_token = "1791650395751452"
+content_type = "text/html"

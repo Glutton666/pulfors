@@ -1,6 +1,18 @@
 import type { BeatType } from "./metronome-engine";
 
 export type VoiceCountLanguage = "off" | "ko" | "en";
+export type VoiceCountOutput = "mixed" | "voice-only";
+export type VoiceCountSpeaker = "male" | "female";
+export function sanitizeVoiceCountOutput(value: unknown): VoiceCountOutput {
+  return value === "voice-only" ? value : "mixed";
+}
+export function sanitizeVoiceCountSpeaker(value: unknown): VoiceCountSpeaker {
+  return value === "male" ? value : "female";
+}
+/** Off always restores clicks, even if the remembered output is voice-only. */
+export function shouldPlayCountClicks(language: VoiceCountLanguage = "off", output: VoiceCountOutput = "mixed"): boolean {
+  return language === "off" || output !== "voice-only";
+}
 export const KOREAN_COUNT_WORDS = ["공", "일", "둘", "삼", "넷", "오", "육", "칠", "팔", "구"] as const;
 export const ENGLISH_COUNT_WORDS = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen"] as const;
 export function sanitizeVoiceCountLanguage(value: unknown): VoiceCountLanguage {

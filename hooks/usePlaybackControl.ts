@@ -258,7 +258,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
     sparseAbortRef.current = controller;
     const shouldAbort = () => generation !== sparseGenerationRef.current ||
       p.preparingCancelledRef.current;
-    const [clickPCMs, layerClickPCMs, samplePCMs] = await Promise.all([
+    const [clickPCMs, layerClickPCMs, samplePCMs, voiceCountPCMs] = await Promise.all([
       p.getClickPCMs(
         plan.audio.soundSet,
         controller.signal,
@@ -272,6 +272,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
         customSoundSets: plan.audio.customSoundSets,
       }),
       p.getSamplePCMs(plan.audio.noteSamples, controller.signal),
+      prepareVoiceCountPCMs(scheduleInfo.ticks, plan.audio.tone.voiceCountLanguage, controller.signal, plan.audio.tone.voiceCountSpeaker),
     ]);
     if (shouldAbort()) throw new Error("Sparse audio preparation was cancelled.");
     const prepared = await prepareSparseEvents({
@@ -279,6 +280,9 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
       measureDurationMs: scheduleInfo.durationMs,
       clickPCMs,
       layerClickPCMs,
+      voiceCountPCMs,
+      voiceCountLanguage: plan.audio.tone.voiceCountLanguage,
+      voiceCountOutput: plan.audio.tone.voiceCountOutput,
       samplePCMs,
       clickVolume: plan.audio.tone.renderGain,
       sampleVolume: samplePCMs.size > 0 ? plan.audio.sampleVolume : 0,
@@ -475,7 +479,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
           customSoundSets: plan.audio.customSoundSets,
         }),
         p.getSamplePCMs(plan.audio.noteSamples, signal),
-        prepareVoiceCountPCMs(ticks, plan.audio.tone.voiceCountLanguage, signal),
+        prepareVoiceCountPCMs(ticks, plan.audio.tone.voiceCountLanguage, signal, plan.audio.tone.voiceCountSpeaker),
       ]);
       if (
         !session.isCurrent() ||
@@ -498,6 +502,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
         metroChannelsByBeat: plan.mode === "bar" ? plan.audio.noteSampleMetroChannels : undefined,
         layerClickPCMs,
         voiceCountPCMs, voiceCountLanguage: plan.audio.tone.voiceCountLanguage,
+        voiceCountOutput: plan.audio.tone.voiceCountOutput,
       }, signal);
       const preparedPcm = session.complete(pcm, () => {});
       if (preparedPcm.status !== "completed") return preparedPcm;
@@ -659,7 +664,6 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
     const useSparseAndroid =
       Platform.OS === "android" &&
       (plan.mode === "beat" || plan.mode === "bar") &&
-      (!plan.audio.tone.voiceCountLanguage || plan.audio.tone.voiceCountLanguage === "off") &&
       !Object.values(plan.audio.tone.overlays ?? {}).some(Boolean) &&
       process.env.EXPO_PUBLIC_ENABLE_ANDROID_SPARSE_AUDIO === "1";
     // Select notification ownership before any preparation/start await.

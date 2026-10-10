@@ -1,6 +1,6 @@
 import type { SoundSet } from "@/lib/storage";
 import type { SoundSetOverlays } from "./sound-overlays";
-import type { VoiceCountLanguage } from "./voice-count";
+import { sanitizeVoiceCountOutput, sanitizeVoiceCountSpeaker, type VoiceCountLanguage, type VoiceCountOutput, type VoiceCountSpeaker } from "./voice-count";
 import {
   NEUTRAL,
   processClickPCM,
@@ -25,6 +25,8 @@ export interface AudioToneSnapshotInput {
   readonly positions?: Readonly<Partial<Record<SoundSet | string, Readonly<TonePosition>>>>;
   readonly overlays?: Readonly<SoundSetOverlays>;
   readonly voiceCountLanguage?: VoiceCountLanguage;
+  readonly voiceCountOutput?: VoiceCountOutput;
+  readonly voiceCountSpeaker?: VoiceCountSpeaker;
 }
 
 export interface AudioToneSnapshot {
@@ -40,6 +42,8 @@ export interface AudioToneSnapshot {
   readonly ceiling: number;
   readonly overlays?: Readonly<SoundSetOverlays>;
   readonly voiceCountLanguage?: VoiceCountLanguage;
+  readonly voiceCountOutput?: VoiceCountOutput;
+  readonly voiceCountSpeaker?: VoiceCountSpeaker;
 }
 
 export interface AudioToneShape {
@@ -86,6 +90,8 @@ export function createAudioToneSnapshot(
     ceiling: AUDIO_OUTPUT_CEILING,
     overlays: Object.freeze({ ...input.overlays }),
     voiceCountLanguage: input.voiceCountLanguage ?? "off",
+    voiceCountOutput: sanitizeVoiceCountOutput(input.voiceCountOutput),
+    voiceCountSpeaker: sanitizeVoiceCountSpeaker(input.voiceCountSpeaker),
   });
 }
 

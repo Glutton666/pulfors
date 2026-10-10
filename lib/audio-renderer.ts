@@ -6,7 +6,7 @@ import { logger } from "./logger";
 import { limitLinkedPCM } from "./metronome-tone-dsp";
 import type { SampleChannel, MetroChannel } from "./stereo-channel";
 import { getWebAudioPresentationTime } from "./web-audio-timing";
-import { voiceCountEvent } from "./voice-count";
+import { voiceCountEvent, shouldPlayCountClicks } from "./voice-count";
 
 const RENDER_SR = 44100;
 
@@ -436,6 +436,7 @@ export interface RenderMeasureParams {
   layerClickPCMs?: Map<string, ClickPCMs>;
   voiceCountPCMs?: ReadonlyMap<number, ClickPCMs>;
   voiceCountLanguage?: import("./voice-count").VoiceCountLanguage;
+  voiceCountOutput?: import("./voice-count").VoiceCountOutput;
   metroChannelsByBeat?: Record<string, MetroChannel>;
   shouldAbort?: () => boolean;
 }
@@ -456,6 +457,7 @@ export function renderMeasure(params: RenderMeasureParams): Float32Array | { lef
     metroChannelsByBeat,
     shouldAbort,
     voiceCountPCMs, voiceCountLanguage = "off",
+    voiceCountOutput = "mixed",
   } = params;
   const stereoMode =
     metronomeChannel !== "both" ||
@@ -521,6 +523,7 @@ export function renderMeasure(params: RenderMeasureParams): Float32Array | { lef
         const effectiveMetroChannel: MetroChannel =
           metroChannelsByBeat?.[String(tick.beat)] ?? metronomeChannel;
         if (effectiveMetroChannel !== "off") {
+          if (shouldPlayCountClicks(voiceCountLanguage, voiceCountOutput)) {
           let clickPCM: Float32Array;
           if (tick.type === "strong") clickPCM = effectiveClickPCMs.strong;
           else if (tick.type === "accent") clickPCM = effectiveClickPCMs.high;
@@ -529,6 +532,7 @@ export function renderMeasure(params: RenderMeasureParams): Float32Array | { lef
             mixToChannel(left, right, clickPCM, offsetSamples, clickVolume, effectiveMetroChannel as SampleChannel);
           } else {
             mixInto(left, clickPCM, offsetSamples, clickVolume, shouldAbort);
+          }
           }
           const event = voiceCountEvent(tick, voiceCountLanguage);
           if (event) {
@@ -635,6 +639,7 @@ export async function renderMeasureAbortable(
     layerClickPCMs,
     metroChannelsByBeat,
     voiceCountPCMs, voiceCountLanguage = "off",
+    voiceCountOutput = "mixed",
   } = params;
   await renderYield(signal);
   const stereoMode =
@@ -698,6 +703,7 @@ export async function renderMeasureAbortable(
         const effectiveMetroChannel: MetroChannel =
           metroChannelsByBeat?.[String(tick.beat)] ?? metronomeChannel;
         if (effectiveMetroChannel !== "off") {
+          if (shouldPlayCountClicks(voiceCountLanguage, voiceCountOutput)) {
           const clickPCM = tick.type === "strong"
             ? effectiveClickPCMs.strong
             : tick.type === "accent"
@@ -707,6 +713,7 @@ export async function renderMeasureAbortable(
             await mixToChannel(left, right, clickPCM, offsetSamples, clickVolume, effectiveMetroChannel as SampleChannel);
           } else {
             await mixIntoAbortable(left, clickPCM, offsetSamples, clickVolume, signal);
+          }
           }
           const event = voiceCountEvent(tick, voiceCountLanguage);
           if (event) {

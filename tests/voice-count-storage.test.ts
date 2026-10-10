@@ -7,7 +7,25 @@ describe("sound enhancements persist with safe legacy and deletion handling", ()
     await storage.setItem("metronome_settings", JSON.stringify({ bpm: 120 }));
     const settings = await loadSettings();
     expect(settings.voiceCountLanguage).toBe("off");
+    expect(settings.voiceCountOutput).toBe("mixed");
+    expect(settings.voiceCountSpeaker).toBe("female");
     expect(settings.soundSetOverlays).toEqual({});
+  });
+  it.each(["ko", "en"] as const)("roundtrips %s male/female and output independently", async language => {
+    for (const speaker of ["male", "female"] as const) {
+      for (const output of ["mixed", "voice-only"] as const) {
+        await saveSettings({ bpm: 120, beatsPerMeasure: 4, subdivisions: 1,
+          voiceCountLanguage: language, voiceCountSpeaker: speaker, voiceCountOutput: output } as MetronomeSettings);
+        const settings = await loadSettings();
+        expect(settings.voiceCountLanguage).toBe(language);
+        expect(settings.voiceCountSpeaker).toBe(speaker);
+        expect(settings.voiceCountOutput).toBe(output);
+      }
+    }
+  });
+  it("sanitizes invalid speaker/output while preserving off's independent choices", async () => {
+    await storage.setItem("metronome_settings", JSON.stringify({ voiceCountLanguage: "off", voiceCountSpeaker: "unknown", voiceCountOutput: "unknown" }));
+    expect(await loadSettings()).toMatchObject({ voiceCountLanguage: "off", voiceCountSpeaker: "female", voiceCountOutput: "mixed" });
   });
   it("roundtrips Tempo, Korean count, direct links and independent tone positions", async () => {
     await saveCustomSoundSets({ custom1: { name: "My click", strong: builtin("strong"), accent: builtin("high"), normal: builtin("low") } });

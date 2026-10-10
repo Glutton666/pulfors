@@ -48,6 +48,70 @@ beforeEach(() => {
   jest.clearAllMocks();
   saveMock.mockImplementation(async (_pcm, filename) => `file:///private/${filename}`);
 });
+test("voice-only suppresses both click layers, keeps speech/samples and restores clicks with Off", async () => {
+  const speech = Float32Array.from([0.01, 0.02]);
+  const params = {
+    schedule: [makeTick(), makeTick({ time: 10, subBeat: 1, layerIndex: 1 })],
+    measureDurationMs: 100, clickPCMs: makeClicks(),
+    samplePCMs: new Map([["0-0", makeSample([0.05])]]),
+    clickVolume: 1, outputGain: 1, sampleVolume: 1,
+    voiceCountLanguage: "ko" as const, voiceCountOutput: "voice-only" as const,
+    voiceCountPCMs: new Map([[1, { strong: speech, high: speech, low: speech }]]),
+  };
+  const prepared = await prepareSparseEvents(params);
+  expect(prepared.clipDescriptors).toHaveLength(2);
+  expect(saveMock.mock.calls[0][0]).toEqual(speech);
+  prepared.dispose();
+  jest.clearAllMocks();
+  const off = await prepareSparseEvents({ ...params, voiceCountLanguage: "off" });
+  expect(off.clipDescriptors).toHaveLength(3);
+  expect(saveMock.mock.calls[0][0]).toEqual(params.clickPCMs.low);
+  off.dispose();
+});
+test("mixed speech and clicks share one descriptor per dense metro slot", async () => {
+  const speech = Float32Array.from([0.01]);
+  const prepared = await prepareSparseEvents({
+    schedule: Array.from({ length: 256 }, (_, i) => makeTick({ time: i, beat: Math.floor(i / 16), subBeat: i % 16 })),
+    measureDurationMs: 1000, clickPCMs: makeClicks(), samplePCMs: new Map(),
+    clickVolume: 1, outputGain: 1, sampleVolume: 0,
+    voiceCountLanguage: "en", voiceCountOutput: "mixed",
+    voiceCountPCMs: new Map(Array.from({ length: 16 }, (_, i) => [i + 1, { strong: speech, high: speech, low: speech }])),
+  });
+  expect(prepared.clipDescriptors).toHaveLength(256);
+  expect((saveMock.mock.calls[0][0] as Float32Array)[0]).toBeCloseTo(0.31);
+  prepared.dispose();
+});
+test.each([false, true])("mixed primary and shared-click layer keep distinct audio in either schedule order (layer first: %s)", async layerFirst => {
+  const speech = Float32Array.from([0.01, 0.02]);
+  const clicks = makeClicks();
+  const primary = makeTick({ time: 10 });
+  const layer = makeTick({ time: 20, layerIndex: 1 });
+  const stored = new Map<string, Float32Array>();
+  saveMock.mockImplementation(async (pcm, filename) => {
+    const uri = `file:///private/${filename}`;
+    stored.set(uri, pcm as Float32Array);
+    return uri;
+  });
+  const prepared = await prepareSparseEvents({
+    // Prime object ID zero with speech used as an independent sample. Absent
+    // speech must never alias it, irrespective of primary/layer ordering.
+    schedule: [makeTick({ beat: 2 }), ...(layerFirst ? [layer, primary] : [primary, layer])],
+    metroChannelsByBeat: { "2": "off" },
+    measureDurationMs: 100, clickPCMs: clicks,
+    layerClickPCMs: new Map([["#1", clicks]]),
+    samplePCMs: new Map([["2-0", { pcm: speech, trimStartMs: 0, trimDurationMs: 0 }]]),
+    clickVolume: 1, outputGain: 1, sampleVolume: 1,
+    voiceCountLanguage: "ko", voiceCountOutput: "mixed",
+    voiceCountPCMs: new Map([[1, { strong: speech, high: speech, low: speech }]]),
+  });
+  const primaryEvent = prepared.clipDescriptors.find(v => v.startFrame === 441)!;
+  const layerEvent = prepared.clipDescriptors.find(v => v.startFrame === 882)!;
+  expect(primaryEvent.uri).not.toBe(layerEvent.uri);
+  expect(stored.get(primaryEvent.uri)![0]).toBeCloseTo(0.31);
+  expect(stored.get(primaryEvent.uri)![1]).toBeCloseTo(-0.28);
+  expect(stored.get(layerEvent.uri)).toEqual(clicks.low);
+  prepared.dispose();
+});
 
 test("creates one reusable click voice with a descriptor for each scheduled event", async () => {
   const clicks = makeClicks();

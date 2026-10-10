@@ -122,6 +122,34 @@ function buildParams(): UseSettingsParams {
     applyAudioSettingsCallbackRef: { current: () => {} },
   };
 }
+test("voice count choices restore, persist independently, and reset their state and refs", async () => {
+  const { loadSettings } = require("@/lib/storage");
+  loadSettings.mockResolvedValueOnce({
+    bpm: 120, beatsPerMeasure: 4, subdivisions: 1,
+    voiceCountLanguage: "ko", voiceCountOutput: "voice-only", voiceCountSpeaker: "male",
+  });
+  const params = buildParams();
+  params.scheduleReRenderCallbackRef.current = jest.fn();
+  const { result } = renderHook(() => useSettings(params));
+  await waitFor(() => expect(result.current.voiceCountSpeaker).toBe("male"));
+  expect(result.current.voiceCountOutputRef.current).toBe("voice-only");
+  act(() => result.current.updateVoiceCountLanguage("en"));
+  expect(result.current.voiceCountSpeaker).toBe("male");
+  act(() => result.current.updateVoiceCountSpeaker("female"));
+  act(() => result.current.updateVoiceCountOutput("mixed"));
+  expect(savedSettings.at(-1)).toMatchObject({
+    voiceCountLanguage: "en", voiceCountOutput: "mixed", voiceCountSpeaker: "female",
+  });
+  expect(params.scheduleReRenderCallbackRef.current).toHaveBeenCalledTimes(3);
+  act(() => result.current.updateVoiceCountOutput("voice-only"));
+  act(() => result.current.resetSoundEnhancements());
+  expect(result.current.voiceCountLanguage).toBe("off");
+  expect(result.current.voiceCountLanguageRef.current).toBe("off");
+  expect(result.current.voiceCountOutput).toBe("mixed");
+  expect(result.current.voiceCountOutputRef.current).toBe("mixed");
+  expect(result.current.voiceCountSpeaker).toBe("female");
+  expect(result.current.voiceCountSpeakerRef.current).toBe("female");
+});
 
 test("both tone axes survive sound-set and Beat/Bar/Note profile transitions", async () => {
   const { loadSettings } = require("@/lib/storage");

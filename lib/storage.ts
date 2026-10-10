@@ -10,7 +10,7 @@ import { logger } from "./logger";
 import { sanitizeTonePosition, type TonePosition } from "./metronome-tone-dsp";
 import { TUNING_DATA } from "./tuning-data";
 import { sanitizeSoundSetOverlays, type SoundSetOverlays } from "./sound-overlays";
-import { sanitizeVoiceCountLanguage, type VoiceCountLanguage } from "./voice-count";
+import { sanitizeVoiceCountLanguage, sanitizeVoiceCountOutput, sanitizeVoiceCountSpeaker, type VoiceCountLanguage, type VoiceCountOutput, type VoiceCountSpeaker } from "./voice-count";
 
 const SETTINGS_KEY = "metronome_settings";
 const PRACTICE_BOOK_KEY = "practice_book";
@@ -322,6 +322,8 @@ export interface MetronomeSettings {
   soundSetTonePositions?: Partial<Record<SoundSet, TonePosition>>;
   soundSetOverlays?: SoundSetOverlays;
   voiceCountLanguage?: VoiceCountLanguage;
+  voiceCountOutput?: VoiceCountOutput;
+  voiceCountSpeaker?: VoiceCountSpeaker;
   flashMode?: FlashMode;
   hapticMode?: HapticMode;
   audioOffsetMs?: number;
@@ -425,6 +427,8 @@ const DEFAULT_SETTINGS: MetronomeSettings = {
   soundSetTonePositions: {},
   soundSetOverlays: {},
   voiceCountLanguage: "off",
+  voiceCountOutput: "mixed",
+  voiceCountSpeaker: "female",
   flashMode: "accent",
   hapticMode: "all",
   audioOffsetMs: 0,
@@ -506,6 +510,8 @@ export async function loadSettings(): Promise<MetronomeSettings> {
           : undefined;
       merged.soundSetTonePositions = sanitizeTonePositions(merged.soundSetTonePositions);
       merged.voiceCountLanguage = sanitizeVoiceCountLanguage(parsed.voiceCountLanguage);
+      merged.voiceCountOutput = sanitizeVoiceCountOutput(parsed.voiceCountOutput);
+      merged.voiceCountSpeaker = sanitizeVoiceCountSpeaker(parsed.voiceCountSpeaker);
       merged.soundSetOverlays = sanitizeSoundSetOverlays(parsed.soundSetOverlays, [
         ...BUILTIN_SOUND_SETS, ...CUSTOM_SOUND_SET_SLOTS.filter(key => !!customSoundSets[key]),
       ]);

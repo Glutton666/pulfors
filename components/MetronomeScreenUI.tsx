@@ -121,6 +121,7 @@ export function MetronomeScreenUI(props: Props) {
     recordTutorialAction, completeTutorialStep, finishModeTutorial, skipModeTutorial,
     volume, updateVolume, tonePosition, updateTonePosition, sampleVolume, updateSampleVolume,
     voiceCountLanguage, updateVoiceCountLanguage, soundSetOverlays, updateSoundSetOverlays,
+    voiceCountOutput, updateVoiceCountOutput, voiceCountSpeaker, updateVoiceCountSpeaker,
     backgroundPlay, updateBackgroundPlay,
     playbackNotifications, updatePlaybackNotifications,
     autoResumeAfterInterruption, updateAutoResumeAfterInterruption,
@@ -1033,6 +1034,10 @@ export function MetronomeScreenUI(props: Props) {
         }}
         tonePosition={tonePosition}
         voiceCountLanguage={voiceCountLanguage}
+        voiceCountOutput={voiceCountOutput}
+        voiceCountSpeaker={voiceCountSpeaker}
+        onVoiceCountOutputChange={value => { if (!playbackEditsLocked) updateVoiceCountOutput(value); }}
+        onVoiceCountSpeakerChange={value => { if (!playbackEditsLocked) updateVoiceCountSpeaker(value); }}
         soundSetOverlays={soundSetOverlays}
         onVoiceCountLanguageChange={value => { if (!playbackEditsLocked) updateVoiceCountLanguage(value); }}
         onSoundSetOverlaysChange={value => { if (!playbackEditsLocked) updateSoundSetOverlays(value); }}

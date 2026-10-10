@@ -33,7 +33,7 @@ test("iframe: long-press links one click without selecting base; count choice, r
   });
   await page.route("**/extras-test-host", route => route.fulfill({
     contentType: "text/html",
-    body: '<body style="margin:0"><iframe id="app" src="/" allow="autoplay; microphone" style="border:0;width:420px;height:860px"></iframe></body>',
+    body: '<meta name="viewport" content="width=device-width,initial-scale=1"><body style="margin:0"><iframe id="app" src="/" allow="autoplay; microphone" style="border:0;width:420px;height:860px"></iframe></body>',
   }));
   const open = async (): Promise<Frame> => {
     await page.goto("/extras-test-host", { waitUntil: "domcontentloaded" });
@@ -90,14 +90,24 @@ test("iframe: long-press links one click without selecting base; count choice, r
   await app.getByTestId("sound-overlay-option-classic").click();
   await app.getByTestId("voice-count-language-ko").click();
   await expect.poll(async () => (await settings()).voiceCountLanguage).toBe("ko");
+  const voiceTop = (await app.getByTestId("voice-count-language-ko").boundingBox())!.y;
+  expect(voiceTop).toBeLessThan((await app.getByTestId("sound-set-row-classic").boundingBox())!.y);
+  await app.getByTestId("voice-count-output-voice-only").click();
+  await app.getByTestId("voice-count-speaker-male").click();
+  await expect.poll(async () => (await settings()).voiceCountOutput).toBe("voice-only");
+  await expect.poll(async () => (await settings()).voiceCountSpeaker).toBe("male");
   await app.getByTestId("voice-count-language-en").click();
   await expect.poll(async () => (await settings()).voiceCountLanguage).toBe("en");
   app = await open();
   expect((await settings()).soundSetOverlays).toEqual({ tempo: "classic" });
   expect((await settings()).voiceCountLanguage).toBe("en");
+  expect((await settings()).voiceCountOutput).toBe("voice-only");
+  expect((await settings()).voiceCountSpeaker).toBe("male");
+  await expect(app.getByTestId("voice-count-output-voice-only")).toHaveAttribute("aria-pressed", "true");
+  await expect(app.getByTestId("voice-count-speaker-male")).toHaveAttribute("aria-pressed", "true");
   await expect(app.getByTestId("sound-set-row-tempo")).toHaveAttribute("aria-pressed", "true");
   await expect(app.getByTestId("voice-count-language-en")).toHaveAttribute("aria-pressed", "true");
-  await app.getByTestId("voice-count-language-en").scrollIntoViewIfNeeded();
+  await app.getByTestId("voice-count-speaker-male").scrollIntoViewIfNeeded();
   await page.screenshot({ path: "test-results/sound-extras-settings.jpg" });
   // Verify real speech assets decode and enter a single bounded output loop.
   await app.getByTestId("settings-close").click();
@@ -107,6 +117,35 @@ test("iframe: long-press links one click without selecting base; count choice, r
   const loop = await app.evaluate(() => (window as any).__soundCaptures.findLast((c: any) => c.loop));
   expect(loop.energy).toBeGreaterThan(0);
   expect(loop.peak).toBeLessThanOrEqual(0.98);
+  await start.click();
+  await expect.poll(() => app.evaluate(() => (window as any).__soundCaptures.filter((c: any) => c.loop && !c.stopped).length)).toBe(0);
+  for (const language of ["ko", "en"]) {
+    for (const speaker of ["male", "female"]) {
+      await app.getByRole("button", { name: /^(Settings|설정)$/ }).click();
+      await app.getByText(/^(Sound|사운드)$/).click();
+      await app.getByTestId(`voice-count-language-${language}`).click();
+      await app.getByTestId(`voice-count-speaker-${speaker}`).click();
+      await app.getByTestId("voice-count-output-voice-only").click();
+      await expect.poll(async () => (await settings()).voiceCountSpeaker).toBe(speaker);
+      await app.getByTestId("settings-close").click();
+      await start.click();
+      await expect.poll(() => app.evaluate(() => (window as any).__soundCaptures.filter((c: any) => c.loop && !c.stopped).length)).toBe(1);
+      const voice = await app.evaluate(() => (window as any).__soundCaptures.findLast((c: any) => c.loop));
+      expect(voice.energy).toBeGreaterThan(0);
+      expect(voice.peak).toBeLessThanOrEqual(0.98);
+      await start.click();
+      await expect.poll(() => app.evaluate(() => (window as any).__soundCaptures.filter((c: any) => c.loop && !c.stopped).length)).toBe(0);
+    }
+  }
+  await app.getByRole("button", { name: /^(Settings|설정)$/ }).click();
+  await app.getByText(/^(Sound|사운드)$/).click();
+  await app.getByTestId("voice-count-language-off").click();
+  await expect(app.getByTestId("voice-count-speaker-male")).toBeDisabled();
+  await expect(app.getByTestId("voice-count-output-mixed")).toBeDisabled();
+  await app.getByTestId("settings-close").click();
+  await start.click();
+  await expect.poll(() => app.evaluate(() => (window as any).__soundCaptures.filter((c: any) => c.loop && !c.stopped).length)).toBe(1);
+  expect((await app.evaluate(() => (window as any).__soundCaptures.findLast((c: any) => c.loop))).energy).toBeGreaterThan(0);
   await start.click();
   await expect.poll(() => app.evaluate(() => (window as any).__soundCaptures.filter((c: any) => c.loop && !c.stopped).length)).toBe(0);
   expect(errors).toEqual([]);
