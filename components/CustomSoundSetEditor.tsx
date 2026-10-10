@@ -57,7 +57,30 @@ const ROLE_OPTIONS: { value: SoundRole; label: string }[] = [
   { value: "low", label: "NORMAL" },
 ];
 
-export function CustomSoundSetEditor({
+/**
+ * 이 편집기는 Bar 모드 하단 패널에 항상 마운트돼 있고 `visible`은 모달 표시만
+ * 제어한다. 본문이 마운트되는 순간 미리듣기용 useAudioPlayer를 33개(사운드셋
+ * 11개 × 3역할) 한꺼번에 만들어서, 그 순간 ExoPlayer/AudioTrack이 33개 생긴다.
+ * 기기의 AudioTrack 슬롯이 한계에 다다르면 재생용 풀 생성이
+ * createTrack_l -12(no control block)로 실패해 무음이 된다
+ * (2026-10-10 실기기: 재생 시작 62ms 안에 ExoPlayer 33개 생성 후 실패).
+ * 그래서 열려 있을 때만(닫힘 애니메이션 동안만 잠깐 더) 본문을 마운트한다.
+ */
+export function CustomSoundSetEditor(props: CustomSoundSetEditorProps) {
+  const [mounted, setMounted] = useState(props.visible);
+  useEffect(() => {
+    if (props.visible) {
+      setMounted(true);
+      return;
+    }
+    const timer = setTimeout(() => setMounted(false), 400);
+    return () => clearTimeout(timer);
+  }, [props.visible]);
+  if (!mounted && !props.visible) return null;
+  return <CustomSoundSetEditorBody {...props} />;
+}
+
+function CustomSoundSetEditorBody({
   visible,
   slot,
   customSoundSets,
