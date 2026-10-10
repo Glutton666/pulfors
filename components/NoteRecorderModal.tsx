@@ -50,10 +50,14 @@ import { decodeSampleFile } from "@/lib/audio-renderer";
 import { motionDuration, useReducedMotion } from "@/hooks/useReducedMotion";
 import type { RecorderKeyboardActions } from "@/lib/keyboard-bindings";
 import { registerSampleTempoTap } from "@/lib/sample-tap-tempo";
+import { NoteTtsPanel } from "@/components/NoteTtsPanel";
+import { getNoteTtsCopy } from "@/components/note-tts-copy";
+import { useNoteTts } from "@/hooks/useNoteTts";
 
-type Phase = "idle" | "countdown" | "recording" | "trimming" | "loading";
+type Phase = "idle" | "countdown" | "recording" | "trimming" | "loading" | "tts";
 
 interface NoteRecorderModalProps {
+  allowTts?: boolean;
   visible: boolean;
   onClose: () => void;
   onSave: (uri: string, name: string, source: SampleSource, channel: SampleChannel, metronomeChannel: MetroChannel, sampleGain?: number, sampleSpeed?: number) => void;
@@ -110,6 +114,7 @@ const RECORDER_OPTIONS: RecordingOptions =
   Platform.OS === "ios" ? WAV_RECORDING_OPTIONS : RecordingPresets.HIGH_QUALITY;
 
 export function NoteRecorderModal({
+  allowTts = false,
   visible,
   onClose,
   onSave,
@@ -135,7 +140,8 @@ export function NoteRecorderModal({
 }: NoteRecorderModalProps) {
   const { colors: C } = useTheme();
   const styles = make_styles(C);
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
+  const ttsCopy = getNoteTtsCopy(language);
   const { width: winW, height: winH } = useWindowDimensions();
   const reduceMotion = useReducedMotion();
 
@@ -144,7 +150,12 @@ export function NoteRecorderModal({
   const [recordDuration, setRecordDuration] = useState(0);
   const [recordedUri, setRecordedUri] = useState<string | null>(null);
   const [sampleName, setSampleName] = useState("");
-  const [keyboardSourceIndex, setKeyboardSourceIndex] = useState<0 | 1>(0);
+  const [keyboardSourceIndex, setKeyboardSourceIndex] = useState<0 | 1 | 2>(0);
+  const [isTtsDraft, setIsTtsDraft] = useState(false);
+  const saveTargetKey = `${visible}-${allowTts}-${beatIndex}-${subIndex}-${slotIndex}`;
+  const saveOwnerRef = useRef({ key: saveTargetKey });
+  if (saveOwnerRef.current.key !== saveTargetKey) saveOwnerRef.current = { key: saveTargetKey };
+  const saveOwner = saveOwnerRef.current;
   const sourceTypeRef = useRef<SampleSource>("recording");
   const [channel, setChannel] = useState<SampleChannel>(existingChannel);
   const [metronomeChannel, setMetronomeChannel] = useState<MetroChannel>(existingMetronomeChannel ?? "both");
@@ -494,6 +505,8 @@ export function NoteRecorderModal({
   }, [probeDurationSec, stopMetronomeClicks]);
 
   const stopPreview = useCallback(() => {
+    // Invalidate previews still waiting for channel conversion/seek/load.
+    previewTokenRef.current += 1;
     if (previewWatchRef.current) {
       clearInterval(previewWatchRef.current);
       previewWatchRef.current = null;
@@ -506,6 +519,41 @@ export function NoteRecorderModal({
     try { previewPlayerRef.current.pause(); } catch {}
     setIsPlayingPreview(false);
   }, [stopMetronomeClicks]);
+
+  const tts = useNoteTts(
+    visible && allowTts,
+    `${beatIndex}-${subIndex}-${slotIndex}`,
+    (result, text) => {
+      sourceTypeRef.current = "import";
+      setRecordedUri(result.uri);
+      setAudioDuration(result.duration);
+      setTrimStart(0);
+      setTrimEnd(1);
+      setSampleName(text.slice(0, 30));
+      setIsTtsDraft(true);
+      setPhase("trimming");
+    },
+    stopPreview,
+  );
+  const openTts = useCallback(() => {
+    tts.reset();
+    setRecordedUri(null);
+    setAudioDuration(0);
+    setIsTtsDraft(false);
+    setPhase("tts");
+    void tts.loadVoices();
+  }, [tts.reset, tts.loadVoices]);
+  const leaveTts = useCallback(() => {
+    tts.reset();
+    setPhase("idle");
+  }, [tts.reset]);
+  // A new slot/target must never inherit a draft or eventual generation result.
+  useEffect(() => {
+    setPhase("idle");
+    setRecordedUri(null);
+    setAudioDuration(0);
+    setIsTtsDraft(false);
+  }, [visible, allowTts, beatIndex, subIndex, slotIndex]);
 
   const playPreview = useCallback(async () => {
     if (!recordedUri || audioDuration === 0) return;
@@ -616,7 +664,8 @@ export function NoteRecorderModal({
   }, [autoPreview]);
 
   const doSave = useCallback((finalMetronomeChannel: MetroChannel) => {
-    if (!recordedUri) return;
+    if (!recordedUri || saveOwnerRef.current !== saveOwner || closedByHandleRef.current) return;
+    tts.commit(recordedUri); // Existing persistence now owns this durable file.
     if (audioDuration > 0) {
       const startMs = Math.floor(trimStart * audioDuration * 1000);
       const endMs = Math.floor(trimEnd * audioDuration * 1000);
@@ -624,7 +673,7 @@ export function NoteRecorderModal({
     } else {
       onSave(recordedUri, sampleName, sourceTypeRef.current, channel, finalMetronomeChannel, sampleGain, sampleSpeed);
     }
-  }, [recordedUri, trimStart, trimEnd, audioDuration, onSave, sampleName, channel, sampleGain, sampleSpeed]);
+  }, [recordedUri, trimStart, trimEnd, audioDuration, onSave, sampleName, channel, sampleGain, sampleSpeed, tts.commit, saveOwner]);
 
   const handleSave = useCallback(() => {
     if (!recordedUri) return;
@@ -771,26 +820,29 @@ export function NoteRecorderModal({
   }, [onDelete]);
 
   const handleClose = useCallback(async () => {
+    saveOwnerRef.current = { key: "closed" };
+    tts.reset();
     closedByHandleRef.current = true;
     await cleanup();
     onClose();
-  }, [cleanup, onClose]);
+  }, [cleanup, onClose, tts.reset]);
 
   useEffect(() => {
     if (!keyboardActionsRef) return;
     keyboardActionsRef.current = {
       isActive: () => visible,
       moveSelection: (direction) => {
-        setKeyboardSourceIndex((current) => (direction < 0
-          ? (current === 0 ? 1 : 0)
-          : (current === 1 ? 0 : 1)));
+        const count = allowTts ? 3 : 2;
+        setKeyboardSourceIndex((current) => ((current + (direction < 0 ? count - 1 : 1)) % count) as 0 | 1 | 2);
       },
       confirm: () => {
         if (!visible || phase !== "idle") return;
         if (keyboardSourceIndex === 0) {
           void startCountdown();
-        } else {
+        } else if (keyboardSourceIndex === 1) {
           void handleImportFile();
+        } else {
+          openTts();
         }
       },
       cancel: () => {
@@ -808,6 +860,8 @@ export function NoteRecorderModal({
     phase,
     startCountdown,
     visible,
+    openTts,
+    allowTts,
   ]);
 
   const countAnimStyle = useAnimatedStyle(() => ({
@@ -945,7 +999,7 @@ export function NoteRecorderModal({
                 </View>
               </View>
             )}
-            <ScrollView showsVerticalScrollIndicator={false} bounces={false} contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
+            <ScrollView style={{ flexShrink: 1, minHeight: 0 }} showsVerticalScrollIndicator={false} bounces={false} contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
 
           {phase === "idle" && (
             <View style={styles.content}>
@@ -979,6 +1033,16 @@ export function NoteRecorderModal({
                   <Text style={[styles.sourceButtonText, { color: keyboardSourceIndex === 1 ? onAccentColor(C.accent) : C.text }]}>{t("noteRecorder", "import")}</Text>
                 </Pressable>
               </View>}
+              {allowTts && <Pressable
+                testID="note-recorder-tts"
+                accessibilityRole="button"
+                accessibilityLabel={ttsCopy.title}
+                style={[styles.sourceButton, { width: "100%", borderColor: keyboardSourceIndex === 2 ? C.accent : C.border, borderWidth: 1 }]}
+                onPress={openTts}
+              >
+                <Ionicons name="text-outline" size={20} color={C.text} />
+                <Text style={[styles.sourceButtonText, { color: C.text }]}>{ttsCopy.title}</Text>
+              </Pressable>}
               {hasExisting && (
                 <>
                   <Pressable style={[styles.sourceButton, { width: "100%", borderColor: C.border, borderWidth: 1 }]} onPress={handleEditExisting}>
@@ -991,6 +1055,18 @@ export function NoteRecorderModal({
                   </Pressable>
                 </>
               )}
+            </View>
+          )}
+
+          {phase === "tts" && (
+            <View style={{ padding: Spacing.lg }}>
+              <NoteTtsPanel
+                text={tts.text} onTextChange={tts.changeText}
+                voices={tts.voices} voiceId={tts.voiceId} onVoiceChange={tts.changeVoice}
+                status={tts.status} error={tts.error}
+                onGenerate={() => { void tts.generate(); }} onCancel={tts.reset}
+                onRetry={() => { void tts.loadVoices(); }} onBack={leaveTts}
+              />
             </View>
           )}
 
@@ -1045,6 +1121,13 @@ export function NoteRecorderModal({
 
           {phase === "trimming" && recordedUri && (
             <View style={styles.content}>
+              {isTtsDraft && (
+                <Pressable testID="note-tts-edit" accessibilityRole="button" onPress={openTts}
+                  style={[styles.sourceButton, { borderColor: C.border, borderWidth: 1 }]}>
+                  <Ionicons name="text-outline" size={18} color={C.text} />
+                  <Text style={[styles.sourceButtonText, { color: C.text }]}>{ttsCopy.regenerate}</Text>
+                </Pressable>
+              )}
               <Text style={styles.sectionLabel}>{t("noteRecorder", "trimAudio")}</Text>
               <Text style={styles.trimInfo}>
                 {t("noteRecorder", "duration").replace("{0}", trimDuration)}
@@ -1218,6 +1301,7 @@ export function NoteRecorderModal({
                 <Pressable
                   style={[styles.previewBtn, { borderColor: autoPreview ? C.accent : C.textSecondary }]}
                   onPress={togglePreview}
+                  testID="note-recorder-preview"
                   onLongPress={() => {
                     setAutoPreview((prev) => {
                       const next = !prev;
@@ -1369,6 +1453,7 @@ export function NoteRecorderModal({
                 <Pressable
                   style={[styles.saveBtn, { backgroundColor: C.accent }]}
                   onPress={handleSave}
+                  testID="note-recorder-save"
                 >
                   <Ionicons name="checkmark" size={18} color={onAccentColor(C.accent)} />
                   <Text style={[styles.saveBtnText, { color: onAccentColor(C.accent) }]}>{t("noteRecorder", "save")}</Text>

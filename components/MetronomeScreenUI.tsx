@@ -826,6 +826,7 @@ export function MetronomeScreenUI(props: Props) {
 
       {recorderTarget !== null && (
       <NoteRecorderModal
+        allowTts={barMode}
         visible={recorderTarget !== null}
         onClose={() => setRecorderTarget(null)}
         onSave={handleNoteRecordSave}
