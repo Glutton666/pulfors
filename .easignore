@@ -30,6 +30,11 @@ android/
 # 이 예외가 없으면 android/ 소스가 EAS 업로드에서 빠져 네이티브 모듈이 빌드에 안 들어간다.
 !modules/sparse-metronome/android/
 !modules/sparse-metronome/android/**
+# note-tts도 로컬 Expo 모듈이다(.gitignore와 동일 예외). 없으면 네이티브 소스가 업로드에서 빠진다.
+!modules/note-tts/android/
+!modules/note-tts/android/**
+!modules/note-tts/ios/
+!modules/note-tts/ios/**
 *.orig.*
 *.jks
 *.p8

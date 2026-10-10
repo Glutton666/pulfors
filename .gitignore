@@ -27,6 +27,11 @@ android/
 !modules/audio-decoder/android/**
 !modules/sparse-metronome/android/
 !modules/sparse-metronome/android/**
+# note-tts도 손으로 작성한 로컬 Expo 모듈이다. 네이티브 소스를 git에 포함한다.
+!modules/note-tts/android/
+!modules/note-tts/android/**
+!modules/note-tts/ios/
+!modules/note-tts/ios/**
 *.orig.*
 *.jks
 *.p8
