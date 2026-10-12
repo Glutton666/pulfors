@@ -37,7 +37,7 @@ test("native clock waits for playback, survives a transient status flip, and sto
   jest.mocked(createAudioPlayer).mockReturnValue(player as any);
   const output = createNativeAudioOutput().rendered("file:///count.wav");
   const provider = createNativeVisualTimingProvider(output.getPositionSeconds);
-  expect(provider(0, 2000, true)).toBeCloseTo(-10);
+  expect(provider(0, 2000, true)).toBe(-1000);
   expect(player.play).not.toHaveBeenCalled();
   player.playing = true;
   expect(output.getPositionSeconds()).toBe(0);
@@ -48,6 +48,44 @@ test("native clock waits for playback, survives a transient status flip, and sto
   output.release();
   expect(provider(700, 2000, true)).toBeNull();
   expect(player.release).toHaveBeenCalledTimes(1);
+});
+
+test.each([1200, 5200])("finite playback waits through a %i ms native startup delay", (delay) => {
+  const original = Object.getOwnPropertyDescriptor(globalThis, "performance")!;
+  let now = 1000;
+  Object.defineProperty(globalThis, "performance", { configurable: true, value: { now: () => now } });
+  const engine = new MetronomeEngine();
+  try {
+    engine.setBpm(120); engine.setBeatsPerMeasure(4); engine.buildScheduleOnly();
+    engine.setPreRenderedAudio(true);
+    let position = -0.01;
+    engine.setVisualTimingProvider(createNativeVisualTimingProvider(() => position));
+    const beats: number[] = [];
+    const completed = jest.fn();
+    engine.setOnBeat((beat) => { beats.push(beat); });
+    engine.setOnMeasureComplete(completed);
+    engine.start();
+    engine.requestStopAfterMeasure();
+    const internal = engine as unknown as { loop: () => void };
+    for (let step = 0; step < 4; step++) {
+      now += delay / 4;
+      internal.loop();
+      expect(beats).toEqual([]);
+      expect(completed).not.toHaveBeenCalled();
+    }
+    position = 0; internal.loop();
+    expect(beats).toEqual([0]);
+    for (let beat = 1; beat <= 3; beat++) {
+      now += 500; position = beat * 0.5; internal.loop();
+      expect(beats).toEqual(Array.from({ length: beat + 1 }, (_, index) => index));
+      expect(completed).not.toHaveBeenCalled();
+    }
+    now += 500; position = 0; internal.loop();
+    expect(completed).toHaveBeenCalledTimes(1);
+  } finally {
+    engine.stop();
+    Object.defineProperty(globalThis, "performance", original);
+  }
 });
 
 test("count beat indicators wait for native output and catch up after a stalled UI", () => {
