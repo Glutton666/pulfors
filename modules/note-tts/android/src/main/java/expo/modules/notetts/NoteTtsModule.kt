@@ -126,8 +126,11 @@ class NoteTtsModule : Module() {
       override fun onStart(id: String) {}
       override fun onDone(id: String) { main.post {
         val job = active?.takeIf { it.id == id } ?: return@post
-        val duration = if (job.sampleRate > 0) job.frames.toDouble() / job.sampleRate else 0.0
-        if (duration <= 0 || duration > 30 || job.file.length() <= 44 || job.file.length() > 16 * 1024 * 1024) {
+        val duration = NoteTtsWav.duration(job.file)
+        if (duration <= 0) {
+          fail("invalidAudio", "Speech engine produced an invalid or unsupported WAV file."); return@post
+        }
+        if (duration > 30 || job.file.length() > 16 * 1024 * 1024) {
           fail("tooLarge", "Invalid or overlong speech output."); return@post
         }
         job.timeout?.let { main.removeCallbacks(it) }

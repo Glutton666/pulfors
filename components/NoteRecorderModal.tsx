@@ -53,6 +53,7 @@ import { registerSampleTempoTap } from "@/lib/sample-tap-tempo";
 import { NoteTtsPanel } from "@/components/NoteTtsPanel";
 import { getNoteTtsCopy } from "@/components/note-tts-copy";
 import { useNoteTts } from "@/hooks/useNoteTts";
+import { startNotePreview } from "@/lib/note-preview-playback";
 
 type Phase = "idle" | "countdown" | "recording" | "trimming" | "loading" | "tts";
 
@@ -178,6 +179,7 @@ export function NoteRecorderModal({
   const [trimEnd, setTrimEnd] = useState(1);
   const [audioDuration, setAudioDuration] = useState(0);
   const [isPlayingPreview, setIsPlayingPreview] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
   const [autoPreview, setAutoPreview] = useState(true);
   const [pressToast, setPressToast] = useState<string | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -195,6 +197,8 @@ export function NoteRecorderModal({
 
   const clickSource = (soundSets as Record<string, typeof soundSets.classic>)[soundSet]?.low ?? soundSets.classic.low;
   const clickPlayer = useAudioPlayer(clickSource);
+  const clickPlayerRef = useRef(clickPlayer);
+  useEffect(() => { clickPlayerRef.current = clickPlayer; }, [clickPlayer]);
   const previewPlayer = useAudioPlayer(null);
   const previewPlayerRef = useRef(previewPlayer);
   useEffect(() => { previewPlayerRef.current = previewPlayer; }, [previewPlayer]);
@@ -207,11 +211,21 @@ export function NoteRecorderModal({
   // useEffect([visible]) branch skips a redundant cleanup() call.
   const closedByHandleRef = useRef(false);
   const recordingActiveRef = useRef(false);
+  const recordingSessionOwnedRef = useRef(false);
+  const clickTokenRef = useRef(0);
+  const releaseRecordingSession = useCallback(async () => {
+    if (!recordingSessionOwnedRef.current) return;
+    recordingSessionOwnedRef.current = false;
+    await releaseAudioSession("noteRecorderModal");
+  }, []);
 
   const countScale = useSharedValue(1);
   const countOpacity = useSharedValue(1);
 
   const cleanup = useCallback(async () => {
+    ++clickTokenRef.current;
+    ++previewTokenRef.current;
+    try { clickPlayerRef.current.pause(); } catch {}
     if (recordTimerRef.current) {
       clearInterval(recordTimerRef.current);
       recordTimerRef.current = null;
@@ -234,22 +248,27 @@ export function NoteRecorderModal({
     }
     try { previewPlayerRef.current.pause(); } catch {}
     try {
-      await releaseAudioSession("noteRecorderModal");
+      await releaseRecordingSession();
     } catch {}
     if (toastTimerRef.current) {
       clearTimeout(toastTimerRef.current);
       toastTimerRef.current = null;
     }
     setPressToast(null);
-  }, []);
+  }, [releaseRecordingSession]);
 
   const updateSampleSpeed = useCallback((next: number) => {
     setSampleSpeed(Math.max(0.5, Math.min(2, Math.round(next * 20) / 20)));
   }, []);
 
-  const playClick = useCallback(() => {
-    try { clickPlayer.seekTo(0); } catch {}
-    safePlay(clickPlayer, "noteRecorder.click");
+  const playClick = useCallback(async () => {
+    const token = clickTokenRef.current;
+    try {
+      await clickPlayer.seekTo(0);
+      if (token === clickTokenRef.current) safePlay(clickPlayer, "noteRecorder.click");
+    } catch (e) {
+      captureBreadcrumb({ category: "noteRecorder", message: "Preview click failed", level: "warning", data: { error: String(e) } });
+    }
   }, [clickPlayer]);
 
   const startMetronomeClicks = useCallback((currentBpm: number) => {
@@ -262,11 +281,13 @@ export function NoteRecorderModal({
   }, [playClick]);
 
   const stopMetronomeClicks = useCallback(() => {
+    ++clickTokenRef.current;
     if (metronomeTimerRef.current) {
       clearInterval(metronomeTimerRef.current);
       metronomeTimerRef.current = null;
     }
-  }, []);
+    try { clickPlayer.pause(); } catch {}
+  }, [clickPlayer]);
 
   const resetTempoTaps = useCallback(() => {
     tempoTapTimesRef.current = [];
@@ -300,6 +321,7 @@ export function NoteRecorderModal({
       setTrimEnd(1);
       setAudioDuration(0);
       setIsPlayingPreview(false);
+      setPreviewError(null);
       setSampleName("");
       previewStereoCacheRef.current = {};
       previewTokenRef.current += 1;
@@ -318,19 +340,17 @@ export function NoteRecorderModal({
   }, [recordedUri, resetTempoTaps]);
 
   const prepareRecording = useCallback(async () => {
-    let acquired = false;
     try {
+      recordingSessionOwnedRef.current = true;
       await acquireAudioSession("noteRecorderModal", "recording");
-      acquired = true;
+      if (!recordingSessionOwnedRef.current) return;
       await recorderRef.current.prepareToRecordAsync();
     } catch (e) {
       captureBreadcrumb({ category: "noteRecorder", message: "prepareToRecord failed", level: "error", data: { error: String(e) } });
       // prepare가 실패하면 녹음은 시작되지 않으므로 세션을 즉시 회복한다.
-      if (acquired) {
-        try { await releaseAudioSession("noteRecorderModal"); } catch {}
-      }
+      try { await releaseRecordingSession(); } catch {}
     }
-  }, []);
+  }, [releaseRecordingSession]);
 
   const startCountdownRef = useRef<() => Promise<void>>(async () => {});
   const startCountdown = useCallback(async () => {
@@ -413,9 +433,9 @@ export function NoteRecorderModal({
       recordingActiveRef.current = false;
       // record() 자체가 실패하면 prepareRecording에서 잡고 있던 세션이 남으므로
       // 여기서 명시적으로 회복한다.
-      try { await releaseAudioSession("noteRecorderModal"); } catch {}
+      try { await releaseRecordingSession(); } catch {}
     }
-  }, [bpm, startMetronomeClicks]);
+  }, [bpm, startMetronomeClicks, releaseRecordingSession]);
 
   const probeDurationSec = useCallback(async (uri: string): Promise<number> => {
     return new Promise((resolve) => {
@@ -480,7 +500,7 @@ export function NoteRecorderModal({
       await recorderRef.current.stop();
       recordingActiveRef.current = false;
       const uri = recorderRef.current.uri;
-      await releaseAudioSession("noteRecorderModal");
+      await releaseRecordingSession();
 
       if (uri) {
         setRecordedUri(uri);
@@ -500,9 +520,9 @@ export function NoteRecorderModal({
       captureBreadcrumb({ category: "noteRecorder", message: "stopRecording failed", level: "error", data: { error: String(e) } });
       setPhase("idle");
       // 에러로 stop이 실패해도 세션은 반드시 회복.
-      try { await releaseAudioSession("noteRecorderModal"); } catch {}
+      try { await releaseRecordingSession(); } catch {}
     }
-  }, [probeDurationSec, stopMetronomeClicks]);
+  }, [probeDurationSec, stopMetronomeClicks, releaseRecordingSession]);
 
   const stopPreview = useCallback(() => {
     // Invalidate previews still waiting for channel conversion/seek/load.
@@ -558,13 +578,8 @@ export function NoteRecorderModal({
   const playPreview = useCallback(async () => {
     if (!recordedUri || audioDuration === 0) return;
 
-    if (previewWatchRef.current) {
-      clearInterval(previewWatchRef.current);
-      previewWatchRef.current = null;
-    }
-    // 이전 미리듣기 클릭 정리
-    stopMetronomeClicks();
-
+    stopPreview();
+    setPreviewError(null);
     const token = ++previewTokenRef.current;
 
     try {
@@ -589,31 +604,17 @@ export function NoteRecorderModal({
 
       if (token !== previewTokenRef.current) return;
       const player = previewPlayerRef.current;
-      try { player.pause(); } catch {}
-      try { player.replace({ uri: effectiveUri }); } catch {}
-      player.volume = sampleGain;
-      player.playbackRate = sampleSpeed;
-      player.shouldCorrectPitch = false;
 
       const startSec = trimStart * audioDuration;
       const endSec = trimEnd * audioDuration;
 
-      // Wait briefly for the player to load the new source before seeking.
-      const waitLoad = async () => {
-        const start = Date.now();
-        while (Date.now() - start < 1500) {
-          const d = player.duration;
-          if (typeof d === "number" && d > 0 && isFinite(d)) return true;
-          await new Promise((r) => setTimeout(r, 40));
-        }
-        return false;
-      };
-      await waitLoad();
-      if (token !== previewTokenRef.current) return;
-
-      try { await player.seekTo(startSec); } catch {}
+      const started = await startNotePreview(player, effectiveUri, startSec, () => token !== previewTokenRef.current, () => {
+        player.volume = sampleGain;
+        player.shouldCorrectPitch = false;
+        player.setPlaybackRate(sampleSpeed);
+      });
+      if (!started || token !== previewTokenRef.current) return;
       setIsPlayingPreview(true);
-      safePlay(player, "noteRecorder.preview");
 
       // 1/1 클릭: 미리듣기 시작과 동시에 한 마디 간격으로 클릭 (메트로놈 채널이 off가 아닐 때만)
       if (metronomeChannel !== "off") {
@@ -638,10 +639,13 @@ export function NoteRecorderModal({
         }
       }, 50);
     } catch (e) {
+      if (token !== previewTokenRef.current) return;
       captureBreadcrumb({ category: "noteRecorder", message: "playPreview failed", level: "warning", data: { error: String(e) } });
       stopPreview();
+      const code = e instanceof Error ? e.message : "";
+      setPreviewError(code === "previewSeek" ? ttsCopy.previewSeek : code === "previewPlay" ? ttsCopy.previewPlay : ttsCopy.previewLoad);
     }
-  }, [recordedUri, trimStart, trimEnd, audioDuration, channel, metronomeChannel, localBpm, beatsPerMeasure, sampleGain, sampleSpeed, playClick, stopMetronomeClicks, stopPreview]);
+  }, [recordedUri, trimStart, trimEnd, audioDuration, channel, metronomeChannel, localBpm, beatsPerMeasure, sampleGain, sampleSpeed, playClick, stopMetronomeClicks, stopPreview, ttsCopy]);
 
   const playPreviewRef = useRef(playPreview);
   useEffect(() => { playPreviewRef.current = playPreview; }, [playPreview]);
@@ -1297,6 +1301,7 @@ export function NoteRecorderModal({
                 })}
               </View>
 
+              {previewError ? <Text testID="note-recorder-preview-error" accessibilityRole="alert" style={{ color: C.text }}>{previewError}</Text> : null}
               <View style={styles.trimActions}>
                 <Pressable
                   style={[styles.previewBtn, { borderColor: autoPreview ? C.accent : C.textSecondary }]}

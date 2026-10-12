@@ -5,6 +5,7 @@ export type NoteTtsErrorKey =
   | "cancelled"
   | "timeout"
   | "invalidText"
+  | "invalidAudio"
   | "tooLarge"
   | "busy";
 
@@ -37,6 +38,9 @@ const copy = {
     retry: "Try again",
     back: "Back",
     loading: "Checking installed voices…",
+    previewLoad: "Could not load this audio file. Try preview again, or regenerate/import the file.",
+    previewSeek: "Could not select the preview range. Try again or adjust the trim range.",
+    previewPlay: "Playback could not start. Check audio output and try preview again.",
     errors: {
       noVoice: "Choose an offline Korean voice. If none are listed, install a Korean voice in device speech settings.",
       unavailable: "The device speech engine could not start. Check the engine and offline Korean voices in device settings, then retry.",
@@ -44,6 +48,7 @@ const copy = {
       cancelled: "Voice generation was cancelled.",
       timeout: "Voice generation took too long. Try again.",
       invalidText: "Enter valid text to generate a voice sample.",
+      invalidAudio: "The generated file contains no playable speech or uses an unsupported format. Try generating with another installed voice.",
       tooLarge: "The audio is too long or invalid. Use shorter text (up to 300 characters and 30 seconds).",
       busy: "Another voice sample is being generated. Please wait.",
     },
@@ -74,6 +79,9 @@ const copy = {
     retry: "다시 시도",
     back: "뒤로",
     loading: "설치된 음성을 확인하고 있습니다…",
+    previewLoad: "음성 파일을 불러오지 못했습니다. 미리듣기를 다시 누르거나 파일을 다시 생성·가져오세요.",
+    previewSeek: "미리듣기 구간으로 이동하지 못했습니다. 다시 시도하거나 자르기 구간을 조정하세요.",
+    previewPlay: "재생을 시작하지 못했습니다. 소리 출력 상태를 확인하고 미리듣기를 다시 누르세요.",
     errors: {
       noVoice: "오프라인 한국어 음성을 선택하세요. 목록이 없으면 기기 음성 설정에서 한국어 음성을 설치하세요.",
       unavailable: "기기의 음성 엔진을 시작하지 못했습니다. 기기 설정에서 음성 엔진과 오프라인 한국어 음성을 확인한 뒤 다시 시도하세요.",
@@ -81,6 +89,7 @@ const copy = {
       cancelled: "음성 생성을 취소했습니다.",
       timeout: "음성 생성 시간이 초과되었습니다. 다시 시도하세요.",
       invalidText: "음성 샘플을 만들 문장을 입력하세요.",
+      invalidAudio: "생성된 파일에 재생 가능한 음성이 없거나 지원하지 않는 형식입니다. 다른 설치 음성으로 다시 생성하세요.",
       tooLarge: "생성 음원이 너무 길거나 올바르지 않습니다. 300자·30초 이내의 짧은 문장으로 다시 시도하세요.",
       busy: "다른 음성 샘플을 생성 중입니다. 잠시 기다려 주세요.",
     },

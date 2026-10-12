@@ -2,6 +2,8 @@ import { beforeEach, expect, jest, test } from "@jest/globals";
 import { prepareSparseEvents } from "../lib/audio-sparse-event-preparation";
 import type { ClickPCMs, SamplePCMEntry, TickInfo } from "../lib/audio-renderer";
 import { releaseRenderedWav, saveRenderedWav } from "../lib/audio-renderer";
+import { normalizeNoteTtsWav } from "../lib/note-tts-wav";
+import { speechWav } from "./helpers/note-tts-wav-fixture";
 
 jest.mock("../lib/audio-renderer", () => ({
   getRenderSampleRate: () => 44100,
@@ -47,6 +49,36 @@ const makeSample = (
 beforeEach(() => {
   jest.clearAllMocks();
   saveMock.mockImplementation(async (_pcm, filename) => `file:///private/${filename}`);
+});
+const ttsCombinations: Array<["off" | "ko", "mixed" | "voice-only", "both" | "off", number]> = [
+  ["off", "mixed", "both", 1],
+  ["ko", "mixed", "both", 1],
+  ["ko", "voice-only", "both", 1],
+  ["ko", "voice-only", "off", 1],
+  ["ko", "mixed", "both", 0],
+];
+test.each(ttsCombinations)("saved TTS slot survives count %s/%s, metro %s, sample gain %s independently", async (language, output, metro, gain) => {
+  const { bytes } = normalizeNoteTtsWav(speechWav());
+  const view = new DataView(bytes.buffer);
+  const pcm = Float32Array.from({ length: (bytes.length - 44) / 2 }, (_, i) => view.getInt16(44 + i * 2, true) / 32768);
+  const prepared = await prepareSparseEvents({
+    schedule: [makeTick()], measureDurationMs: 100, clickPCMs: makeClicks(),
+    samplePCMs: new Map([["0-0~2", { pcm, trimStartMs: 1, trimDurationMs: 4 }]]),
+    clickVolume: 1, outputGain: 1, sampleVolume: 1,
+    sampleVolumes: { "0-0~2": gain }, sampleSpeeds: { "0-0~2": 2 }, sampleChannels: { "0-0~2": "right" },
+    metroChannelsByBeat: { "0": metro },
+    voiceCountLanguage: language, voiceCountOutput: output,
+    voiceCountPCMs: new Map([[1, { strong: new Float32Array([0.01]), high: new Float32Array([0.01]), low: new Float32Array([0.01]) }]]),
+  });
+  const sample = saveMock.mock.calls.find(([audio]) => !(audio instanceof Float32Array));
+  if (gain > 0) {
+    expect(sample).toBeDefined();
+    const stereo = sample![0] as { left: Float32Array; right: Float32Array };
+    expect(stereo.left.every(value => value === 0)).toBe(true);
+    expect(stereo.right.some(value => value !== 0)).toBe(true);
+    expect(stereo.right.length).toBeLessThan(pcm.length);
+  } else expect(sample).toBeUndefined();
+  prepared.dispose();
 });
 test("voice-only suppresses both click layers, keeps speech/samples and restores clicks with Off", async () => {
   const speech = Float32Array.from([0.01, 0.02]);

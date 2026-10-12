@@ -20,7 +20,7 @@ export function validateNoteTtsText(text: string): string {
 }
 export function noteTtsErrorCode(error: unknown): string {
   const code = (error as { code?: string })?.code ?? (error instanceof Error ? error.message : "failed");
-  return ["unavailable", "noVoice", "invalidText", "tooLarge", "busy", "cancelled", "timeout"].includes(code) ? code : "failed";
+  return ["unavailable", "noVoice", "invalidText", "invalidAudio", "tooLarge", "busy", "cancelled", "timeout"].includes(code) ? code : "failed";
 }
 
 let nextRequest = 0;
@@ -29,7 +29,10 @@ export class NoteTtsSession {
   private epoch = 0;
   private request: string | null = null;
   private draft: string | null = null;
-  constructor(private native: NoteTtsNative) {}
+  constructor(
+    private native: NoteTtsNative,
+    private prepare?: (result: NoteTtsResult, isCurrent: () => boolean) => Promise<NoteTtsResult>,
+  ) {}
 
   async generate(text: string, voiceId: string): Promise<NoteTtsResult | null> {
     const clean = validateNoteTtsText(text);
@@ -39,12 +42,17 @@ export class NoteTtsSession {
     const id = `note-tts-${Date.now()}-${++nextRequest}`;
     this.request = id;
     try {
-      const result = await this.native.generate(clean, voiceId, id);
+      let result = await this.native.generate(clean, voiceId, id);
       if (epoch !== this.epoch) { await this.native.discard(result.uri); return null; }
       if (!result.uri.startsWith("file://") || !Number.isFinite(result.duration) ||
           result.duration <= 0 || result.duration > NOTE_TTS_MAX_DURATION) {
         await this.native.discard(result.uri);
         throw new Error("tooLarge");
+      }
+      if (this.prepare) {
+        try { result = await this.prepare(result, () => epoch === this.epoch); }
+        catch (error) { await this.native.discard(result.uri); throw error; }
+        if (epoch !== this.epoch) { await this.native.discard(result.uri); return null; }
       }
       if (this.draft) await this.native.discard(this.draft);
       // Discard may yield to a reset/target change.

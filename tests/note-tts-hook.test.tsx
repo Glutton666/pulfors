@@ -2,6 +2,7 @@
 import { act, renderHook } from "@testing-library/react";
 import { Platform } from "react-native";
 import { useNoteTts } from "@/hooks/useNoteTts";
+jest.mock("@/lib/note-tts-file", () => ({ prepareNoteTtsFile: async (result: unknown) => result }));
 import { noteTtsNative } from "@/lib/note-tts-runtime";
 import type { NoteTtsNative, NoteTtsResult } from "@/lib/note-tts";
 

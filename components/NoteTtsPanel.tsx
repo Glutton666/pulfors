@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React from "react";
 import {
   Platform,
   Pressable,
@@ -34,7 +34,6 @@ export interface NoteTtsPanelProps {
   onBack: () => void;
 }
 
-type VoiceFilter = "all" | "male" | "female";
 const MAX_TEXT_LENGTH = 300;
 
 export function NoteTtsPanel({
@@ -53,12 +52,7 @@ export function NoteTtsPanel({
   const { colors: C } = useTheme();
   const { language } = useLanguage();
   const c = getNoteTtsCopy(language);
-  const [filter, setFilter] = useState<VoiceFilter>("all");
   const selectedVoice = voices.find((voice) => voice.id === voiceId);
-  const visibleVoices = useMemo(
-    () => (filter === "all" ? voices : voices.filter((voice) => voice.gender === filter)),
-    [filter, voices],
-  );
   const trimmedText = text.trim();
   const canGenerate = status === "ready" && trimmedText.length > 0 && text.length <= MAX_TEXT_LENGTH && !!selectedVoice;
   const errorMessage = translateNoteTtsError(error, language);
@@ -235,11 +229,6 @@ export function NoteTtsPanel({
     );
   }
 
-  const filterChoices: { key: VoiceFilter; label: string; enabled: boolean }[] = [
-    { key: "all", label: c.allVoices, enabled: true },
-    { key: "male", label: c.male, enabled: voices.some((voice) => voice.gender === "male") },
-    { key: "female", label: c.female, enabled: voices.some((voice) => voice.gender === "female") },
-  ];
 
   return (
     <View style={styles.root} testID="note-tts-panel">
@@ -267,34 +256,13 @@ export function NoteTtsPanel({
         <>
           <View style={styles.section}>
             <Text style={styles.sectionHeading}>{c.voiceSection}</Text>
-            <View style={styles.filterRow} accessibilityRole="radiogroup" accessibilityLabel={c.voiceFilter}>
-              {filterChoices.map((choice) => (
-                <Pressable
-                  key={choice.key}
-                  testID={`note-tts-filter-${choice.key}`}
-                  accessibilityRole="radio"
-                  accessibilityState={{ selected: filter === choice.key, disabled: !choice.enabled }}
-                  disabled={!choice.enabled}
-                  onPress={() => setFilter(choice.key)}
-                  style={[
-                    styles.filterChip,
-                    filter === choice.key && styles.filterChipActive,
-                    !choice.enabled && styles.disabledButton,
-                  ]}
-                >
-                  <Text style={[styles.filterText, filter === choice.key && styles.filterTextActive]}>{choice.label}</Text>
-                </Pressable>
-              ))}
-            </View>
             {voices.length === 0 ? (
               <Text style={styles.helper}>{c.noVoices}</Text>
             ) : (
               <View style={styles.voiceList}>
-                {visibleVoices.map((voice) => {
+                {voices.map((voice) => {
                   const selected = voice.id === voiceId;
-                  const meta = [voice.language, voice.gender === "unknown" ? c.unknownGender : null]
-                    .filter(Boolean)
-                    .join(" · ");
+                  const meta = voice.language;
                   return (
                     <Pressable
                       key={voice.id}
@@ -319,9 +287,6 @@ export function NoteTtsPanel({
                 })}
               </View>
             )}
-            {selectedVoice?.gender === "unknown" && filter === "all" ? (
-              <Text style={styles.helper}>{c.unknownVoiceNote}</Text>
-            ) : null}
             {!selectedVoice ? <Text style={styles.helper}>{c.selectVoice}</Text> : null}
           </View>
 

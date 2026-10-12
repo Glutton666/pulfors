@@ -3,6 +3,7 @@ import { Platform } from "react-native";
 import { noteTtsNative } from "@/lib/note-tts-runtime";
 import { NoteTtsSession, noteTtsErrorCode, type NoteTtsResult, type NoteTtsVoice } from "@/lib/note-tts";
 import { captureBreadcrumb } from "@/lib/error-tracking";
+import { prepareNoteTtsFile } from "@/lib/note-tts-file";
 
 export function useNoteTts(
   visible: boolean,
@@ -11,7 +12,7 @@ export function useNoteTts(
   onInvalidate: () => void,
 ) {
   const native = Platform.OS === "web" ? null : noteTtsNative;
-  const sessionRef = useRef<NoteTtsSession | null>(native ? new NoteTtsSession(native) : null);
+  const sessionRef = useRef<NoteTtsSession | null>(native ? new NoteTtsSession(native, prepareNoteTtsFile) : null);
   const epoch = useRef(0);
   const generating = useRef(false);
   const liveTarget = useRef({ visible, target });
@@ -79,11 +80,13 @@ export function useNoteTts(
         return;
       }
       setStatus("ready");
+      captureBreadcrumb({ category: "noteTts", message: "Local speech file ready for sample playback", data: { duration: result.duration } });
       callbacks.current.onGenerated(result, text.trim());
     } catch (e) {
       if (token !== epoch.current) return;
       setStatus("ready");
       setError(noteTtsErrorCode(e));
+      captureBreadcrumb({ category: "noteTts", message: "Speech file generation or validation failed", level: "warning", data: { code: noteTtsErrorCode(e) } });
     } finally {
       if (token === epoch.current) generating.current = false;
     }

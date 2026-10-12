@@ -24,11 +24,18 @@ test("web only explains unsupported generation and leaves a back action", () => 
   expect(p.onBack).toHaveBeenCalledTimes(1);
   expect(p.onGenerate).not.toHaveBeenCalled();
 });
-test("unknown Android gender is not relabeled as male or female", () => {
+test("installed voice is selected by name without gender filters", () => {
   const ui = render(<NoteTtsPanel {...props()} />);
-  expect(ui.getByText(/성별 메타데이터를 제공하지 않습니다/)).toBeTruthy();
-  expect(ui.getByTestId("note-tts-filter-male").getAttribute("disabled")).not.toBeNull();
-  expect(ui.getByTestId("note-tts-filter-female").getAttribute("disabled")).not.toBeNull();
+  expect(ui.getByText("한국어 설치 음성")).toBeTruthy();
+  expect(ui.queryByTestId("note-tts-filter-male")).toBeNull();
+  expect(ui.queryByTestId("note-tts-filter-female")).toBeNull();
+  expect(ui.queryByText(/성별/)).toBeNull();
+});
+test("multiple installed voices can still be selected by their actual names", () => {
+  const p = props();
+  const ui = render(<NoteTtsPanel {...p} voices={[...p.voices, { id: "other", name: "다른 설치 음성", language: "ko-KR", gender: "unknown" }]} />);
+  fireEvent.click(ui.getByTestId("note-tts-voice-other"));
+  expect(p.onVoiceChange).toHaveBeenCalledWith("other");
 });
 test("blank text and absent selected voice cannot generate", () => {
   const p = props(); const ui = render(<NoteTtsPanel {...p} text="  " />);

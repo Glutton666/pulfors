@@ -38,13 +38,16 @@ jest.mock("@/lib/error-tracking", () => ({ captureBreadcrumb: jest.fn() }));
 jest.mock("@/lib/note-tts-runtime", () => ({
   noteTtsNative: { getVoices: jest.fn(), generate: jest.fn(), cancel: jest.fn(), discard: jest.fn() },
 }));
+jest.mock("@/lib/note-tts-file", () => ({ prepareNoteTtsFile: async (result: NoteTtsResult) => result }));
 jest.mock("expo-audio", () => {
   const player = { pause: jest.fn(), play: jest.fn(), replace: jest.fn(),
-    seekTo: jest.fn().mockResolvedValue(undefined), duration: 1.2, currentTime: 0, remove: jest.fn() };
+    setPlaybackRate: jest.fn(),
+    seekTo: jest.fn().mockResolvedValue(undefined), isLoaded: true, duration: 1.2, currentTime: 0, remove: jest.fn() };
+  const click = { ...player, pause: jest.fn(), play: jest.fn(), seekTo: jest.fn().mockResolvedValue(undefined) };
   return {
-    useAudioRecorder: () => ({}), useAudioPlayer: () => player, createAudioPlayer: () => player,
+    useAudioRecorder: () => ({}), useAudioPlayer: (source: unknown) => source === null ? player : click, createAudioPlayer: () => player,
     RecordingPresets: { HIGH_QUALITY: {} }, IOSOutputFormat: {}, AudioQuality: {},
-    __player: player,
+    __player: player, __click: click,
   };
 });
 const native = noteTtsNative as jest.Mocked<NoteTtsNative>;
@@ -58,6 +61,38 @@ beforeEach(() => {
   jest.clearAllMocks(); Platform.OS = "ios";
   native.getVoices.mockResolvedValue([{ id: "f", name: "여성", gender: "female", language: "ko-KR" }]);
   native.generate.mockResolvedValue(output); native.cancel.mockResolvedValue(undefined); native.discard.mockResolvedValue(undefined);
+  const player = require("expo-audio").__player;
+  player.isLoaded = true; player.duration = 1.2;
+});
+test("failed preview displays retry guidance and does not start clicks or show playing", async () => {
+  const p = props(); const ui = render(<NoteRecorderModal {...p} existingMetronomeChannel="both" />);
+  await act(async () => { fireEvent.click(ui.getByTestId("note-recorder-tts")); });
+  fireEvent.change(ui.getByTestId("note-tts-text"), { target: { value: "시작" } });
+  await act(async () => { fireEvent.click(ui.getByTestId("note-tts-generate")); });
+  const player = require("expo-audio").__player;
+  player.seekTo.mockRejectedValueOnce(new Error("seek"));
+  await act(async () => { fireEvent.click(ui.getByTestId("note-recorder-preview")); });
+  expect(ui.getByTestId("note-recorder-preview-error").textContent).toMatch(/구간/);
+  expect(ui.queryByText("noteRecorder.playing")).toBeNull();
+  expect(require("expo-audio").__click.play).not.toHaveBeenCalled();
+  await act(async () => { fireEvent.click(ui.getByTestId("note-recorder-preview")); });
+  expect(ui.queryByTestId("note-recorder-preview-error")).toBeNull();
+  expect(player.play).toHaveBeenCalled();
+  ui.unmount();
+});
+test("TTS preview and click use distinct players; closing does not release an unowned session", async () => {
+  const ui = render(<NoteRecorderModal {...props()} existingMetronomeChannel="both" />);
+  await act(async () => { fireEvent.click(ui.getByTestId("note-recorder-tts")); });
+  fireEvent.change(ui.getByTestId("note-tts-text"), { target: { value: "시작" } });
+  await act(async () => { fireEvent.click(ui.getByTestId("note-tts-generate")); });
+  await act(async () => { fireEvent.click(ui.getByTestId("note-recorder-preview")); });
+  const audio = require("expo-audio");
+  expect(audio.__player.play).toHaveBeenCalledTimes(1);
+  expect(audio.__click.play).toHaveBeenCalledTimes(1);
+  fireEvent.click(ui.getByTestId("note-recorder-preview"));
+  expect(audio.__player.pause).toHaveBeenCalled(); expect(audio.__click.pause).toHaveBeenCalled();
+  ui.unmount();
+  expect(require("@/lib/audio-session").releaseAudioSession).not.toHaveBeenCalled();
 });
 test("native text → file → preview/stop → trimmed import sample save preserves ownership", async () => {
   const p = props(); const ui = render(<NoteRecorderModal {...p} />);
