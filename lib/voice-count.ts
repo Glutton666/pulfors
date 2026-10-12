@@ -14,7 +14,7 @@ export function shouldPlayCountClicks(language: VoiceCountLanguage = "off", outp
   return language === "off" || output !== "voice-only";
 }
 export const KOREAN_COUNT_WORDS = ["공", "일", "둘", "삼", "넷", "오", "육", "칠", "팔", "구"] as const;
-export const ENGLISH_COUNT_WORDS = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen"] as const;
+export const ENGLISH_COUNT_WORDS = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"] as const;
 export function sanitizeVoiceCountLanguage(value: unknown): VoiceCountLanguage {
   return value === "ko" || value === "en" ? value : "off";
 }
@@ -35,11 +35,11 @@ export interface VoiceCountEvent {
 export function voiceCountEvent(slot: VoiceCountSlot, language: VoiceCountLanguage): Readonly<VoiceCountEvent> | null {
   if (language === "off" || slot.type === "mute" || (slot.layerIndex ?? 0) > 0) return null;
   const number = slot.subBeat === 0 ? slot.beat + 1 : slot.subBeat + 1;
-  if (!Number.isInteger(number) || number < 1 || (language === "en" && number > 16)) {
+  if (!Number.isInteger(number) || number < 1) {
     throw new Error(`Unsupported ${language} count position: ${number}`);
   }
   return Object.freeze({
-    time: slot.time, number, clip: language === "ko" ? number % 10 : number,
+    time: slot.time, number, clip: number % 10,
     role: slot.type === "strong" ? "strong" : slot.type === "accent" ? "high" : "low",
   });
 }

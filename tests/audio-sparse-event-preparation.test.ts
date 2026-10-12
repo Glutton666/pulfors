@@ -75,7 +75,7 @@ test("mixed speech and clicks share one descriptor per dense metro slot", async 
     measureDurationMs: 1000, clickPCMs: makeClicks(), samplePCMs: new Map(),
     clickVolume: 1, outputGain: 1, sampleVolume: 0,
     voiceCountLanguage: "en", voiceCountOutput: "mixed",
-    voiceCountPCMs: new Map(Array.from({ length: 16 }, (_, i) => [i + 1, { strong: speech, high: speech, low: speech }])),
+    voiceCountPCMs: new Map(Array.from({ length: 10 }, (_, i) => [i, { strong: speech, high: speech, low: speech }])),
   });
   expect(prepared.clipDescriptors).toHaveLength(256);
   expect((saveMock.mock.calls[0][0] as Float32Array)[0]).toBeCloseTo(0.31);

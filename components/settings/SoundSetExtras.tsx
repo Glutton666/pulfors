@@ -32,7 +32,8 @@ export function VoiceCountControl({
   const ko = language === "ko";
   const voiceEnabled = value !== "off";
   const durations = Object.entries(catalogDurations)
-    .filter(([key]) => value === "off" || key.startsWith(`${value}-${speaker}-`))
+    .filter(([key]) => Number(key.split("-").at(-1)) < 10 &&
+      (value === "off" || key.startsWith(`${value}-${speaker}-`)))
     .map(([, clip]) => clip.durationMs);
   const durationRange = `${Math.min(...durations)}–${Math.max(...durations)}ms`;
   const choices: { value: VoiceCountLanguage; label: string; detail: string }[] = [

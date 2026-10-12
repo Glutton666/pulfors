@@ -22,6 +22,7 @@ export interface NativeOutputResource {
   release: () => void;
   setVolume: (volume: number) => void;
   isRunning: () => boolean;
+  getPositionSeconds: () => number;
   playAndConfirm: (label?: string) => Promise<boolean>;
 }
 
@@ -46,6 +47,7 @@ export function createNativeAudioOutput() {
     player.volume = Math.max(0, Math.min(1, volume));
     let stopped = false;
     let releasedResource = false;
+    let playbackStarted = false;
     const stop = () => {
       if (stopped) return;
       stopped = true;
@@ -66,6 +68,20 @@ export function createNativeAudioOutput() {
         player.volume = Math.max(0, Math.min(1, nextVolume));
       },
       isRunning: () => player.playing,
+      getPositionSeconds: () => {
+        if (stopped || releasedResource) return NaN;
+        try {
+          const position = player.currentTime;
+          if (!Number.isFinite(position)) return NaN;
+          // Wait for native playback readiness, not merely play().
+          // Once started, transient status flips must not reset the clock.
+          if (!playbackStarted && (position > 0 || player.playing)) playbackStarted = true;
+          // Stay outside the engine's 1ms tick tolerance while loading.
+          return playbackStarted ? position : -0.01;
+        } catch {
+          return NaN;
+        }
+      },
       playAndConfirm: (label = "native.output") => safePlayAndConfirm(player, label),
     };
   };

@@ -1,4 +1,4 @@
-import { emphasizeCountPCM, voiceCountEvent, KOREAN_COUNT_WORDS } from "@/lib/voice-count";
+import { emphasizeCountPCM, voiceCountEvent, KOREAN_COUNT_WORDS, ENGLISH_COUNT_WORDS } from "@/lib/voice-count";
 import { renderMeasure, renderMeasureAbortable, type ClickPCMs, type TickInfo } from "@/lib/audio-renderer";
 import { AUDIO_OUTPUT_CEILING } from "@/lib/audio-tone-snapshot";
 
@@ -15,8 +15,22 @@ describe("offline count identity and emphasis", () => {
     expect(KOREAN_COUNT_WORDS).toEqual(["공", "일", "둘", "삼", "넷", "오", "육", "칠", "팔", "구"]);
     for (const [beat, expected] of [[0, "일"], [9, "공"], [11, "둘"], [13, "넷"], [15, "육"]] as const) {
       expect(KOREAN_COUNT_WORDS[voiceCountEvent(slot(beat), "ko")!.clip]).toBe(expected);
-      expect(voiceCountEvent(slot(beat), "en")!.clip).toBe(beat + 1);
+      expect(voiceCountEvent(slot(beat), "en")!.clip).toBe((beat + 1) % 10);
     }
+  });
+  it("reads English 10–16 as zero–six while retaining the actual position and onset", () => {
+    expect(Array.from({ length: 7 }, (_, i) =>
+      ENGLISH_COUNT_WORDS[voiceCountEvent(slot(i + 9), "en")!.clip]))
+      .toEqual(["zero", "one", "two", "three", "four", "five", "six"]);
+    expect(Array.from({ length: 7 }, (_, i) =>
+      ENGLISH_COUNT_WORDS[voiceCountEvent(slot(0, i + 9), "en")!.clip]))
+      .toEqual(["zero", "one", "two", "three", "four", "five", "six"]);
+    const input = slot(15, 0, "strong");
+    expect(voiceCountEvent(input, "en")).toEqual({
+      time: input.time, number: 16, clip: 6, role: "strong",
+    });
+    expect(voiceCountEvent(slot(9, 0, "mute"), "en")).toBeNull();
+    expect(voiceCountEvent(slot(10), "en")!.clip).toBe(1);
   });
   it("counts the first subdivision by basic beat, later slots by ordinal", () => {
     expect([0, 1, 2].map(beat => Array.from({ length: 4 }, (_, sub) => voiceCountEvent(slot(beat, sub), "ko")!.number)))

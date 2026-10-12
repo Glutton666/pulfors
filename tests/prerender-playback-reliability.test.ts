@@ -278,15 +278,26 @@ describe("pre-rendered playback reliability", () => {
     mockSparseStop.mockResolvedValue({ status: "stopped" });
   });
 
-  it("installs visual clock alignment for web startup only", () => {
+  it("installs visual clock alignment for web and reads the active native output dynamically", () => {
     (Platform as unknown as { OS: string }).OS = "web";
     const engine = makeEngine();
-    const { result, unmount } = renderHook(() => useAudioPipeline(makePipelineParams(engine) as any));
-    const snapshot = createAudioToneSnapshot({ volume: 0.75, defaultSoundSet: "classic" });
+    const params = makePipelineParams(engine);
+    const { result, unmount } = renderHook(() => useAudioPipeline(params as any));
+    const snapshot = createAudioToneSnapshot({ volume: 0.75, defaultSoundSet: "classic", voiceCountLanguage: "en" });
     act(() => { result.current.setActiveAudioToneSnapshot(snapshot); });
     expect(engine.setVisualTimingProvider).toHaveBeenLastCalledWith(expect.any(Function));
     (Platform as unknown as { OS: string }).OS = "ios";
     act(() => { result.current.setActiveAudioToneSnapshot(snapshot); });
+    const provider = engine.setVisualTimingProvider.mock.calls.at(-1)![0];
+    expect(provider).toEqual(expect.any(Function));
+    result.current.outputOwner.publish({ release: jest.fn(), getPositionSeconds: () => 0.4 });
+    expect(provider(600, 2000, true)).toBeCloseTo(400);
+    result.current.outputOwner.publish({ release: jest.fn(), getPositionSeconds: () => 0.8 });
+    expect(provider(900, 2000, true)).toBeCloseTo(800);
+    expect(provider(900, 2000, false)).toBeNull();
+    act(() => { result.current.setActiveAudioToneSnapshot(createAudioToneSnapshot({
+      volume: 0.75, defaultSoundSet: "classic", voiceCountLanguage: "off",
+    })); });
     expect(engine.setVisualTimingProvider).toHaveBeenLastCalledWith(null);
     unmount();
   });

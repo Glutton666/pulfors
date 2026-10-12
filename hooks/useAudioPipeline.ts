@@ -37,6 +37,7 @@ import {
 } from "@/lib/audio-output-owner";
 import type { NativeAudioOutput } from "@/lib/native-audio-output";
 import { createWebVisualTimingProvider, type WebAudioOutput } from "@/lib/web-audio-output";
+import { createNativeVisualTimingProvider } from "@/lib/native-visual-timing";
 import { isSafeNoteSampleUri } from "@/lib/index.helpers";
 import type {
   ClickPCMs,
@@ -281,7 +282,9 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
           () => outputOwner.active()?.getPresentedPositionSeconds?.(),
           (audioTime) => webClockAdapterRef.current?.audioTimeToPerformanceMs(audioTime),
         )
-        : null,
+        : snapshot.voiceCountLanguage && snapshot.voiceCountLanguage !== "off"
+          ? createNativeVisualTimingProvider(() => outputOwner.active()?.getPositionSeconds?.())
+          : null,
     );
   }, [engineRef, outputOwner, setPoolsVolume]);
 

@@ -38,7 +38,10 @@ These are independently generated generic catalog voices, not a cloned user
 voice or extracted Tempo audio. No speech generation service is called by the app.
 
 - Korean identifiers 0–9: 공, 일, 둘, 삼, 넷, 오, 육, 칠, 팔, 구.
-- English identifiers 0–16: full English number words.
+- English identifiers 0–9: zero, one, two, three, four, five, six, seven, eight, nine.
+  Both languages read the ones digit: English 10→zero, 11→one, …16→six.
+  The former English 10–16 assets are retained for compatibility, but no longer
+  used by the count scheduler or its duration warning.
 - `scripts/build-metronome-audio.mjs` builds the legacy clips and Tempo clicks;
   `durations.json` records their lengths for before/after comparisons.
 - `scripts/build-count-listening-report.mjs` creates a self-contained HTML
