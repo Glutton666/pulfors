@@ -12,6 +12,7 @@ export type VoiceCountSpeaker = "male" | "female";
 export type OverlayOption = { value: SoundSet; label: string };
 
 export function VoiceCountControl({
+  labUnlocked = false,
   value,
   onChange,
   language,
@@ -21,6 +22,7 @@ export function VoiceCountControl({
   onSpeakerChange,
   nativeKoreanAvailable = Platform.OS !== "web" && noteTtsNative !== null,
 }: {
+  labUnlocked?: boolean;
   value: VoiceCountLanguage;
   onChange: (value: VoiceCountLanguage) => void;
   language: string;
@@ -33,7 +35,7 @@ export function VoiceCountControl({
   const { colors: C } = useTheme();
   const ko = language === "ko";
   const koreanVoiceEnabled = nativeKoreanAvailable && value === "ko";
-  const voiceEnabled = value !== "off" && (value !== "ko" || koreanVoiceEnabled);
+  const voiceEnabled = labUnlocked && value !== "off" && (value !== "ko" || koreanVoiceEnabled);
   const koreanUnavailableDetail = Platform.OS === "web"
     ? ko ? "iOS·Android 네이티브 앱에서 사용" : "Use a native iOS/Android app"
     : ko ? "네이티브 앱 설치본 필요" : "Requires a native app build";
@@ -56,19 +58,25 @@ export function VoiceCountControl({
 
   return (
     <View style={{ gap: 9 }}>
+      {!labUnlocked && (
+        <Text testID="voice-count-lab-locked" style={{ color: C.textSecondary, fontSize: 12, lineHeight: 18 }}>
+          {ko ? "실험실 해금 후 사용할 수 있습니다. 저장된 음성 설정은 유지됩니다." : "Unlock the Lab to use voice count. Your saved voice settings are kept."}
+        </Text>
+      )}
       <View style={{ flexDirection: "row", gap: 7 }}>
         {choices.map((choice) => {
           const active = value === choice.value;
+          const disabled = !labUnlocked || choice.disabled;
           return (
             <Pressable
               key={choice.value}
               testID={`voice-count-language-${choice.value}`}
               accessibilityRole="button"
-              accessibilityState={{ selected: active, disabled: choice.disabled }}
+              accessibilityState={{ selected: active, disabled }}
               aria-pressed={active}
-              disabled={choice.disabled}
+              disabled={disabled}
               onPress={() => onChange(choice.value)}
-              style={toggleStyle(active, choice.disabled)}
+              style={toggleStyle(active, disabled)}
             >
               <Text style={{ color: active ? C.accent : C.text, fontSize: 12, fontFamily: "SpaceGrotesk_600SemiBold", textAlign: "center" }}>
                 {choice.label}

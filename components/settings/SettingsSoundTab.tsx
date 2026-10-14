@@ -45,6 +45,7 @@ import type { TonePosition } from "@/lib/metronome-tone-dsp";
 
 interface SettingsSoundTabProps {
   scope: SettingsScope;
+  labUnlocked?: boolean;
   tonePosition?: TonePosition;
   onTonePositionChange?: (position: TonePosition) => void;
   volume: number;
@@ -82,6 +83,7 @@ interface SettingsSoundTabProps {
 
 export function SettingsSoundTab({
   scope,
+  labUnlocked = false,
   tonePosition,
   onTonePositionChange,
   volume,
@@ -603,6 +605,7 @@ export function SettingsSoundTab({
         </View>
         <View style={{ marginTop: Spacing.sm }}>
           <VoiceCountControl
+            labUnlocked={labUnlocked}
             value={voiceCountLanguage}
             onChange={onVoiceCountLanguageChange}
             language={language}

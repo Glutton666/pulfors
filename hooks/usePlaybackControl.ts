@@ -10,6 +10,7 @@ import {
 } from "@/lib/audio-renderer";
 import type { ClickPCMs, SamplePCMEntry, TickInfo } from "@/lib/audio-renderer";
 import { prepareVoiceCountPCMs } from "@/lib/voice-count-assets";
+import { resolveLabGatedVoiceCountLanguage } from "@/lib/voice-count";
 import type { BeatType, MetronomeEngine } from "@/lib/metronome-engine";
 import type { BarConfig, DialConfig } from "@/lib/index.helpers";
 import type { CustomSoundSetConfig, PracticeEntry, SoundSet } from "@/lib/storage";
@@ -121,6 +122,7 @@ export interface UsePlaybackControlParams {
   clearAudioWatchdogRef: Ref<() => void>;
   armAudioWatchdogRef: Ref<() => void>;
   soundSetRef: Ref<SoundSet>;
+  labUnlockedRef?: Ref<boolean>;
   captureAudioToneSnapshot: () => AudioToneSnapshot;
   setActiveAudioToneSnapshot: (snapshot: AudioToneSnapshot) => void;
   customSoundSetsRef?: Ref<Record<string, CustomSoundSetConfig>>;
@@ -251,6 +253,10 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
     scheduleInfo: { ticks: TickInfo[]; durationMs: number },
     generation: number,
   ) => {
+    const voiceCountLanguage = resolveLabGatedVoiceCountLanguage(
+      p.labUnlockedRef?.current !== false,
+      plan.audio.tone.voiceCountLanguage ?? "off",
+    );
     if (!isSparseMetronomeAvailable) {
       throw new Error("Android sparse audio is unavailable in this build; no continuous-audio fallback is permitted.");
     }
@@ -272,7 +278,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
         customSoundSets: plan.audio.customSoundSets,
       }),
       p.getSamplePCMs(plan.audio.noteSamples, controller.signal),
-      prepareVoiceCountPCMs(scheduleInfo.ticks, plan.audio.tone.voiceCountLanguage, controller.signal, plan.audio.tone.voiceCountSpeaker),
+      prepareVoiceCountPCMs(scheduleInfo.ticks, voiceCountLanguage, controller.signal, plan.audio.tone.voiceCountSpeaker),
     ]);
     if (shouldAbort()) throw new Error("Sparse audio preparation was cancelled.");
     const prepared = await prepareSparseEvents({
@@ -281,7 +287,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
       clickPCMs,
       layerClickPCMs,
       voiceCountPCMs,
-      voiceCountLanguage: plan.audio.tone.voiceCountLanguage,
+      voiceCountLanguage,
       voiceCountOutput: plan.audio.tone.voiceCountOutput,
       samplePCMs,
       clickVolume: plan.audio.tone.renderGain,
@@ -463,6 +469,10 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
       }
       const scheduleInfo = engine.getScheduleInfo();
       const ticks = scheduleInfo.ticks as TickInfo[];
+      const voiceCountLanguage = resolveLabGatedVoiceCountLanguage(
+        p.labUnlockedRef?.current !== false,
+        plan.audio.tone.voiceCountLanguage ?? "off",
+      );
       readAudioToneSnapshot(plan.audio.tone, plan.audio.soundSet);
       const [clickPCMs, layerClickPCMs, samplePCMs, voiceCountPCMs] = await Promise.all([
         p.getClickPCMs(
@@ -479,7 +489,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
           customSoundSets: plan.audio.customSoundSets,
         }),
         p.getSamplePCMs(plan.audio.noteSamples, signal),
-        prepareVoiceCountPCMs(ticks, plan.audio.tone.voiceCountLanguage, signal, plan.audio.tone.voiceCountSpeaker),
+        prepareVoiceCountPCMs(ticks, voiceCountLanguage, signal, plan.audio.tone.voiceCountSpeaker),
       ]);
       if (
         !session.isCurrent() ||
@@ -501,7 +511,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
         metronomeChannel: plan.audio.metronomeChannel,
         metroChannelsByBeat: plan.mode === "bar" ? plan.audio.noteSampleMetroChannels : undefined,
         layerClickPCMs,
-        voiceCountPCMs, voiceCountLanguage: plan.audio.tone.voiceCountLanguage,
+        voiceCountPCMs, voiceCountLanguage,
         voiceCountOutput: plan.audio.tone.voiceCountOutput,
       }, signal);
       const preparedPcm = session.complete(pcm, () => {});

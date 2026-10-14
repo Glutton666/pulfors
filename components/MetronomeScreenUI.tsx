@@ -826,7 +826,7 @@ export function MetronomeScreenUI(props: Props) {
 
       {recorderTarget !== null && (
       <NoteRecorderModal
-        allowTts={barMode}
+        allowTts={barMode && labUnlocked}
         visible={recorderTarget !== null}
         onClose={() => setRecorderTarget(null)}
         onSave={handleNoteRecordSave}
@@ -1034,13 +1034,14 @@ export function MetronomeScreenUI(props: Props) {
           if (!playbackEditsLocked) updateVolume(value);
         }}
         tonePosition={tonePosition}
+        labUnlocked={labUnlocked}
         voiceCountLanguage={voiceCountLanguage}
         voiceCountOutput={voiceCountOutput}
         voiceCountSpeaker={voiceCountSpeaker}
-        onVoiceCountOutputChange={value => { if (!playbackEditsLocked) updateVoiceCountOutput(value); }}
-        onVoiceCountSpeakerChange={value => { if (!playbackEditsLocked) updateVoiceCountSpeaker(value); }}
+        onVoiceCountOutputChange={value => { if (labUnlocked && !playbackEditsLocked) updateVoiceCountOutput(value); }}
+        onVoiceCountSpeakerChange={value => { if (labUnlocked && !playbackEditsLocked) updateVoiceCountSpeaker(value); }}
         soundSetOverlays={soundSetOverlays}
-        onVoiceCountLanguageChange={value => { if (!playbackEditsLocked) updateVoiceCountLanguage(value); }}
+        onVoiceCountLanguageChange={value => { if (labUnlocked && !playbackEditsLocked) updateVoiceCountLanguage(value); }}
         onSoundSetOverlaysChange={value => { if (!playbackEditsLocked) updateSoundSetOverlays(value); }}
         prepareTonePreview={prepareTonePreview}
         onTonePositionChange={(value) => {

@@ -153,7 +153,7 @@ export function NoteRecorderModal({
   const [sampleName, setSampleName] = useState("");
   const [keyboardSourceIndex, setKeyboardSourceIndex] = useState<0 | 1 | 2>(0);
   const [isTtsDraft, setIsTtsDraft] = useState(false);
-  const saveTargetKey = `${visible}-${allowTts}-${beatIndex}-${subIndex}-${slotIndex}`;
+  const saveTargetKey = `${visible}-${beatIndex}-${subIndex}-${slotIndex}`;
   const saveOwnerRef = useRef({ key: saveTargetKey });
   if (saveOwnerRef.current.key !== saveTargetKey) saveOwnerRef.current = { key: saveTargetKey };
   const saveOwner = saveOwnerRef.current;
@@ -556,24 +556,28 @@ export function NoteRecorderModal({
     stopPreview,
   );
   const openTts = useCallback(() => {
+    if (!allowTts) return;
     tts.reset();
     setRecordedUri(null);
     setAudioDuration(0);
     setIsTtsDraft(false);
     setPhase("tts");
     void tts.loadVoices();
-  }, [tts.reset, tts.loadVoices]);
+  }, [allowTts, tts.reset, tts.loadVoices]);
   const leaveTts = useCallback(() => {
     tts.reset();
     setPhase("idle");
   }, [tts.reset]);
+  useEffect(() => {
+    if (!allowTts && phase === "tts") leaveTts();
+  }, [allowTts, phase, leaveTts]);
   // A new slot/target must never inherit a draft or eventual generation result.
   useEffect(() => {
     setPhase("idle");
     setRecordedUri(null);
     setAudioDuration(0);
     setIsTtsDraft(false);
-  }, [visible, allowTts, beatIndex, subIndex, slotIndex]);
+  }, [visible, beatIndex, subIndex, slotIndex]);
 
   const playPreview = useCallback(async () => {
     if (!recordedUri || audioDuration === 0) return;

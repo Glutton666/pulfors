@@ -46,6 +46,7 @@ interface SettingsModalProps {
   soundSet: SoundSet;
   onSoundSetChange: (value: SoundSet) => void;
   tonePosition: TonePosition;
+  labUnlocked?: boolean;
   voiceCountLanguage?: import("@/lib/voice-count").VoiceCountLanguage;
   voiceCountOutput?: import("@/lib/voice-count").VoiceCountOutput;
   voiceCountSpeaker?: import("@/lib/voice-count").VoiceCountSpeaker;
@@ -122,6 +123,7 @@ export function SettingsModal({
   soundSet,
   onSoundSetChange,
   tonePosition,
+  labUnlocked = false,
   voiceCountLanguage, onVoiceCountLanguageChange, soundSetOverlays, onSoundSetOverlaysChange,
   voiceCountOutput, onVoiceCountOutputChange, voiceCountSpeaker, onVoiceCountSpeakerChange,
   prepareTonePreview,
@@ -297,6 +299,7 @@ export function SettingsModal({
             soundSet={soundSet}
             onSoundSetChange={onSoundSetChange}
             tonePosition={tonePosition}
+            labUnlocked={labUnlocked}
             voiceCountLanguage={voiceCountLanguage}
             voiceCountOutput={voiceCountOutput}
             voiceCountSpeaker={voiceCountSpeaker}

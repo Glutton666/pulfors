@@ -1,8 +1,31 @@
 import { loadSettings, saveSettings, saveCustomSoundSets, type MetronomeSettings } from "@/lib/storage";
+import { Platform } from "react-native";
+import { addPracticeRoom, loadLabUnlocked } from "@/lib/practice-room";
+import { resolveLabGatedVoiceCountLanguage } from "@/lib/voice-count";
 const storage = require("./_stubs/async-storage");
 const builtin = (sourceRole: "strong" | "high" | "low") => ({ type: "builtin" as const, sourceSet: "classic" as const, sourceRole, duration: 0.1 });
 beforeEach(() => storage.__reset());
 describe("sound enhancements persist with safe legacy and deletion handling", () => {
+  it.each(["ko", "en"] as const)("keeps saved %s preferences silent while locked and restores them after lab registration and restart", async language => {
+    const previousPlatform = Platform.OS;
+    Platform.OS = "ios";
+    try {
+      await saveSettings({
+        bpm: 120, beatsPerMeasure: 4, subdivisions: 1,
+        voiceCountLanguage: language, voiceCountSpeaker: "male", voiceCountOutput: "voice-only",
+      } as MetronomeSettings);
+      const locked = await loadSettings();
+      expect(resolveLabGatedVoiceCountLanguage(await loadLabUnlocked(), locked.voiceCountLanguage!)).toBe("off");
+      expect(locked).toMatchObject({ voiceCountLanguage: language, voiceCountSpeaker: "male", voiceCountOutput: "voice-only" });
+      expect(await addPracticeRoom("lab")).not.toBeNull();
+      // Fresh storage reads model restarting without any in-memory unlock/settings.
+      const restarted = await loadSettings();
+      expect(resolveLabGatedVoiceCountLanguage(await loadLabUnlocked(), restarted.voiceCountLanguage!)).toBe(language);
+      expect(restarted).toMatchObject({ voiceCountLanguage: language, voiceCountSpeaker: "male", voiceCountOutput: "voice-only" });
+    } finally {
+      Platform.OS = previousPlatform;
+    }
+  });
   it("defaults to count off and zero overlays in old settings", async () => {
     await storage.setItem("metronome_settings", JSON.stringify({ bpm: 120 }));
     const settings = await loadSettings();

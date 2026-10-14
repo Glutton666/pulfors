@@ -108,7 +108,7 @@ import { useBeatQuickSave } from "@/hooks/useBeatQuickSave";
 import { usePracticeBookLoad } from "@/hooks/usePracticeBookLoad";
 import { useGoalPopups } from "@/hooks/useGoalPopups";
 import { usePracticeRoomTracking } from "@/hooks/usePracticeRoomTracking";
-import { loadLabUnlocked } from "@/lib/practice-room";
+import { useLabUnlock } from "@/hooks/useLabUnlock";
 import { useStageComposition } from "@/hooks/useStageComposition";
 import { useBeatTypeControls } from "@/hooks/useBeatTypeControls";
 import { useRandomBarSession } from "@/hooks/useRandomBarSession";
@@ -408,17 +408,7 @@ export function useMetronomeScreen() {
   // 단일 활성 모달 보장(태스크 #70)을 위해 두 모달의 동시 visible=true를 금지한다.
   const reopenSignalGenAfterTuningGuideRef = useRef(false);
   const [loggingEnabled, setLoggingEnabled] = useState(false);
-  const [labUnlocked, setLabUnlocked] = useState(false);
-  const unlockLab = useCallback(() => setLabUnlocked(true), []);
-  useEffect(() => {
-    let mounted = true;
-    void loadLabUnlocked().then((unlocked) => {
-      if (mounted) setLabUnlocked(unlocked);
-    });
-    return () => {
-      mounted = false;
-    };
-  }, []);
+  const { labUnlocked, labUnlockedRef, unlockLab, resetLabUnlock, refreshLabUnlock } = useLabUnlock();
   const practiceStartRef = useRef<number | null>(null);
   const practiceSessionRef = useRef<PracticeSessionTracker | null>(null);
   const featureStartRef = useRef<{ name: string; start: number } | null>(null);
@@ -709,7 +699,7 @@ export function useMetronomeScreen() {
     layerSoundSetsRef, noteSamplesRef, noteSampleChannelsRef, noteSampleVolumesRef, noteSampleSpeedsRef, barModeRef,
     barMetronomeChannelRef, noteSampleMetroChannelsRef, volumeRef, sampleVolumeRef,
     webClickReadyRef, noteSampleSoundsRef, tonePositionRef, tonePositionsRef,
-    soundSetOverlaysRef, voiceCountLanguageRef,
+    soundSetOverlaysRef, voiceCountLanguageRef, labUnlockedRef,
     voiceCountOutputRef, voiceCountSpeakerRef,
     isPlayingRef, isPreparingRef, bpmRef, t, showRecoveryToast, persistAudioSettingsCallbackRef,
     fatalRenderFailureRef,
@@ -1611,7 +1601,7 @@ export function useMetronomeScreen() {
     engine.setOnScheduleRebuild(() => {
       if (isSparsePlaybackActive() || polygonOnBeatRef.current) return;
       stopRenderedAudio();
-      if (Platform.OS === "web" || voiceCountLanguageRef.current !== "off"
+      if (Platform.OS === "web" || (labUnlockedRef.current && voiceCountLanguageRef.current !== "off")
         || Object.keys(soundSetOverlaysRef.current).length > 0) {
         // A random pass or failed/replaced schedule must not leave the previous
         // PCM loop owning output. Hand audio to the look-ahead fallback now;
@@ -1671,14 +1661,12 @@ export function useMetronomeScreen() {
       try {
         const { requestLocationPermission, addPracticeRoom } = await import("@/lib/practice-room");
         const granted = await requestLocationPermission();
-        if (granted) {
-          await addPracticeRoom(result.practiceRoomName);
-        }
+        if (granted && await addPracticeRoom(result.practiceRoomName)) await refreshLabUnlock();
       } catch (e) {
         captureBreadcrumb({ category: "practice-room", message: "Failed to register practice room", level: "warning", data: { error: String(e) } });
       }
     }
-  }, [setThemeColor, setCustomHex, persistSettings, openModeTutorial, tutorialShouldShow]);
+  }, [setThemeColor, setCustomHex, persistSettings, openModeTutorial, tutorialShouldShow, refreshLabUnlock]);
 
   const handleResetApp = useCallback(async () => {
     try {
@@ -1700,6 +1688,7 @@ export function useMetronomeScreen() {
       discardRoomTracking();
       featureStartRef.current = null;
       await clearAllAppStorage();
+      resetLabUnlock();
 
       setActiveModal(null);
       tuningGuideOnSelectRef.current = null;
@@ -1820,6 +1809,7 @@ export function useMetronomeScreen() {
     discardRoomTracking,
     invalidateSettingsLoad,
     releaseNoteSampleResources,
+    resetLabUnlock,
     setThemeColor,
     stopPlaybackAudio,
   ]);
@@ -2039,6 +2029,7 @@ export function useMetronomeScreen() {
     clearAudioWatchdogRef,
     armAudioWatchdogRef,
     soundSetRef,
+    labUnlockedRef,
     captureAudioToneSnapshot,
     setActiveAudioToneSnapshot,
     customSoundSetsRef,

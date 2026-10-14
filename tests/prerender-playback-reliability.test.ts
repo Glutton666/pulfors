@@ -434,6 +434,61 @@ describe("pre-rendered playback reliability", () => {
     expect(filenames[0]).not.toBe(filenames[1]);
     unmount();
   });
+  it.each(["web", "android"] as const)("blocks a saved voice snapshot at the %s playback boundary", async platform => {
+    Platform.OS = platform;
+    const engine = makeEngine();
+    const params = makePlaybackParams(engine, null);
+    const preparation = jest.spyOn(require("@/lib/audio-sparse-event-preparation"), "prepareSparseEvents");
+    const { result, unmount } = renderHook(() => usePlaybackControl({
+      ...params, labUnlockedRef: { current: false },
+      captureAudioToneSnapshot: () => createAudioToneSnapshot({
+        volume: 0.75, defaultSoundSet: "classic", voiceCountLanguage: "en", voiceCountOutput: "voice-only",
+      }),
+    } as any));
+    try {
+      await act(async () => { await result.current.startMetronome(); });
+      const rendered = platform === "web"
+        ? mockRenderMeasure.mock.calls.at(-1)![0]
+        : preparation.mock.calls.at(-1)![0] as any;
+      expect(rendered.voiceCountLanguage).toBe("off");
+      expect(rendered.voiceCountPCMs.size).toBe(0);
+      expect(engine.start).toHaveBeenCalled();
+    } finally {
+      unmount();
+      preparation.mockRestore();
+    }
+  });
+  it.each(["en", "ko"] as const)("gates saved %s counts in snapshots and native renders without modifying preferences", async language => {
+    const engine = makeEngine();
+    const params = makePipelineParams(engine);
+    const labUnlockedRef = { current: false };
+    const voiceCountLanguageRef = { current: language };
+    const { result, unmount } = renderHook(() => useAudioPipeline({
+      ...params, labUnlockedRef, voiceCountLanguageRef,
+      voiceCountOutputRef: { current: "voice-only" },
+      voiceCountSpeakerRef: { current: "male" },
+    } as any));
+    try {
+      expect(result.current.captureAudioToneSnapshot()).toMatchObject({
+        voiceCountLanguage: "off", voiceCountOutput: "voice-only", voiceCountSpeaker: "male",
+      });
+      const override = createAudioToneSnapshot({ volume: 0.75, defaultSoundSet: "classic", voiceCountLanguage: language });
+      const locked = await result.current.prepareRenderedPlayer(undefined, override);
+      expect(locked.status).toBe("completed");
+      expect(mockRenderMeasure.mock.calls.at(-1)![0].voiceCountLanguage).toBe("off");
+      expect(mockRenderMeasure.mock.calls.at(-1)![0].voiceCountPCMs.size).toBe(0);
+      if (locked.status === "completed") locked.prepared.discard();
+      expect(voiceCountLanguageRef.current).toBe(language);
+      labUnlockedRef.current = true;
+      expect(result.current.captureAudioToneSnapshot().voiceCountLanguage).toBe(language);
+      const unlocked = await result.current.prepareRenderedPlayer();
+      expect(unlocked.status).toBe("completed");
+      expect(mockRenderMeasure.mock.calls.at(-1)![0].voiceCountLanguage).toBe(language);
+      if (unlocked.status === "completed") unlocked.prepared.discard();
+    } finally {
+      unmount();
+    }
+  });
 
   it("bounds voice/overlay preparation and releases every native WAV/player over 120 stop/change/restart cycles", async () => {
     const engine = makeEngine();

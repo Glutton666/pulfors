@@ -8,6 +8,7 @@ test("iframe: long-press links one click without selecting base; count choice, r
   await page.addInitScript(() => {
     if (!localStorage.getItem("sound_extras_seed")) {
       localStorage.setItem("metronome_onboarding_done", "1");
+      localStorage.setItem("metronome_lab_unlocked", "true");
       localStorage.setItem("metronome_settings", JSON.stringify({ soundSet: "classic", volume: 0.75 }));
       localStorage.setItem("sound_extras_seed", "1");
     }

@@ -138,3 +138,24 @@ test("web offers unsupported notice without disrupting source or existing-sample
   expect(ui.getByText("noteRecorder.removeSample")).toBeTruthy();
   expect(native.generate).not.toHaveBeenCalled(); expect(native.getVoices).not.toHaveBeenCalled();
 });
+test("locked source selection hides TTS but preserves recording, import and existing-sample actions", async () => {
+  const p = props();
+  const ui = render(<NoteRecorderModal {...p} allowTts={false} />);
+  expect(ui.queryByTestId("note-recorder-tts")).toBeNull();
+  for (const key of ["record", "import"]) {
+    expect(ui.getByText(`noteRecorder.${key}`)).toBeTruthy();
+  }
+  ui.rerender(<NoteRecorderModal {...p} allowTts={false} hasExisting existingUri={output.uri} />);
+  for (const key of ["editSample", "removeSample"]) {
+    expect(ui.getByText(`noteRecorder.${key}`)).toBeTruthy();
+  }
+  await act(async () => { fireEvent.click(ui.getByText("noteRecorder.editSample")); });
+  expect(await ui.findByTestId("note-recorder-preview")).toBeTruthy();
+  // Loading the persisted unlock must not discard an existing sample edit.
+  ui.rerender(<NoteRecorderModal {...p} allowTts hasExisting existingUri={output.uri} />);
+  expect(ui.getByTestId("note-recorder-save")).toBeTruthy();
+  fireEvent.click(ui.getByTestId("note-recorder-save"));
+  expect(p.onSave).toHaveBeenCalled();
+  expect(native.generate).not.toHaveBeenCalled();
+  ui.unmount();
+});

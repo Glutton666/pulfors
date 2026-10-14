@@ -865,6 +865,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
     getClickPCMs,
     getLayerClickPCMsForSchedule,
     getSamplePCMs,
+    labUnlockedRef,
     noteSampleChannelsRef,
     noteSampleMetroChannelsRef,
     noteSampleSpeedsRef,

@@ -23,6 +23,7 @@ test("iframe dense count soak: Beat, Bar, Note queue resource plateau and stop s
     const profile = { volume: 0.75, soundSet: "classic", voiceCountLanguage: "en",
       soundSetOverlays: { classic: "tempo" } };
     localStorage.setItem("metronome_onboarding_done", "1");
+    localStorage.setItem("metronome_lab_unlocked", "true");
     localStorage.setItem("metronome_settings", JSON.stringify({
       ...rhythm, ...profile,
       modeSettings: Object.fromEntries(["beat", "bar", "note"].map(mode => [mode, profile])),

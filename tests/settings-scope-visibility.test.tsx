@@ -187,6 +187,33 @@ describe("theme settings scope visibility", () => {
 });
 
 describe("sound settings scope visibility", () => {
+  test("locked voice settings retain selection and cannot change until Lab unlocks", () => {
+    const onLanguage = jest.fn(), onOutput = jest.fn(), onSpeaker = jest.fn();
+    const props = {
+      ...soundProps, voiceCountLanguage: "en" as const, voiceCountOutput: "voice-only" as const,
+      voiceCountSpeaker: "male" as const, onVoiceCountLanguageChange: onLanguage,
+      onVoiceCountOutputChange: onOutput, onVoiceCountSpeakerChange: onSpeaker,
+    };
+    const view = render(<SettingsSoundTab scope="global" {...props} labUnlocked={false} />);
+    expect(view.getByTestId("voice-count-lab-locked")).toBeTruthy();
+    expect(view.getByTestId("voice-count-language-en").textContent).toContain("English");
+    for (const id of ["language-off", "language-en", "output-mixed", "speaker-female"]) {
+      const control = view.getByTestId(`voice-count-${id}`) as HTMLButtonElement;
+      expect(control.disabled).toBe(true);
+      fireEvent.click(control);
+    }
+    expect(onLanguage).not.toHaveBeenCalled();
+    expect(onOutput).not.toHaveBeenCalled();
+    expect(onSpeaker).not.toHaveBeenCalled();
+    view.rerender(<SettingsSoundTab scope="global" {...props} labUnlocked />);
+    expect(view.queryByTestId("voice-count-lab-locked")).toBeNull();
+    fireEvent.click(view.getByTestId("voice-count-language-off"));
+    fireEvent.click(view.getByTestId("voice-count-output-mixed"));
+    fireEvent.click(view.getByTestId("voice-count-speaker-female"));
+    expect(onLanguage).toHaveBeenCalledWith("off");
+    expect(onOutput).toHaveBeenCalledWith("mixed");
+    expect(onSpeaker).toHaveBeenCalledWith("female");
+  });
   test("every existing built-in plus Tempo remains selectable with its own overlay edit control", () => {
     const choose = jest.fn();
     const view = render(<SettingsSoundTab scope="global" {...soundProps} onSoundSetChange={choose} />);
