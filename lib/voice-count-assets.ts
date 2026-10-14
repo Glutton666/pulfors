@@ -1,7 +1,8 @@
 import { loadPCM } from "./pcm-loader";
-import { getDecodedPCM } from "./pcm-cache";
+import { getClickPCM, getDecodedPCM } from "./pcm-cache";
 import { emphasizeCountPCM, voiceCountEvent, type VoiceCountLanguage, type VoiceCountSlot, type VoiceCountSpeaker } from "./voice-count";
 import type { ClickPCMs } from "./audio-renderer";
+import { raiseVoiceCountPitch } from "./voice-count-pitch";
 
 // Static requires are intentional: Metro must include every offline speaker.
 const catalog = {
@@ -57,12 +58,19 @@ export async function prepareVoiceCountPCMs(
   const prepared = await Promise.all([...clips].map(async number => {
     const asset = catalog[language][speaker][number!];
     if (asset === undefined) throw new Error(`Missing ${language} voice count ${number}`);
-    const pcm = await getDecodedPCM(`voice:${language}:${speaker}:${number}`, s => loadPCM({ kind: "asset", source: asset }, s), signal);
-    return [number!, {
-      strong: emphasizeCountPCM(pcm, "strong"),
-      high: emphasizeCountPCM(pcm, "high"),
-      low: emphasizeCountPCM(pcm, "low"),
-    }] as const;
+    const roles = await getClickPCM(`voice:roles:${language}:${speaker}:${number}`, async sharedSignal => {
+      const pcm = await getDecodedPCM(
+        `voice:${language}:${speaker}:${number}`,
+        s => loadPCM({ kind: "asset", source: asset }, s),
+        sharedSignal,
+      );
+      return {
+        strong: raiseVoiceCountPitch(emphasizeCountPCM(pcm, "strong")),
+        high: emphasizeCountPCM(pcm, "high"),
+        low: emphasizeCountPCM(pcm, "low"),
+      };
+    }, signal);
+    return [number!, roles] as const;
   }));
   return new Map(prepared);
 }
