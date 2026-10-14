@@ -95,5 +95,8 @@ export function useNoteTts(
   const changeText = useCallback((value: string) => { reset(); setText(value); }, [reset]);
   const changeVoice = useCallback((value: string) => { reset(); setVoiceId(value); }, [reset]);
   const commit = useCallback((uri: string) => sessionRef.current?.commit(uri), []);
-  return { text, voiceId, voices, status, error, loadVoices, generate, reset, changeText, changeVoice, commit };
+  const beginCommit = useCallback((uri: string) => sessionRef.current?.beginCommit(uri) ?? ((saved: boolean) => {
+    if (saved) sessionRef.current?.commit(uri);
+  }), []);
+  return { text, voiceId, voices, status, error, loadVoices, generate, reset, changeText, changeVoice, commit, beginCommit };
 }

@@ -14,8 +14,10 @@ function native(): jest.Mocked<NoteTtsNative> {
     getVoices: jest.fn().mockResolvedValue([]),
     getOfflineKoreanCountVoices: jest.fn().mockResolvedValue([]),
     generate: jest.fn().mockResolvedValue(result),
+    claim: jest.fn().mockResolvedValue(undefined),
     cancel: jest.fn().mockResolvedValue(undefined),
     discard: jest.fn().mockResolvedValue(undefined),
+    listFiles: jest.fn().mockResolvedValue([]),
   };
 }
 describe("Device-local TTS file ownership", () => {
@@ -47,6 +49,30 @@ describe("Device-local TTS file ownership", () => {
     expect(engine.discard).not.toHaveBeenCalled();
     expect(await loadNoteSamples()).toEqual({ "4-1~2": uri });
     expect(engine.generate).toHaveBeenCalledTimes(1);
+  });
+  test("reset waits for an in-flight durable save before discarding a draft", async () => {
+    const engine = native(); const session = new NoteTtsSession(engine);
+    await session.generate("시작", "male-ko");
+    const settleSave = session.beginCommit(result.uri);
+
+    await session.reset();
+    expect(engine.discard).not.toHaveBeenCalled();
+    settleSave(true);
+    expect(engine.discard).not.toHaveBeenCalled();
+
+    settleSave(false); // A completion callback cannot reverse a committed save.
+    expect(engine.discard).not.toHaveBeenCalled();
+  });
+  test("reset discards a draft after its pending save fails", async () => {
+    const engine = native(); const session = new NoteTtsSession(engine);
+    await session.generate("시작", "male-ko");
+    const settleSave = session.beginCommit(result.uri);
+
+    await session.reset();
+    expect(engine.discard).not.toHaveBeenCalled();
+    settleSave(false);
+    await Promise.resolve();
+    expect(engine.discard).toHaveBeenCalledWith(result.uri);
   });
   test("close/slot/text change discards a late result instead of returning it", async () => {
     const engine = native(); const pending = deferred();

@@ -15,7 +15,9 @@ const result = { uri: "file:///app/tts-samples/voice.wav", duration: 0.02 };
 function native(): jest.Mocked<NoteTtsNative> {
   return { getVoices: jest.fn(), getOfflineKoreanCountVoices: jest.fn().mockResolvedValue([]),
     generate: jest.fn().mockResolvedValue(result),
-    discard: jest.fn().mockResolvedValue(undefined), cancel: jest.fn().mockResolvedValue(undefined) };
+    claim: jest.fn().mockResolvedValue(undefined),
+    discard: jest.fn().mockResolvedValue(undefined), cancel: jest.fn().mockResolvedValue(undefined),
+    listFiles: jest.fn().mockResolvedValue([]) };
 }
 beforeEach(() => { mockBytes = speechWav(); mockWrite.mockReset(); });
 test("rewrites the owned durable file, corrects duration, and preserves it after commit/reset", async () => {

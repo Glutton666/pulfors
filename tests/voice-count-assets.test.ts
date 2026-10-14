@@ -27,8 +27,10 @@ jest.mock("@/lib/note-tts-runtime", () => ({
     getVoices: jest.fn(async () => []),
     getOfflineKoreanCountVoices: jest.fn(async () => []),
     generate: jest.fn(),
+    claim: jest.fn(async () => {}),
     cancel: jest.fn(async () => {}),
     discard: jest.fn(async () => {}),
+    listFiles: jest.fn(async () => []),
   },
 }));
 jest.mock("@/lib/note-tts-file", () => ({

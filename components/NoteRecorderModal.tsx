@@ -61,7 +61,7 @@ interface NoteRecorderModalProps {
   allowTts?: boolean;
   visible: boolean;
   onClose: () => void;
-  onSave: (uri: string, name: string, source: SampleSource, channel: SampleChannel, metronomeChannel: MetroChannel, sampleGain?: number, sampleSpeed?: number) => void;
+  onSave: (uri: string, name: string, source: SampleSource, channel: SampleChannel, metronomeChannel: MetroChannel, sampleGain?: number, sampleSpeed?: number, onDurablySaved?: (saved: boolean) => void) => void | boolean | Promise<void | boolean>;
   onDelete: () => void;
   beatIndex: number;
   subIndex: number;
@@ -671,17 +671,24 @@ export function NoteRecorderModal({
     }
   }, [autoPreview]);
 
-  const doSave = useCallback((finalMetronomeChannel: MetroChannel) => {
+  const doSave = useCallback(async (finalMetronomeChannel: MetroChannel) => {
     if (!recordedUri || saveOwnerRef.current !== saveOwner || closedByHandleRef.current) return;
-    tts.commit(recordedUri); // Existing persistence now owns this durable file.
-    if (audioDuration > 0) {
-      const startMs = Math.floor(trimStart * audioDuration * 1000);
-      const endMs = Math.floor(trimEnd * audioDuration * 1000);
-      onSave(`${recordedUri}#t=${startMs},${endMs}`, sampleName, sourceTypeRef.current, channel, finalMetronomeChannel, sampleGain, sampleSpeed);
-    } else {
-      onSave(recordedUri, sampleName, sourceTypeRef.current, channel, finalMetronomeChannel, sampleGain, sampleSpeed);
+    const settleDraftSave = tts.beginCommit(recordedUri);
+    try {
+      let saved: void | boolean;
+      if (audioDuration > 0) {
+        const startMs = Math.floor(trimStart * audioDuration * 1000);
+        const endMs = Math.floor(trimEnd * audioDuration * 1000);
+        saved = await onSave(`${recordedUri}#t=${startMs},${endMs}`, sampleName, sourceTypeRef.current, channel, finalMetronomeChannel, sampleGain, sampleSpeed, settleDraftSave);
+      } else {
+        saved = await onSave(recordedUri, sampleName, sourceTypeRef.current, channel, finalMetronomeChannel, sampleGain, sampleSpeed, settleDraftSave);
+      }
+      settleDraftSave(saved !== false);
+    } catch (error) {
+      settleDraftSave(false);
+      captureBreadcrumb({ category: "noteRecorder", message: "sample save failed", level: "warning", data: { error: String(error) } });
     }
-  }, [recordedUri, trimStart, trimEnd, audioDuration, onSave, sampleName, channel, sampleGain, sampleSpeed, tts.commit, saveOwner]);
+  }, [recordedUri, trimStart, trimEnd, audioDuration, onSave, sampleName, channel, sampleGain, sampleSpeed, tts.beginCommit, saveOwner]);
 
   const handleSave = useCallback(() => {
     if (!recordedUri) return;

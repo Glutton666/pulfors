@@ -7,7 +7,7 @@ import { noteTtsNative } from "@/lib/note-tts-runtime";
 import type { NoteTtsNative, NoteTtsResult } from "@/lib/note-tts";
 
 jest.mock("@/lib/note-tts-runtime", () => ({
-  noteTtsNative: { getVoices: jest.fn(), generate: jest.fn(), cancel: jest.fn(), discard: jest.fn() },
+  noteTtsNative: { getVoices: jest.fn(), generate: jest.fn(), claim: jest.fn(), cancel: jest.fn(), discard: jest.fn(), listFiles: jest.fn() },
 }));
 jest.mock("@/lib/error-tracking", () => ({ captureBreadcrumb: jest.fn() }));
 const native = noteTtsNative as jest.Mocked<NoteTtsNative>;
@@ -26,6 +26,7 @@ beforeEach(() => {
   Platform.OS = "ios";
   native.getVoices.mockResolvedValue(voices as any);
   native.generate.mockResolvedValue(output);
+  native.claim.mockResolvedValue(undefined);
   native.cancel.mockResolvedValue(undefined);
   native.discard.mockResolvedValue(undefined);
 });

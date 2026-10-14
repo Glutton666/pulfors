@@ -142,8 +142,10 @@ jest.mock("@/lib/note-tts-runtime", () => ({
       uri: `file:///tts-samples/${voiceId}-${encodeURIComponent(word)}.wav`,
       duration: 0.25,
     })),
+    claim: jest.fn(async () => {}),
     cancel: jest.fn(async () => {}),
     discard: jest.fn(async () => {}),
+    listFiles: jest.fn(async () => []),
   },
 }));
 jest.mock("@/lib/note-tts-file", () => ({

@@ -36,7 +36,7 @@ jest.mock("@/lib/audio-session", () => ({ acquireAudioSession: jest.fn(), releas
 jest.mock("@/lib/audio-renderer", () => ({ decodeSampleFile: jest.fn().mockResolvedValue([]) }));
 jest.mock("@/lib/error-tracking", () => ({ captureBreadcrumb: jest.fn() }));
 jest.mock("@/lib/note-tts-runtime", () => ({
-  noteTtsNative: { getVoices: jest.fn(), generate: jest.fn(), cancel: jest.fn(), discard: jest.fn() },
+  noteTtsNative: { getVoices: jest.fn(), generate: jest.fn(), claim: jest.fn(), cancel: jest.fn(), discard: jest.fn(), listFiles: jest.fn() },
 }));
 jest.mock("@/lib/note-tts-file", () => ({ prepareNoteTtsFile: async (result: NoteTtsResult) => result }));
 jest.mock("expo-audio", () => {
@@ -60,7 +60,7 @@ function props() {
 beforeEach(() => {
   jest.clearAllMocks(); Platform.OS = "ios";
   native.getVoices.mockResolvedValue([{ id: "f", name: "여성", gender: "female", language: "ko-KR" }]);
-  native.generate.mockResolvedValue(output); native.cancel.mockResolvedValue(undefined); native.discard.mockResolvedValue(undefined);
+  native.generate.mockResolvedValue(output); native.claim.mockResolvedValue(undefined); native.cancel.mockResolvedValue(undefined); native.discard.mockResolvedValue(undefined);
   const player = require("expo-audio").__player;
   player.isLoaded = true; player.duration = 1.2;
 });
@@ -106,8 +106,8 @@ test("native text → file → preview/stop → trimmed import sample save prese
   expect(player.play).toHaveBeenCalled();
   fireEvent.click(ui.getByTestId("note-recorder-preview"));
   expect(player.pause).toHaveBeenCalled();
-  fireEvent.click(ui.getByTestId("note-recorder-save"));
-  expect(p.onSave).toHaveBeenCalledWith(`${output.uri}#t=0,1200`, "시작", "import", "both", "off", 1, 1);
+  await act(async () => { fireEvent.click(ui.getByTestId("note-recorder-save")); });
+  expect(p.onSave).toHaveBeenCalledWith(`${output.uri}#t=0,1200`, "시작", "import", "both", "off", 1, 1, expect.any(Function));
   ui.unmount();
   expect(native.discard).not.toHaveBeenCalled();
 });

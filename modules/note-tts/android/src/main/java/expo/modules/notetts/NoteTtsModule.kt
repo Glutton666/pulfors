@@ -21,6 +21,8 @@ class NoteTtsModule : Module() {
   private var destroyed = false
   private data class Waiting(val promise: Promise, val action: (TextToSpeech) -> Unit, val id: String?)
   private val waiting = mutableListOf<Waiting>()
+  /** Completed outputs stay hidden from cleanup until JS claims or discards them. */
+  private val unclaimedFiles = mutableSetOf<File>()
   private var initEpoch = 0
   private var initTimeout: Runnable? = null
   private data class Job(
@@ -59,6 +61,12 @@ class NoteTtsModule : Module() {
     AsyncFunction("generate") { text: String, voiceId: String, requestId: String, promise: Promise ->
       main.post { withEngine(promise, requestId) { tts -> generate(tts, text, voiceId, requestId, promise) } }
     }
+    AsyncFunction("claim") { uri: String, promise: Promise ->
+      main.post {
+        generatedFile(uri)?.let { unclaimedFiles.remove(it.canonicalFile) }
+        promise.resolve(null)
+      }
+    }
     AsyncFunction("cancel") { requestId: String, promise: Promise ->
       main.post {
         if (active?.id == requestId) fail("cancelled", "Speech generation cancelled.")
@@ -71,14 +79,32 @@ class NoteTtsModule : Module() {
     }
     AsyncFunction("discard") { uri: String, promise: Promise ->
       main.post {
-        val directory = directory()
-        val path = Uri.parse(uri)
-        if (directory != null && path.scheme == "file") {
-          val file = File(path.path ?: "")
-          if (file.parentFile?.canonicalFile == directory.canonicalFile &&
-              file.name.matches(Regex("[a-f0-9-]{36}\\.wav"))) file.delete()
+        val file = generatedFile(uri)
+        if (file != null && active?.file?.canonicalFile != file.canonicalFile) {
+          unclaimedFiles.remove(file.canonicalFile)
+          file.delete()
         }
         promise.resolve(null)
+      }
+    }
+    AsyncFunction("listFiles") { promise: Promise ->
+      main.post {
+        try {
+          val directory = directory() ?: throw IllegalStateException("Speech directory unavailable.")
+          val activeFile = active?.file?.canonicalFile
+          val files = directory.listFiles().orEmpty()
+            .filter { file ->
+              file.isFile &&
+                file.name.matches(Regex("[a-f0-9-]{36}\\.wav")) &&
+                file.canonicalFile.parentFile == directory.canonicalFile &&
+                file.canonicalFile != activeFile &&
+                file.canonicalFile !in unclaimedFiles
+            }
+            .map { Uri.fromFile(it).toString() }
+          promise.resolve(files)
+        } catch (error: Exception) {
+          promise.reject("failed", "Cannot list speech files.", error)
+        }
       }
     }
     OnDestroy {
@@ -95,6 +121,21 @@ class NoteTtsModule : Module() {
 
   private fun directory(): File? =
     appContext.reactContext?.filesDir?.let { File(it, "tts-samples").also { dir -> dir.mkdirs() } }
+
+  private fun generatedFile(uri: String): File? {
+    val directory = directory() ?: return null
+    val path = Uri.parse(uri)
+    if (path.scheme != "file") return null
+    val file = File(path.path ?: "")
+    return try {
+      file.takeIf {
+        it.parentFile?.canonicalFile == directory.canonicalFile &&
+          it.name.matches(Regex("[a-f0-9-]{36}\\.wav"))
+      }
+    } catch (_: Exception) {
+      null
+    }
+  }
 
   private fun voices(tts: TextToSpeech): List<Voice> =
     (tts.voices ?: emptySet()).filter {
@@ -151,6 +192,7 @@ class NoteTtsModule : Module() {
         }
         job.timeout?.let { main.removeCallbacks(it) }
         active = null
+        unclaimedFiles.add(job.file.canonicalFile)
         job.promise.resolve(mapOf("uri" to Uri.fromFile(job.file).toString(), "duration" to duration))
       } }
       @Deprecated("Android callback")

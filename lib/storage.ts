@@ -11,6 +11,11 @@ import { sanitizeTonePosition, type TonePosition } from "./metronome-tone-dsp";
 import { TUNING_DATA } from "./tuning-data";
 import { sanitizeSoundSetOverlays, type SoundSetOverlays } from "./sound-overlays";
 import { sanitizeVoiceCountLanguage, sanitizeVoiceCountOutput, sanitizeVoiceCountSpeaker, type VoiceCountLanguage, type VoiceCountOutput, type VoiceCountSpeaker } from "./voice-count";
+import {
+  collectUnusedNoteTtsFiles,
+  retainPendingNoteTtsReferences,
+  withNoteTtsStorageLock,
+} from "./note-tts-storage";
 
 const SETTINGS_KEY = "metronome_settings";
 const PRACTICE_BOOK_KEY = "practice_book";
@@ -827,20 +832,28 @@ export async function loadPracticeBook(): Promise<PracticeEntry[]> {
 }
 
 export async function savePracticeBook(entries: PracticeEntry[]): Promise<void> {
+  const releasePending = retainPendingNoteTtsReferences(entries);
+  let saved = false;
   try {
-    const serialized = JSON.stringify(entries);
-    await AsyncStorage.setItem(PRACTICE_BOOK_KEY, serialized);
-    const snapshot = JSON.parse(serialized) as PracticeEntry[];
-    for (const listener of practiceBookListeners) {
-      try {
-        listener(snapshot);
-      } catch (e) {
-        logger.warn("Practice book listener failed:", e);
+    await withNoteTtsStorageLock(async () => {
+      const serialized = JSON.stringify(entries);
+      await AsyncStorage.setItem(PRACTICE_BOOK_KEY, serialized);
+      saved = true;
+      const snapshot = JSON.parse(serialized) as PracticeEntry[];
+      for (const listener of practiceBookListeners) {
+        try {
+          listener(snapshot);
+        } catch (e) {
+          logger.warn("Practice book listener failed:", e);
+        }
       }
-    }
+    });
   } catch (e) {
     logger.warn("Failed to save practice book:", e);
+  } finally {
+    releasePending();
   }
+  if (saved) void collectUnusedNoteTtsFiles();
 }
 
 export function subscribePracticeBook(

@@ -7,6 +7,7 @@ import {
   type BarSymbolShortcut,
 } from "@/hooks/useKeyboardShortcuts";
 import { useAudioPipeline } from "@/hooks/useAudioPipeline";
+import { useNoteSampleSave } from "@/hooks/useNoteSampleSave";
 import { useSoundSetPreview } from "@/hooks/useSoundSetPreview";
 import { useSettings } from "@/hooks/useSettings";
 import {
@@ -1333,57 +1334,11 @@ export function useMetronomeScreen() {
     setRecorderTarget({ beat: beatIndex, sub: subIndex, slot: selected >= 0 ? selected : 0 });
   }, []);
 
-  const handleNoteRecordSave = useCallback(async (uri: string, name: string, source: SampleSource, channel: SampleChannel, metronomeChannel: MetroChannel, sampleGain = 1, sampleSpeed = 1) => {
-    if (!recorderTarget) return;
-    const targetConfig = barModeRef.current
-      ? barConfigRef.current
-      : dialConfigRef.current;
-    const baseKey = `${recorderTarget.beat}-${recorderTarget.sub}`;
-    const key = recorderTarget.slot ? `${baseKey}~${recorderTarget.slot}` : baseKey;
-    invalidateSamplePCMCache(key);
-    const updated = { ...noteSamplesRef.current, [key]: uri };
-    await saveNoteSamples(updated);
-    setNoteSamples(updated);
-    noteSamplesRef.current = updated;
-    const updatedNames = { ...noteSampleNamesRef.current, [key]: name };
-    await saveNoteSampleNames(updatedNames);
-    setNoteSampleNames(updatedNames);
-    noteSampleNamesRef.current = updatedNames;
-    const updatedSources = { ...noteSampleSourcesRef.current, [key]: source };
-    await saveNoteSampleSources(updatedSources);
-    setNoteSampleSources(updatedSources);
-    noteSampleSourcesRef.current = updatedSources;
-    const updatedChannels = { ...noteSampleChannelsRef.current };
-    if (channel === "both") delete updatedChannels[key]; else updatedChannels[key] = channel;
-    await saveNoteSampleChannels(updatedChannels);
-    setNoteSampleChannels(updatedChannels);
-    noteSampleChannelsRef.current = updatedChannels;
-    const updatedVolumes = { ...noteSampleVolumesRef.current, [key]: Math.max(0, Math.min(1, sampleGain)) };
-    await saveNoteSampleVolumes(updatedVolumes);
-    setNoteSampleVolumes(updatedVolumes);
-    noteSampleVolumesRef.current = updatedVolumes;
-    const updatedSpeeds = { ...noteSampleSpeedsRef.current, [key]: Math.max(0.5, Math.min(2, sampleSpeed)) };
-    await saveNoteSampleSpeeds(updatedSpeeds);
-    setNoteSampleSpeeds(updatedSpeeds);
-    noteSampleSpeedsRef.current = updatedSpeeds;
-    Object.assign(targetConfig, {
-      noteSamples: { ...updated },
-      noteSampleNames: { ...updatedNames },
-      noteSampleSources: { ...updatedSources },
-      noteSampleChannels: { ...updatedChannels },
-      noteSampleVolumes: { ...updatedVolumes },
-      noteSampleSpeeds: { ...updatedSpeeds },
-    });
-    const updatedMetroChannels = await setNoteSampleMetroChannel(recorderTarget.beat, metronomeChannel, noteSampleMetroChannelsRef.current);
-    setNoteSampleMetroChannels(updatedMetroChannels);
-    noteSampleMetroChannelsRef.current = updatedMetroChannels;
-    if (barModeRef.current) {
-      barConfigRef.current.noteSampleMetroChannels = { ...updatedMetroChannels };
-    }
-    await preloadNoteSampleSounds(updated, true);
-    scheduleReRender();
-    setRecorderTarget(null);
-  }, [recorderTarget, preloadNoteSampleSounds, invalidateSamplePCMCache, scheduleReRender]);
+  const handleNoteRecordSave = useNoteSampleSave({
+    recorderTarget, barModeRef, barConfigRef, dialConfigRef,
+    noteSamples: noteSamplesHook, noteSampleMetroChannelsRef, setNoteSampleMetroChannels,
+    setRecorderTarget, invalidateSamplePCMCache, preloadNoteSampleSounds, scheduleReRender,
+  });
 
   const handleNoteRecordApplyPreviewBpm = useCallback((previewBpm: number) => {
     const clamped = Math.max(20, Math.min(300, Math.round(previewBpm)));

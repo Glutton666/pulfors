@@ -87,4 +87,5 @@
 - [Nix WebKit runtime](nix-webkit-runtime.md) — ldconfig checks, overwritten library paths and mixed soup plugins can fail before the app; Linux WebKit is not device Safari.
 - [Metronome count language](metronome-count-language.md) — 한영 모두 끝자리만 읽는다. 한국어 지정 발음·짧고 또렷한 원음·오프라인 음성 범위를 유지한다.
 - [Bar TTS file delivery](bar-tts-file-delivery.md) — 앱 자체 생성 파일을 저장·재생한다; 웹 생성은 미지원 안내 후 추후 진행, 마디마다 합성·외부 계정 요구는 하지 않는다.
+- [Bar TTS file ownership](bar-tts-file-ownership.md) — 수거는 저장 참조·진행 중인 쓰기·생성·재생/내보내기 소유권이 모두 정리된 뒤에만 수행한다.
 - [Catalog speech generation](catalog-speech-generation.md) — 작은 배치와 반환된 파일 경로를 사용하며, 문맥 발화 분리는 정확한 개수와 별도 청취 확인이 필요하다.

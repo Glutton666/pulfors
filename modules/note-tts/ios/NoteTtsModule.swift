@@ -16,6 +16,8 @@ public final class NoteTtsModule: Module {
     }
   }
   private var active: Job?
+  /** Completed outputs stay hidden from cleanup until JS claims or discards them. */
+  private var unclaimedFiles = Set<URL>()
 
   public func definition() -> ModuleDefinition {
     Name("NoteTts")
@@ -35,19 +37,39 @@ public final class NoteTtsModule: Module {
     AsyncFunction("generate") { (text: String, voiceId: String, requestId: String, promise: Promise) in
       self.generate(text: text, voiceId: voiceId, requestId: requestId, promise: promise)
     }.runOnQueue(.main)
+    AsyncFunction("claim") { (uri: String, promise: Promise) in
+      if let url = self.generatedFile(uri) { self.unclaimedFiles.remove(url) }
+      promise.resolve(nil)
+    }.runOnQueue(.main)
     AsyncFunction("cancel") { (requestId: String, promise: Promise) in
       if self.active?.id == requestId { self.fail("cancelled", "Speech generation cancelled.") }
       promise.resolve(nil)
     }.runOnQueue(.main)
     AsyncFunction("discard") { (uri: String, promise: Promise) in
-      if let url = URL(string: uri), url.isFileURL,
-         let directory = try? self.directory(),
-         url.deletingLastPathComponent().standardizedFileURL == directory.standardizedFileURL,
-         url.pathExtension == "wav",
-         UUID(uuidString: url.deletingPathExtension().lastPathComponent) != nil {
+      if let url = self.generatedFile(uri), self.active?.url.standardizedFileURL != url {
+        self.unclaimedFiles.remove(url)
         try? FileManager.default.removeItem(at: url)
       }
       promise.resolve(nil)
+    }.runOnQueue(.main)
+    AsyncFunction("listFiles") { (promise: Promise) in
+      do {
+        let directory = try self.directory()
+        let activeURL = self.active?.url.standardizedFileURL
+        let files = try FileManager.default.contentsOfDirectory(
+          at: directory, includingPropertiesForKeys: [.isRegularFileKey], options: [.skipsHiddenFiles]
+        ).filter { url in
+          let isRegularFile = (try? url.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true
+          return isRegularFile &&
+            url.pathExtension == "wav" &&
+            UUID(uuidString: url.deletingPathExtension().lastPathComponent) != nil &&
+            url.standardizedFileURL != activeURL &&
+            !self.unclaimedFiles.contains(url.standardizedFileURL)
+        }.map(\.absoluteString)
+        promise.resolve(files)
+      } catch {
+        promise.reject("failed", "Cannot list speech files.", error)
+      }
     }.runOnQueue(.main)
     OnDestroy {
       DispatchQueue.main.async { self.fail("cancelled", "Speech module closed.") }
@@ -64,6 +86,17 @@ public final class NoteTtsModule: Module {
     let url = root.appendingPathComponent("tts-samples", isDirectory: true)
     try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
     return url
+  }
+
+  private func generatedFile(_ uri: String) -> URL? {
+    guard let url = URL(string: uri), url.isFileURL,
+          let directory = try? directory(),
+          url.deletingLastPathComponent().standardizedFileURL == directory.standardizedFileURL,
+          url.pathExtension == "wav",
+          UUID(uuidString: url.deletingPathExtension().lastPathComponent) != nil else {
+      return nil
+    }
+    return url.standardizedFileURL
   }
 
   private func generate(text: String, voiceId: String, requestId: String, promise: Promise) {
@@ -105,6 +138,7 @@ public final class NoteTtsModule: Module {
               }
               job.timeout?.cancel()
               self.active = nil
+              self.unclaimedFiles.insert(url.standardizedFileURL)
               promise.resolve(["uri": url.absoluteString, "duration": duration])
               return
             }

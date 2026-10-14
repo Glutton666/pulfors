@@ -39,6 +39,11 @@ import type { NativeAudioOutput } from "@/lib/native-audio-output";
 import { createWebVisualTimingProvider, type WebAudioOutput } from "@/lib/web-audio-output";
 import { createNativeVisualTimingProvider } from "@/lib/native-visual-timing";
 import { isSafeNoteSampleUri } from "@/lib/index.helpers";
+import {
+  attachNoteTtsPlayerLease,
+  releaseNoteTtsPlayerLease,
+  retainNoteTtsFile,
+} from "@/lib/note-tts";
 import type {
   ClickPCMs,
   SamplePCMEntry,
@@ -628,6 +633,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
     const map = new Map<string, SamplePCMEntry>();
     const entries = Object.entries(samples);
     if (entries.length === 0) return map;
+    const releaseTtsFiles = entries.map(([, uri]) => retainNoteTtsFile(uri));
     const ownerSignal = pcmPreparationOwnerRef.current.signal;
     const preparationController = new AbortController();
     const abortPreparation = () => preparationController.abort();
@@ -672,6 +678,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
       }));
       return map;
     } finally {
+      for (const release of releaseTtsFiles) release();
       for (const linkedSignal of linkedSignals) {
         linkedSignal.removeEventListener("abort", abortPreparation);
       }
@@ -725,6 +732,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
 
   // ── Core audio player lifecycle ──────────────────────────────────────────────
   const releaseAudioPlayer = useCallback((player: ExpoAudioPlayer, pause = true) => {
+    releaseNoteTtsPlayerLease(player);
     if (releasedPlayersRef.current.has(player)) return;
     releasedPlayersRef.current.add(player);
     if (pause) {
@@ -1080,6 +1088,11 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
     const newPlayers: Record<string, ExpoAudioPlayer> = {};
     const keysToKeep = new Set<string>();
     const ownedArtifactUris = new Map<string, string>();
+    const pendingTtsLeases = new Map<string, () => void>();
+    const releasePendingTtsLeases = () => {
+      for (const release of pendingTtsLeases.values()) release();
+      pendingTtsLeases.clear();
+    };
     const releaseNewPlayers = () => {
       for (const [key, player] of Object.entries(newPlayers)) {
         if (!keysToKeep.has(key)) releaseAudioPlayer(player);
@@ -1100,6 +1113,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
     for (const [key, uri] of Object.entries(samples)) {
       if (!isCurrent()) {
         releaseNewPlayers();
+        releasePendingTtsLeases();
         return;
       }
       samplePreloadKeysRef.current.add(key);
@@ -1109,18 +1123,22 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
         samplePreloadKeysRef.current.delete(key);
         continue;
       }
+      pendingTtsLeases.set(key, retainNoteTtsFile(uri));
       const channel = noteSampleChannelsRef.current[key] ?? "both";
       let result;
       try { result = await syncStereoArtifact(key, uri, channel); }
       catch (e) {
         captureBreadcrumb({ category: "sample.preload", message: "syncStereoArtifact failed", level: "warning", data: { key, error: String(e) } });
         samplePreloadKeysRef.current.delete(key);
+        pendingTtsLeases.get(key)?.();
+        pendingTtsLeases.delete(key);
         continue;
       }
       ownedArtifactUris.set(key, result.uri);
       if (!isCurrent()) {
         samplePreloadKeysRef.current.delete(key);
         releaseNewPlayers();
+        releasePendingTtsLeases();
         releaseOwnedArtifacts();
         return;
       }
@@ -1131,18 +1149,28 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
         player.shouldCorrectPitch = false;
         newPlayers[key] = player;
         keysToKeep.add(key);
+        pendingTtsLeases.get(key)?.();
+        pendingTtsLeases.delete(key);
       } else {
+        let pendingPlayer: ExpoAudioPlayer | null = null;
         try {
           const isFileUri = result.uri.startsWith("file://");
           const player = manageAudioPlayer(outputOwner.nativeAdapter.createPlayer(
             result.uri,
             { downloadFirst: isFileUri },
           ));
+          pendingPlayer = player;
+          attachNoteTtsPlayerLease(player, uri);
+          pendingTtsLeases.get(key)?.();
+          pendingTtsLeases.delete(key);
           player.volume = Math.max(0, Math.min(1, sampleVolumeRef.current * (noteSampleVolumesRef.current[key] ?? 1)));
           player.playbackRate = noteSampleSpeedsRef.current[key] ?? 1;
           player.shouldCorrectPitch = false;
           newPlayers[key] = player;
         } catch (e) {
+          if (pendingPlayer) releaseAudioPlayer(pendingPlayer);
+          pendingTtsLeases.get(key)?.();
+          pendingTtsLeases.delete(key);
           captureBreadcrumb({ category: "sample.preload", message: "Failed", level: "warning", data: { key, error: String(e) } });
         }
       }
@@ -1150,6 +1178,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
     }
     if (!isCurrent()) {
       releaseNewPlayers();
+      releasePendingTtsLeases();
       releaseOwnedArtifacts();
       return;
     }
@@ -1161,6 +1190,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
     }
     if (!isCurrent()) {
       releaseNewPlayers();
+      releasePendingTtsLeases();
       releaseOwnedArtifacts();
       return;
     }

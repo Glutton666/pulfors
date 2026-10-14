@@ -16,6 +16,7 @@ import {
 import { applyEntryToEngine } from "@/lib/index.helpers";
 import type { PracticeEntry } from "./storage";
 import { logger } from "./logger";
+import { retainNoteTtsFile } from "./note-tts";
 import {
   clampRepeats as _clampRepeats,
   clampFadeOutSec as _clampFadeOutSec,
@@ -316,45 +317,56 @@ export async function exportPracticeEntry(
   entry: PracticeEntry,
   options: ExportOptions,
 ): Promise<ExportResult> {
-  const { format, onProgress, signal } = options;
-  throwIfAborted(signal);
-  const repeats = clampRepeats(options.repeats);
-  const fadeOutSec = clampFadeOutSec(options.fadeOutSec);
+  const sampleUris = new Set<string>();
+  const collectSampleUris = (current: PracticeEntry) => {
+    for (const uri of Object.values(current.noteSamples || {})) sampleUris.add(uri);
+    for (const queued of current.noteQueueEntries || []) collectSampleUris(queued);
+  };
+  collectSampleUris(entry);
+  const releaseSamples = [...sampleUris].map(retainNoteTtsFile);
+  try {
+    const { format, onProgress, signal } = options;
+    throwIfAborted(signal);
+    const repeats = clampRepeats(options.repeats);
+    const fadeOutSec = clampFadeOutSec(options.fadeOutSec);
 
-  onProgress?.(0.02);
-  const pcm = await renderEntryAllPassesPCM(
-    entry,
-    (p) => onProgress?.(0.05 + p * 0.45),
-    signal,
-  );
-  if (pcm.length === 0) {
-    throw new Error("EMPTY_RENDER");
-  }
-  onProgress?.(0.6);
-  await checkpoint(signal);
+    onProgress?.(0.02);
+    const pcm = await renderEntryAllPassesPCM(
+      entry,
+      (p) => onProgress?.(0.05 + p * 0.45),
+      signal,
+    );
+    if (pcm.length === 0) {
+      throw new Error("EMPTY_RENDER");
+    }
+    onProgress?.(0.6);
+    await checkpoint(signal);
 
-  const base = safeFilename(entry.label);
-  let bytes: Uint8Array;
-  let filename: string;
-  let mime: string;
-  if (format === "mp3") {
-    bytes = await encodeMp3MonoChunked(pcm, repeats, fadeOutSec, SR, 128, signal);
-    filename = `${base}_x${repeats}.mp3`;
-    mime = "audio/mpeg";
-  } else {
-    bytes = await encodeWavMonoChunkedAbortable(pcm, repeats, fadeOutSec, SR, signal);
-    filename = `${base}_x${repeats}.wav`;
-    mime = "audio/wav";
-  }
-  onProgress?.(0.9);
-  await checkpoint(signal);
+    const base = safeFilename(entry.label);
+    let bytes: Uint8Array;
+    let filename: string;
+    let mime: string;
+    if (format === "mp3") {
+      bytes = await encodeMp3MonoChunked(pcm, repeats, fadeOutSec, SR, 128, signal);
+      filename = `${base}_x${repeats}.mp3`;
+      mime = "audio/mpeg";
+    } else {
+      bytes = await encodeWavMonoChunkedAbortable(pcm, repeats, fadeOutSec, SR, signal);
+      filename = `${base}_x${repeats}.wav`;
+      mime = "audio/wav";
+    }
+    onProgress?.(0.9);
+    await checkpoint(signal);
 
-  const uri = await saveBytesToCache(bytes, makeCacheFilename(filename), mime, signal);
-  if (signal?.aborted) {
-    discardExportedUri(uri);
-    throw new Error(EXPORT_ABORTED);
+    const uri = await saveBytesToCache(bytes, makeCacheFilename(filename), mime, signal);
+    if (signal?.aborted) {
+      discardExportedUri(uri);
+      throw new Error(EXPORT_ABORTED);
+    }
+    onProgress?.(1);
+    return { uri, filename, format };
+  } finally {
+    for (const release of releaseSamples) release();
   }
-  onProgress?.(1);
-  return { uri, filename, format };
 }
 

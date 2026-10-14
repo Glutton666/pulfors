@@ -2,6 +2,11 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { normalizeSampleChannel, normalizeMetroChannel, type SampleChannel, type MetroChannel } from "./stereo-channel";
 import { createDebouncedPersister } from "./persist";
 import type { PersisterStatus } from "./persist";
+import {
+  collectUnusedNoteTtsFiles,
+  retainPendingNoteTtsReferences,
+  withNoteTtsStorageLock,
+} from "./note-tts-storage";
 
 const STORAGE_KEY = "@note_samples";
 const NAMES_STORAGE_KEY = "@note_sample_names";
@@ -51,7 +56,7 @@ function createSerializedWriter<T>(
         cycleWaiters = queuedWaiters.filter((w) => w.version <= merged.version);
         queuedWaiters = queuedWaiters.filter((w) => w.version > merged.version);
       }
-      await AsyncStorage.setItem(key, JSON.stringify(merged.value));
+      await withNoteTtsStorageLock(() => AsyncStorage.setItem(key, JSON.stringify(merged.value)));
       // Retry 중 들어온 값도 해당 retry의 merged.version에 포함됐다면 이번
       // 성공으로 저장된 것이므로 바로 resolve한다.
       const mergedWaiters = queuedWaiters.filter((w) => w.version <= merged.version);
@@ -170,10 +175,23 @@ export async function loadNoteSamples(): Promise<NoteSampleMap> {
   return {};
 }
 
-export async function saveNoteSamples(samples: NoteSampleMap): Promise<void> {
+export async function saveNoteSamplesDurably(samples: NoteSampleMap): Promise<boolean> {
+  const releasePending = retainPendingNoteTtsReferences(samples);
+  let saved = false;
   try {
     await samplesWriter(samples);
-  } catch {}
+    saved = true;
+  } catch {
+    saved = false;
+  } finally {
+    releasePending();
+  }
+  if (saved) void collectUnusedNoteTtsFiles();
+  return saved;
+}
+
+export async function saveNoteSamples(samples: NoteSampleMap): Promise<void> {
+  await saveNoteSamplesDurably(samples);
 }
 
 export async function loadNoteSampleNames(): Promise<NoteSampleNameMap> {
