@@ -13,7 +13,8 @@ jest.mock("expo-file-system", () => ({
 }));
 const result = { uri: "file:///app/tts-samples/voice.wav", duration: 0.02 };
 function native(): jest.Mocked<NoteTtsNative> {
-  return { getVoices: jest.fn(), generate: jest.fn().mockResolvedValue(result),
+  return { getVoices: jest.fn(), getOfflineKoreanCountVoices: jest.fn().mockResolvedValue([]),
+    generate: jest.fn().mockResolvedValue(result),
     discard: jest.fn().mockResolvedValue(undefined), cancel: jest.fn().mockResolvedValue(undefined) };
 }
 beforeEach(() => { mockBytes = speechWav(); mockWrite.mockReset(); });

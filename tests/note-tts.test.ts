@@ -12,6 +12,7 @@ const result = { uri: "file:///app/tts-samples/73b9bbcf-9a1b-4f84-9bb1-a6638ba19
 function native(): jest.Mocked<NoteTtsNative> {
   return {
     getVoices: jest.fn().mockResolvedValue([]),
+    getOfflineKoreanCountVoices: jest.fn().mockResolvedValue([]),
     generate: jest.fn().mockResolvedValue(result),
     cancel: jest.fn().mockResolvedValue(undefined),
     discard: jest.fn().mockResolvedValue(undefined),

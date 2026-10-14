@@ -1,10 +1,10 @@
 import React from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { noteTtsNative } from "@/lib/note-tts-runtime";
 import type { SoundSet } from "@/lib/storage";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useLanguage } from "@/contexts/LanguageContext";
-import catalogDurations from "@/assets/sounds/count/catalog-durations.json";
 
 export type VoiceCountLanguage = "off" | "ko" | "en";
 export type VoiceCountOutput = "mixed" | "voice-only";
@@ -19,6 +19,7 @@ export function VoiceCountControl({
   onOutputChange,
   speaker = "female",
   onSpeakerChange,
+  nativeKoreanAvailable = Platform.OS !== "web" && noteTtsNative !== null,
 }: {
   value: VoiceCountLanguage;
   onChange: (value: VoiceCountLanguage) => void;
@@ -27,18 +28,18 @@ export function VoiceCountControl({
   onOutputChange?: (value: VoiceCountOutput) => void;
   speaker?: VoiceCountSpeaker;
   onSpeakerChange?: (value: VoiceCountSpeaker) => void;
+  nativeKoreanAvailable?: boolean;
 }) {
   const { colors: C } = useTheme();
   const ko = language === "ko";
-  const voiceEnabled = value !== "off";
-  const durations = Object.entries(catalogDurations)
-    .filter(([key]) => Number(key.split("-").at(-1)) < 10 &&
-      (value === "off" || key.startsWith(`${value}-${speaker}-`)))
-    .map(([, clip]) => clip.durationMs);
-  const durationRange = `${Math.min(...durations)}–${Math.max(...durations)}ms`;
-  const choices: { value: VoiceCountLanguage; label: string; detail: string }[] = [
+  const koreanVoiceEnabled = nativeKoreanAvailable && value === "ko";
+  const voiceEnabled = value !== "off" && (value !== "ko" || koreanVoiceEnabled);
+  const koreanUnavailableDetail = Platform.OS === "web"
+    ? ko ? "iOS·Android 네이티브 앱에서 사용" : "Use a native iOS/Android app"
+    : ko ? "네이티브 앱 설치본 필요" : "Requires a native app build";
+  const choices: { value: VoiceCountLanguage; label: string; detail: string; disabled?: boolean }[] = [
     { value: "off", label: ko ? "끔" : "Off", detail: ko ? "음성 카운트 끔" : "No spoken count" },
-    { value: "ko", label: "한국어", detail: "공 · 일 · 둘 · 삼…" },
+    { value: "ko", label: "한국어", detail: nativeKoreanAvailable ? "공 · 일 · 둘 · 삼…" : koreanUnavailableDetail, disabled: !nativeKoreanAvailable },
     { value: "en", label: "English", detail: "One · two · three…" },
   ];
   const toggleStyle = (active: boolean, disabled = false) => ({
@@ -63,10 +64,11 @@ export function VoiceCountControl({
               key={choice.value}
               testID={`voice-count-language-${choice.value}`}
               accessibilityRole="button"
-              accessibilityState={{ selected: active }}
+              accessibilityState={{ selected: active, disabled: choice.disabled }}
               aria-pressed={active}
+              disabled={choice.disabled}
               onPress={() => onChange(choice.value)}
-              style={toggleStyle(active)}
+              style={toggleStyle(active, choice.disabled)}
             >
               <Text style={{ color: active ? C.accent : C.text, fontSize: 12, fontFamily: "SpaceGrotesk_600SemiBold", textAlign: "center" }}>
                 {choice.label}
@@ -149,8 +151,8 @@ export function VoiceCountControl({
         </Text>
         <Text style={{ color: C.textTertiary, fontSize: 10, lineHeight: 15 }}>
           {ko
-            ? `현재 음성 길이는 ${durationRange}입니다. 짧은 분할에서는 발음이 겹칩니다(240 BPM·9분할 = 27.8ms). 숫자는 생략하지 않고 템포를 바꾸거나 말끝을 자르지 않습니다.`
-            : `Current clips: ${durationRange}. Short slots overlap (240 BPM × 9 = 27.8ms). Counts are never omitted, tempo stays fixed and syllable endings are not cut.`}
+            ? `${koreanVoiceEnabled ? "기기에 설치된 오프라인 한국어 음성으로 미리 음원을 만들고, 메트로놈이 박자에 맞춰 재생합니다." : "영어 카운트는 앱에 들어 있는 음원을 사용합니다. 한국어 기기 음성은 iOS·Android 앱에서 사용할 수 있습니다."} 짧은 분할에서는 말소리가 겹칠 수 있습니다(240 BPM·9분할 = 27.8ms). 숫자는 생략하지 않고 템포나 말끝을 바꾸지 않습니다.`
+            : `${koreanVoiceEnabled ? "Korean speech uses the device's installed offline voice and is prepared before the metronome starts." : "English uses bundled clips. Live Korean device speech is available in the iOS/Android app."} Speech can overlap in short slots (240 BPM × 9 = 27.8ms). Counts are never omitted and metronome timing and speech endings are preserved.`}
         </Text>
       </View>
     </View>

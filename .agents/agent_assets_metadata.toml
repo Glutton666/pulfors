@@ -765,3 +765,171 @@ mtime_ms = 1791650221979
 storage_uri = "gcs://replit-rams-assets-pike/rams/assets/repl:93f1fe32-983d-4024-b65a-6bb27a9b1eb8/e9443591-9269-4bd7-9e6a-f89af187af0a/6b9a03ff-7c42-412a-9f38-4ef279c11810"
 storage_version_token = "1791650395751452"
 content_type = "text/html"
+
+[[outputs]]
+id = "yH9Ig3qWttNl8tnmID_UF"
+uri = "file://generated-artifacts/korean-count/raw/ko-male-0.mp3"
+type = "audio"
+title = "korean male 0"
+description = "Text-to-speech audio: 공."
+
+[[outputs]]
+id = "LmoIID67oTXsL7b27dYJC"
+uri = "file://generated-artifacts/korean-count/raw/ko-female-0.mp3"
+type = "audio"
+title = "korean female 0"
+description = "Text-to-speech audio: 공."
+
+[[outputs]]
+id = "h98003vVtnVOzuFkW5pTJ"
+uri = "file://generated-artifacts/korean-count/raw/ko-female-1.mp3"
+type = "audio"
+title = "korean female 1"
+description = "Text-to-speech audio: 일."
+
+[[outputs]]
+id = "S5WUeDzxV2OwdbUVHcbSs"
+uri = "file://generated-artifacts/korean-count/raw/ko-male-1.mp3"
+type = "audio"
+title = "korean male 1"
+description = "Text-to-speech audio: 일."
+
+[[outputs]]
+id = "E2r-IVJP3dG0CM40Zgipw"
+uri = "file://generated-artifacts/korean-count/raw/ko-female-2.mp3"
+type = "audio"
+title = "korean female 2"
+description = "Text-to-speech audio: 둘."
+
+[[outputs]]
+id = "iuYmhomSvG2E3--8ubUi4"
+uri = "file://generated-artifacts/korean-count/raw/ko-male-2.mp3"
+type = "audio"
+title = "korean male 2"
+description = "Text-to-speech audio: 둘."
+
+[[outputs]]
+id = "s_PNGcVOzxQXVGuzECO9Y"
+uri = "file://generated-artifacts/korean-count/raw/ko-male-3.mp3"
+type = "audio"
+title = "korean male 3"
+description = "Text-to-speech audio: 삼."
+
+[[outputs]]
+id = "ZwtUsAsWlBmW2-1qqPLwa"
+uri = "file://generated-artifacts/korean-count/raw/ko-female-3.mp3"
+type = "audio"
+title = "korean female 3"
+description = "Text-to-speech audio: 삼."
+
+[[outputs]]
+id = "M3CDLOjQKlaObrUthQBW_"
+uri = "file://generated-artifacts/korean-count/raw/ko-female-4.mp3"
+type = "audio"
+title = "korean female 4"
+description = "Text-to-speech audio: 넷."
+
+[[outputs]]
+id = "L4pUo5bpizCsuG4C9Onwx"
+uri = "file://generated-artifacts/korean-count/raw/ko-male-4.mp3"
+type = "audio"
+title = "korean male 4"
+description = "Text-to-speech audio: 넷."
+
+[[outputs]]
+id = "9zw3R3rJLItp8rg0wdmZw"
+uri = "file://generated-artifacts/korean-count/raw/ko-male-5.mp3"
+type = "audio"
+title = "korean male 5"
+description = "Text-to-speech audio: 오."
+
+[[outputs]]
+id = "afKJ13-TQHdOvWJziFmrD"
+uri = "file://generated-artifacts/korean-count/raw/ko-female-5.mp3"
+type = "audio"
+title = "korean female 5"
+description = "Text-to-speech audio: 오."
+
+[[outputs]]
+id = "rpgx32VR30wORP9Eg0NSc"
+uri = "file://generated-artifacts/korean-count/raw/ko-female-6.mp3"
+type = "audio"
+title = "korean female 6"
+description = "Text-to-speech audio: 육."
+
+[[outputs]]
+id = "LKZgj7HawWqNWy3mCGOaY"
+uri = "file://generated-artifacts/korean-count/raw/ko-male-6.mp3"
+type = "audio"
+title = "korean male 6"
+description = "Text-to-speech audio: 육."
+
+[[outputs]]
+id = "TniFbaCkeXDzbjiDJvHra"
+uri = "file://generated-artifacts/korean-count/raw/ko-male-7.mp3"
+type = "audio"
+title = "korean male 7"
+description = "Text-to-speech audio: 칠."
+
+[[outputs]]
+id = "qm1dRiuXl6zcm5XuJ6598"
+uri = "file://generated-artifacts/korean-count/raw/ko-female-7.mp3"
+type = "audio"
+title = "korean female 7"
+description = "Text-to-speech audio: 칠."
+
+[[outputs]]
+id = "sd06OazWxNyBCLEjHGunf"
+uri = "file://generated-artifacts/korean-count/raw/ko-male-8.mp3"
+type = "audio"
+title = "korean male 8"
+description = "Text-to-speech audio: 팔."
+
+[[outputs]]
+id = "a7aUN_1RPg2kyc2Hm36BT"
+uri = "file://generated-artifacts/korean-count/raw/ko-female-8.mp3"
+type = "audio"
+title = "korean female 8"
+description = "Text-to-speech audio: 팔."
+
+[[outputs]]
+id = "fyQCgeRMoaNkGPphlOOu_"
+uri = "file://generated-artifacts/korean-count/raw/ko-female-9.mp3"
+type = "audio"
+title = "korean female 9"
+description = "Text-to-speech audio: 구."
+
+[[outputs]]
+id = "q1k14bkxcyDiK9--z3Hmt"
+uri = "file://generated-artifacts/korean-count/raw/ko-male-9.mp3"
+type = "audio"
+title = "korean male 9"
+description = "Text-to-speech audio: 구."
+
+[[outputs]]
+id = "7qnBNi8KWPxuX0LVbZdvV"
+uri = "file://generated-artifacts/korean-count/comparison.html"
+type = "html"
+title = "한국어 카운트 원음 청취 비교"
+description = "남녀 각각 공~구 10개: 기존 번들·새 합성 원음·새 앱 번들을 비교합니다. 특히 넷·오 발음 확인용이며 모든 음원이 내장되어 있습니다."
+logical_id = "381fc439-42e5-43bf-bcba-12c087c47990"
+content_hash = "sha256:6aa723fc0bc807bd6d8475170c6e4ad9b5279a336b09621a806af030c31f7ff4"
+size = 2235151
+mtime_ms = 1791824568202
+storage_uri = "gcs://replit-rams-assets-pike/rams/assets/repl:93f1fe32-983d-4024-b65a-6bb27a9b1eb8/381fc439-42e5-43bf-bcba-12c087c47990/d42becf8-dca0-4627-bdab-3fe57a838198"
+storage_version_token = "1791824764916950"
+content_type = "text/html"
+
+[[outputs]]
+id = "I7NWPxqa79vS-zo2BVtZW"
+uri = "file://generated-artifacts/korean-count-supertonic/comparison.html"
+type = "html"
+title = "다른 엔진으로 만든 넷·오 원음 비교"
+description = "이전 원음과 한국어 ko를 명시한 Supertonic 2 남녀 원음 4개를 비교합니다. 앱 반영 전 청취용이며 외부 계정 없이 재생됩니다."
+logical_id = "ee17a5c7-3849-4bc7-9c0d-e09e72b286dc"
+content_hash = "sha256:5ed939091343278bdb436ae406194238dc2b100151092c50ba83ce1e3dcff54e"
+size = 518437
+mtime_ms = 1791846883253
+storage_uri = "gcs://replit-rams-assets-pike/rams/assets/repl:93f1fe32-983d-4024-b65a-6bb27a9b1eb8/ee17a5c7-3849-4bc7-9c0d-e09e72b286dc/25db19e9-0581-4b90-81bc-c7f129684fd2"
+storage_version_token = "1791846917257835"
+content_type = "text/html"

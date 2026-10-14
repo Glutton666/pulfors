@@ -40,6 +40,22 @@ class NoteTtsModule : Module() {
           "language" to voice.locale.toLanguageTag(), "gender" to "unknown")
       }) } }
     }
+    AsyncFunction("getOfflineKoreanCountVoices") { promise: Promise ->
+      main.post { withEngine(promise) { tts ->
+        promise.resolve(voices(tts).mapNotNull { voice ->
+          val id = voice.name.lowercase()
+          // Android's TTS API has no gender field. Recognize only explicit
+          // engine-provided male/female voice IDs; never guess by pitch/name.
+          val gender = when {
+            Regex("(?:^|[#_.-])female(?:[#_.-]|$)").containsMatchIn(id) -> "female"
+            Regex("(?:^|[#_.-])male(?:[#_.-]|$)").containsMatchIn(id) -> "male"
+            else -> null
+          }
+          gender?.let { mapOf("id" to voice.name, "name" to voice.name,
+            "language" to voice.locale.toLanguageTag(), "gender" to it) }
+        })
+      } }
+    }
     AsyncFunction("generate") { text: String, voiceId: String, requestId: String, promise: Promise ->
       main.post { withEngine(promise, requestId) { tts -> generate(tts, text, voiceId, requestId, promise) } }
     }

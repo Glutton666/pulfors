@@ -25,6 +25,13 @@ public final class NoteTtsModule: Module {
          "gender": voice.gender == .male ? "male" : voice.gender == .female ? "female" : "unknown"]
       })
     }.runOnQueue(.main)
+    AsyncFunction("getOfflineKoreanCountVoices") { (promise: Promise) in
+      promise.resolve(self.voices().filter { !$0.requiresNetworkConnection }.compactMap { voice in
+        let gender = voice.gender == .male ? "male" : voice.gender == .female ? "female" : nil
+        guard let gender else { return nil }
+        return ["id": voice.identifier, "name": voice.name, "language": voice.language, "gender": gender]
+      })
+    }.runOnQueue(.main)
     AsyncFunction("generate") { (text: String, voiceId: String, requestId: String, promise: Promise) in
       self.generate(text: text, voiceId: voiceId, requestId: requestId, promise: promise)
     }.runOnQueue(.main)
@@ -65,7 +72,7 @@ public final class NoteTtsModule: Module {
     guard !cleanText.isEmpty, text.utf16.count <= 300, requestId.count <= 100 else {
       promise.reject("invalidText", "Enter up to 300 characters."); return
     }
-    guard let voice = voices().first(where: { $0.identifier == voiceId }) else {
+    guard let voice = voices().first(where: { $0.identifier == voiceId && !$0.requiresNetworkConnection }) else {
       promise.reject("noVoice", "Install the selected Korean voice in device settings."); return
     }
     do {

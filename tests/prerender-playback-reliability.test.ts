@@ -131,6 +131,25 @@ jest.mock("@/lib/audio-renderer", () => ({
   clearWebClickBuffers: jest.fn(),
 }));
 
+jest.mock("@/lib/note-tts-runtime", () => ({
+  noteTtsNative: {
+    getVoices: jest.fn(async () => []),
+    getOfflineKoreanCountVoices: jest.fn(async () => [
+      { id: "ko-local-female", name: "Korean Female", language: "ko-KR", gender: "female" },
+      { id: "ko-local-male", name: "Korean Male", language: "ko-KR", gender: "male" },
+    ]),
+    generate: jest.fn(async (word: string, voiceId: string) => ({
+      uri: `file:///tts-samples/${voiceId}-${encodeURIComponent(word)}.wav`,
+      duration: 0.25,
+    })),
+    cancel: jest.fn(async () => {}),
+    discard: jest.fn(async () => {}),
+  },
+}));
+jest.mock("@/lib/note-tts-file", () => ({
+  prepareNoteTtsFile: async (result: { uri: string; duration: number }) => result,
+}));
+
 jest.mock("@/hooks/useAudioPlayers", () => ({
   BUILTIN_POOL_SIZE: 4,
   useAudioPlayers: () => ({

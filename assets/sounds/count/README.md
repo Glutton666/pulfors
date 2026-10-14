@@ -1,31 +1,38 @@
 # Offline count audio
 
-## Male/female catalog
+## Count voices
 
-Runtime uses `ko-male-*`, `ko-female-*`, `en-male-*`, `en-female-*`.
-The legacy language-only files remain for before/after comparison, not playback.
-Korean uses native-Seoul catalog speakers: original synthetic Yonsei young adult
-steady midlow (`JnZlz7xPh51nt613nRAl`) and Yooni Natural & Clear
-(`n2fbxG88jqAoaVPUy3IG`). English uses Eric Smooth & Trustworthy
-(`cjVigY5qzO86Huf0OWal`) and Bella Professional Bright Warm
-(`hpp4J3VqNfWAUOO0d1Us`). These are distinct catalog speakers, not pitch-shifted
-copies or user voice clones.
+Korean counts use the phone's installed **offline** Android or iOS Korean
+speech engine. The app converts the exact syllables 공·일·둘·삼·넷·오·육·칠·팔·구
+to PCM before starting playback, then the regular metronome renderer schedules
+those samples together with clicks. It does not call `speak()` on a beat, which
+would let speech-engine startup latency move the count. The first start can
+take longer while the required words are synthesized; subsequent starts reuse
+generated PCM while it remains in the selected voice ID's number cache.
 
-`scripts/build-voice-count-catalog.mjs` builds the offline catalog. Korean
-contextual counting provides concise pronunciation; silence-separated words
-are extracted with padding and an exact-count check. English uses individual
-words (male fourteen uses the shorter Flash model take). Other clips use
-Eleven Multilingual v2 with synthesis speed 1.2. All catalog WAVs then receive
-modest offline `atempo=1.15` pitch-preserving time compression, conservative
-silence trim, normalization and edge fades. This is not pitch-changing
-resampling and does not change BPM, omit numbers, cut syllable endings or
-adjust count onset times.
+iOS reads actual system gender metadata. Android does not expose a standardized
+voice-gender field, so it accepts only offline Korean voice IDs with explicit
+male/female markers. If the device does not have the requested role, playback
+fails clearly rather than using another role, a network voice, or English.
+Neither role is produced by pitch-shifting the other. Korean phone voices vary
+by installed engine; naturalness still needs confirmation by listening on
+each real device. Web disables this option because browser speech is not an
+offline guarantee. Expo Go also disables it when the app's native TTS module
+is absent; use a native app build to access that local module.
 
-`catalog-durations.json` records source, previous/new duration, processing
-and leading silence removed for every number and speaker. Settings uses this
-metadata for the selected voice's overlap warning. Naturalness and the
-perceived Korean 넷/오 distinction still require human listening; measurements
-and automated PCM tests alone cannot establish pronunciation quality.
+English retains its existing bundled male/female word recordings and cache.
+Bar-entry text-to-speech remains a separate feature and is not changed.
+`scripts/build-voice-count-catalog.mjs` rebuilds English only; it rejects
+Korean asset generation so rejected WAV candidates cannot silently return to
+the app. Existing Korean WAVs and their duration records are historical
+comparison material and are not played by the app.
+
+`catalog-durations.json` describes the historical bundled clips; those
+durations do not describe a phone's synthesized Korean voice. Automated
+duration or PCM-format checks cannot establish natural Korean pronunciation.
+The earlier bundled Korean candidates were rejected after listening reports
+that 넷 could sound like “네스,” 오 like “어,” and both could be drawn out.
+The Supertonic 2 M1/F1 candidate received the same rejection.
 
 Voice-only removes primary and additional click layers but retains independent
 recorded samples. Count Off restores clicks regardless of the remembered
@@ -34,8 +41,9 @@ decoding identities include the speaker. Android sparse output mixes speech
 and clicks into one descriptor per slot so mixed counts do not double the
 native event limit.
 
-These are independently generated generic catalog voices, not a cloned user
-voice or extracted Tempo audio. No speech generation service is called by the app.
+English recordings are independently generated generic catalog voices, not
+cloned user voices or extracted Tempo audio. Korean speech generation happens
+on-device and uses no external speech service or account.
 
 - Korean identifiers 0–9: 공, 일, 둘, 삼, 넷, 오, 육, 칠, 팔, 구.
 - English identifiers 0–9: zero, one, two, three, four, five, six, seven, eight, nine.
@@ -44,11 +52,10 @@ voice or extracted Tempo audio. No speech generation service is called by the ap
   used by the count scheduler or its duration warning.
 - `scripts/build-metronome-audio.mjs` builds the legacy clips and Tempo clicks;
   `durations.json` records their lengths for before/after comparisons.
-- `scripts/build-count-listening-report.mjs` creates a self-contained HTML
-  listening comparison and a number-by-number duration table under the
-  git/deployment-ignored `generated-artifacts/voice-count-comparison/` folder.
+- The archived listening reports compare old candidate WAV files only. They
+  are not a verification of the current on-device voices.
 - Runtime does not cut syllables or omit scheduled numbers to fit short slots.
-  Current catalog clips are 206–511 ms long. At 240 BPM with nine subdivisions a
+  Phone TTS durations vary by voice. At 240 BPM with nine subdivisions a
   slot is only 27.8 ms: spoken counts overlap, and clear intelligibility cannot
   be guaranteed. The settings screen explains this limitation.
 - Role emphasis is independent of number identity. Count clips are mixed into

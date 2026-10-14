@@ -1,10 +1,25 @@
 import fs from "node:fs";
-import { execFileSync, spawnSync } from "node:child_process";
+import { Buffer } from "node:buffer";
+import { execFileSync } from "node:child_process";
 
 const sr = 44100;
 const folder = "assets/sounds/count";
 const legacy = JSON.parse(fs.readFileSync(`${folder}/durations.json`, "utf8"));
-const report = {};
+const report = JSON.parse(fs.readFileSync(`${folder}/catalog-durations.json`, "utf8"));
+const args = process.argv.slice(2);
+function option(name) {
+  const index = args.indexOf(name);
+  if (index < 0) return undefined;
+  const value = args[index + 1];
+  if (!value || value.startsWith("--")) throw new Error(`Missing value for ${name}`);
+  return value;
+}
+const languageOption = option("--language") ?? "en";
+if (languageOption === "ko" || languageOption === "all") {
+  throw new Error("Korean counts use installed on-device speech; use --language en to rebuild the English bundle.");
+}
+if (languageOption !== "en") throw new Error("Invalid --language");
+const language = "en";
 function encode(pcm) {
   const b = Buffer.alloc(44 + pcm.length * 2);
   b.write("RIFF"); b.writeUInt32LE(b.length - 8, 4); b.write("WAVEfmt ", 8);
@@ -14,46 +29,18 @@ function encode(pcm) {
   pcm.forEach((v, i) => b.writeInt16LE(Math.round(Math.max(-1, Math.min(1, v)) * 32767), 44 + i * 2));
   return b;
 }
-for (const [language, count] of [["ko", 10], ["en", 17]]) {
-  for (const speaker of ["male", "female"]) {
-    const sequenceSource = language === "ko"
-      ? `attached_assets/generated_audio/count_sequence_ko_${speaker}.mp3`
-      : null;
-    let sequence;
-    let segments;
-    if (sequenceSource && fs.existsSync(sequenceSource)) {
-      const analysis = spawnSync("ffmpeg", ["-hide_banner", "-i", sequenceSource,
-        "-af", "silencedetect=n=-36dB:d=0.06", "-f", "null", "-"], { encoding: "utf8" });
-      if (analysis.status !== 0) throw new Error(analysis.stderr);
-      const raw = execFileSync("ffmpeg", ["-v", "error", "-i", sequenceSource,
-        "-ac", "1", "-ar", String(sr), "-f", "f32le", "pipe:1"], { maxBuffer: 8 * 1024 * 1024 });
-      sequence = new Float32Array(raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength));
-      const silences = [...analysis.stderr.matchAll(/silence_start: ([\d.]+)[\s\S]*?silence_end: ([\d.]+)/g)]
-        .map(m => [Number(m[1]), Number(m[2])]);
-      segments = [];
-      let cursor = 0;
-      for (const [start, end] of silences) {
-        if (start - cursor > 0.08) segments.push([cursor, start]);
-        cursor = end;
-      }
-      if (sequence.length / sr - cursor > 0.08) segments.push([cursor, sequence.length / sr]);
-      if (segments.length !== count) {
-        throw new Error(`${language}/${speaker}: ${segments.length} detected chunks, expected ${count}`);
-      }
-    }
-    for (let n = 0; n < count; n++) {
-      const source = language === "en" && speaker === "male" && n === 14
+const count = 17;
+for (const speaker of ["male", "female"]) {
+  for (let n = 0; n < count; n++) {
+      const source = speaker === "male" && n === 14
         ? "attached_assets/generated_audio/count_en_male_14_2.mp3"
-        : `attached_assets/generated_audio/count_${language}_${speaker}_${n}.mp3`;
+        : `attached_assets/generated_audio/count_en_${speaker}_${n}.mp3`;
       const raw = execFileSync("ffmpeg", ["-v", "error", "-i", source,
         "-ac", "1", "-ar", String(sr), "-f", "f32le", "pipe:1"]);
-      const individual = new Float32Array(raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength));
-      const original = sequence
-        ? sequence.slice(Math.max(0, Math.floor((segments[n][0] - 0.03) * sr)),
-          Math.min(sequence.length, Math.ceil((segments[n][1] + 0.04) * sr)))
-        : individual;
+      const original = new Float32Array(raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength));
       // Modest offline WSOLA compression preserves pitch and every syllable.
       // It never changes playback rate, count event onset or metronome BPM.
+      const tempo = 1.15;
       const compressed = execFileSync("ffmpeg", ["-v", "error", "-f", "f32le",
         "-ar", String(sr), "-ac", "1", "-i", "pipe:0", "-af", "atempo=1.15",
         "-f", "f32le", "pipe:1"], { input: Buffer.from(original.buffer, original.byteOffset, original.byteLength) });
@@ -83,10 +70,9 @@ for (const [language, count] of [["ko", 10], ["en", 17]]) {
         previousDurationMs: legacy[`${language}-${n}`].durationMs,
         sourceDurationMs: Math.round(original.length / sr * 1000),
         removedLeadMs: Math.round(start / sr * 1000),
-        source: sequence ? sequenceSource : source,
-        pitchPreservingTempo: 1.15,
+        source,
+        pitchPreservingTempo: tempo,
       };
-    }
   }
 }
 fs.writeFileSync(`${folder}/catalog-durations.json`, JSON.stringify(report, null, 2) + "\n");

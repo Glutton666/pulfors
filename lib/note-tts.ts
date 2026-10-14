@@ -1,3 +1,5 @@
+import { KOREAN_COUNT_WORDS } from "./voice-count";
+
 /** Platform-neutral contract, limits and ownership; safe to import in Node/web. */
 export interface NoteTtsVoice {
   id: string;
@@ -8,12 +10,14 @@ export interface NoteTtsVoice {
 export interface NoteTtsResult { uri: string; duration: number }
 export interface NoteTtsNative {
   getVoices(): Promise<NoteTtsVoice[]>;
+  getOfflineKoreanCountVoices(): Promise<NoteTtsVoice[]>;
   generate(text: string, voiceId: string, requestId: string): Promise<NoteTtsResult>;
   cancel(requestId: string): Promise<void>;
   discard(uri: string): Promise<void>;
 }
 export const NOTE_TTS_MAX_TEXT = 300;
 export const NOTE_TTS_MAX_DURATION = 30;
+export const OFFLINE_KOREAN_COUNT_WORDS = KOREAN_COUNT_WORDS;
 export function validateNoteTtsText(text: string): string {
   if (!text.trim() || text.length > NOTE_TTS_MAX_TEXT) throw new Error("invalidText");
   return text.trim();
