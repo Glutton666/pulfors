@@ -18,6 +18,12 @@ export const ENGLISH_COUNT_WORDS = ["zero", "one", "two", "three", "four", "five
 export function sanitizeVoiceCountLanguage(value: unknown): VoiceCountLanguage {
   return value === "ko" || value === "en" ? value : "off";
 }
+export function resolveLabGatedVoiceCountLanguage(
+  labUnlocked: boolean,
+  configuredLanguage: VoiceCountLanguage,
+): VoiceCountLanguage {
+  return labUnlocked ? configuredLanguage : "off";
+}
 export interface VoiceCountSlot {
   readonly time: number;
   readonly beat: number;

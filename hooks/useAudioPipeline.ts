@@ -59,6 +59,7 @@ import type { MetronomePlaybackPlan } from "@/lib/audio-playback-plan";
 import { mixOverlayPCM, overlaySoundSet, type SoundSetOverlays } from "@/lib/sound-overlays";
 import { prepareVoiceCountPCMs } from "@/lib/voice-count-assets";
 import type { VoiceCountLanguage, VoiceCountOutput, VoiceCountSpeaker } from "@/lib/voice-count";
+import { resolveLabGatedVoiceCountLanguage } from "@/lib/voice-count";
 import { useAudioPlayers } from "@/hooks/useAudioPlayers";
 import type { BuiltinPlayers } from "@/hooks/useAudioPlayers";
 import {
@@ -110,6 +111,7 @@ export interface UseAudioPipelineParams {
   voiceCountLanguageRef?: React.MutableRefObject<VoiceCountLanguage>;
   voiceCountOutputRef?: React.MutableRefObject<VoiceCountOutput>;
   voiceCountSpeakerRef?: React.MutableRefObject<VoiceCountSpeaker>;
+  labUnlockedRef?: React.MutableRefObject<boolean>;
   sampleVolumeRef: React.MutableRefObject<number>;
   /** Web click-ready flag — created in useMetronomeScreen, shared with useSettings. */
   webClickReadyRef: React.MutableRefObject<boolean>;
@@ -234,7 +236,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
   const {
     engineRef, soundSet, volume, customSoundSetsRef,
     layerSoundSetsRef, noteSamplesRef, noteSampleChannelsRef, noteSampleVolumesRef, noteSampleSpeedsRef, barModeRef,
-    barMetronomeChannelRef, noteSampleMetroChannelsRef, volumeRef, sampleVolumeRef, tonePositionRef, tonePositionsRef, soundSetOverlaysRef, voiceCountLanguageRef,
+    barMetronomeChannelRef, noteSampleMetroChannelsRef, volumeRef, sampleVolumeRef, tonePositionRef, tonePositionsRef, soundSetOverlaysRef, voiceCountLanguageRef, labUnlockedRef,
     voiceCountOutputRef, voiceCountSpeakerRef,
     isPlayingRef, isPreparingRef, bpmRef, t, showRecoveryToast, persistAudioSettingsCallbackRef,
     fatalRenderFailureRef,
@@ -269,10 +271,13 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
     defaultPosition: tonePositionRef?.current,
     positions: tonePositionsRef?.current,
     overlays: soundSetOverlaysRef?.current,
-    voiceCountLanguage: voiceCountLanguageRef?.current,
+    voiceCountLanguage: resolveLabGatedVoiceCountLanguage(
+      labUnlockedRef?.current !== false,
+      voiceCountLanguageRef?.current ?? "off",
+    ),
     voiceCountOutput: voiceCountOutputRef?.current,
     voiceCountSpeaker: voiceCountSpeakerRef?.current,
-  }), [soundSetRef, tonePositionRef, tonePositionsRef, volumeRef, soundSetOverlaysRef, voiceCountLanguageRef, voiceCountOutputRef, voiceCountSpeakerRef]);
+  }), [soundSetRef, tonePositionRef, tonePositionsRef, volumeRef, soundSetOverlaysRef, voiceCountLanguageRef, voiceCountOutputRef, voiceCountSpeakerRef, labUnlockedRef]);
   const setActiveAudioToneSnapshot = useCallback((snapshot: AudioToneSnapshot) => {
     activeToneSnapshotRef.current = snapshot;
     setPoolsVolume(snapshot.realtimeGain);
@@ -282,11 +287,12 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
           () => outputOwner.active()?.getPresentedPositionSeconds?.(),
           (audioTime) => webClockAdapterRef.current?.audioTimeToPerformanceMs(audioTime),
         )
-        : snapshot.voiceCountLanguage && snapshot.voiceCountLanguage !== "off"
+        : labUnlockedRef?.current !== false
+          && snapshot.voiceCountLanguage && snapshot.voiceCountLanguage !== "off"
           ? createNativeVisualTimingProvider(() => outputOwner.active()?.getPositionSeconds?.())
           : null,
     );
-  }, [engineRef, outputOwner, setPoolsVolume]);
+  }, [engineRef, labUnlockedRef, outputOwner, setPoolsVolume]);
 
   // ── Audio-session settings (moved from useMetronomeScreen) ─────────────────
   const [backgroundPlay, setBackgroundPlay] = useState(true);
@@ -745,7 +751,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
     if (!engine) return session.fail(new Error("Audio engine is unavailable"));
     const signal = session.signal;
     try {
-      const audio = plan?.audio ?? {
+      const sourceAudio = plan?.audio ?? {
         soundSet: soundSetRef.current,
         sampleVolume: sampleVolumeRef.current,
         tone: toneSnapshotOverride ?? captureAudioToneSnapshot(),
@@ -757,6 +763,16 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
         metronomeChannel: barModeRef.current ? barMetronomeChannelRef.current : "both" as const,
         noteSampleMetroChannels: noteSampleMetroChannelsRef.current,
         layerSoundSets: layerSoundSetsRef.current,
+      };
+      const audio = {
+        ...sourceAudio,
+        tone: {
+          ...sourceAudio.tone,
+          voiceCountLanguage: resolveLabGatedVoiceCountLanguage(
+            labUnlockedRef?.current !== false,
+            sourceAudio.tone.voiceCountLanguage ?? "off",
+          ),
+        },
       };
       const scheduleInfo = engine.getScheduleInfo();
       const ticks = scheduleInfo.ticks as TickInfo[];
