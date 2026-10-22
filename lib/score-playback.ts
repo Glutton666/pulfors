@@ -9,6 +9,8 @@ import { getElementBeatScale } from "./score-tuplet";
 // ── 마디 내 단일 음표 재생 이벤트 ────────────────────────────
 
 export interface PlayNoteEvent {
+  /** Optional relative loudness for callers with explicit expression data. */
+  velocity?: number;
   /** MIDI 번호 (21–108). 드럼 노트(drumType 있음)에서는 사용되지 않는다. */
   midiNote: number;
   /** 발음 지속 시간(ms) — 이론 길이의 82% */

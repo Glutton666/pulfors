@@ -23,6 +23,8 @@ interface MenuScreenProps {
   onWorkUp: () => void;
   onStage: () => void;
   onScore: () => void;
+  onRhythmLab?: () => void;
+  onStaffNotebook?: () => void;
   onPolygon: () => void;
   onAssistant: () => void;
   onDrumKit: () => void;
@@ -41,13 +43,15 @@ export function MenuScreen({
   onWorkUp,
   onStage,
   onScore,
+  onRhythmLab,
+  onStaffNotebook,
   onPolygon,
   onAssistant,
   onDrumKit,
   labUnlocked = false,
 }: MenuScreenProps) {
   const { colors: C } = useTheme();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const S = useScale();
   const ITEM_H = S.ms(64, 0.4);
   const ICON_SIZE = S.ms(22, 0.4);
@@ -112,6 +116,18 @@ export function MenuScreen({
       onPress: onScore,
       testID: "menu-score",
     },
+    ...(onRhythmLab ? [{
+      icon: <MaterialCommunityIcons name="music-note-plus" size={ICON_SIZE} color={C.accent} />,
+      label: language === "ko" ? "리듬 랩" : "Rhythm Lab",
+      onPress: onRhythmLab,
+      testID: "menu-rhythm-lab",
+    }] : []),
+    ...(onStaffNotebook ? [{
+      icon: <Ionicons name="create-outline" size={ICON_SIZE} color={C.accent} />,
+      label: language === "ko" ? "오선 노트" : "Staff notebook",
+      onPress: onStaffNotebook,
+      testID: "menu-staff-notebook",
+    }] : []),
     {
       icon: <Ionicons name="shapes-outline" size={ICON_SIZE} color={C.accent} />,
       label: t("polygon", "polygonMenuLabel"),

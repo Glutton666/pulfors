@@ -528,6 +528,7 @@ export function scheduleMeasureNotes(
     if (note.durationMs <= 0) continue;
 
     const drumType = note.drumType;
+    const noteVolume = volume * Math.max(0, Math.min(1, note.velocity ?? 1));
 
     // 다악기 악보: 음표별 instrumentId → waveform 결정
     // 단일 파트 악보(note.instrumentId 없음): top-level instrumentId 폴백
@@ -540,13 +541,13 @@ export function scheduleMeasureNotes(
 
       if (Platform.OS === "web") {
         const stop = drumType
-          ? _playWebDrum(drumType, volume)
-          : _playWebNote(note.midiNote, note.durationMs, volume, noteWaveform);
+          ? _playWebDrum(drumType, noteVolume)
+          : _playWebNote(note.midiNote, note.durationMs, noteVolume, noteWaveform);
         myStopFns.push(stop);
       } else {
         const playPromise = drumType
-          ? _playNativeDrum(drumType, volume)
-          : _playNativeNote(note.midiNote, note.durationMs, volume, noteWaveform);
+          ? _playNativeDrum(drumType, noteVolume)
+          : _playNativeNote(note.midiNote, note.durationMs, noteVolume, noteWaveform);
         playPromise.then((stop) => {
           if (cancelled) {
             stop();
@@ -614,6 +615,29 @@ export function previewScoreNote(midi: number, instrumentId?: string): void {
       }
     }).catch(() => {});
   }
+}
+
+/** Independent click output: a notebook/count-in click must not cut off a held
+ * piano chord by replacing the shared monophonic note preview. */
+export function createScoreClickSession() {
+  let epoch = 0;
+  let release: (() => void) | undefined;
+  const stop = () => { epoch++; release?.(); release = undefined; };
+  return {
+    stop,
+    play(drum: DrumType = "hihat_closed", volume = 0.45) {
+      stop();
+      const owner = epoch;
+      if (Platform.OS === "web") {
+        release = _playWebDrum(drum, volume);
+      } else {
+        void _playNativeDrum(drum, volume).then((cleanup) => {
+          if (owner !== epoch) cleanup();
+          else release = cleanup;
+        }).catch((error) => console.warn("Independent score click failed", error));
+      }
+    },
+  };
 }
 
 /**

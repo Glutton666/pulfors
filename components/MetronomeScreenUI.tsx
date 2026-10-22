@@ -36,6 +36,7 @@ import type { BeatType } from "@/lib/metronome-engine";
 import { OnboardingModal } from "@/components/OnboardingModal";
 import { ScoreListScreen } from "@/components/ScoreListScreen";
 import { ScoreEditorScreen } from "@/components/ScoreEditorScreen";
+import { LabScoreWorkspace, type LabScoreTab } from "@/components/lab-score/LabScoreWorkspace";
 import { ModeSwitcherDial } from "@/components/ModeSwitcherDial";
 import type { ModeSwitcherDialHandle } from "@/components/ModeSwitcherDial";
 import type { ModeSlot } from "@/components/ModeSwitcherDial";
@@ -87,6 +88,7 @@ export function MetronomeScreenUI(props: Props) {
   const modeDialTriggerRef = useRef<View>(null);
   const [isModeDialOpen, setIsModeDialOpen] = useState(false);
   const [showLabMenu, setShowLabMenu] = useState(false);
+  const [labScoreTab, setLabScoreTab] = useState<LabScoreTab | null>(null);
   const [practiceBookFilter, setPracticeBookFilter] = useState<PracticeBookMode | undefined>(undefined);
   const practiceBookReturnRef = useRef<"score" | null>(null);
 
@@ -389,11 +391,24 @@ export function MetronomeScreenUI(props: Props) {
       ref={rootViewRef}
       style={styles.screen}
       focusable={Platform.OS !== "web" ? true : undefined}
-      onKeyDown={Platform.OS !== "web" ? (e) => handleNativeKeyDown(e.nativeEvent) : undefined}
-      onKeyUp={Platform.OS !== "web" ? (e) => handleNativeKeyUp(e.nativeEvent) : undefined}
+      onKeyDown={Platform.OS !== "web" && labScoreTab === null ? (e) => handleNativeKeyDown(e.nativeEvent) : undefined}
+      onKeyUp={Platform.OS !== "web" && labScoreTab === null ? (e) => handleNativeKeyUp(e.nativeEvent) : undefined}
       {...easterEggGestureHandlers}
     >
       <StatusBar style={themeMode === "day" ? "dark" : "light"} />
+      {labScoreTab !== null && (
+        <View style={[StyleSheet.absoluteFillObject, {
+          zIndex: 950, backgroundColor: C.background,
+          paddingTop: insets.top || webTopInset,
+          paddingBottom: insets.bottom || webBottomInset,
+        }]}>
+          <LabScoreWorkspace initialTab={labScoreTab} onClose={() => {
+            setLabScoreTab(null);
+            setShowLabMenu(true);
+            setActiveModal("menu");
+          }} />
+        </View>
+      )}
 
       {saveFailureBannerKey ? (
         <View
@@ -646,7 +661,7 @@ export function MetronomeScreenUI(props: Props) {
       )}
 
 
-      {showMenu && (
+      {showMenu && labScoreTab === null && (
         <Animated.View style={[StyleSheet.absoluteFillObject, { zIndex: 400 }, modeSlideStyle]}>
           <MenuScreen
             topInset={insets.top || webTopInset}
@@ -677,6 +692,14 @@ export function MetronomeScreenUI(props: Props) {
                 setActiveModal(null);
                 setScoreMode("list");
               });
+            }}
+            onRhythmLab={() => {
+              if (isPlaying || isPreparing || noteIsPlaying) return;
+              setLabScoreTab("rhythm");
+            }}
+            onStaffNotebook={() => {
+              if (isPlaying || isPreparing || noteIsPlaying) return;
+              setLabScoreTab("notebook");
             }}
             onPolygon={() => {
               openMenuItem(() => openExclusive("polygon"));

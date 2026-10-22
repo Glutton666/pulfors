@@ -1,5 +1,7 @@
 {pkgs}: {
   deps = [
+    pkgs.freetype
+    pkgs.harfbuzz
     pkgs.gst_all_1.gst-plugins-good
     pkgs.gst_all_1.gst-libav
     pkgs.libglvnd
@@ -26,10 +28,8 @@
     pkgs.libxml2
     pkgs.graphene
     pkgs.vulkan-loader
-    pkgs.harfbuzz
     pkgs.gcc
     pkgs.fontconfig
-    pkgs.freetype
     pkgs.xorg.libXrender
     pkgs.gdk-pixbuf
     pkgs.cairo
