@@ -89,3 +89,4 @@
 - [Bar TTS file delivery](bar-tts-file-delivery.md) — 앱 자체 생성 파일을 저장·재생한다; 웹 생성은 미지원 안내 후 추후 진행, 마디마다 합성·외부 계정 요구는 하지 않는다.
 - [Bar TTS file ownership](bar-tts-file-ownership.md) — 수거는 저장 참조·진행 중인 쓰기·생성·재생/내보내기 소유권이 모두 정리된 뒤에만 수행한다.
 - [Catalog speech generation](catalog-speech-generation.md) — 작은 배치와 반환된 파일 경로를 사용하며, 문맥 발화 분리는 정확한 개수와 별도 청취 확인이 필요하다.
+- [악보 입력 해석의 전제](score-input-interpretation.md) — 직접 연주 입력은 즉시 기보 확정이 아니라 이후 문맥으로 임시 해석을 갱신하는 방식으로 검토한다.
