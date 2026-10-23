@@ -67,6 +67,8 @@ type TupletGroup = { events: NotationEvent[]; actual: number };
 
 const BLACK = "#111111";
 const GOLD = "#C39A2E";
+// Scale the whole engraving together, but keep editing targets in screen pixels.
+const NOTATION_SCALE = 0.8;
 const EPSILON = 0.025;
 
 function beamLevel(event: NotationEvent) {
@@ -190,10 +192,12 @@ export function RhythmStaff({ events, meter, selected, symbols, onSelect, onMove
     const precedingWidths = measureWidths.slice(rowStart, i).reduce((sum, value) => sum + value, 0);
     measureStarts.push(left + precedingWidths);
   }
-  const contentWidth = Math.max(viewportWidth, ...rowEnds.map((end) => end + rightInset));
+  const contentWidth = Math.max(viewportWidth / NOTATION_SCALE, ...rowEnds.map((end) => end + rightInset));
   const width = Math.max(260, contentWidth);
   const rowHeight = 118;
   const height = Math.max(rowHeight, rowCount * rowHeight);
+  const renderedWidth = width * NOTATION_SCALE;
+  const renderedHeight = height * NOTATION_SCALE;
   const rowFor = (event: NotationEvent) => Math.floor(event.measureIndex / measuresPerRow);
   const yFor = (event: NotationEvent) => 54 + rowFor(event) * rowHeight;
   const edgePadding = 18;
@@ -214,9 +218,9 @@ export function RhythmStaff({ events, meter, selected, symbols, onSelect, onMove
   const flagsFor = (event: NotationEvent) => beamLevel(event);
 
   return <View testID="rhythm-staff" onLayout={(event) => setViewportWidth(event.nativeEvent.layout.width)} style={styles.frame}>
-    <ScrollView horizontal showsHorizontalScrollIndicator contentContainerStyle={{ minWidth: width }}>
-      <View style={{ width, height, position: "relative" }}>
-        <Svg width={width} height={height} style={{ backgroundColor: "#FFFFFF" }}>
+    <ScrollView horizontal showsHorizontalScrollIndicator contentContainerStyle={{ minWidth: renderedWidth }}>
+      <View style={{ width: renderedWidth, height: renderedHeight, position: "relative" }}>
+        <Svg width={renderedWidth} height={renderedHeight} viewBox={`0 0 ${width} ${height}`} style={{ backgroundColor: "#FFFFFF" }}>
           {Array.from({ length: rowCount }, (_, row) => <G key={`staff-${row}`}>
             {Array.from({ length: 5 }, (_, i) => <Line key={`staff-line-${i}`} x1={left} x2={rowEnds[row]} y1={34 + row * rowHeight + i * 9} y2={34 + row * rowHeight + i * 9} stroke={BLACK} strokeWidth={1} />)}
             <SvgText x={left + 5} y={24 + row * rowHeight} fontSize="11" fill={BLACK}>{meter.numerator}/{meter.denominator}</SvgText>
@@ -337,7 +341,7 @@ export function RhythmStaff({ events, meter, selected, symbols, onSelect, onMove
           })}
         </Svg>
         <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>
-          {events.map((event) => <EventTarget key={`target-${event.id}`} event={event} x={xFor(event)} y={yFor(event)} measureWidth={measureWidthFor(event)} spanQ={spanQ} draggable={event.kind === "note"} onSelect={onSelect} onPreview={onMovePreview} onCommit={onMoveCommit} onCancel={onMoveCancel} />)}
+          {events.map((event) => <EventTarget key={`target-${event.id}`} event={event} x={xFor(event) * NOTATION_SCALE} y={yFor(event) * NOTATION_SCALE} measureWidth={measureWidthFor(event) * NOTATION_SCALE} spanQ={spanQ} draggable={event.kind === "note"} onSelect={onSelect} onPreview={onMovePreview} onCommit={onMoveCommit} onCancel={onMoveCancel} />)}
         </View>
       </View>
     </ScrollView>

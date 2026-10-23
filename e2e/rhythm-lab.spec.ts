@@ -54,6 +54,19 @@ test("triplet recording renders grouped notation without tiny fabricated rests",
     return bounds.y + bounds.height / 2;
   }));
   expect(Math.max(...renderedYs) - Math.min(...renderedYs)).toBeLessThan(0.5);
+  const head = await notation.locator('ellipse').first().boundingBox();
+  expect(head!.width).toBeGreaterThan(12);
+  expect(head!.width).toBeLessThan(15);
+  const engravingScale = await notation.locator('svg').evaluate((svg) => {
+    const coordinates = svg.getAttribute("viewBox")!.split(" ").map(Number);
+    return svg.getBoundingClientRect().width / coordinates[2];
+  });
+  expect(engravingScale).toBeCloseTo(0.8, 3);
+  const target = await notation.getByTestId('rhythm-note-target-note-triplet-0').boundingBox();
+  expect(target!.width).toBe(36);
+  expect(target!.height).toBe(36);
+  expect(Math.abs((target!.x + 18) - (head!.x + head!.width / 2))).toBeLessThan(0.5);
+  expect(Math.abs((target!.y + 18) - (head!.y + head!.height / 2))).toBeLessThan(0.5);
   await page.screenshot({ path: "/tmp/rhythm-notation-triplets-phone.png" });
 });
 
