@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   applyInterpretation, applyTuplet, buildRhythmPlayback, chooseCandidate, createRhythmDocument,
-  fraction, insertRest, insertNotationNote, interpretRhythm, moveNotationEvent, setEventDuration, toNumber, validateRhythmDocument,
+  describeDuration, fraction, insertRest, insertNotationNote, interpretRhythm, moveNotationEvent, setEventDuration, toNumber, validateRhythmDocument,
 } from "../lib/rhythm-lab/engine";
 import { calibrateOffset, evaluatePractice, timingTolerance } from "../lib/rhythm-lab/practice";
 import { saveRhythmDocument, listRhythmDocuments, deleteRhythmDocument } from "../lib/rhythm-lab/storage";
@@ -29,6 +29,48 @@ test("24th equivalent is represented as sixteenth triplets", () => {
   assert.equal(events.length, 4);
   assert.equal(toNumber(events[1].startQ), 1 / 6);
   assert.deepEqual(events[0].tuplet, { actual: 3, normal: 2 });
+});
+test("ordinary dotted durations retain their correct base glyph", () => {
+  assert.deepEqual(describeDuration(0.75), { value: 8 });
+  assert.deepEqual(describeDuration(1.5), { value: 4 });
+  assert.deepEqual(describeDuration(3), { value: 2 });
+});
+test("triplet taps and intervening rests stay on the same rhythmic family", () => {
+  const doc = makeDoc([0, 167, 332, 501]);
+  const result = interpretRhythm(doc);
+  assert.equal(result.candidates[0].grid, 12);
+  const firstBeat = result.events.filter((event) => toNumber(event.startQ) < 1);
+  assert.equal(firstBeat.length, 6);
+  for (const event of firstBeat) {
+    assert.ok(Math.abs(toNumber(event.durationQ) - 1 / 6) < 1e-7);
+    assert.equal(event.value, 16);
+    assert.deepEqual(event.tuplet, { actual: 3, normal: 2 });
+  }
+  assert.ok(result.events.every((event) => event.value <= 16));
+  assert.deepEqual(buildRhythmPlayback(doc, "original").map((hit) => hit.timeMs), [0, 167, 332, 501]);
+});
+test("final dense tap keeps the preceding subdivision instead of reverting to a sixteenth", () => {
+  for (const times of [[0, 500 / 6, 1000 / 6, 250, 2000 / 6, 2500 / 6], [0, 31.25, 62.5, 93.75]]) {
+    const events = notes(makeDoc(times));
+    const step = (times[1] - times[0]) / 500;
+    for (const event of events) assert.ok(Math.abs(toNumber(event.durationQ) - step) < 1e-7);
+    const firstRest = interpretRhythm(makeDoc(times)).events.find((event) => event.kind === "rest")!;
+    assert.ok(Math.abs(toNumber(firstRest.startQ) - step * times.length) < 1e-7);
+  }
+});
+test("slightly early next downbeat is not turned into an exotic fine-grid note", () => {
+  const result = interpretRhythm(makeDoc([0, 490, 1000, 1490, 1990]));
+  assert.equal(result.candidates[0].grid, 4);
+  const hitNotes = result.events.filter((event) => event.kind === "note");
+  assert.deepEqual(hitNotes.map((event) => toNumber(event.startQ)), [0, 1, 2, 3, 4]);
+  assert.equal(hitNotes[4].measureIndex, 1);
+  assert.ok(result.events.every((event) => !event.tuplet));
+});
+test("quarter-spaced short taps use one dotted eighth rest, not tiny fragments", () => {
+  const events = interpretRhythm(makeDoc([0, 500, 1000, 1500])).events;
+  const rests = events.filter((event) => event.kind === "rest");
+  assert.equal(rests.length, 4);
+  assert.ok(rests.every((event) => event.value === 8 && toNumber(event.durationQ) === 0.75));
 });
 test("silence is an explicit rest and held keyboard duration is retained", () => {
   const doc = makeDoc([0, 1000]);

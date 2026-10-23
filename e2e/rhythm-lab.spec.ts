@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { createRhythmDocument } from "../lib/rhythm-lab/engine";
 
 test.use({
   baseURL: process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : undefined,
@@ -27,6 +28,34 @@ async function enterLab(page: Page, entry: "rhythm" | "notebook") {
   await page.getByTestId(entry === "rhythm" ? "menu-rhythm-lab" : "menu-staff-notebook").click();
   await expect(page.getByTestId(`lab-score-tab-${entry}`)).toBeVisible();
 }
+
+test("triplet recording renders grouped notation without tiny fabricated rests", async ({ page }) => {
+  const doc = {
+    ...createRhythmDocument({ title: "Triplet notation regression", bpm: 120 }),
+    hits: [0, 500 / 6, 1000 / 6, 250, 2000 / 6, 2500 / 6]
+      .map((onsetMs, index) => ({ id: `triplet-${index}`, onsetMs, drum: "snare" as const })),
+  };
+  await page.addInitScript((document) => {
+    localStorage.setItem("rhythm_lab_documents_v1", JSON.stringify([document]));
+  }, doc);
+  await enterLab(page, "rhythm");
+  await page.getByLabel(/^Open$|^열기$/).click();
+  const notation = page.getByTestId("rhythm-staff");
+  await notation.scrollIntoViewIfNeeded();
+  await expect(notation.locator('svg text').filter({ hasText: /^3$/ })).toHaveCount(2);
+  // Exact timing gives six equal sixteenth-triplets followed by three
+  // quarter rests. These are rendered paths, not just model assertions.
+  await expect(notation.locator('ellipse')).toHaveCount(6);
+  await expect(notation.locator('path')).toHaveCount(3);
+  const heads = await notation.locator('ellipse').evaluateAll((elements) => elements.map((element) => Number(element.getAttribute("cx"))));
+  for (let i = 2; i < heads.length; i++) expect(Math.abs((heads[i] - heads[i - 1]) - (heads[1] - heads[0]))).toBeLessThan(0.1);
+  const renderedYs = await notation.locator('ellipse').evaluateAll((elements) => elements.map((element) => {
+    const bounds = element.getBoundingClientRect();
+    return bounds.y + bounds.height / 2;
+  }));
+  expect(Math.max(...renderedYs) - Math.min(...renderedYs)).toBeLessThan(0.5);
+  await page.screenshot({ path: "/tmp/rhythm-notation-triplets-phone.png" });
+});
 
 test("staff notebook really draws, saves, restores, and does not alter legacy scores", async ({ page }) => {
   await enterLab(page, "notebook");

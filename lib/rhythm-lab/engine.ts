@@ -39,6 +39,9 @@ export function describeDuration(q: number): Pick<NotationEvent, "value" | "tupl
   const ordinary = [1, 2, 4, 8, 16, 32, 64, 128];
   const exact = ordinary.find((d) => Math.abs(d - effectiveDenominator) < 0.001);
   if (exact) return { value: exact };
+  // A dotted value is still an ordinary glyph, not an exotic tuplet.
+  const dotted = ordinary.find((d) => Math.abs(q - 4 / d * 1.5) < 1e-7);
+  if (dotted) return { value: dotted };
   const triplet = ordinary.find((d) => Math.abs(d * 1.5 - effectiveDenominator) < 0.001);
   if (triplet) return { value: triplet, tuplet: { actual: 3, normal: 2 } };
   if (Number.isInteger(Math.round(effectiveDenominator)) && Math.abs(effectiveDenominator - Math.round(effectiveDenominator)) < 0.001) {
@@ -69,7 +72,9 @@ function candidateForMeasure(doc: RhythmDocument, index: number, hits: Hit[], gr
   let collisions = 0;
   const placed = mainHits.map((hit) => {
     const observed = correctedQ(doc, hit);
-    const q = clamp(start + Math.round((observed - start) / step) * step, start, start + capacity - step);
+    // A slightly early downbeat may belong to the next bar. Clamping it one
+    // grid cell backwards made finer and finer grids win for ordinary jitter.
+    const q = clamp(start + Math.round((observed - start) / step) * step, start, start + capacity);
     error += ((q - observed) * beatMs) ** 2;
     return { hit, q };
   });
@@ -83,10 +88,21 @@ function candidateForMeasure(doc: RhythmDocument, index: number, hits: Hit[], gr
     } else grouped.push({ hits: [p.hit], q: p.q });
   }
   const notes: NotationEvent[] = grouped.map((group, i) => {
-    const nextQ = grouped[i + 1]?.q ?? start + capacity;
+    const nextQ = grouped[i + 1]?.q ?? Math.max(start + capacity, group.q + step);
+    // Keep short taps on the selected rhythmic family. A fixed binary 1/4 Q
+    // inside a triplet creates spurious 64th/128th rests between every hit.
+    let tapDuration = 0.25;
+    const binaryGrid = (grid & (grid - 1)) === 0;
+    if (!binaryGrid) {
+      const binaryBase = 2 ** Math.floor(Math.log2(grid));
+      tapDuration = 0.25 * binaryBase / grid;
+    }
+    const previousGap = i > 0 ? group.q - grouped[i - 1].q : Number.POSITIVE_INFINITY;
+    const nextGap = grouped[i + 1] ? nextQ - group.q : previousGap;
+    tapDuration = Math.min(tapDuration, nextGap);
     const releaseDurations = group.hits.map((h) => {
       const held = (h.releaseMs ?? h.onsetMs) - h.onsetMs;
-      return held >= Math.max(80, beatMs / 4) ? Math.max(step, Math.round(held / beatMs / step) * step) : 0.25;
+      return held >= Math.max(80, beatMs / 4) ? Math.max(step, Math.round(held / beatMs / step) * step) : tapDuration;
     });
     const duration = Math.max(1 / 24000, Math.min(Math.max(...releaseDurations), nextQ - group.q));
     const mainIds = group.hits.map((h) => h.id);
@@ -97,7 +113,7 @@ function candidateForMeasure(doc: RhythmDocument, index: number, hits: Hit[], gr
       startQ: fraction(Math.round(group.q / step) * 4, grid),
       durationQ: Math.abs(duration / step - Math.round(duration / step)) < 1e-7
         ? fraction(Math.round(duration / step) * 4, grid) : qFraction(duration),
-      measureIndex: index,
+      measureIndex: Math.floor((group.q + 1e-7) / capacity),
       ...describeDuration(duration),
       ...(grace.length ? { graceHitIds: grace.flatMap((o) => o.hitIds.filter((id) => id !== o.primaryHitId)) } : {}),
       ...(overrides.find((o) => o.symbolId) ? { symbolId: overrides.find((o) => o.symbolId)!.symbolId } : {}),
@@ -132,10 +148,25 @@ function withRests(doc: RhythmDocument, notes: NotationEvent[], minimumMeasures:
         // exact residual rational time is retained for uncommon tuplet rests.
         let p = cursor;
         while (p < a - 1e-7) {
-          const boundary = Math.min(a, Math.floor(p + 1e-7) + 1);
+          // Finish the current tuplet group before spelling the remaining
+          // silence in ordinary beats. Do not carry its fractional residue
+          // through the rest of the measure.
+          const previousTuplet = notes.find((e) => e.tuplet &&
+            Math.abs(toNumber(e.startQ) + toNumber(e.durationQ) - cursor) < 1e-7);
+          const groupQ = previousTuplet?.tuplet
+            ? 4 / previousTuplet.value * previousTuplet.tuplet.normal : 1;
+          const completion = (Math.floor((cursor + 1e-7) / groupQ) + 1) * groupQ;
+          const needsCompletion = Math.abs(cursor / groupQ - Math.round(cursor / groupQ)) > 1e-7;
+          const groupEnd = needsCompletion && p < completion - 1e-7 ? completion : Number.POSITIVE_INFINITY;
+          const boundary = Math.min(a, Math.floor(p + 1e-7) + 1, groupEnd);
           const remaining = boundary - p;
           const powers = [4, 2, 1, 0.5, 0.25, 0.125, 0.0625, 0.03125];
-          const dur = powers.find((v) => v <= remaining + 1e-7) ?? remaining;
+          // Prefer a single exact ordinary/dotted/tuplet rest. Greedily
+          // subtracting binary values from a triplet gap fabricated tiny rests.
+          const spelling = describeDuration(remaining);
+          const base = 4 / spelling.value * (spelling.tuplet ? spelling.tuplet.normal / spelling.tuplet.actual : 1);
+          const exact = Math.abs(base - remaining) < 1e-7 || Math.abs(base * 1.5 - remaining) < 1e-7;
+          const dur = exact ? remaining : powers.find((v) => v <= remaining + 1e-7) ?? remaining;
           result.push({
             id: `rest-${m}-${Math.round(p * 96000)}`, kind: "rest", hitIds: [],
             startQ: qFraction(p), durationQ: qFraction(dur), measureIndex: m, ...describeDuration(dur),
@@ -163,7 +194,7 @@ export function interpretRhythm(doc: RhythmDocument): Interpretation {
   const auto: NotationEvent[] = [];
   for (const [index, hits] of byMeasure) {
     const choices = grids.filter((g) => 4 / g <= capacity).map((g) => candidateForMeasure(doc, index, hits, g)).sort((a, b) => a.score - b.score);
-    candidates.push(...choices.slice(0, 4).map((c) => ({ ...c, events: withRests(doc, c.events, index + 1, index).filter((e) => e.measureIndex === index) })));
+    candidates.push(...choices.slice(0, 4).map((c) => ({ ...c, events: withRests(doc, c.events, index + 1, index).filter((e) => e.kind === "note" || e.measureIndex === index) })));
     auto.push(...(choices[0]?.events ?? []));
   }
   const manual = doc.manualEvents ?? [];

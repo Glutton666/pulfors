@@ -43,7 +43,7 @@ export function RhythmWorkspace({ active = true }: { active?: boolean }) {
   const [tupletActual, setTupletActual] = useState("3");
   const [tupletNormal, setTupletNormal] = useState("2");
   const [parentTupletId, setParentTupletId] = useState<string | undefined>();
-  const [candidateOpen, setCandidateOpen] = useState(true);
+  const [candidateOpen, setCandidateOpen] = useState(false);
   const [saved, setSaved] = useState<RhythmDocument[]>([]);
   const [loadError, setLoadError] = useState("");
   const [playing, setPlaying] = useState(false);
@@ -86,6 +86,8 @@ export function RhythmWorkspace({ active = true }: { active?: boolean }) {
   const playheadQ = Math.max(0, Number(scrubPosition) || 0);
   const scrubMaxQ = Math.max(doc.meter.numerator * 4 / doc.meter.denominator, ...events.map((event) => toNumber(event.startQ) + toNumber(event.durationQ)));
   const selectedEvents = events.filter((event) => selected.includes(event.id) || event.hitIds.some((id) => selected.includes(id)));
+  const candidateMeasure = selectedEvents[0]?.measureIndex ?? events.filter((event) => event.kind === "note").at(-1)?.measureIndex ?? 0;
+  const visibleCandidates = interpretation.candidates.filter((candidate) => candidate.measureIndex === candidateMeasure);
   const selectedHitIds = [...new Set([...selectedEvents.flatMap((event) => [...event.hitIds, ...(event.graceHitIds ?? [])]), ...selected.filter((id) => doc.hits.some((hit) => hit.id === id))])];
   const cleanupPlayback = () => { audioSession.current?.stop(); stopPreviewNote(); setPlaying(false); };
   const cleanupRecording = () => { recordTimers.current.forEach(clearTimeout); recordTimers.current = []; if (recordMetro.current) clearInterval(recordMetro.current); recordMetro.current = null; clickSession.current?.stop(); };
@@ -391,7 +393,7 @@ export function RhythmWorkspace({ active = true }: { active?: boolean }) {
         </View>
         <View style={[s.editBox, { borderColor: C.border, backgroundColor: C.surface }]}>
           <View style={s.sectionHeader}><Text style={[s.cardTitle, { color: C.text }]}>{text.candidates}</Text><Pressable onPress={() => setCandidateOpen((v) => !v)}><Ionicons name={candidateOpen ? "chevron-up" : "chevron-down"} size={18} color={C.textSecondary} /></Pressable></View>
-          {candidateOpen && interpretation.candidates.slice(0, 6).map((candidate) => <Pressable key={candidate.id} onPress={() => selectCandidate(candidate)} style={[s.candidate, { borderColor: C.border }]}><Text style={{ color: C.text, flex: 1 }}>{candidate.label}</Text><Text style={{ color: C.accent, fontFamily: "SpaceGrotesk_700Bold" }}>{Math.round(candidate.score * 100)}%</Text></Pressable>)}
+          {candidateOpen && visibleCandidates.map((candidate, index) => <Pressable key={candidate.id} onPress={() => selectCandidate(candidate)} style={[s.candidate, { borderColor: C.border }]}><Text style={{ color: C.text, flex: 1 }}>{ko ? `${candidate.measureIndex + 1}마디 · 온음표의 ${candidate.grid}분할 격자` : `Bar ${candidate.measureIndex + 1} · 1/${candidate.grid} whole-note grid`}</Text><Text style={{ color: C.accent, fontFamily: "SpaceGrotesk_700Bold" }}>{index === 0 ? (ko ? "추천" : "Suggested") : ""}</Text></Pressable>)}
         </View>
         <View style={[s.editBox, { borderColor: C.border, backgroundColor: C.surface }]}>
           <View style={s.sectionHeader}><Text style={[s.cardTitle, { color: C.text }]}>{text.symbols}</Text><Pressable onPress={() => setSymbolEditor((v) => !v)} style={[s.smallPrimary, { backgroundColor: C.accent }]}><Text style={{ color: C.background }}>{text.newSymbol}</Text></Pressable></View>
