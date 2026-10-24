@@ -1,6 +1,6 @@
 import type { PracticeEntry } from "@/lib/storage";
 
-export type PracticeBookMode = "beat" | "bar" | "note" | "score";
+export type PracticeBookMode = "beat" | "bar" | "note" | "score" | "rhythm";
 export type PracticeBookFilter = "all" | PracticeBookMode;
 
 export function isScorePracticeEntry(entry: PracticeEntry): boolean {

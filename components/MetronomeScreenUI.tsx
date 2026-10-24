@@ -38,6 +38,9 @@ import { OnboardingModal } from "@/components/OnboardingModal";
 import { ScoreListScreen } from "@/components/ScoreListScreen";
 import { ScoreEditorScreen } from "@/components/ScoreEditorScreen";
 import { LabScoreWorkspace, type LabScoreTab } from "@/components/lab-score/LabScoreWorkspace";
+import { Alert } from "@/lib/alert";
+import type { RhythmDocument } from "@/lib/rhythm-lab/types";
+import { rhythmDocumentFromPracticeEntry } from "@/lib/rhythm-lab/storage";
 import { ModeSwitcherDial } from "@/components/ModeSwitcherDial";
 import type { ModeSwitcherDialHandle } from "@/components/ModeSwitcherDial";
 import type { ModeSlot } from "@/components/ModeSwitcherDial";
@@ -90,6 +93,8 @@ export function MetronomeScreenUI(props: Props) {
   const [isModeDialOpen, setIsModeDialOpen] = useState(false);
   const [showLabMenu, setShowLabMenu] = useState(false);
   const [labScoreTab, setLabScoreTab] = useState<LabScoreTab | null>(null);
+  const [labRhythmDocument, setLabRhythmDocument] = useState<RhythmDocument>();
+  const rhythmReturnToBookRef = useRef(false);
   const [practiceBookFilter, setPracticeBookFilter] = useState<PracticeBookMode | undefined>(undefined);
   const practiceBookReturnRef = useRef<"score" | null>(null);
 
@@ -418,8 +423,14 @@ export function MetronomeScreenUI(props: Props) {
           paddingTop: insets.top || webTopInset,
           paddingBottom: insets.bottom || webBottomInset,
         }]}>
-          <LabScoreWorkspace initialTab={labScoreTab} onClose={() => {
+          <LabScoreWorkspace initialTab={labScoreTab} initialDocument={labRhythmDocument} onClose={() => {
             setLabScoreTab(null);
+            setLabRhythmDocument(undefined);
+            if (rhythmReturnToBookRef.current) {
+              rhythmReturnToBookRef.current = false;
+              setActiveModal("practiceBook");
+              return;
+            }
             setShowLabMenu(true);
             setActiveModal("menu");
           }} />
@@ -613,7 +624,7 @@ export function MetronomeScreenUI(props: Props) {
       </Animated.View>
 
       {/* 상단 중앙 고정 모드 레이블 — 탭하면 팬 다이얼 열기 (무대·악보·메뉴·연습장 중 숨김, 해당 화면 헤더에 자체 트리거 있음) */}
-      {!stageModeActive && scoreMode === null && !showMenu && !showPracticeBook && !showPolygon && (
+      {!stageModeActive && scoreMode === null && labScoreTab === null && !showMenu && !showPracticeBook && !showPolygon && (
         <Pressable
           ref={modeDialTriggerRef}
           onPress={openModeDial}
@@ -662,7 +673,7 @@ export function MetronomeScreenUI(props: Props) {
       )}
 
       {/* 모드 다이얼 — D-탭 없이 텍스트 레이블이 트리거 */}
-      {scoreMode === null && (
+      {scoreMode === null && labScoreTab === null && (
         <ModeSwitcherDial
           ref={modeSwitcherDialRef}
           currentMode={currentMode}
@@ -711,10 +722,14 @@ export function MetronomeScreenUI(props: Props) {
             }}
             onRhythmLab={() => {
               if (isPlaying || isPreparing || noteIsPlaying) return;
+              setLabRhythmDocument(undefined);
+              rhythmReturnToBookRef.current = false;
               setLabScoreTab("rhythm");
             }}
             onStaffNotebook={() => {
               if (isPlaying || isPreparing || noteIsPlaying) return;
+              setLabRhythmDocument(undefined);
+              rhythmReturnToBookRef.current = false;
               setLabScoreTab("notebook");
             }}
             onPolygon={() => {
@@ -944,7 +959,17 @@ export function MetronomeScreenUI(props: Props) {
           }
         }}
         onLoad={(entry) => {
-          handleLoadPracticeEntry(entry);
+          if (entry.mode === "rhythm") {
+            try {
+              setLabRhythmDocument(rhythmDocumentFromPracticeEntry(entry));
+              rhythmReturnToBookRef.current = true;
+              setLabScoreTab("rhythm");
+            } catch (error) {
+              Alert.alert(t("settings", "error"), error instanceof Error ? error.message : String(error));
+            }
+          } else {
+            handleLoadPracticeEntry(entry);
+          }
           recordTutorialAction("practice_load");
         }}
         onSetGoal={handleSetPracticeNoteGoal}

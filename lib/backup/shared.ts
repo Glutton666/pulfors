@@ -1,6 +1,7 @@
 import * as FileSystem from "expo-file-system/legacy";
 import { Platform } from "react-native";
 import type { PracticeEntry } from "../storage";
+import { validateRhythmDocument } from "../rhythm-lab/engine";
 import type { ScoreDocument } from "../score-types";
 import { logger } from "../logger";
 import {
@@ -428,7 +429,15 @@ export function sanitizePracticeEntry(raw: unknown, depth = 0): PracticeEntry | 
     logger.warn("[Backup] sanitizePracticeEntry: null/non-object input, dropping entry");
     return null;
   }
-  const entry = raw as PracticeEntry;
+  const entry = { ...raw } as PracticeEntry;
+  if (entry.mode === "rhythm") {
+    try {
+      entry.rhythmDocument = validateRhythmDocument({ ...entry.rhythmDocument, title: entry.label });
+    } catch (error) {
+      logger.warn("[Backup] Invalid rhythm practice entry, dropping entry:", error);
+      return null;
+    }
+  }
 
   let queueEntries: PracticeEntry[] | undefined;
   if (Array.isArray(entry.noteQueueEntries)) {

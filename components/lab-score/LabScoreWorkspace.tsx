@@ -6,11 +6,12 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { RhythmWorkspace } from "./RhythmWorkspace";
 import { StaffNotebookWorkspace } from "./StaffNotebookWorkspace";
 import { Alert } from "@/lib/alert";
+import type { RhythmDocument } from "@/lib/rhythm-lab/types";
 
 export type LabScoreTab = "rhythm" | "notebook";
-type Props = { onClose: () => void; initialTab?: LabScoreTab };
+type Props = { onClose: () => void; initialTab?: LabScoreTab; initialDocument?: RhythmDocument };
 
-export function LabScoreWorkspace({ onClose, initialTab = "rhythm" }: Props) {
+export function LabScoreWorkspace({ onClose, initialTab = "rhythm", initialDocument }: Props) {
   const { colors: C } = useTheme();
   const { language } = useLanguage();
   const ko = language === "ko";
@@ -46,7 +47,7 @@ export function LabScoreWorkspace({ onClose, initialTab = "rhythm" }: Props) {
           </Pressable>
         ))}
       </View>
-      <View style={{ flex: 1, display: tab === "rhythm" ? "flex" : "none" }}><RhythmWorkspace active={tab === "rhythm"} /></View>
+      <View style={{ flex: 1, display: tab === "rhythm" ? "flex" : "none" }}><RhythmWorkspace active={tab === "rhythm"} initialDocument={initialDocument} /></View>
       <View style={{ flex: 1, display: tab === "notebook" ? "flex" : "none" }}><StaffNotebookWorkspace active={tab === "notebook"} /></View>
       <Modal transparent visible={help} animationType="fade" onRequestClose={() => setHelp(false)}>
         <View style={s.modalBackdrop}>

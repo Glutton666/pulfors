@@ -39,7 +39,7 @@ test("triplet recording renders grouped notation without tiny fabricated rests",
     localStorage.setItem("rhythm_lab_documents_v1", JSON.stringify([document]));
   }, doc);
   await enterLab(page, "rhythm");
-  await page.getByLabel(/^Open$|^열기$/).click();
+  await page.getByRole("button", { name: /^Open from Saved takes$|^저장 기록에서 열기$/ }).click();
   const notation = page.getByTestId("rhythm-staff");
   await notation.scrollIntoViewIfNeeded();
   await expect(notation.locator('svg text').filter({ hasText: /^3$/ })).toHaveCount(2);
@@ -79,7 +79,7 @@ test("notation similarity and intent confirmation persist separately", async ({ 
     localStorage.setItem("rhythm_lab_documents_v1", JSON.stringify([document]));
   }, doc);
   await enterLab(page, "rhythm");
-  await page.getByLabel(/^Open$|^열기$/).click();
+  await page.getByRole("button", { name: /^Open from Saved takes$|^저장 기록에서 열기$/ }).click();
   const panel = page.getByTestId("rhythm-validation-panel");
   await expect(page.getByTestId("rhythm-similarity")).toHaveText("91%");
   await panel.getByTestId("rhythm-review-region-0").click();
@@ -89,10 +89,10 @@ test("notation similarity and intent confirmation persist separately", async ({ 
   await expect(page.getByTestId("rhythm-similarity")).toHaveText("91%");
   await page.getByTestId("rhythm-save").click();
   await expect.poll(() => page.evaluate(() => {
-    const stored = JSON.parse(localStorage.getItem("rhythm_lab_documents_v1") ?? "[]");
+    const stored = JSON.parse(localStorage.getItem("practice_book") ?? "[]").filter((entry: { mode: string }) => entry.mode === "rhythm").map((entry: { rhythmDocument: unknown }) => entry.rhythmDocument);
     return stored[0]?.reviewConfirmations?.length ?? 0;
   })).toBe(1);
-  const storedHits = await page.evaluate(() => JSON.parse(localStorage.getItem("rhythm_lab_documents_v1")!)[0].hits);
+  const storedHits = await page.evaluate(() => JSON.parse(localStorage.getItem("practice_book")!).find((entry: { mode: string }) => entry.mode === "rhythm").rhythmDocument.hits);
   expect(storedHits).toEqual(doc.hits);
   const okay = page.getByText(/^OK$|^확인$/).last();
   if (await okay.isVisible()) await okay.click();
@@ -111,7 +111,7 @@ test("a structural calculation failure cannot be approved by the user", async ({
     localStorage.setItem("rhythm_lab_documents_v1", JSON.stringify([document]));
   }, invalid);
   await enterLab(page, "rhythm");
-  await page.getByLabel(/^Open$|^열기$/).click();
+  await page.getByRole("button", { name: /^Open from Saved takes$|^저장 기록에서 열기$/ }).click();
   const panel = page.getByTestId("rhythm-validation-panel");
   await expect(page.getByTestId("rhythm-similarity")).toHaveText("—");
   await panel.getByTestId("rhythm-review-region-0").click();
@@ -148,6 +148,8 @@ test("staff notebook really draws, saves, restores, and does not alter legacy sc
 
 test("rhythm capture persists actual input and permits switching to the independent notebook", async ({ page }) => {
   await enterLab(page, "rhythm");
+  await expect(page.getByTestId("rhythm-input-stage")).toBeVisible();
+  await expect(page.getByTestId("rhythm-review-stage")).toHaveCount(0);
   await page.getByTestId("rhythm-record").click();
   await expect(page.getByTestId("rhythm-record-status")).toHaveText(/Recording|녹음 중/, { timeout: 6000 });
   for (let i = 0; i < 4; i++) {
@@ -156,9 +158,15 @@ test("rhythm capture persists actual input and permits switching to the independ
   }
   await expect(page.getByText(/^4 hits?$|^4 타격s?$/)).toBeVisible();
   await page.getByTestId("rhythm-record").click();
+  await expect(page.getByTestId("rhythm-review-stage")).toBeVisible();
+  await expect(page.getByTestId("rhythm-input-stage")).toHaveCount(0);
+  await expect(page.getByTestId("rhythm-pad")).toHaveCount(0);
+  const staff = await page.getByTestId("rhythm-staff").boundingBox();
+  const validation = await page.getByTestId("rhythm-validation-panel").boundingBox();
+  expect(staff!.y).toBeLessThan(validation!.y);
   await page.getByTestId("rhythm-save").click();
   await expect.poll(() => page.evaluate(() => {
-    const documents = JSON.parse(localStorage.getItem("rhythm_lab_documents_v1") ?? "[]");
+    const documents = JSON.parse(localStorage.getItem("practice_book") ?? "[]").filter((entry: { mode: string }) => entry.mode === "rhythm").map((entry: { rhythmDocument: unknown }) => entry.rhythmDocument);
     return documents[0]?.hits.length ?? 0;
   })).toBe(4);
   const okay = page.getByText(/^OK$|^확인$/).last();
@@ -188,11 +196,84 @@ test("desktop keyboard records a held chord with independent key releases", asyn
   await page.keyboard.up("g");
   await page.getByTestId("rhythm-record").click();
   await page.getByTestId("rhythm-save").click();
-  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("rhythm_lab_documents_v1") ?? "[]")[0]?.hits.length)).toBe(3);
-  const hits = await page.evaluate(() => JSON.parse(localStorage.getItem("rhythm_lab_documents_v1")!)[0].hits);
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("practice_book") ?? "[]").find((entry: { mode: string }) => entry.mode === "rhythm")?.rhythmDocument.hits.length)).toBe(3);
+  const hits = await page.evaluate(() => JSON.parse(localStorage.getItem("practice_book")!).find((entry: { mode: string }) => entry.mode === "rhythm").rhythmDocument.hits);
   expect(hits.map((hit: { midi: number }) => hit.midi)).toEqual([60, 64, 67]);
   expect(hits.every((hit: { onsetMs: number; releaseMs: number }) => hit.releaseMs - hit.onsetMs >= 180)).toBe(true);
   const okay = page.getByText(/^OK$|^확인$/).last();
   if (await okay.isVisible()) await okay.click();
   await page.screenshot({ path: "/tmp/rhythm-lab-desktop.png" });
+});
+
+test("main practice book opens a full rhythm for correction, saving and practice", async ({ page }) => {
+  const doc = {
+    ...createRhythmDocument({ title: "Main book rhythm", bpm: 120 }),
+    hits: [0, 500, 1000, 1500].map((onsetMs, index) => ({ id: `main-${index}`, onsetMs, drum: "snare" as const })),
+  };
+  await page.addInitScript((document) => {
+    localStorage.setItem("metronome_onboarding_done", "1");
+    localStorage.setItem("metronome_onboarding_lang_done", "1");
+    localStorage.setItem("practice_book", JSON.stringify([{
+      id: `rhythm:${document.id}`, label: document.title, createdAt: document.createdAt,
+      mode: "rhythm", bpm: document.bpm, beatsPerMeasure: 4,
+      beatTypes: ["normal", "normal", "normal", "normal"], beatSubdivisions: {},
+      barRepeats: {}, barLoopMode: "once", subdivisionPattern: [], rhythmDocument: document,
+    }]));
+  }, doc);
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await expect(page.getByTestId("mode-cycle-label")).toBeVisible({ timeout: 45_000 });
+  const viewport = page.viewportSize()!;
+  await page.getByTestId("mode-cycle-label").click();
+  await page.waitForTimeout(400);
+  await page.mouse.click(viewport.width / 2 - 96, 39);
+  await page.waitForTimeout(300);
+  await page.mouse.click(viewport.width / 2, viewport.height * 0.7);
+  await expect(page.getByTestId("practice-book-screen")).toBeVisible();
+  await page.getByText("Main book rhythm", { exact: true }).click();
+  await expect(page.getByTestId("rhythm-review-stage")).toBeVisible();
+  await expect(page.getByTestId("rhythm-pad")).toHaveCount(0);
+  await expect(page.getByTestId("rhythm-record")).toHaveCount(0);
+  await expect(page.getByTestId("rhythm-staff")).toBeVisible();
+  const save = page.getByTestId("rhythm-save");
+  const saveBox = (await save.boundingBox())!;
+  expect(saveBox.x).toBeGreaterThanOrEqual(0);
+  expect(saveBox.x + saveBox.width).toBeLessThanOrEqual(viewport.width);
+  await save.click();
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("practice_book") ?? "[]").length)).toBe(1);
+  const okay = page.getByText(/^OK$|^확인$/).last();
+  if (await okay.isVisible()) await okay.click();
+  await page.screenshot({ path: "/tmp/rhythm-main-book-review.png" });
+  await page.getByTestId("rhythm-flow-practice").click();
+  await expect(page.getByTestId("rhythm-practice-stage")).toBeVisible();
+  await expect(page.getByTestId("rhythm-validation-panel")).toHaveCount(0);
+  await expect(page.getByTestId("rhythm-pad")).toBeVisible();
+  await page.getByRole("switch").click();
+  await page.getByText(/^Start practice$|^연습 시작$/).click();
+  await expect(page.getByTestId("rhythm-flow-review")).toBeDisabled();
+  await page.getByTestId("rhythm-pad").tap();
+  await expect(page.getByText(/Overall score:|종합 점수:/)).toBeVisible({ timeout: 10_000 });
+  await page.getByTestId("rhythm-flow-review").click();
+  await expect(page.getByTestId("rhythm-review-stage")).toBeVisible();
+  await expect(page.getByTestId("rhythm-pad")).toHaveCount(0);
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("practice_book")!)[0].rhythmDocument.hits)).toEqual(doc.hits);
+  await page.getByRole("button", { name: /^Close$|^닫기$/ }).click();
+  await page.getByText(/^Close$|^닫기$/).last().click();
+  await expect(page.getByTestId("practice-book-screen")).toBeVisible();
+  await expect(page.getByText("Main book rhythm", { exact: true })).toBeVisible();
+});
+
+test("manual notation can be saved and practised without fabricating raw hits", async ({ page }) => {
+  await enterLab(page, "rhythm");
+  await page.getByTestId("rhythm-flow-review").click();
+  await page.getByTestId("rhythm-insert-note").click();
+  await expect(page.getByTestId("rhythm-staff").locator("ellipse")).toHaveCount(1);
+  await page.getByTestId("rhythm-save").click();
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("practice_book") ?? "[]").find((entry: { mode: string }) => entry.mode === "rhythm")?.rhythmDocument.manualEvents?.filter((event: { kind: string }) => event.kind === "note").length)).toBe(1);
+  const okay = page.getByText(/^OK$|^확인$/).last();
+  if (await okay.isVisible()) await okay.click();
+  await page.getByTestId("rhythm-flow-practice").click();
+  await page.getByRole("switch").click();
+  await page.getByText(/^Start practice$|^연습 시작$/).click();
+  await expect(page.getByText(/Overall score:|종합 점수:/)).toBeVisible({ timeout: 10_000 });
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("practice_book")!)[0].rhythmDocument.hits)).toEqual([]);
 });

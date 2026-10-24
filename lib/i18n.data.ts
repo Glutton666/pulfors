@@ -458,6 +458,8 @@ export const translations = {
     tabBar: { ko: "바", en: "Bar" },
     tabNote: { ko: "노트", en: "Note" },
     tabScore: { ko: "악보", en: "Score" },
+    tabRhythm: { ko: "리듬", en: "Rhythm" },
+    badgeRhythm: { ko: "리듬", en: "Rhythm" },
     emptyTitle: { ko: "저장된 연습 설정이 없습니다", en: "No saved practice presets" },
     emptyHint: { ko: "비트 또는 바 모드에서 설정을 구성한 후 저장하세요", en: "Configure settings in beat or bar mode, then save" },
     goalTitle: { ko: "목표 설정", en: "Goal Setting" },

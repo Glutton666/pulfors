@@ -174,6 +174,7 @@ function SwipeableEntry({
   const isScoreMode = item.mode === "score" || (!!(item.scoreId) && (!item.mode || item.mode === "beat"));
   const isBeatMode = !isScoreMode && (item.mode || "bar") === "beat";
   const isNoteMode = item.mode === "note";
+  const isRhythmMode = item.mode === "rhythm";
   const barCount = item.beatsPerMeasure;
   const secondsPerBeat = 60 / item.bpm;
   const onePlaySeconds = barCount * secondsPerBeat;
@@ -191,7 +192,7 @@ function SwipeableEntry({
   if (isNoteMode) {
     const pm = item.notePlayMode || "once";
     playModeText = pm === "loop" ? t("practiceBook", "continuousPlay") : pm === "random" ? t("practiceBook", "randomPlay") : t("practiceBook", "singlePlay");
-  } else if (isScoreMode || isBeatMode) {
+  } else if (isScoreMode || isBeatMode || isRhythmMode) {
     playModeText = t("practiceBook", "continuousPlay");
   } else if (clockMode === "timer" && timerDur != null && timerDur > 0) {
     const tm = Math.floor(timerDur / 60);
@@ -329,12 +330,13 @@ function SwipeableEntry({
           <View style={styles.entryDetails}>
             <View style={[styles.modeBadge, {
               backgroundColor: isNoteMode ? "#22c55e"
-                : isScoreMode ? "#a855f7"
+                : isScoreMode || isRhythmMode ? "#a855f7"
                 : isBeatMode ? "#3B82F6"
                 : accentColor,
             }]}>
-              <Text style={[styles.modeBadgeText, !isNoteMode && !isScoreMode && !isBeatMode && { color: onAccentColor(accentColor) }]}>
+              <Text style={[styles.modeBadgeText, !isNoteMode && !isScoreMode && !isBeatMode && !isRhythmMode && { color: onAccentColor(accentColor) }]}>
                 {isNoteMode ? t("practiceBook", "badgeNote")
+                  : isRhythmMode ? t("practiceBook", "badgeRhythm")
                   : isScoreMode ? t("practiceBook", "badgeScore")
                   : isBeatMode ? t("practiceBook", "badgeBeat")
                   : t("practiceBook", "badgeBar")}
@@ -370,7 +372,7 @@ function SwipeableEntry({
                   <Text style={[styles.detailValue, { color: accentColor }]}>
                     {barCount}
                   </Text>
-                  <Text style={styles.detailUnit}>{isScoreMode ? t("practiceBook", "badgeScore") : isBeatMode ? t("practiceBook", "badgeBeat") : t("practiceBook", "badgeBar")}</Text>
+                  <Text style={styles.detailUnit}>{isRhythmMode ? t("practiceBook", "badgeRhythm") : isScoreMode ? t("practiceBook", "badgeScore") : isBeatMode ? t("practiceBook", "badgeBeat") : t("practiceBook", "badgeBar")}</Text>
                 </View>
                 <View style={styles.detailChip}>
                   <Ionicons
@@ -418,12 +420,13 @@ function GridItem({
   const isScoreMode = item.mode === "score" || (!!(item.scoreId) && (!item.mode || item.mode === "beat"));
   const isBeatMode = !isScoreMode && (item.mode || "bar") === "beat";
   const isNoteMode = item.mode === "note";
+  const isRhythmMode = item.mode === "rhythm";
 
   let playModeText: string;
   if (isNoteMode) {
     const pm = item.notePlayMode || "once";
     playModeText = pm === "loop" ? t("practiceBook", "continuousPlay") : pm === "random" ? t("practiceBook", "randomPlay") : t("practiceBook", "singlePlay");
-  } else if (isScoreMode || isBeatMode) {
+  } else if (isScoreMode || isBeatMode || isRhythmMode) {
     playModeText = t("practiceBook", "continuousPlay");
   } else {
     const clockMode = item.barClockMode || "stopwatch";
@@ -473,7 +476,7 @@ function GridItem({
         <View style={[gridStyles.modeDot, {
           backgroundColor: isNoteMode ? "#22c55e"
             : isBeatMode ? "#3B82F6"
-            : isScoreMode ? "#a855f7"
+            : isScoreMode || isRhythmMode ? "#a855f7"
             : accentColor,
         }]} />
         <Pressable
@@ -505,6 +508,7 @@ function GridItem({
       <View style={gridStyles.cardFooter}>
         <Text style={gridStyles.cardMeta} numberOfLines={1}>
           {isNoteMode ? t("practiceBook", "badgeNote")
+            : isRhythmMode ? t("practiceBook", "badgeRhythm")
             : isScoreMode ? t("practiceBook", "badgeScore")
             : isBeatMode ? t("practiceBook", "badgeBeat")
             : t("practiceBook", "badgeBar")}
@@ -697,6 +701,7 @@ export function PracticeBookModal({
     bar: filterPracticeBookEntries(entries, "bar").length,
     note: filterPracticeBookEntries(entries, "note").length,
     score: filterPracticeBookEntries(entries, "score").length,
+    rhythm: filterPracticeBookEntries(entries, "rhythm").length,
   };
 
   const webTopInset = Platform.OS === "web" ? 67 : 0;
@@ -848,12 +853,13 @@ export function PracticeBookModal({
 
         {entries.length > 0 && !fixedFilter && (
           <View style={styles.tabBar}>
-            {(["all", "beat", "bar", "note", "score"] as const).map((mode) => {
+            {(["all", "beat", "bar", "note", "score", "rhythm"] as const).map((mode) => {
               const isActive = filterMode === mode;
               const label = mode === "all" ? t("practiceBook", "tabAll")
                 : mode === "beat" ? t("practiceBook", "tabBeat")
                 : mode === "bar" ? t("practiceBook", "tabBar")
                 : mode === "note" ? t("practiceBook", "tabNote")
+                : mode === "rhythm" ? t("practiceBook", "tabRhythm")
                 : t("practiceBook", "tabScore");
               const count = modeCounts[mode];
               return (
@@ -1029,6 +1035,7 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
   },
   tabBar: {
     flexDirection: "row",
+    flexWrap: "wrap",
     paddingHorizontal: 20,
     borderBottomWidth: 1,
     borderBottomColor: C.border,

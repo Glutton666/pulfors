@@ -721,7 +721,7 @@ export interface PracticeEntry {
   label: string;
   createdAt: number;
   createdBy?: string;
-  mode?: "beat" | "bar" | "note" | "score";
+  mode?: "beat" | "bar" | "note" | "score" | "rhythm";
   bpm: number;
   beatsPerMeasure: number;
   beatTypes: BeatType[];
@@ -751,6 +751,8 @@ export interface PracticeEntry {
   /** Normalized framing used by Note mode's practice image. */
   imageCrop?: NoteImageCrop;
   scoreId?: string;
+  /** Self-contained rhythm performance, notation edits and practice settings. */
+  rhythmDocument?: import("./rhythm-lab/types").RhythmDocument;
 }
 
 // === 컨트롤 패드 매핑 ============================================
@@ -831,7 +833,7 @@ export async function loadPracticeBook(): Promise<PracticeEntry[]> {
   return [];
 }
 
-export async function savePracticeBook(entries: PracticeEntry[]): Promise<void> {
+export async function savePracticeBook(entries: PracticeEntry[], options?: { throwOnError?: boolean }): Promise<void> {
   const releasePending = retainPendingNoteTtsReferences(entries);
   let saved = false;
   try {
@@ -850,6 +852,7 @@ export async function savePracticeBook(entries: PracticeEntry[]): Promise<void> 
     });
   } catch (e) {
     logger.warn("Failed to save practice book:", e);
+    if (options?.throwOnError) throw e;
   } finally {
     releasePending();
   }

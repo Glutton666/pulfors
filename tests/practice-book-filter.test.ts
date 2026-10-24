@@ -32,6 +32,7 @@ describe("practice book mode filters", () => {
     entry("bar", "bar"),
     entry("note", "note"),
     entry("score", "score", "score-current"),
+    entry("rhythm", "rhythm"),
   ];
 
   test("keeps the integrated book unchanged", () => {
@@ -54,5 +55,9 @@ describe("practice book mode filters", () => {
   test("filters bar and note entries without copying or transforming them", () => {
     expect(filterPracticeBookEntries(entries, "bar")).toEqual([entries[3]]);
     expect(filterPracticeBookEntries(entries, "note")).toEqual([entries[4]]);
+  });
+  test("keeps recorded rhythm distinct from metronome and score entries", () => {
+    expect(filterPracticeBookEntries(entries, "rhythm")).toEqual([entries[6]]);
+    expect(isScorePracticeEntry(entries[6])).toBe(false);
   });
 });
