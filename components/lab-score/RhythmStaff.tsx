@@ -3,6 +3,7 @@ import { PanResponder, ScrollView, StyleSheet, View } from "react-native";
 import Svg, { Circle, Ellipse, G, Line, Path, Rect, Text as SvgText } from "react-native-svg";
 import type { Meter, NotationEvent, UserSymbol } from "@/lib/rhythm-lab/types";
 import { toNumber } from "@/lib/rhythm-lab/engine";
+import { notationSpelling } from "@/lib/rhythm-lab/notation";
 
 type TargetProps = {
   event: NotationEvent;
@@ -79,11 +80,7 @@ function beamLevel(event: NotationEvent) {
 }
 
 function displayValue(event: NotationEvent) {
-  if (event.tuplet) {
-    const normalizedQ = toNumber(event.durationQ) * event.tuplet.actual / event.tuplet.normal;
-    if (normalizedQ > 0) return Math.max(1, Math.round(4 / normalizedQ));
-  }
-  return Math.max(1, event.value || 4);
+  return notationSpelling(event).value;
 }
 
 function buildBeamPairs(events: NotationEvent[], spanQ: number, meter: Meter): BeamPair[] {
@@ -274,10 +271,7 @@ export function RhythmStaff({ events, meter, selected, symbols, onSelect, onMove
             const y = yFor(event);
             const isSelected = selected.includes(event.id) || event.hitIds.some((id) => selected.includes(id));
             const value = displayValue(event);
-            const q = toNumber(event.durationQ);
-            const baseDuration = event.tuplet ? 4 / value * event.tuplet.normal / event.tuplet.actual : 4 / value;
-            const durationRatio = q / baseDuration;
-            const dotted = durationRatio > 1.38 && durationRatio < 1.62;
+            const dotted = notationSpelling(event).dotted;
             const open = value <= 2;
             const flags = value >= 8 ? Math.min(5, Math.max(1, Math.round(Math.log2(value) - 2))) : 0;
             const symbol = event.symbolId ? symbols.find((item) => item.id === event.symbolId) : undefined;

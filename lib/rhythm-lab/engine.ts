@@ -455,5 +455,20 @@ export function validateRhythmDocument(value: unknown): RhythmDocument {
       current = parent;
     }
   }
+  if (d.reviewConfirmations !== undefined) {
+    doc.reviewConfirmations = array(d.reviewConfirmations, 4096).map((value) => {
+      const entry = object(value);
+      const measureIndex = finite(entry.measureIndex, 0, 4095);
+      if (!Number.isInteger(measureIndex)) throw new Error("Invalid review measure");
+      const frozen = array(entry.eventIds, 30000).map((id) => text(id));
+      if (new Set(frozen).size !== frozen.length) {
+        throw new Error("Invalid review event");
+      }
+      return { measureIndex, fingerprint: text(entry.fingerprint, 32), eventIds: frozen };
+    }).filter((entry) => entry.eventIds.every((id) => eventIds.has(id)));
+    if (new Set(doc.reviewConfirmations.map((entry) => entry.measureIndex)).size !== doc.reviewConfirmations.length) {
+      throw new Error("Duplicate review measure");
+    }
+  }
   return doc;
 }

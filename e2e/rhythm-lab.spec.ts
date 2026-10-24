@@ -1,5 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
-import { createRhythmDocument } from "../lib/rhythm-lab/engine";
+import { createRhythmDocument, interpretRhythm } from "../lib/rhythm-lab/engine";
 
 test.use({
   baseURL: process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : undefined,
@@ -68,6 +68,57 @@ test("triplet recording renders grouped notation without tiny fabricated rests",
   expect(Math.abs((target!.x + 18) - (head!.x + head!.width / 2))).toBeLessThan(0.5);
   expect(Math.abs((target!.y + 18) - (head!.y + head!.height / 2))).toBeLessThan(0.5);
   await page.screenshot({ path: "/tmp/rhythm-notation-triplets-phone.png" });
+});
+
+test("notation similarity and intent confirmation persist separately", async ({ page }) => {
+  const doc = {
+    ...createRhythmDocument({ title: "Similarity review", bpm: 120 }),
+    hits: [12, 508, 997, 1515].map((onsetMs, index) => ({ id: `review-${index}`, onsetMs, drum: "snare" as const })),
+  };
+  await page.addInitScript((document) => {
+    localStorage.setItem("rhythm_lab_documents_v1", JSON.stringify([document]));
+  }, doc);
+  await enterLab(page, "rhythm");
+  await page.getByLabel(/^Open$|^열기$/).click();
+  const panel = page.getByTestId("rhythm-validation-panel");
+  await expect(page.getByTestId("rhythm-similarity")).toHaveText("91%");
+  await panel.getByTestId("rhythm-review-region-0").click();
+  await panel.getByRole("button", { name: /^Overlay$|^겹쳐 듣기$/ }).click();
+  await panel.getByTestId("rhythm-review-confirm").click();
+  await expect(panel.getByTestId("rhythm-review-region-0")).toContainText(/Confirmed|확정됨/);
+  await expect(page.getByTestId("rhythm-similarity")).toHaveText("91%");
+  await page.getByTestId("rhythm-save").click();
+  await expect.poll(() => page.evaluate(() => {
+    const stored = JSON.parse(localStorage.getItem("rhythm_lab_documents_v1") ?? "[]");
+    return stored[0]?.reviewConfirmations?.length ?? 0;
+  })).toBe(1);
+  const storedHits = await page.evaluate(() => JSON.parse(localStorage.getItem("rhythm_lab_documents_v1")!)[0].hits);
+  expect(storedHits).toEqual(doc.hits);
+  const okay = page.getByText(/^OK$|^확인$/).last();
+  if (await okay.isVisible()) await okay.click();
+  await panel.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: "/tmp/rhythm-verification-panel.png" });
+});
+
+test("a structural calculation failure cannot be approved by the user", async ({ page }) => {
+  const doc = {
+    ...createRhythmDocument({ title: "Invalid glyph regression", bpm: 120 }),
+    hits: [0, 500].map((onsetMs, index) => ({ id: `invalid-${index}`, onsetMs, drum: "snare" as const })),
+  };
+  const first = interpretRhythm(doc).events[0];
+  const invalid = { ...doc, manualEvents: [{ ...first, value: 8, locked: true }] };
+  await page.addInitScript((document) => {
+    localStorage.setItem("rhythm_lab_documents_v1", JSON.stringify([document]));
+  }, invalid);
+  await enterLab(page, "rhythm");
+  await page.getByLabel(/^Open$|^열기$/).click();
+  const panel = page.getByTestId("rhythm-validation-panel");
+  await expect(page.getByTestId("rhythm-similarity")).toHaveText("—");
+  await panel.getByTestId("rhythm-review-region-0").click();
+  await expect(panel).toContainText(/calculation failed|계산 검증에 실패/);
+  await expect(panel.getByTestId("rhythm-review-confirm")).toHaveCount(0);
+  await expect(panel.getByRole("button", { name: /^Notation$|^기보$/ })).toBeDisabled();
+  await expect(panel.getByRole("button", { name: /^Original$|^원본$/ })).toBeEnabled();
 });
 
 test("staff notebook really draws, saves, restores, and does not alter legacy scores", async ({ page }) => {

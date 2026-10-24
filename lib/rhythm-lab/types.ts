@@ -74,6 +74,8 @@ export interface RhythmDocument {
   simplification: number;
   /** Positive values compensate consistently late taps, never change raw hits. */
   offsetMs: number;
+  /** Intent approval is separate from measured similarity and invalidates on edit. */
+  reviewConfirmations?: { measureIndex: number; fingerprint: string; eventIds: string[] }[];
 }
 export interface InterpretationCandidate {
   id: string;

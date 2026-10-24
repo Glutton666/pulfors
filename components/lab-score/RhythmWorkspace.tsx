@@ -5,7 +5,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import type { Difficulty, Hit, InterpretationCandidate, NotationEvent, PlaybackHit, RhythmDocument, Shape, SymbolMeaning, SymbolRole, UserSymbol } from "@/lib/rhythm-lab/types";
-import { applyInterpretation, applyTuplet, buildRhythmPlayback, chooseCandidate, createRhythmDocument, insertRest, insertNotationNote, interpretRhythm, moveNotationEvent, setEventDuration, toNumber } from "@/lib/rhythm-lab/engine";
+import { applyInterpretation, applyTuplet, buildRhythmPlayback, createRhythmDocument, insertRest, insertNotationNote, interpretRhythm, moveNotationEvent, setEventDuration, toNumber } from "@/lib/rhythm-lab/engine";
 import { deleteRhythmDocument, listRhythmDocuments, saveRhythmDocument } from "@/lib/rhythm-lab/storage";
 import { calibrateOffset, evaluatePractice } from "@/lib/rhythm-lab/practice";
 import { createScoreClickSession, playChord, previewScoreDrum, stopPreviewNote } from "@/lib/score-audio";
@@ -14,6 +14,8 @@ import { RhythmStaff } from "./RhythmStaff";
 import { RhythmSymbolEditor } from "./RhythmSymbolEditor";
 import { RhythmInputSurface } from "./RhythmInputSurface";
 import { RhythmKeyboard } from "./RhythmKeyboard";
+import { RhythmValidationPanel } from "./RhythmValidationPanel";
+import { applyDraftCandidate, confirmDraftRegion, prepareValidatedDraft, reconstructNotation, reopenDraftRegion, verifyDraft } from "@/lib/rhythm-lab/verification";
 
 type InputMode = "pad" | "drums" | "keyboard";
 const DURS = [1, 2, 4, 8, 16, 24, 32, 64];
@@ -79,15 +81,22 @@ export function RhythmWorkspace({ active = true }: { active?: boolean }) {
   if (!clickSession.current) clickSession.current = createScoreClickSession();
   const activeMidi = useRef<number[]>([]);
   const scrubTrackWidth = useRef(1);
+  const workspaceScroll = useRef<ScrollView>(null);
+  const editPanelY = useRef(0);
+  const candidatePanelY = useRef(0);
   if (!audioSession.current) audioSession.current = createRhythmAudioSession();
   const interpretation = useMemo(() => interpretRhythm(doc), [doc]);
+  const draftReport = useMemo(() => verifyDraft(doc, interpretation), [doc, interpretation]);
+  const [reviewMeasure, setReviewMeasure] = useState<number | null>(null);
   const events = interpretation.events;
   const displayEvents = useMemo(() => dragPreviewDocument ? interpretRhythm(dragPreviewDocument).events : events, [dragPreviewDocument, events]);
   const playheadQ = Math.max(0, Number(scrubPosition) || 0);
   const scrubMaxQ = Math.max(doc.meter.numerator * 4 / doc.meter.denominator, ...events.map((event) => toNumber(event.startQ) + toNumber(event.durationQ)));
   const selectedEvents = events.filter((event) => selected.includes(event.id) || event.hitIds.some((id) => selected.includes(id)));
-  const candidateMeasure = selectedEvents[0]?.measureIndex ?? events.filter((event) => event.kind === "note").at(-1)?.measureIndex ?? 0;
-  const visibleCandidates = interpretation.candidates.filter((candidate) => candidate.measureIndex === candidateMeasure);
+  const candidateMeasure = reviewMeasure ?? selectedEvents[0]?.measureIndex ?? events.filter((event) => event.kind === "note").at(-1)?.measureIndex ?? 0;
+  const visibleCandidates = interpretation.candidates.filter((candidate) => candidate.measureIndex === candidateMeasure)
+    .filter((candidate) => !candidateOpen || verifyDraft(applyDraftCandidate(reopenDraftRegion(doc, candidateMeasure), candidate))
+      .regions.some((region) => region.measureIndex === candidateMeasure && region.status !== "invalid"));
   const selectedHitIds = [...new Set([...selectedEvents.flatMap((event) => [...event.hitIds, ...(event.graceHitIds ?? [])]), ...selected.filter((id) => doc.hits.some((hit) => hit.id === id))])];
   const cleanupPlayback = () => { audioSession.current?.stop(); stopPreviewNote(); setPlaying(false); };
   const cleanupRecording = () => { recordTimers.current.forEach(clearTimeout); recordTimers.current = []; if (recordMetro.current) clearInterval(recordMetro.current); recordMetro.current = null; clickSession.current?.stop(); };
@@ -105,7 +114,7 @@ export function RhythmWorkspace({ active = true }: { active?: boolean }) {
   const update = (next: RhythmDocument) => setDoc({ ...next, updatedAt: Date.now() });
   const startFreshTake = () => {
     cleanupRecording(); cleanupPlayback();
-    setSelected([]); setFlow("input"); setPracticeResult(null); setDoc((prev) => ({ ...prev, hits: [], overrides: [], manualEvents: undefined, tuplets: [] }));
+    setSelected([]); setReviewMeasure(null); setFlow("input"); setPracticeResult(null); setDoc((prev) => ({ ...prev, hits: [], overrides: [], manualEvents: undefined, tuplets: [], reviewConfirmations: undefined }));
     releaseRef.current = {};
     setRecordPending(true);
     const beatMs = 60000 / doc.bpm * 4 / doc.meter.denominator;
@@ -129,7 +138,10 @@ export function RhythmWorkspace({ active = true }: { active?: boolean }) {
       { text: ko ? "저장 후 시작" : "Save & start", onPress: () => { void saveRhythmDocument(doc).then(async () => { await loadLibrary(); startFreshTake(); }).catch((error) => Alert.alert(text.error, error instanceof Error ? error.message : String(error))); } },
     ]);
   };
-  const finishRecord = () => { cleanupRecording(); setRecording(false); setRecordPending(false); setFlow("review"); stopPreviewNote(); };
+  const finishRecord = () => {
+    cleanupRecording(); setRecording(false); setRecordPending(false); setFlow("review"); stopPreviewNote();
+    setDoc((prev) => prepareValidatedDraft(prev));
+  };
   const previewMove = (eventId: string, startQ: number) => {
     try { setDragPreviewDocument(moveNotationEvent(doc, eventId, startQ, snapEdits)); }
     catch { setDragPreviewDocument(null); }
@@ -197,7 +209,11 @@ export function RhythmWorkspace({ active = true }: { active?: boolean }) {
     if (practiceOn || practicePending) cleanupPractice();
     cleanupPlayback();
     try {
-      const sequence = buildRhythmPlayback(doc, kind);
+      if (kind === "notation" && !draftReport.valid) {
+        Alert.alert(text.error, ko ? "기보 계산 검증을 통과하지 못했습니다. 원본은 그대로 보존되어 있습니다." : "Notation validation failed. The original take is preserved.");
+        return;
+      }
+      const sequence = kind === "notation" ? reconstructNotation(doc, events) : buildRhythmPlayback(doc, kind);
       if (!sequence.length) { Alert.alert(text.listen, text.empty); return; }
       setPlaying(true);
       void audioSession.current?.play(sequence, () => setPlaying(true), () => setPlaying(false)).catch((error) => {
@@ -228,8 +244,57 @@ export function RhythmWorkspace({ active = true }: { active?: boolean }) {
     } else { try { update(applyInterpretation(doc, selectedHitIds, kind)); } catch (e) { Alert.alert(text.error, e instanceof Error ? e.message : String(e)); } }
   };
   const selectCandidate = (candidate: InterpretationCandidate) => {
-    try { update(chooseCandidate(doc, candidate)); setCandidateOpen(false); }
+    const apply = () => {
+      try {
+        const next = applyDraftCandidate(reopenDraftRegion(doc, candidate.measureIndex), candidate);
+        const region = verifyDraft(next).regions.find((item) => item.measureIndex === candidate.measureIndex);
+        if (region?.status === "invalid") {
+          Alert.alert(text.error, ko ? "계산 검증을 통과하지 못한 후보는 적용하지 않습니다." : "This candidate did not pass structural validation.");
+          return;
+        }
+        update(next); setCandidateOpen(false);
+      } catch (error) { Alert.alert(text.error, error instanceof Error ? error.message : String(error)); }
+    };
+    if (draftReport.regions.some((region) => region.measureIndex === candidate.measureIndex && region.status === "confirmed")) {
+      Alert.alert(text.confirm, ko ? "이 마디의 확정을 해제하고 다른 해석을 적용할까요?" : "Reopen this confirmed bar and apply another interpretation?", [
+        { text: ko ? "취소" : "Cancel", style: "cancel" }, { text: text.apply, onPress: apply },
+      ]);
+    } else apply();
+  };
+  const reviewRegion = (index: number) => {
+    setReviewMeasure(index);
+    setSelected(events.filter((event) => event.measureIndex === index && event.kind === "note").map((event) => event.id));
+    setScrubPosition(String(index * doc.meter.numerator * 4 / doc.meter.denominator));
+  };
+  const confirmRegion = (index: number) => {
+    try { update(confirmDraftRegion(doc, index)); }
     catch (error) { Alert.alert(text.error, error instanceof Error ? error.message : String(error)); }
+  };
+  const listenRegion = (index: number, kind: "original" | "notation" | "overlay") => {
+    cleanupPlayback();
+    const region = draftReport.regions.find((item) => item.measureIndex === index);
+    if (kind !== "original" && (!region || region.status === "invalid")) {
+      Alert.alert(text.error, ko ? "기보 계산 오류가 있는 구간은 비교 재생하지 않습니다." : "Cannot play notation that failed structural validation.");
+      return;
+    }
+    const localEvents = events.filter((event) => event.measureIndex === index);
+    const ids = new Set(localEvents.flatMap((event) => [...event.hitIds, ...(event.graceHitIds ?? [])]));
+    const barMs = doc.meter.numerator * 4 / doc.meter.denominator * 60000 / doc.bpm;
+    const from = index * barMs, to = from + barMs;
+    const original = buildRhythmPlayback(doc, "original").filter((hit) => ids.has(hit.id) ||
+      (hit.timeMs - doc.offsetMs >= from && hit.timeMs - doc.offsetMs < to))
+      .map((hit) => ({ ...hit, timeMs: Math.max(0, hit.timeMs - doc.offsetMs - from) }));
+    const notated = reconstructNotation(doc, localEvents).map((hit) => ({ ...hit, timeMs: hit.timeMs - from }));
+    // Distinct sounds make the two streams audible in overlay comparison.
+    const sequence = kind === "original" ? original : kind === "notation" ? notated :
+      [...original.map((hit) => ({ ...hit, midi: undefined, drum: "snare" as const })),
+        ...notated.map((hit) => ({ ...hit, id: `notation-${hit.id}`, midi: undefined, drum: "hihat_closed" as const }))];
+    const lead = Math.max(0, -Math.min(0, ...sequence.map((hit) => hit.timeMs)));
+    if (!sequence.length) return;
+    void audioSession.current?.play(sequence.map((hit) => ({ ...hit, timeMs: hit.timeMs + lead })),
+      () => setPlaying(true), () => setPlaying(false)).catch((error) => {
+      setPlaying(false); Alert.alert(text.error, error instanceof Error ? error.message : String(error));
+    });
   };
   const editEvent = (event: NotationEvent, start: number, dur: number) => {
     try {
@@ -344,7 +409,7 @@ export function RhythmWorkspace({ active = true }: { active?: boolean }) {
   useEffect(() => { if (!active) deactivateRef.current(); }, [active]);
 
   return (
-    <ScrollView contentContainerStyle={s.container} keyboardShouldPersistTaps="handled">
+    <ScrollView ref={workspaceScroll} contentContainerStyle={s.container} keyboardShouldPersistTaps="handled">
       <Text style={[s.kicker, { color: C.accent }]}>{text.headline}</Text>
       <Text style={[s.intro, { color: C.textSecondary }]}>{text.intro}</Text>
       <View style={s.flowRow}>{([["input", text.inputFlow], ["review", text.reviewFlow], ["practice", text.practiceFlow]] as const).map(([key, label]) => <Pressable key={key} onPress={() => setFlow(key)} style={[s.flowChip, { borderColor: flow === key ? C.accent : C.border, backgroundColor: flow === key ? C.surfaceLight : "transparent" }]}><Text style={{ color: flow === key ? C.accent : C.textSecondary, fontSize: 11 }}>{label}</Text></Pressable>)}</View>
@@ -369,6 +434,10 @@ export function RhythmWorkspace({ active = true }: { active?: boolean }) {
       {practiceOn && <View style={[s.practiceLive, { borderColor: C.accent }]}><Text style={{ color: C.accent, fontFamily: "SpaceGrotesk_700Bold" }}>{liveJudgment || text.practice}</Text><Text style={{ color: C.textSecondary }}>{practiceTaps.length} / {buildRhythmPlayback(doc, "original").length}</Text><Pressable onPress={finishPractice} style={[s.smallPrimary, { backgroundColor: C.accent }]}><Text style={{ color: C.background }}>{text.endPractice}</Text></Pressable></View>}
       {flow === "review" && <>
         <View style={s.sectionHeader}><View><Text style={[s.cardTitle, { color: C.text }]}>{text.provisional}</Text><Text style={[s.muted, { color: C.textSecondary }]}>{events.length} events · {doc.hits.length} raw hits</Text></View><Pressable onPress={save} style={[s.smallPrimary, { backgroundColor: C.accent }]} testID="rhythm-save"><Ionicons name="save-outline" size={15} color={C.background} /><Text style={{ color: C.background, fontFamily: "SpaceGrotesk_700Bold" }}>{text.save}</Text></Pressable></View>
+        <RhythmValidationPanel report={draftReport} language={ko ? "ko" : "en"} disabled={recording || recordPending || practiceOn || practicePending}
+          onReview={reviewRegion} onListen={listenRegion} onConfirm={confirmRegion}
+          onAlternatives={(index) => { reviewRegion(index); setCandidateOpen(true); requestAnimationFrame(() => workspaceScroll.current?.scrollTo({ y: candidatePanelY.current, animated: true })); }}
+          onEdit={(index) => { reviewRegion(index); update(reopenDraftRegion(doc, index)); requestAnimationFrame(() => workspaceScroll.current?.scrollTo({ y: editPanelY.current, animated: true })); }} />
         <View style={s.scrubber}>
           <Text style={[s.muted, { color: C.textSecondary }]}>{ko ? "정지 재생 위치 · 박" : "Stopped playhead · beat"}</Text>
           <Pressable onPress={() => setScrubPosition(String(Math.max(0, playheadQ - 0.25)))} style={s.step}><Text style={{ color: C.text }}>−</Text></Pressable>
@@ -383,7 +452,7 @@ export function RhythmWorkspace({ active = true }: { active?: boolean }) {
         {dragPreviewDocument && <Text style={[s.muted, { color: C.accent, marginBottom: 7 }]}>{ko ? "이동 미리보기 · 선택한 음표만 움직이고 주변 쉼표와 간격이 다시 계산됩니다." : "Move preview · this note moves alone; surrounding rests and gaps recalculate."}</Text>}
         <RhythmStaff events={displayEvents} meter={doc.meter} selected={selected} symbols={doc.symbols} onSelect={selectEvent} onMovePreview={previewMove} onMoveCommit={commitMove} onMoveCancel={cancelMove} playheadQ={playheadQ} />
         <View style={s.listenRow}><Text style={[s.muted, { color: C.textSecondary }]}>{text.listen}</Text><Pressable onPress={() => playing ? cleanupPlayback() : play("original")} style={[s.listenButton, { borderColor: C.border }]}><Ionicons name={playing ? "stop" : "play"} size={15} color={C.text} /><Text style={{ color: C.text }}>{text.original}</Text></Pressable><Pressable onPress={() => playing ? cleanupPlayback() : play("notation")} style={[s.listenButton, { borderColor: C.border }]}><Ionicons name="musical-notes-outline" size={15} color={C.text} /><Text style={{ color: C.text }}>{text.notation}</Text></Pressable></View>
-        <View style={[s.editBox, { borderColor: C.border, backgroundColor: C.surface }]}><Text style={[s.cardTitle, { color: C.text }]}>{text.selected}: {selected.length}</Text>
+        <View onLayout={(event) => { editPanelY.current = event.nativeEvent.layout.y; }} style={[s.editBox, { borderColor: C.border, backgroundColor: C.surface }]}><Text style={[s.cardTitle, { color: C.text }]}>{text.selected}: {selected.length}</Text>
           <View style={s.chipWrap}>{(["flam", "drag", "regular", "diddle", "accent"] as const).map((kind) => <Pressable key={kind} onPress={() => applyKind(kind)} style={[s.chip, { borderColor: C.border }]}><Text style={{ color: C.text }}>{text[kind]}</Text></Pressable>)}</View>
            {selectedEvents[0] && <><Text style={[s.muted, { color: C.textSecondary }]}>{text.onset} · {text.duration}</Text><View style={s.setupHead}><TextInput keyboardType="decimal-pad" value={manualStart} onChangeText={setManualStart} style={[s.numInput, { color: C.text, borderColor: C.border }]} /><TextInput keyboardType="decimal-pad" value={durationText} onChangeText={setDurationText} style={[s.numInput, { color: C.text, borderColor: C.border }]} /><Pressable onPress={applyEventForm} style={[s.smallPrimary, { backgroundColor: C.accent }]}><Text style={{ color: C.background }}>{text.apply}</Text></Pressable><Pressable onPress={() => setSnapEdits((v) => !v)} style={[s.chip, { borderColor: snapEdits ? C.accent : C.border }]}><Text style={{ color: C.text }}>{snapEdits ? "Snap" : "Free"}</Text></Pressable><View style={s.chipWrap}>{DURS.map((v) => <Pressable key={v} onPress={() => { const d = 4 / v; setDuration(d); setDurationText(String(d)); editEvent(selectedEvents[0], toNumber(selectedEvents[0].startQ), d); }} style={[s.chip, { borderColor: Math.abs(duration - 4 / v) < 0.001 ? C.accent : C.border }]}><Text style={{ color: C.text }}>{v}</Text></Pressable>)}</View></View></>}
           <View style={s.setupHead}><Text style={[s.muted, { color: C.textSecondary }]}>{text.tuplet}</Text><TextInput value={tupletActual} placeholder={text.actual} placeholderTextColor={C.textTertiary} onChangeText={setTupletActual} keyboardType="number-pad" style={[s.numInput, { color: C.text, borderColor: C.border }]} /><Text style={{ color: C.text }}>:</Text><TextInput value={tupletNormal} placeholder={text.normal} placeholderTextColor={C.textTertiary} onChangeText={setTupletNormal} keyboardType="number-pad" style={[s.numInput, { color: C.text, borderColor: C.border }]} /><Pressable onPress={applyTupletNow} style={[s.smallPrimary, { backgroundColor: C.accent }]}><Text style={{ color: C.background }}>{text.apply}</Text></Pressable></View>
@@ -391,8 +460,9 @@ export function RhythmWorkspace({ active = true }: { active?: boolean }) {
           <View style={s.setupHead}><Pressable onPress={() => { try { update(insertRest(doc, playheadQ, duration)); } catch (error) { Alert.alert(text.error, error instanceof Error ? error.message : String(error)); } }} style={[s.listenButton, { borderColor: C.border }]}><Text style={{ color: C.text }}>+ {text.rest}</Text></Pressable><Text style={{ color: C.textSecondary, fontSize: 11 }}>{text.simplify} {Math.round(doc.simplification * 100)}%</Text></View>
           <View style={s.setupHead}><Text style={[s.muted, { color: C.textSecondary }]}>{text.simplify}</Text><View style={{ flex: 1 }} /><TextInput value={String(Math.round(doc.simplification * 100))} onChangeText={(v) => { const percent = Math.max(0, Math.min(100, Number(v) || 0)); update({ ...doc, simplification: percent / 100 }); }} keyboardType="number-pad" style={[s.numInput, { color: C.text, borderColor: C.border }]} /></View>
         </View>
-        <View style={[s.editBox, { borderColor: C.border, backgroundColor: C.surface }]}>
+        <View onLayout={(event) => { candidatePanelY.current = event.nativeEvent.layout.y; }} style={[s.editBox, { borderColor: C.border, backgroundColor: C.surface }]}>
           <View style={s.sectionHeader}><Text style={[s.cardTitle, { color: C.text }]}>{text.candidates}</Text><Pressable onPress={() => setCandidateOpen((v) => !v)}><Ionicons name={candidateOpen ? "chevron-up" : "chevron-down"} size={18} color={C.textSecondary} /></Pressable></View>
+          {candidateOpen && !visibleCandidates.length && <Text style={[s.muted, { color: C.textSecondary }]}>{ko ? "확정된 수정을 유지하면서 계산 검증을 통과하는 다른 후보가 없습니다." : "No alternative passes validation while preserving protected edits."}</Text>}
           {candidateOpen && visibleCandidates.map((candidate, index) => <Pressable key={candidate.id} onPress={() => selectCandidate(candidate)} style={[s.candidate, { borderColor: C.border }]}><Text style={{ color: C.text, flex: 1 }}>{ko ? `${candidate.measureIndex + 1}마디 · 온음표의 ${candidate.grid}분할 격자` : `Bar ${candidate.measureIndex + 1} · 1/${candidate.grid} whole-note grid`}</Text><Text style={{ color: C.accent, fontFamily: "SpaceGrotesk_700Bold" }}>{index === 0 ? (ko ? "추천" : "Suggested") : ""}</Text></Pressable>)}
         </View>
         <View style={[s.editBox, { borderColor: C.border, backgroundColor: C.surface }]}>
@@ -415,7 +485,7 @@ export function RhythmWorkspace({ active = true }: { active?: boolean }) {
       <View style={s.sectionHeader}><Text style={[s.cardTitle, { color: C.text }]}>{text.library}</Text><Pressable onPress={() => void loadLibrary()}><Ionicons name="refresh" color={C.accent} size={18} /></Pressable></View>
       {loadError ? <Text style={{ color: C.accent }}>{loadError}</Text> : null}
       {!saved.length && <Text style={[s.muted, { color: C.textSecondary }]}>{text.noDoc}</Text>}
-      {saved.map((item) => <View key={item.id} style={[s.candidate, { borderColor: C.border }]}><Text style={{ color: C.text, flex: 1 }}>{item.title} · {item.hits.length} hits</Text><Pressable onPress={() => { update(item); setFlow("review"); }} accessibilityLabel={text.open}><Ionicons name="folder-open-outline" color={C.accent} size={19} /></Pressable><Pressable onPress={() => Alert.alert(text.delete, item.title, [{ text: ko ? "취소" : "Cancel", style: "cancel" }, { text: text.delete, style: "destructive", onPress: () => void removeSaved(item.id) }])} style={{ marginLeft: 14 }}><Ionicons name="trash-outline" color={C.textSecondary} size={18} /></Pressable></View>)}
+      {saved.map((item) => <View key={item.id} style={[s.candidate, { borderColor: C.border }]}><Text style={{ color: C.text, flex: 1 }}>{item.title} · {item.hits.length} hits</Text><Pressable onPress={() => { cleanupAllRef.current(); setReviewMeasure(null); update(prepareValidatedDraft(item)); setFlow("review"); }} accessibilityLabel={text.open}><Ionicons name="folder-open-outline" color={C.accent} size={19} /></Pressable><Pressable onPress={() => Alert.alert(text.delete, item.title, [{ text: ko ? "취소" : "Cancel", style: "cancel" }, { text: text.delete, style: "destructive", onPress: () => void removeSaved(item.id) }])} style={{ marginLeft: 14 }}><Ionicons name="trash-outline" color={C.textSecondary} size={18} /></Pressable></View>)}
     </ScrollView>
   );
 }
