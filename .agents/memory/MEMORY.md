@@ -65,6 +65,7 @@
 - [Microphone lifecycle test harness](microphone-lifecycle-test-harness.md) — compare Web Audio resource counts to a pre-test baseline; native component tests need RN FlatList and KeyboardAvoidingView stubs.
 - [Native signal microphone boundary](signal-native-microphone-boundary.md) — legacy recorder exclusion protects startup; permission success and web tests cannot establish native PCM availability.
 - [시그널 튜너 UI 우선순위](signal-tuner-priorities.md) — 감지·타겟 주파수와 +/− 표시를 주 기능으로 두고 간단한 튜너 UI를 우선한다.
+- [기능 화면 창 중첩 지양](window-hierarchy-preference.md) — 독립 기능의 반복적인 창 중첩은 피로하다; 설정 같은 하위 기능과 구분한다.
 - [Signal analysis session boundary](signal-analysis-session-boundary.md) — keep live single-note HPS tuning separate from temporary polyphonic timeline capture and replay.
 - [RN Web tutorial hit testing](rn-web-tutorial-hit-testing.md) — tutorial overlays must let underlying controls receive events; decorative BPM layers also need pointer-events disabled.
 - [Mode keyboard override persistence](mode-keyboard-override-persistence.md) — store only per-mode differences from global bindings, or later global rebinding changes are silently shadowed.
