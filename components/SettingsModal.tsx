@@ -25,7 +25,7 @@ import { SettingsThemeTab } from "./settings/SettingsThemeTab";
 import { SettingsSoundTab } from "./settings/SettingsSoundTab";
 import { SettingsKeyboardTab } from "./settings/SettingsKeyboardTab";
 
-type SettingsTab = "theme" | "sound" | "keyboard" | "practice";
+type SettingsTab = "theme" | "sound" | "keyboard" | "practice" | "profile";
 export type SettingsScope = "global" | "beat" | "bar" | "note" | "stage";
 
 interface SettingsModalProps {
@@ -104,6 +104,7 @@ interface SettingsModalProps {
   stagePracticeBook?: import("@/lib/storage").PracticeEntry[];
   onStageSettingsChange?: (patch: Partial<import("@/lib/storage").StageSettings>) => void;
   practiceBookContent?: React.ReactNode;
+  profileContent?: React.ReactNode;
 }
 
 export function SettingsModal({
@@ -174,6 +175,7 @@ export function SettingsModal({
   stagePracticeBook,
   onStageSettingsChange,
   practiceBookContent,
+  profileContent,
 }: SettingsModalProps) {
   const { colors: C } = useTheme();
   const S = useScale();
@@ -192,10 +194,11 @@ export function SettingsModal({
     if (
       (scope === "stage" && activeTab === "keyboard")
       || (activeTab === "practice" && !practiceAvailable)
+      || (activeTab === "profile" && (scope !== "global" || !profileContent))
     ) {
       setActiveTab("theme");
     }
-  }, [scope, activeTab, practiceBookContent]);
+  }, [scope, activeTab, practiceBookContent, profileContent]);
 
   const playSoundPreview = useCallback((set: SoundSet) => {
     soundPreviewRef.current?.playSoundPreview(set);
@@ -222,7 +225,7 @@ export function SettingsModal({
   const switchTab = useCallback((tab: SettingsTab) => {
     if (activeTab === tab) return;
     if (Platform.OS !== "web") Haptics.selectionAsync();
-    const tabs: SettingsTab[] = ["theme", "sound", "practice", "keyboard"];
+    const tabs: SettingsTab[] = ["theme", "sound", "profile", "practice", "keyboard"];
     const currentIdx = tabs.indexOf(activeTab);
     const nextIdx = tabs.indexOf(tab);
     const slideDir = nextIdx > currentIdx ? 1 : -1;
@@ -247,6 +250,9 @@ export function SettingsModal({
   const TAB_ITEMS: { key: SettingsTab; icon: string; label: string }[] = [
     { key: "theme", icon: "color-palette-outline", label: t("settings", "themeTab") },
     { key: "sound", icon: "musical-notes-outline", label: t("settings", "soundTab") },
+    ...(scope === "global" && profileContent
+      ? [{ key: "profile" as SettingsTab, icon: "person-outline", label: t("settings", "profileTab") }]
+      : []),
     ...(practiceBookContent && (scope === "beat" || scope === "bar" || scope === "note")
       ? [{ key: "practice" as SettingsTab, icon: "book-outline", label: t("settings", "practiceTab") }]
       : []),
@@ -338,6 +344,8 @@ export function SettingsModal({
         );
       case "practice":
         return practiceBookContent ?? null;
+      case "profile":
+        return scope === "global" ? profileContent ?? null : null;
     }
   };
 
@@ -431,7 +439,7 @@ export function SettingsModal({
                   {TAB_ITEMS.map((tab) => (
                     <Pressable
                       key={tab.key}
-                      style={[styles.tabBtn, activeTab === tab.key && [styles.tabBtnActive, { borderColor: C.accent }]]}
+                      style={[styles.tabBtn, winW < 420 && TAB_ITEMS.length > 3 && { flexDirection: "column" }, activeTab === tab.key && [styles.tabBtnActive, { borderColor: C.accent }]]}
                       onPress={() => switchTab(tab.key)}
                       accessibilityRole="button"
                       accessibilityLabel={tab.label}

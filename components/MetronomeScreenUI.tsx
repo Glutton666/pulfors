@@ -24,6 +24,7 @@ import { SubdivisionBar, DragGhost } from "@/components/SubdivisionBar";
 import { StopwatchTimer } from "@/components/StopwatchTimer";
 import { SettingsModal, type SettingsScope } from "@/components/SettingsModal";
 import { ProfileModal } from "@/components/ProfileModal";
+import { SettingsProfileTab } from "@/components/settings/SettingsProfileTab";
 import { AssistantModal } from "@/components/AssistantModal";
 import { SignalGeneratorModal, TuningGuideModal } from "@/components/SignalGeneratorModal";
 import { PracticeBookModal } from "@/components/PracticeBookModal";
@@ -385,6 +386,21 @@ export function MetronomeScreenUI(props: Props) {
   };
   const KbView = View as React.ComponentType<NativeKbViewProps>;
 
+  // Both entry points use the same data and actions, without nesting a modal.
+  const profileSettingsProps = {
+    username,
+    onUsernameChange: updateUsername,
+    primaryInstrumentId,
+    onPrimaryInstrumentChange: updatePrimaryInstrumentId,
+    roomTrackingActive,
+    trackingRoomName,
+    onStartRoomTracking: startRoomTracking,
+    onStopRoomTracking: stopRoomTracking,
+    onResetApp: handleResetApp,
+    onShowOnboarding: () => openExclusive("onboarding"),
+    onLabUnlocked: unlockLab,
+  };
+
   return (
     <PlaybackVisualContext.Provider value={playbackVisualStore ?? null}>
     <KbView
@@ -712,19 +728,9 @@ export function MetronomeScreenUI(props: Props) {
       )}
 
       <ProfileModal
+        {...profileSettingsProps}
         visible={showProfile}
         onClose={closeMenuItem}
-        username={username}
-        onUsernameChange={updateUsername}
-        primaryInstrumentId={primaryInstrumentId}
-        onPrimaryInstrumentChange={updatePrimaryInstrumentId}
-        roomTrackingActive={roomTrackingActive}
-        trackingRoomName={trackingRoomName}
-        onStartRoomTracking={startRoomTracking}
-        onStopRoomTracking={stopRoomTracking}
-        onResetApp={handleResetApp}
-        onShowOnboarding={() => openExclusive("onboarding")}
-        onLabUnlocked={unlockLab}
       />
 
       <AssistantModal visible={showAssistant} onClose={closeMenuItem} />
@@ -1032,6 +1038,9 @@ export function MetronomeScreenUI(props: Props) {
       <SettingsModal
         visible={showSettings}
         scope={settingsScope}
+        profileContent={settingsScope === "global"
+          ? <SettingsProfileTab {...profileSettingsProps} visible={showSettings} />
+          : undefined}
         practiceBookContent={
           settingsScope === "beat" || settingsScope === "bar" || settingsScope === "note"
             ? (
