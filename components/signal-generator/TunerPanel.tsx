@@ -1,11 +1,14 @@
 import React from "react";
 import {
+  FlatList,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
   View,
   useWindowDimensions,
 } from "react-native";
+import { useCallback, useEffect, useRef } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
 import { FontSize, Radius, Spacing } from "@/constants/tokens";
@@ -29,11 +32,26 @@ interface TunerPanelProps {
   onUseDetected: () => void;
   onToggleReference: () => void;
   onOpenGuide: () => void;
+  selectedNote: string;
+  selectedOctave: number;
+  onSelectNote: (note: string) => void;
+  onSelectOctave: (octave: number) => void;
+  onReferenceHoldStart: () => void;
+  onReferenceHoldEnd: () => void;
+  onAnalysisHoldStart: () => void;
+  onAnalysisHoldEnd: () => void;
+  analysisHolding: boolean;
+  analysisBusy: boolean;
+  analysisElapsedMs: number;
 }
 
 const MIN_FREQUENCY = 20;
 const MAX_FREQUENCY = 20000;
 const IN_TUNE_TOLERANCE = 5;
+const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+const OCTAVES = [0, 1, 2, 3, 4, 5, 6, 7, 8];
+const PICKER_ITEM_HEIGHT = 30;
+const PICKER_HEIGHT = PICKER_ITEM_HEIGHT * 3;
 
 function formatFrequency(value: number): string {
   if (!Number.isFinite(value)) return "—";
@@ -59,11 +77,34 @@ export function TunerPanel({
   onUseDetected,
   onToggleReference,
   onOpenGuide,
+  selectedNote,
+  selectedOctave,
+  onSelectNote,
+  onSelectOctave,
+  onReferenceHoldStart,
+  onReferenceHoldEnd,
+  onAnalysisHoldStart,
+  onAnalysisHoldEnd,
+  analysisHolding,
+  analysisBusy,
+  analysisElapsedMs,
 }: TunerPanelProps) {
   const { colors: C } = useTheme();
   const { t } = useLanguage();
   const styles = makeStyles(C);
   const { width, height } = useWindowDimensions();
+  const referenceLongPress = useRef(false);
+  const referenceHoldActive = useRef(false);
+  const analysisLongPress = useRef(false);
+  const analysisHoldActive = useRef(false);
+  const referenceEndRef = useRef(onReferenceHoldEnd);
+  const analysisEndRef = useRef(onAnalysisHoldEnd);
+  referenceEndRef.current = onReferenceHoldEnd;
+  analysisEndRef.current = onAnalysisHoldEnd;
+  useEffect(() => () => {
+    if (referenceHoldActive.current) referenceEndRef.current();
+    if (analysisHoldActive.current) analysisEndRef.current();
+  }, []);
   const sideBySide = width > height && width >= 600;
   const hasDetectedPitch =
     detectedFrequency !== null &&
@@ -183,7 +224,22 @@ export function TunerPanel({
       <View style={styles.targetBlock}>
         <View style={styles.targetTopline}>
           <Text style={styles.sectionLabel}>{t("signalGenerator", "targetFrequency")}</Text>
-          <Text style={styles.targetNote}>{targetNote}</Text>
+          <View style={styles.targetPickers} accessibilityLabel={`Target pitch ${selectedNote}${selectedOctave}`}>
+            <VerticalPitchPicker
+              testID="signal-target-note-picker"
+              items={NOTE_NAMES}
+              selected={selectedNote}
+              onSelect={onSelectNote}
+              label={t("signalGenerator", "noteLabel")}
+            />
+            <VerticalPitchPicker
+              testID="signal-target-octave-picker"
+              items={OCTAVES}
+              selected={selectedOctave}
+              onSelect={onSelectOctave}
+              label={t("signalGenerator", "octaveLabel")}
+            />
+          </View>
         </View>
         <View style={styles.targetRow}>
           <Pressable
@@ -205,7 +261,30 @@ export function TunerPanel({
             testID="signal-target-edit"
             accessibilityRole="button"
             accessibilityLabel={`${t("signalGenerator", "editTarget")}, ${targetNote}, ${formatFrequency(targetFrequency)} ${t("signalGenerator", "hzUnit")}`}
-            onPress={onEditTarget}
+            accessibilityHint={t("signalGenerator", "referenceHoldHint")}
+            delayLongPress={450}
+            onPressIn={() => {
+              referenceLongPress.current = false;
+              referenceHoldActive.current = false;
+            }}
+            onLongPress={() => {
+              referenceLongPress.current = true;
+              referenceHoldActive.current = true;
+              onReferenceHoldStart();
+            }}
+            onPressOut={() => {
+              if (referenceHoldActive.current) {
+                referenceHoldActive.current = false;
+                onReferenceHoldEnd();
+              }
+            }}
+            onPress={() => {
+              if (referenceLongPress.current) {
+                referenceLongPress.current = false;
+                return;
+              }
+              onEditTarget();
+            }}
             style={({ pressed }) => [styles.targetValueButton, pressed && styles.pressedButton]}
           >
             <Text testID="signal-target-frequency" style={styles.targetFrequency}>
@@ -235,23 +314,65 @@ export function TunerPanel({
         <Pressable
           testID="signal-mic-toggle"
           accessibilityRole="button"
-          accessibilityLabel={t("signalGenerator", listening ? "micStop" : "micStart")}
-          accessibilityState={{ selected: listening }}
-          onPress={onToggleMic}
+          accessibilityLabel={
+            analysisBusy
+              ? t("signalGenerator", "analysisProcessing")
+              : analysisHolding
+                ? `${t("signalGenerator", "analysisRecording")} ${Math.max(0, analysisElapsedMs / 1000).toFixed(1)}s`
+                : t("signalGenerator", listening ? "micStop" : "micStart")
+          }
+          accessibilityHint={t("signalGenerator", "analysisReadyHint")}
+          accessibilityState={{ selected: listening, disabled: analysisBusy && !analysisHolding }}
+          disabled={analysisBusy && !analysisHolding}
+          delayLongPress={450}
+          onPressIn={() => {
+            analysisLongPress.current = false;
+            analysisHoldActive.current = false;
+          }}
+          onLongPress={() => {
+            analysisLongPress.current = true;
+            analysisHoldActive.current = true;
+            onAnalysisHoldStart();
+          }}
+          onPressOut={() => {
+            if (analysisHoldActive.current) {
+              analysisHoldActive.current = false;
+              onAnalysisHoldEnd();
+            }
+          }}
+          onPress={() => {
+            if (analysisLongPress.current) {
+              analysisLongPress.current = false;
+              return;
+            }
+            onToggleMic();
+          }}
           style={({ pressed }) => [
             styles.primaryAction,
-            { backgroundColor: listening ? C.surfaceLight : C.accent },
-            pressed && styles.pressedButton,
+            { backgroundColor: analysisHolding ? C.accentDim : listening ? C.surfaceLight : C.accent },
+            (pressed || (analysisBusy && !analysisHolding)) && styles.pressedButton,
           ]}
         >
           <Ionicons
-            name={listening ? "mic-off-outline" : "mic-outline"}
+            name={analysisBusy ? "hourglass-outline" : analysisHolding ? "pulse-outline" : listening ? "mic-off-outline" : "mic-outline"}
             size={18}
-            color={listening ? C.text : onAccentColor(C.accent)}
+            color={listening || analysisHolding || analysisBusy ? C.text : onAccentColor(C.accent)}
           />
-          <Text style={[styles.primaryActionText, { color: listening ? C.text : onAccentColor(C.accent) }]}>
-            {t("signalGenerator", listening ? "micStop" : "micStart")}
+          <Text
+            testID="signal-analysis-status"
+            style={[styles.primaryActionText, { color: listening || analysisHolding || analysisBusy ? C.text : onAccentColor(C.accent) }]}
+          >
+            {analysisBusy
+              ? t("signalGenerator", "analysisProcessing")
+              : analysisHolding
+                ? `${t("signalGenerator", "analysisRecording")} · ${(Math.max(0, analysisElapsedMs) / 1000).toFixed(1)}s`
+                : t("signalGenerator", listening ? "micStop" : "micStart")}
           </Text>
+          {!analysisHolding && !analysisBusy && (
+            <Text testID="signal-analysis-hint" style={[styles.holdHint, { color: listening ? C.textSecondary : onAccentColor(C.accent) }]}>
+              {t("signalGenerator", "analysisHoldHint")}
+            </Text>
+          )}
         </Pressable>
         <Pressable
           testID="signal-use-detected"
@@ -276,8 +397,9 @@ export function TunerPanel({
           testID="signal-toggle"
           accessibilityRole="button"
           accessibilityLabel={t("signalGenerator", referencePlaying ? "referenceStop" : "referencePlay")}
-          accessibilityState={{ selected: referencePlaying }}
+          accessibilityState={{ selected: referencePlaying, disabled: analysisHolding || analysisBusy }}
           onPress={onToggleReference}
+          disabled={analysisHolding || analysisBusy}
           style={({ pressed }) => [styles.footerButton, pressed && styles.pressedButton]}
         >
           <Ionicons
@@ -294,6 +416,8 @@ export function TunerPanel({
           accessibilityRole="button"
           accessibilityLabel={t("signalGenerator", "tuningGuide")}
           onPress={onOpenGuide}
+          disabled={analysisHolding || analysisBusy}
+          accessibilityState={{ disabled: analysisHolding || analysisBusy }}
           style={({ pressed }) => [styles.footerButton, pressed && styles.pressedButton]}
         >
           <Ionicons name="book-outline" size={16} color={C.textSecondary} />
@@ -301,6 +425,102 @@ export function TunerPanel({
         </Pressable>
       </View>
       </View>
+      </View>
+    </View>
+  );
+}
+
+function VerticalPitchPicker<T extends string | number>({
+  testID,
+  items,
+  selected,
+  onSelect,
+  label,
+}: {
+  testID: string;
+  items: T[];
+  selected: T;
+  onSelect: (value: T) => void;
+  label: string;
+}) {
+  const { colors: C } = useTheme();
+  const pickerStyles = makeStyles(C);
+  const listRef = useRef<FlatList<T>>(null);
+  const draggingRef = useRef(false);
+  const scrollEndTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const selectedIndex = Math.max(0, items.indexOf(selected));
+
+  useEffect(() => {
+    if (scrollEndTimerRef.current) clearTimeout(scrollEndTimerRef.current);
+    if (draggingRef.current) return;
+    listRef.current?.scrollToOffset({
+      offset: selectedIndex * PICKER_ITEM_HEIGHT,
+      animated: false,
+    });
+  }, [selectedIndex]);
+  useEffect(() => () => {
+    if (scrollEndTimerRef.current) clearTimeout(scrollEndTimerRef.current);
+  }, []);
+
+  const finishScroll = useCallback((event: any) => {
+    const offset = event.nativeEvent.contentOffset.y;
+    const index = Math.max(0, Math.min(items.length - 1, Math.round(offset / PICKER_ITEM_HEIGHT)));
+    if (items[index] !== selected) onSelect(items[index]);
+    draggingRef.current = false;
+  }, [items, onSelect, selected]);
+
+  return (
+    <View testID={testID} style={pickerStyles.pickerColumn}>
+      <Text style={pickerStyles.pickerLabel}>{label}</Text>
+      <View style={pickerStyles.pickerWindow}>
+        <View pointerEvents="none" style={pickerStyles.pickerSelection} />
+        <FlatList
+          ref={listRef}
+          style={{ flex: 1, minHeight: 0, maxHeight: "100%" }}
+          data={items}
+          keyExtractor={(item) => String(item)}
+          showsVerticalScrollIndicator={false}
+          snapToInterval={PICKER_ITEM_HEIGHT}
+          decelerationRate="fast"
+          scrollEventThrottle={16}
+          onScroll={(event) => {
+            // RN Web wheel scrolling emits scroll, but no drag/momentum end.
+            if (Platform.OS !== "web") return;
+            const y = event.nativeEvent.contentOffset.y;
+            if (scrollEndTimerRef.current) clearTimeout(scrollEndTimerRef.current);
+            scrollEndTimerRef.current = setTimeout(() => {
+              scrollEndTimerRef.current = null;
+              finishScroll({ nativeEvent: { contentOffset: { y } } });
+            }, 140);
+          }}
+          getItemLayout={(_, index) => ({
+            length: PICKER_ITEM_HEIGHT,
+            offset: PICKER_ITEM_HEIGHT * index,
+            index,
+          })}
+          contentContainerStyle={{ paddingVertical: PICKER_ITEM_HEIGHT }}
+          onScrollBeginDrag={() => { draggingRef.current = true; }}
+          onMomentumScrollEnd={finishScroll}
+          onScrollEndDrag={(event) => {
+            if (Platform.OS === "web" || Math.abs(event.nativeEvent.velocity?.y ?? 0) < 0.1) finishScroll(event);
+          }}
+          renderItem={({ item }) => {
+            const isSelected = item === selected;
+            return (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`${label} ${String(item)}`}
+                accessibilityState={{ selected: isSelected }}
+                onPress={() => onSelect(item)}
+                style={pickerStyles.pickerItem}
+              >
+                <Text style={[pickerStyles.pickerItemText, isSelected && pickerStyles.pickerItemSelected]}>
+                  {String(item)}
+                </Text>
+              </Pressable>
+            );
+          }}
+        />
       </View>
     </View>
   );
@@ -466,6 +686,58 @@ const makeStyles = (C: typeof Colors) => StyleSheet.create({
     fontFamily: "SpaceGrotesk_700Bold",
     fontSize: 13,
   },
+  targetPickers: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  pickerColumn: {
+    width: 43,
+    alignItems: "center",
+    gap: Spacing.xxs,
+  },
+  pickerLabel: {
+    color: C.textTertiary,
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: 9,
+    letterSpacing: 0.35,
+    textTransform: "uppercase",
+  },
+  pickerWindow: {
+    width: "100%",
+    height: PICKER_HEIGHT,
+    overflow: "hidden",
+    position: "relative",
+    borderRadius: Radius.sm,
+    backgroundColor: C.background,
+  },
+  pickerSelection: {
+    position: "absolute",
+    zIndex: 1,
+    top: PICKER_ITEM_HEIGHT,
+    left: 3,
+    right: 3,
+    height: PICKER_ITEM_HEIGHT,
+    borderRadius: Radius.xs,
+    borderWidth: 1,
+    borderColor: C.accent,
+    backgroundColor: C.accentDim,
+  },
+  pickerItem: {
+    height: PICKER_ITEM_HEIGHT,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  pickerItemText: {
+    color: C.textTertiary,
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: FontSize.caption,
+    fontVariant: ["tabular-nums"],
+  },
+  pickerItemSelected: {
+    color: C.accent,
+    fontFamily: "SpaceGrotesk_700Bold",
+  },
   targetRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -518,6 +790,10 @@ const makeStyles = (C: typeof Colors) => StyleSheet.create({
     color: C.background,
     fontFamily: "SpaceGrotesk_700Bold",
     fontSize: FontSize.small,
+  },
+  holdHint: {
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: 9,
   },
   secondaryAction: {
     minHeight: 44,

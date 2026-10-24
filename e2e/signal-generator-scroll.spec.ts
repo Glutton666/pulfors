@@ -101,23 +101,18 @@ test.describe("SignalGeneratorModal 스크롤 (375×667 iPhone SE)", () => {
     await skipOnboarding(page);
   });
 
-  test("기본 튜너에서 상세를 열고 스크롤하면 파형 선택에 도달한다", async ({
+  test("음·옥타브 선택과 기준음이 상세 패널 없이 바로 보인다", async ({
     page,
   }) => {
     await openSignalGenerator(page);
     await expect(page.getByTestId("signal-target-frequency")).toBeInViewport();
     await expect(page.getByTestId("signal-mic-toggle")).toBeInViewport();
     await expect(page.getByTestId("signal-details")).toHaveCount(0);
-    await page.getByTestId("signal-details-toggle").click();
+    await expect(page.getByTestId("signal-details-toggle")).toHaveCount(0);
+    await expect(page.getByTestId("signal-target-note-picker")).toBeVisible();
+    await expect(page.getByTestId("signal-target-octave-picker")).toBeVisible();
 
     await scrollSignalModal(page);
-    for (const waveType of ["sine", "square", "triangle", "sawtooth"]) {
-      await expect(
-        page.locator(`[data-testid="signal-wave-${waveType}"]`),
-      ).toBeInViewport();
-    }
-
-    await page.getByTestId("signal-wave-square").click();
     await page.getByTestId("signal-toggle").scrollIntoViewIfNeeded();
     await expect(page.getByTestId("signal-toggle")).toBeInViewport();
   });
@@ -157,5 +152,31 @@ test.describe("SignalGeneratorModal 스크롤 (375×667 iPhone SE)", () => {
     await input.fill("435");
     await page.getByRole("button", { name: /^Apply$|^적용$/ }).click();
     await expect(page.getByTestId("signal-target-frequency")).toHaveText(/435\.0/);
+  });
+
+  test("타겟 숫자를 누르는 동안 기준음이 재생되고 떼면 멈춘다", async ({ page }) => {
+    await openSignalGenerator(page);
+    const target = page.getByTestId("signal-target-edit");
+    const reference = page.getByTestId("signal-toggle");
+    await target.scrollIntoViewIfNeeded();
+    const box = (await target.boundingBox())!;
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    await expect(reference).toHaveAttribute("aria-label", /Stop reference|기준음 정지/);
+    await page.mouse.up();
+    await expect(reference).toHaveAttribute("aria-label", /Play reference|기준음 재생/);
+    await expect(page.getByTestId("signal-frequency-input")).toHaveCount(0);
+  });
+
+  test("오른쪽 음과 옥타브를 위아래 스크롤하면 타겟이 바뀐다", async ({ page }) => {
+    await openSignalGenerator(page);
+    const notePicker = page.getByTestId("signal-target-note-picker");
+    await notePicker.getByRole("button", { name: /^(Note|음) G#$/ }).click();
+    await expect(page.getByTestId("signal-target-frequency")).toHaveText(/415\.3/);
+    const octavePicker = page.getByTestId("signal-target-octave-picker");
+    await octavePicker.hover();
+    await page.mouse.wheel(0, 32);
+    await expect(page.getByTestId("signal-target-frequency")).not.toHaveText(/415\.3/);
+    await expect(page.getByTestId("signal-details-toggle")).toHaveCount(0);
   });
 });

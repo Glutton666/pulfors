@@ -135,6 +135,8 @@ export class SignalGeneratorEngine {
           logger.warn("[SignalGen] AudioContext resume failed:", resumeErr);
         }
       }
+      // A hold may have ended (or a newer tone started) while resume awaited.
+      if (this.audioContext !== ctx || ctx.state === "closed") return;
       const gain = ctx.createGain();
       gain.gain.value = volumeLinear;
       gain.connect(ctx.destination);

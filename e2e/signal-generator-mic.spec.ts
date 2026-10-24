@@ -226,6 +226,28 @@ test.describe("SignalGeneratorModal microphone lifecycle", () => {
     }
   });
 
+  test("holds past ten seconds and shows analysis below the tuner on release", async ({ page }) => {
+    test.setTimeout(60_000);
+    await installFakeMic(page, "tone");
+    await openSignalGenerator(page);
+    const mic = page.getByTestId("signal-mic-toggle");
+    await mic.scrollIntoViewIfNeeded();
+    const box = (await mic.boundingBox())!;
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    await expect(page.getByTestId("signal-analysis-status")).toHaveText(/Analyzing|Listening|소리를 듣고/);
+    await page.waitForTimeout(10_500);
+    await expect(page.getByTestId("signal-analysis-timeline")).toHaveCount(0);
+    await expect(page.getByTestId("signal-analysis-status")).toHaveText(/1[01]\.\ds/);
+    await page.mouse.up();
+    await expect(page.getByTestId("signal-analysis-timeline")).toBeVisible();
+    await expect(page.getByTestId("signal-tuner-panel")).toBeVisible();
+    await expect(mic).toHaveAttribute("aria-label", /Start mic|마이크 켜기/i);
+    await expect(page.getByTestId("signal-analysis-panel")).toContainText(/G#4|A4|E4/);
+    const probe = await getProbe(page);
+    expect(probe.trackStops).toBe(probe.streamsCreated);
+  });
+
   test("shows no signal for a live but silent input", async ({ page }) => {
     await installFakeMic(page, "silence");
     await openSignalGenerator(page);

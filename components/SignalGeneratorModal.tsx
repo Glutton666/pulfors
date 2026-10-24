@@ -48,7 +48,6 @@ import {
 } from "@/lib/signal-analysis";
 import {
   ANALYSIS_BUCKET_MS,
-  ANALYSIS_DURATION_MS,
   analyzePcmFrame,
   analyzeSpectrumFrame,
   buildAnalysisSummary,
@@ -82,7 +81,7 @@ const MIN_FREQ = 20;
 const MAX_FREQ = 20000;
 const VOLUME_LINEAR = 0.3;
 
-type AnalysisPhase = "idle" | "ready" | "recording" | "results";
+type AnalysisPhase = "idle" | "recording" | "processing" | "results";
 
 interface AnalysisCapture {
   sampleRate: number;
@@ -776,7 +775,6 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
   const cardPad = isLandscape ? undefined : Math.max(16, S.ms(20, 0.4));
   const cardGap = isLandscape ? undefined : Math.max(16, S.ms(18, 0.4));
   const [frequency, setFrequency] = useState(440);
-  const [showDetails, setShowDetails] = useState(false);
   const [waveType, setWaveType] = useState<WaveType>("sine");
   const [isPlaying, setIsPlaying] = useState(false);
   const [editingFreq, setEditingFreq] = useState(false);
@@ -792,7 +790,9 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
   const handleNoteSelect = useCallback((note: string) => {
     setSelectedNote(note);
     pickerDrivenRef.current = true;
-    const f = noteToFreq(note, selectedOctave);
+    const octave = noteToFreq(note, selectedOctave) < MIN_FREQ ? 1 : selectedOctave;
+    setSelectedOctave(octave);
+    const f = noteToFreq(note, octave);
     if (f >= MIN_FREQ && f <= MAX_FREQ) {
       setFrequency(f);
     }
@@ -800,9 +800,10 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
   }, [selectedOctave]);
 
   const handleOctaveSelect = useCallback((oct: number) => {
-    setSelectedOctave(oct);
+    const octave = noteToFreq(selectedNote, oct) < MIN_FREQ ? 1 : oct;
+    setSelectedOctave(octave);
     pickerDrivenRef.current = true;
-    const f = noteToFreq(selectedNote, oct);
+    const f = noteToFreq(selectedNote, octave);
     if (f >= MIN_FREQ && f <= MAX_FREQ) {
       setFrequency(f);
     }
@@ -811,16 +812,9 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
 
   useEffect(() => {
     if (pickerDrivenRef.current) return;
-    for (let oct = 0; oct <= 8; oct++) {
-      for (const name of NOTE_NAMES) {
-        const nf = noteToFreq(name, oct);
-        if (Math.abs(frequency - nf) <= 1) {
-          setSelectedNote(name);
-          setSelectedOctave(oct);
-          return;
-        }
-      }
-    }
+    const note = frequencyToNote(frequency);
+    setSelectedNote(note.name);
+    setSelectedOctave(Math.max(0, Math.min(8, note.octave)));
   }, [frequency]);
 
   const [micListening, setMicListening] = useState(false);
@@ -853,6 +847,7 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
   const micInputWatchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const micDataReceivedRef = useRef(false);
   const analysisActiveRef = useRef(false);
+  const analysisEpochRef = useRef(0);
   const analysisCaptureRef = useRef<AnalysisCapture | null>(null);
   const analysisRecorderRef = useRef<any>(null);
   const analysisRecorderChunksRef = useRef<Blob[]>([]);
@@ -870,6 +865,8 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
 
   const engineRef = useRef(new SignalGeneratorEngine());
   const isPlayingRef = useRef(false);
+  const playbackEpochRef = useRef(0);
+  const referenceHeldRef = useRef(false);
   const nativeSoundRef = useRef<AudioPlayer | null>(null);
   const nativeRestartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -912,6 +909,8 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
   }, []);
 
   const stopPlayback = useCallback(() => {
+    playbackEpochRef.current++;
+    referenceHeldRef.current = false;
     if (nativeRestartTimerRef.current) {
       clearTimeout(nativeRestartTimerRef.current);
       nativeRestartTimerRef.current = null;
@@ -926,15 +925,18 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
   }, [stopNativeSound]);
 
   const startPlayback = useCallback(async () => {
+    const epoch = ++playbackEpochRef.current;
     isPlayingRef.current = true;
     if (Platform.OS === "web") {
       await engineRef.current.startWeb(frequency, waveType, VOLUME_LINEAR);
     } else {
       try {
         await stopNativeSound();
+        if (epoch !== playbackEpochRef.current) return;
         const base64 = generateToneBase64(frequency, waveType, VOLUME_LINEAR);
         const fileUri = (FileSystem.cacheDirectory || FileSystem.documentDirectory || "") + "signal_tone.wav";
         await FileSystem.writeAsStringAsync(fileUri, base64, { encoding: FileSystem.EncodingType.Base64 });
+        if (epoch !== playbackEpochRef.current) return;
         const player = createAudioPlayer({ uri: fileUri });
         player.loop = true;
         player.volume = 1.0;
@@ -944,7 +946,7 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
         logger.warn("[SignalGen] native playback error:", e);
       }
     }
-    setIsPlaying(true);
+    if (epoch === playbackEpochRef.current) setIsPlaying(true);
   }, [frequency, waveType, stopNativeSound]);
 
   const startPlaybackRef = useRef(startPlayback);
@@ -973,6 +975,9 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
       if (isPlayingRef.current) startPlaybackRef.current();
     }, 80);
     return () => {
+      playbackEpochRef.current++;
+      analysisEpochRef.current++;
+      analysisActiveRef.current = false;
       if (nativeRestartTimerRef.current) {
         clearTimeout(nativeRestartTimerRef.current);
         nativeRestartTimerRef.current = null;
@@ -1054,7 +1059,23 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
   const finishAnalysis = useCallback(async () => {
     const capture = analysisCaptureRef.current;
     if (!capture || !analysisActiveRef.current) return;
+    if (!micActiveRef.current && capture.frames.length === 0 && capture.samples.length === 0) {
+      analysisEpochRef.current++;
+      analysisActiveRef.current = false;
+      if (analysisAnalysisTimerRef.current) clearInterval(analysisAnalysisTimerRef.current);
+      analysisAnalysisTimerRef.current = null;
+      stopMic();
+      setAnalysisPhase("idle");
+      return;
+    }
+    const epoch = analysisEpochRef.current;
+    const durationMs = Math.max(1, Date.now() - capture.startedAt);
     analysisActiveRef.current = false;
+    if (analysisAnalysisTimerRef.current) {
+      clearInterval(analysisAnalysisTimerRef.current);
+      analysisAnalysisTimerRef.current = null;
+    }
+    setAnalysisPhase("processing");
 
     const recorder = analysisRecorderRef.current;
     const blobPromise = recorder && recorder.state !== "inactive"
@@ -1075,10 +1096,7 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
         new Promise<Blob | null>((resolve) => setTimeout(() => resolve(null), 700)),
       ]),
     ]);
-    const durationMs = Math.min(
-      ANALYSIS_DURATION_MS,
-      Math.max(250, Date.now() - capture.startedAt),
-    );
+    if (epoch !== analysisEpochRef.current) return;
     const summary = buildAnalysisSummary(capture.frames, durationMs);
     setAnalysisSummary(summary);
     setAnalysisElapsedMs(durationMs);
@@ -1094,12 +1112,20 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
         const base64 = encodePcm16WavBase64(new Float32Array(capture.samples), capture.sampleRate);
         const fileUri = `${FileSystem.cacheDirectory || FileSystem.documentDirectory || ""}signal_analysis_${Date.now()}.wav`;
         await FileSystem.writeAsStringAsync(fileUri, base64, { encoding: FileSystem.EncodingType.Base64 });
+        if (epoch !== analysisEpochRef.current) {
+          void FileSystem.deleteAsync(fileUri, { idempotent: true }).catch(() => {});
+          return;
+        }
         uri = fileUri;
       }
     } catch (error) {
       logger.warn("[SignalAnalysis] Could not prepare replay audio:", error);
     }
 
+    if (epoch !== analysisEpochRef.current) {
+      if (uri?.startsWith("blob:")) URL.revokeObjectURL(uri);
+      return;
+    }
     if (uri) {
       try {
         analysisPlayerRef.current = createAudioPlayer({ uri });
@@ -1112,23 +1138,13 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
     setAnalysisPhase("results");
   }, [disposeAnalysisPlayback, stopMic]);
 
-  const openAnalysisMode = useCallback(() => {
+  const startAnalysis = useCallback(() => {
+    if (analysisActiveRef.current) return;
+    analysisEpochRef.current++;
     hapticFeedback();
     clearMicToggleDebounce();
     stopPlayback();
     stopMic();
-    disposeAnalysisPlayback();
-    analysisActiveRef.current = false;
-    analysisCaptureRef.current = null;
-    setAnalysisSummary(null);
-    setAnalysisElapsedMs(0);
-    setAnalysisDurationSec(0);
-    setAnalysisPositionSec(0);
-    setAnalysisPhase("ready");
-  }, [clearMicToggleDebounce, disposeAnalysisPlayback, hapticFeedback, stopMic, stopPlayback]);
-
-  const startAnalysis = useCallback(() => {
-    hapticFeedback();
     disposeAnalysisPlayback();
     analysisCaptureRef.current = {
       sampleRate: Platform.OS === "web" ? 48000 : 44100,
@@ -1145,19 +1161,13 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
     if (analysisAnalysisTimerRef.current) clearInterval(analysisAnalysisTimerRef.current);
     analysisAnalysisTimerRef.current = setInterval(() => {
       const capture = analysisCaptureRef.current;
-      const elapsed = capture ? Math.min(ANALYSIS_DURATION_MS, Date.now() - capture.startedAt) : 0;
+      const elapsed = capture ? Math.max(0, Date.now() - capture.startedAt) : 0;
       setAnalysisElapsedMs(elapsed);
-      if (elapsed >= ANALYSIS_DURATION_MS) {
-        if (analysisAnalysisTimerRef.current) {
-          clearInterval(analysisAnalysisTimerRef.current);
-          analysisAnalysisTimerRef.current = null;
-        }
-        void finishAnalysis();
-      }
     }, 100);
-  }, [disposeAnalysisPlayback, finishAnalysis, hapticFeedback]);
+  }, [clearMicToggleDebounce, stopPlayback, stopMic, disposeAnalysisPlayback, hapticFeedback]);
 
   const cancelAnalysis = useCallback(() => {
+    analysisEpochRef.current++;
     analysisActiveRef.current = false;
     if (analysisAnalysisTimerRef.current) {
       clearInterval(analysisAnalysisTimerRef.current);
@@ -1169,6 +1179,35 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
     setAnalysisSummary(null);
     setAnalysisPhase("idle");
   }, [disposeAnalysisPlayback, stopMic]);
+
+  useEffect(() => {
+    if (micError && analysisActiveRef.current) {
+      cancelAnalysis();
+      setMicError(micError);
+    }
+  }, [micError, cancelAnalysis]);
+
+  useEffect(() => {
+    if (!visible) {
+      cancelAnalysis();
+      stopPlayback();
+    }
+  }, [visible, cancelAnalysis, stopPlayback]);
+
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+    const cancelHeldInput = () => {
+      if (analysisActiveRef.current) cancelAnalysis();
+      if (referenceHeldRef.current) stopPlayback();
+    };
+    const onVisibility = () => { if (document.hidden) cancelHeldInput(); };
+    window.addEventListener("blur", cancelHeldInput);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.removeEventListener("blur", cancelHeldInput);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [cancelAnalysis, stopPlayback]);
 
   const playAnalysis = useCallback(async () => {
     const player = analysisPlayerRef.current;
@@ -1289,6 +1328,7 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
   }, []);
 
   const startMicWeb = useCallback(async () => {
+    const epoch = ++micStartupEpochRef.current;
     try {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         logger.warn("[MicTuner] getUserMedia not available");
@@ -1310,11 +1350,20 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
           channelCount: 1,
         },
       });
+      if (epoch !== micStartupEpochRef.current) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
       micStreamRef.current = stream;
       const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)({
         sampleRate: 48000,
       });
       if (audioCtx.state === "suspended") await audioCtx.resume();
+      if (epoch !== micStartupEpochRef.current) {
+        stream.getTracks().forEach((track) => track.stop());
+        void audioCtx.close();
+        return;
+      }
       micAudioCtxRef.current = audioCtx;
       const analyser = audioCtx.createAnalyser();
       analyser.fftSize = 8192;
@@ -1327,16 +1376,18 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
       if (analysisActiveRef.current && typeof MediaRecorder !== "undefined") {
         try {
           const recorder = new MediaRecorder(stream);
-          analysisRecorderChunksRef.current = [];
+          const chunks: Blob[] = [];
+          analysisRecorderChunksRef.current = chunks;
           recorder.ondataavailable = (event: any) => {
-            if (event.data?.size > 0) analysisRecorderChunksRef.current.push(event.data);
+            if (event.data?.size > 0) chunks.push(event.data);
           };
           recorder.onstop = () => {
-            const chunks = analysisRecorderChunksRef.current;
             const blob = chunks.length > 0 ? new Blob(chunks, { type: chunks[0].type || "audio/webm" }) : null;
-            analysisRecorderRef.current = null;
-            analysisRecorderResolveRef.current?.(blob);
-            analysisRecorderResolveRef.current = null;
+            if (analysisRecorderRef.current === recorder) {
+              analysisRecorderRef.current = null;
+              analysisRecorderResolveRef.current?.(blob);
+              analysisRecorderResolveRef.current = null;
+            }
           };
           recorder.start(250);
           analysisRecorderRef.current = recorder;
@@ -1347,6 +1398,9 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
 
       micActiveRef.current = true;
       setMicListening(true);
+      if (analysisActiveRef.current && analysisCaptureRef.current) {
+        analysisCaptureRef.current.startedAt = Date.now();
+      }
 
       const freqBinCount = analyser.frequencyBinCount;
       const fftBuf = new Float32Array(freqBinCount);
@@ -1367,7 +1421,7 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
       let frameCount = 0;
 
       const detect = () => {
-        if (!micActiveRef.current) return;
+        if (!micActiveRef.current || epoch !== micStartupEpochRef.current) return;
         analyser.getFloatTimeDomainData(timeBuf);
         let rms = 0;
         for (let i = 0; i < timeBuf.length; i++) rms += timeBuf[i] * timeBuf[i];
@@ -1447,6 +1501,7 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
       };
       detect();
     } catch (e) {
+      if (epoch !== micStartupEpochRef.current) return;
       logger.warn("[MicTuner] Web mic error:", e);
       if (micStreamRef.current) {
         micStreamRef.current.getTracks().forEach((t: any) => t.stop());
@@ -1508,12 +1563,14 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
         }
         const analysisCapture = analysisActiveRef.current ? analysisCaptureRef.current : null;
         if (analysisCapture) {
-          if (!analysisCapture.samples.length) analysisCapture.sampleRate = sampleRate;
+          if (!analysisCapture.samples.length) {
+            analysisCapture.sampleRate = sampleRate;
+            analysisCapture.startedAt = Date.now();
+          }
           // Keep earlier audio if a hardware route changes rate mid-session.
           // All replay samples must still have one consistent WAV sample rate.
           const step = sampleRate / analysisCapture.sampleRate;
-          const limit = Math.round(analysisCapture.sampleRate * ANALYSIS_DURATION_MS / 1000);
-          for (let position = 0; position < samples.length && analysisCapture.samples.length < limit; position += step) {
+          for (let position = 0; position < samples.length; position += step) {
             const left = Math.floor(position);
             const fraction = position - left;
             analysisCapture.samples.push(samples[left] +
@@ -1633,11 +1690,10 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
   const handleClose = useCallback(() => {
     clearMicToggleDebounce();
     stopPlayback();
-    stopMic();
-    setShowDetails(false);
+    cancelAnalysis();
     setEditingFreq(false);
     onClose();
-  }, [stopPlayback, stopMic, onClose, clearMicToggleDebounce]);
+  }, [stopPlayback, cancelAnalysis, onClose, clearMicToggleDebounce]);
 
   const handleFreqKnob = useCallback((norm: number) => {
     const f = normToFreq(norm);
@@ -1668,6 +1724,7 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
     setFrequency(liveFrequency);
   };
   const openTuningGuide = () => {
+    if (analysisActiveRef.current || analysisPhase === "processing") return;
     hapticFeedback();
     const capturedFreq = frequency;
     onOpenTuningGuide(capturedFreq, (selectedFreq) => {
@@ -1676,8 +1733,18 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
     });
   };
   const toggleReference = () => {
+    if (analysisActiveRef.current || analysisPhase === "processing") return;
     hapticFeedback();
     isPlaying ? stopPlayback() : startPlayback();
+  };
+  const startReferenceHold = () => {
+    if (analysisActiveRef.current || analysisPhase === "processing") return;
+    referenceHeldRef.current = true;
+    disposeAnalysisPlayback();
+    void startPlayback();
+  };
+  const endReferenceHold = () => {
+    if (referenceHeldRef.current) stopPlayback();
   };
 
   const formatFreqDisplay = (f: number) => {
@@ -1731,10 +1798,6 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [spectrumTick]);
 
-  const analysisProgress = Math.min(
-    1,
-    analysisElapsedMs / ANALYSIS_DURATION_MS,
-  );
   const analysisPositionRatio = analysisDurationSec > 0
     ? Math.min(1, analysisPositionSec / analysisDurationSec)
     : 0;
@@ -1778,55 +1841,23 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
         </Pressable>
       </View>
 
-      {analysisPhase === "ready" && (
-        <View style={styles.analysisReady}>
-          <MaterialCommunityIcons name="microphone-outline" size={42} color={C.accent} />
-          <Text style={styles.analysisHeadline}>{t("signalGenerator", "analysisReady")}</Text>
-          <Text style={styles.analysisDescription}>{t("signalGenerator", "analysisReadyHint")}</Text>
-          <Pressable
-            onPress={startAnalysis}
-            style={[styles.analysisPrimaryButton, { backgroundColor: C.accent }]}
-            testID="signal-analysis-start"
-          >
-            <Ionicons name="radio" size={16} color={onAccentColor(C.accent)} />
-            <Text style={[styles.analysisButtonText, { color: onAccentColor(C.accent) }]}>
-              {t("signalGenerator", "analysisStart")}
-            </Text>
-          </Pressable>
-        </View>
-      )}
-
       {analysisPhase === "recording" && (
         <View style={styles.analysisRecording}>
           <Text style={styles.analysisHeadline}>{t("signalGenerator", "analysisRecording")}</Text>
           <Text style={[styles.analysisTimer, { color: C.accent }]}>
             {analysisTimeLabel(analysisElapsedMs / 1000)}
-            <Text style={styles.analysisTimerMuted}> / 10.0s</Text>
           </Text>
-          <View style={styles.analysisProgressTrack}>
-            <View style={[styles.analysisProgressFill, { width: `${analysisProgress * 100}%`, backgroundColor: C.accent }]} />
-          </View>
           <Text style={styles.analysisDescription}>{t("signalGenerator", "analysisRecordingHint")}</Text>
-          <Pressable
-            onPress={() => { hapticFeedback(); void finishAnalysis(); }}
-            style={[styles.analysisPrimaryButton, { backgroundColor: C.accent }]}
-            testID="signal-analysis-finish"
-          >
-            <Ionicons name="checkmark" size={16} color={onAccentColor(C.accent)} />
-            <Text style={[styles.analysisButtonText, { color: onAccentColor(C.accent) }]}>
-              {t("signalGenerator", "analysisFinish")}
-            </Text>
-          </Pressable>
         </View>
+      )}
+      {analysisPhase === "processing" && (
+        <Text accessibilityLiveRegion="polite" style={styles.analysisDescription}>
+          {t("signalGenerator", "analysisProcessing")}
+        </Text>
       )}
 
       {analysisPhase === "results" && (
-        <ScrollView
-          style={styles.analysisResultsScroll}
-          contentContainerStyle={styles.analysisResultsContent}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-        >
+        <View style={styles.analysisResultsContent}>
           <View style={styles.analysisResultSummary}>
             <Text style={styles.analysisEyebrow}>{t("signalGenerator", "analysisResult")}</Text>
             <Text style={[styles.analysisResultDuration, { color: C.accent }]}>
@@ -1887,6 +1918,9 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
               onPress={analysisPlaying ? pauseAnalysis : playAnalysis}
               style={[styles.analysisPlayButton, { backgroundColor: C.accent }]}
               testID="signal-analysis-play"
+              disabled={!analysisAudioUri}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: !analysisAudioUri }}
             >
               <Ionicons name={analysisPlaying ? "pause" : "play"} size={16} color={onAccentColor(C.accent)} />
               <Text style={[styles.analysisButtonText, { color: onAccentColor(C.accent) }]}>
@@ -1936,7 +1970,7 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
             ))}
           </View>
           <Pressable
-            onPress={openAnalysisMode}
+            onPress={cancelAnalysis}
             style={styles.analysisSecondaryButton}
             testID="signal-analysis-again"
           >
@@ -1945,7 +1979,7 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
               {t("signalGenerator", "analysisAgain")}
             </Text>
           </Pressable>
-        </ScrollView>
+        </View>
       )}
     </View>
   );
@@ -1995,7 +2029,6 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
             </>
           )}
 
-          {analysisPhase !== "idle" ? analysisPanel : (
           <View style={{ flex: 1, minHeight: 0, alignSelf: "stretch" }}>
           <ScrollView
             style={{ flex: 1, minHeight: 0 }}
@@ -2023,6 +2056,17 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
             onUseDetected={useDetectedTarget}
             onToggleReference={toggleReference}
             onOpenGuide={openTuningGuide}
+            selectedNote={selectedNote}
+            selectedOctave={selectedOctave}
+            onSelectNote={handleNoteSelect}
+            onSelectOctave={handleOctaveSelect}
+            onReferenceHoldStart={startReferenceHold}
+            onReferenceHoldEnd={endReferenceHold}
+            onAnalysisHoldStart={startAnalysis}
+            onAnalysisHoldEnd={() => { void finishAnalysis(); }}
+            analysisHolding={analysisPhase === "recording"}
+            analysisBusy={analysisPhase === "processing"}
+            analysisElapsedMs={analysisElapsedMs}
           />
           {editingFreq && (
             <View style={styles.freqEditRow}>
@@ -2042,199 +2086,9 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
               </Pressable>
             </View>
           )}
-          <Pressable
-            testID="signal-details-toggle"
-            onPress={() => setShowDetails((value) => !value)}
-            accessibilityRole="button"
-            accessibilityState={{ expanded: showDetails }}
-            style={{ minHeight: 44, flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderTopWidth: 1, borderColor: C.border }}
-          >
-            <Text style={{ color: C.textSecondary, fontFamily: "SpaceGrotesk_500Medium", fontSize: 13 }}>{t("signalGenerator", "generatorDetails")}</Text>
-            <Ionicons name={showDetails ? "chevron-up" : "chevron-down"} size={18} color={C.textSecondary} />
-          </Pressable>
-          {showDetails && (
-          <View testID="signal-details" style={{ gap: 16 }}>
-          <Pressable
-            testID="signal-analysis-open"
-            onPress={openAnalysisMode}
-            accessibilityRole="button"
-            style={{ minHeight: 44, justifyContent: "center", alignItems: "center", borderWidth: 1, borderColor: C.border, borderRadius: Radius.md }}
-          >
-            <Text style={{ color: C.accent }}>{t("signalGenerator", "analysisTitle")}</Text>
-          </Pressable>
-          <View style={styles.knobMicContainer}>
-            <View style={styles.knobWrap}>
-              <Knob
-                value={freqNorm}
-                onChange={handleFreqKnob}
-                displayValue={formatFreqDisplay(frequency)}
-                displayUnit={freqDisplayUnit}
-                accentColor={C.accent}
-                accentDim={C.accentDim}
-                onTapCenter={openFreqEdit}
-                onLongPress={micListening && micDetectedFreqRef.current ? () => {
-                  const captured = micDetectedFreqRef.current;
-                  if (captured) {
-                    hapticFeedback();
-                    setFrequency(captured);
-                  }
-                } : undefined}
-                noteLabel={currentNoteLabel}
-                knobSize={dynamicKnobSize}
-              />
-            </View>
-          </View>
-
-          {!isLandscape && <View style={{ height: Math.max(14, S.ms(16, 0.4)) }} />}
-
-          <View style={{ alignItems: "center" as const, gap: Math.max(18, S.ms(20, 0.4)), width: "100%" as const }}>
-            <View style={styles.notePickerRow}>
-              <PickerColumn
-                data={NOTE_NAMES}
-                selected={selectedNote}
-                onSelect={handleNoteSelect}
-                accentColor={C.accent}
-                accentDim={C.accentDim}
-              />
-              <PickerColumn
-                data={OCTAVES}
-                selected={selectedOctave}
-                onSelect={handleOctaveSelect}
-                accentColor={C.accent}
-                accentDim={C.accentDim}
-              />
-            </View>
-            <Pressable
-              onLongPress={() => {
-                const f = noteToFreq(selectedNote, selectedOctave);
-                setFrequency(f);
-                preGuideFreqRef.current = null;
-                if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                setPickerLockFlash(true);
-                setTimeout(() => setPickerLockFlash(false), 600);
-              }}
-              delayLongPress={400}
-              hitSlop={8}
-            >
-              <Text style={[styles.pickerHzHint, pickerLockFlash && { color: C.accent }]}>
-                {pickerLockFlash ? "✓ " : ""}{noteToFreq(selectedNote, selectedOctave)} {t("signalGenerator", "hzUnit")}
-              </Text>
-            </Pressable>
-
-            <Pressable
-              testID="signal-tuning-guide-details"
-              onPress={() => {
-                hapticFeedback();
-                const capturedFreq = frequency;
-                onOpenTuningGuide(capturedFreq, (selectedFreq) => {
-                  if (preGuideFreqRef.current === null) preGuideFreqRef.current = capturedFreq;
-                  setFrequency(selectedFreq);
-                });
-              }}
-              onLongPress={() => {
-                if (preGuideFreqRef.current !== null) {
-                  if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-                  setFrequency(preGuideFreqRef.current);
-                  preGuideFreqRef.current = null;
-                }
-              }}
-              delayLongPress={400}
-              style={[styles.tuningGuideToggle]}
-            >
-              <MaterialCommunityIcons name="music-note-outline" size={S.ms(14, 0.4)} color={C.textTertiary} />
-              <Text style={styles.tuningGuideToggleText}>
-                {t("signalGenerator", "tuningGuide")}
-              </Text>
-              <Ionicons name="chevron-forward" size={S.ms(14, 0.4)} color={C.textTertiary} />
-            </Pressable>
-
-            <View style={styles.waveSection}>
-              <Text style={styles.sectionLabel}>{t("signalGenerator", "waveform")}</Text>
-              <View style={styles.waveRow}>
-                {WAVE_CONFIGS.map((w) => {
-                  const active = waveType === w.type;
-                  return (
-                    <Pressable
-                      key={w.type}
-                      onPress={() => { hapticFeedback(); setWaveType(w.type); }}
-                      style={[styles.waveBtn, active && { backgroundColor: C.accentDim, borderColor: C.accent }]}
-                      testID={`signal-wave-${w.type}`}
-                    >
-                      <MaterialCommunityIcons
-                        name={w.icon as any}
-                        size={S.ms(20, 0.4)}
-                        color={active ? C.accent : C.textTertiary}
-                      />
-                      <Text style={[styles.waveBtnText, active && { color: C.accent }]}>{t("signalGenerator", w.key)}</Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            </View>
-
-            </View>
-
-          {/* Supplemental spectral peaks stay inside the scrollable details. */}
-            <View style={{ borderTopWidth: 1, borderTopColor: C.border, paddingTop: Spacing.sm }}>
-              <Text style={{ color: C.textSecondary, fontFamily: "SpaceGrotesk_600SemiBold", fontSize: FontSize.micro, letterSpacing: 1.2, marginBottom: Spacing.sm, textTransform: "uppercase" as const }}>
-                {t("signalGenerator", "detectedFreqs")}
-              </Text>
-              {micListening ? (
-                topPeaks.length > 0 ? (
-                  <View>
-                    <View style={{ flexDirection: "row" as const, paddingBottom: Spacing.xs, borderBottomWidth: 0.5, borderBottomColor: C.border, marginBottom: Spacing.xxs }}>
-                      <Text style={{ flex: 1.4, color: C.textTertiary, fontSize: 9, letterSpacing: 0.8, fontFamily: "SpaceGrotesk_500Medium" }}>Hz</Text>
-                      <Text style={{ flex: 0.7, color: C.textTertiary, fontSize: 9, letterSpacing: 0.8, fontFamily: "SpaceGrotesk_500Medium", textAlign: "center" as const }}>{t("signalGenerator", "noteLabel")}</Text>
-                      <Text style={{ flex: 1, color: C.textTertiary, fontSize: 9, letterSpacing: 0.8, fontFamily: "SpaceGrotesk_500Medium", textAlign: "right" as const }}>dBFS</Text>
-                    </View>
-                    {topPeaks.map((peak, i) => {
-                      const isSelected = Math.abs(peak.hz - frequency) < 1;
-                      return (
-                      <Pressable
-                        key={i}
-                        onPress={() => {
-                          setFrequency(peak.hz);
-                          if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                          setPickerLockFlash(true);
-                          setTimeout(() => setPickerLockFlash(false), 200);
-                        }}
-                        style={[
-                          { flexDirection: "row" as const, alignItems: "center" as const, paddingVertical: Spacing.xs, borderBottomWidth: 0.5, borderBottomColor: C.border + "30", borderRadius: Radius.xs },
-                          isSelected && { backgroundColor: C.accentDim },
-                        ]}
-                      >
-                        <Text style={{ flex: 1.4, color: i === 0 ? C.accent : C.text, fontFamily: "SpaceGrotesk_600SemiBold", fontSize: FontSize.small }}>
-                          {peak.hz}
-                        </Text>
-                        <Text style={{ flex: 0.7, color: i === 0 ? C.accent : C.textSecondary, fontSize: FontSize.caption, textAlign: "center" as const, fontFamily: "SpaceGrotesk_500Medium" }}>
-                          {peak.note}
-                        </Text>
-                        <Text style={{ flex: 1, color: C.textTertiary, fontSize: FontSize.caption, textAlign: "right" as const, fontFamily: "SpaceGrotesk_400Regular" }}>
-                          {peak.db}
-                        </Text>
-                      </Pressable>
-                      );
-                    })}
-                  </View>
-                ) : (
-                  <Text style={{ color: C.textTertiary, fontSize: FontSize.small, fontFamily: "SpaceGrotesk_400Regular" }}>
-                    {micAnalyzed ? t("signalGenerator", "noSignal") : t("signalGenerator", "detecting")}
-                  </Text>
-                )
-              ) : (
-                <View style={{ flex: 1, justifyContent: "center" as const, alignItems: "center" as const }}>
-                  <MaterialCommunityIcons name="microphone-off" size={28} color={C.textTertiary} style={{ marginBottom: Spacing.sm }} />
-                  <Text style={{ color: C.textTertiary, fontSize: FontSize.caption, fontFamily: "SpaceGrotesk_400Regular", textAlign: "center" as const, lineHeight: 16 }}>
-                    {t("signalGenerator", "micOffHint")}
-                  </Text>
-                </View>
-              )}
-            </View>
-          </View>
-          )}
+          {analysisPhase !== "idle" && analysisPanel}
           </ScrollView>
           </View>
-          )}
 
 
         </View>
@@ -2832,7 +2686,6 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
     overflow: "visible",
   },
   analysisPanel: {
-    flex: 1,
     minHeight: 0,
     width: "100%",
     borderRadius: 16,

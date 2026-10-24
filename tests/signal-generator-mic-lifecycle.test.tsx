@@ -31,6 +31,19 @@ jest.mock("react-native", () => {
     ...actual,
     KeyboardAvoidingView: actual.View,
     FlatList,
+    Pressable: React.forwardRef(({
+      children, testID, onPress, onPressIn, onPressOut, onLongPress, disabled,
+      accessibilityLabel,
+    }: any, ref: React.Ref<HTMLButtonElement>) => React.createElement("button", {
+      ref,
+      "data-testid": testID,
+      "aria-label": accessibilityLabel,
+      disabled,
+      onClick: onPress,
+      onMouseDown: onPressIn,
+      onMouseUp: onPressOut,
+      onContextMenu: (event: React.MouseEvent) => { event.preventDefault(); onLongPress?.(); },
+    }, typeof children === "function" ? children({ pressed: false }) : children)),
     TextInput: React.forwardRef(({
       value, onChangeText, onBlur, onSubmitEditing, testID,
     }: {
@@ -248,30 +261,103 @@ describe("SignalGeneratorModal native microphone lifecycle", () => {
     expect(view.getByTestId("signal-mic-note").textContent).toBe("A4");
   });
 
-  test("the details entry opens analysis without starting the tuner", () => {
+  test("analysis is available directly without a details panel or automatic microphone start", () => {
     const view = render(<SignalGeneratorModal {...makeProps()} />);
 
-    fireEvent.click(view.getByTestId("signal-details-toggle"));
-    fireEvent.click(view.getByTestId("signal-analysis-open"));
-
-    expect(view.getByTestId("signal-analysis-panel")).toBeTruthy();
-    expect(view.getByTestId("signal-analysis-start")).toBeTruthy();
+    expect(view.queryByTestId("signal-details-toggle")).toBeNull();
+    expect(view.queryByTestId("signal-analysis-panel")).toBeNull();
+    expect(view.getByTestId("signal-target-note-picker")).toBeTruthy();
+    expect(view.getByTestId("signal-target-octave-picker")).toBeTruthy();
     expect(NativeApi.AudioRecorder).not.toHaveBeenCalled();
   });
 
-  test("analysis start uses the existing microphone lifecycle", async () => {
+  test("holding the microphone captures past ten seconds and releasing shows results below the tuner", async () => {
     const view = render(<SignalGeneratorModal {...makeProps()} />);
 
-    fireEvent.click(view.getByTestId("signal-details-toggle"));
-    fireEvent.click(view.getByTestId("signal-analysis-open"));
     await act(async () => {
-      fireEvent.click(view.getByTestId("signal-analysis-start"));
+      fireEvent.mouseDown(view.getByTestId("signal-mic-toggle"));
+      fireEvent.contextMenu(view.getByTestId("signal-mic-toggle"));
       await Promise.resolve();
     });
 
     expect(NativeApi.AudioRecorder).toHaveBeenCalledTimes(1);
     expect(AudioRecord.start).toHaveBeenCalledTimes(1);
-    expect(view.getByTestId("signal-analysis-finish")).toBeTruthy();
+    act(() => {
+      AudioRecord.__emit(validPcm440());
+      jest.advanceTimersByTime(12_000);
+    });
+    expect(view.queryByTestId("signal-analysis-timeline")).toBeNull();
+    expect(AudioRecord.stop).not.toHaveBeenCalled();
+    await act(async () => {
+      fireEvent.mouseUp(view.getByTestId("signal-mic-toggle"));
+      await Promise.resolve();
+    });
+    expect(view.getByTestId("signal-analysis-timeline")).toBeTruthy();
+    expect(view.getByTestId("signal-tuner-panel")).toBeTruthy();
+    expect(AudioRecord.stop).toHaveBeenCalledTimes(1);
+    expect(view.getByTestId("signal-analysis-panel").textContent).toContain("12.0s");
+    act(() => {
+      fireEvent.click(view.getByTestId("signal-mic-toggle"));
+      jest.advanceTimersByTime(300);
+    });
+    expect(NativeApi.AudioRecorder).toHaveBeenCalledTimes(1);
+  });
+
+  test("release before microphone permission completes never starts recording", async () => {
+    const audio = require("expo-audio");
+    let grant!: (value: unknown) => void;
+    audio.requestRecordingPermissionsAsync.mockImplementationOnce(() => new Promise((resolve) => { grant = resolve; }));
+    const view = render(<SignalGeneratorModal {...makeProps()} />);
+    await act(async () => {
+      fireEvent.mouseDown(view.getByTestId("signal-mic-toggle"));
+      fireEvent.contextMenu(view.getByTestId("signal-mic-toggle"));
+      await Promise.resolve();
+    });
+    await act(async () => {
+      fireEvent.mouseUp(view.getByTestId("signal-mic-toggle"));
+      grant({ status: "granted", canAskAgain: true });
+      await Promise.resolve();
+    });
+    expect(NativeApi.AudioRecorder).not.toHaveBeenCalled();
+    expect(view.queryByTestId("signal-analysis-panel")).toBeNull();
+  });
+
+  test("closing while held stops capture and discards late results", async () => {
+    const props = makeProps();
+    const view = render(<SignalGeneratorModal {...props} />);
+    await act(async () => {
+      fireEvent.mouseDown(view.getByTestId("signal-mic-toggle"));
+      fireEvent.contextMenu(view.getByTestId("signal-mic-toggle"));
+      await Promise.resolve();
+    });
+    act(() => { AudioRecord.__emit(validPcm440()); });
+    view.rerender(<SignalGeneratorModal {...props} visible={false} />);
+    await act(async () => { jest.advanceTimersByTime(1000); });
+    expect(AudioRecord.stop).toHaveBeenCalledTimes(1);
+    view.rerender(<SignalGeneratorModal {...props} />);
+    expect(view.queryByTestId("signal-analysis-panel")).toBeNull();
+    expect(view.queryByTestId("signal-mic-frequency")).toBeNull();
+  });
+
+  test("releasing a reference hold during file preparation prevents late playback", async () => {
+    const audio = require("expo-audio");
+    const fs = require("expo-file-system/legacy");
+    let finishWrite!: () => void;
+    const write = jest.spyOn(fs, "writeAsStringAsync").mockImplementationOnce(() => new Promise<void>((resolve) => { finishWrite = resolve; }));
+    const view = render(<SignalGeneratorModal {...makeProps()} />);
+    await act(async () => {
+      fireEvent.mouseDown(view.getByTestId("signal-target-edit"));
+      fireEvent.contextMenu(view.getByTestId("signal-target-edit"));
+      await Promise.resolve();
+    });
+    await act(async () => {
+      fireEvent.mouseUp(view.getByTestId("signal-target-edit"));
+      finishWrite();
+      await Promise.resolve();
+    });
+    expect(audio.createAudioPlayer).not.toHaveBeenCalled();
+    expect(view.queryByTestId("signal-frequency-input")).toBeNull();
+    write.mockRestore();
   });
 
   test("a missing native binary shows a rebuild message, not a permission error", async () => {
