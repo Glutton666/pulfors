@@ -530,11 +530,7 @@ const makeStyles = (C: typeof Colors) => StyleSheet.create({
   panel: {
     width: "100%",
     alignSelf: "stretch",
-    padding: Spacing.md,
-    borderRadius: Radius.xl,
-    borderWidth: 1,
-    borderColor: C.border,
-    backgroundColor: C.surface,
+    padding: 0,
     gap: Spacing.md,
   },
   header: {
@@ -582,10 +578,6 @@ const makeStyles = (C: typeof Colors) => StyleSheet.create({
   },
   pitchReadout: {
     minHeight: 82,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    borderRadius: Radius.lg,
-    backgroundColor: C.background,
     alignItems: "center",
     justifyContent: "center",
   },

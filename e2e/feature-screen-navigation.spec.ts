@@ -67,6 +67,16 @@ for (const viewport of [
 
     await page.getByRole("menuitem", { name: /시그널 제너레이터|signal generator/i }).click();
     await expectFullScreen(page, "signal-generator-screen");
+    // Full-screen transport alone is insufficient: the tuner itself must not
+    // retain a separate rounded card or an inset detected-pitch box.
+    const tuner = page.getByTestId("signal-tuner-panel");
+    await expect(tuner).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+    await expect(tuner).toHaveCSS("border-top-width", "0px");
+    await expect(tuner).toHaveCSS("border-top-left-radius", "0px");
+    const readout = page.getByTestId("signal-mic-placeholder").locator("..").locator("..");
+    await expect(readout).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+    await expect(readout).toHaveCSS("border-top-left-radius", "0px");
+    await page.screenshot({ path: `/tmp/feature-screen-tuner-${viewport.width}x${viewport.height}.jpg` });
     if (viewport.width === 375) {
       await page.screenshot({ path: "/tmp/feature-screen-tuner.jpg" });
     }
