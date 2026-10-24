@@ -35,6 +35,9 @@
 import { test, expect, type Page } from "@playwright/test";
 
 const VIEWPORT = { width: 375, height: 667 };
+test.use({
+  baseURL: process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : undefined,
+});
 
 /** 온보딩이 있으면 모두 건너뛴다 (최대 8회). */
 async function skipOnboarding(page: Page) {
@@ -98,10 +101,14 @@ test.describe("SignalGeneratorModal 스크롤 (375×667 iPhone SE)", () => {
     await skipOnboarding(page);
   });
 
-  test("스크롤 후 파형 선택 버튼과 재생 버튼이 뷰포트 안에 보인다", async ({
+  test("기본 튜너에서 상세를 열고 스크롤하면 파형 선택에 도달한다", async ({
     page,
   }) => {
     await openSignalGenerator(page);
+    await expect(page.getByTestId("signal-target-frequency")).toBeInViewport();
+    await expect(page.getByTestId("signal-mic-toggle")).toBeInViewport();
+    await expect(page.getByTestId("signal-details")).toHaveCount(0);
+    await page.getByTestId("signal-details-toggle").click();
 
     await scrollSignalModal(page);
     for (const waveType of ["sine", "square", "triangle", "sawtooth"]) {
@@ -110,7 +117,9 @@ test.describe("SignalGeneratorModal 스크롤 (375×667 iPhone SE)", () => {
       ).toBeInViewport();
     }
 
-    await expect(page.locator('[data-testid="signal-toggle"]')).toBeInViewport();
+    await page.getByTestId("signal-wave-square").click();
+    await page.getByTestId("signal-toggle").scrollIntoViewIfNeeded();
+    await expect(page.getByTestId("signal-toggle")).toBeInViewport();
   });
 
   test("스크롤 후 재생 버튼을 클릭하면 정지 상태로 전환된다", async ({
@@ -126,5 +135,27 @@ test.describe("SignalGeneratorModal 스크롤 (375×667 iPhone SE)", () => {
 
     await expect(toggleBtn).toBeVisible();
     await expect(toggleBtn).toBeEnabled();
+    await expect(toggleBtn).toHaveAttribute("aria-label", /기준음 정지|Stop reference/);
+    await toggleBtn.click();
+    await expect(toggleBtn).toHaveAttribute("aria-label", /기준음 재생|Play reference/);
+  });
+
+  test("접지 않은 타겟을 버튼과 직접 입력으로 조절한다", async ({ page }) => {
+    await openSignalGenerator(page);
+    await page.getByTestId("signal-target-increase").click();
+    await expect(page.getByTestId("signal-target-frequency")).toHaveText(/441\.0/);
+    await page.getByTestId("signal-target-decrease").click();
+    await expect(page.getByTestId("signal-target-frequency")).toHaveText(/440\.0/);
+    await page.getByTestId("signal-target-edit").click();
+    const input = page.getByTestId("signal-frequency-input");
+    await input.fill("432");
+    await input.press("Enter");
+    await expect(page.getByTestId("signal-target-frequency")).toHaveText(/432\.0/);
+    await expect(input).toHaveCount(0);
+    await expect(page.getByTestId("signal-details")).toHaveCount(0);
+    await page.getByTestId("signal-target-edit").click();
+    await input.fill("435");
+    await page.getByRole("button", { name: /^Apply$|^적용$/ }).click();
+    await expect(page.getByTestId("signal-target-frequency")).toHaveText(/435\.0/);
   });
 });

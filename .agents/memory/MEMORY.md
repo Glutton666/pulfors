@@ -58,6 +58,7 @@
 - [Native dense-pattern playback](native-dense-pattern-playback.md) — native Beat playback is rendered-first; async per-tick seek/play can reorder accent and normal output.
 - [Metronome tone shaping](metronome-boost-path.md) — XY tone shaping requires shared rendered PCM; realtime remains the neutral-tone path.
 - [RN Web ScrollView parent sizing](rn-web-scrollview-parent-sizing.md) — a bounded card is insufficient; the ScrollView's direct parent also needs flex:1/minHeight:0 or short screens cannot scroll.
+- [RN Web editor submit races](rn-web-editor-submit-races.md) — submit the event's text, not potentially stale React state; incidental blur must not destroy a newly focused editor.
 - [Deployment npm compatibility](deployment-npm-peer-resolution.md) — publishing ignores Yarn-only resolutions; verify fresh npm peers and parent-pinned security dependencies.
 - [Scheduled playback ownership](scheduled-playback-ownership.md) — preloaded starts need token ownership; modal unmount cleanup must use a latest-callback ref.
 - [Expo web static image URLs](expo-web-static-image-urls.md) — RN Image.resolveAssetSource is unavailable on web; use Expo asset metadata and Metro's unstable_path URL for CSS masks.

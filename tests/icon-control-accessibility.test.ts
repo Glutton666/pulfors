@@ -7,16 +7,22 @@ import { translations } from "../lib/i18n.data";
 
 const readSource = (path: string) => readFileSync(join(process.cwd(), path), "utf8");
 
-test("signal generator close and clear-target icon controls expose localized actions", () => {
+test("signal generator close and persistent-target icon controls expose localized actions", () => {
   const source = readSource("components/SignalGeneratorModal.tsx");
 
   const count = (value: string) => source.split(value).length - 1;
   assert.equal(count('accessibilityLabel={t("signalGenerator", "close")}'), 3, "portrait, landscape, and tuning guide close controls must be labeled");
   assert.equal(count('accessibilityHint={t("signalGenerator", "closeHint")}'), 3);
-  assert.match(
-    source,
-    /onPress=\{clearPitchTarget\}[\s\S]*?accessibilityRole="button"[\s\S]*?accessibilityLabel=\{t\("signalGenerator", "clearTarget"\)\}[\s\S]*?accessibilityHint=\{t\("signalGenerator", "clearTargetHint"\)\}/,
-  );
+  const tunerSource = readSource("components/signal-generator/TunerPanel.tsx");
+  for (const [id, key] of [
+    ["signal-target-decrease", "targetDecrease"],
+    ["signal-target-increase", "targetIncrease"],
+  ]) {
+    assert.match(tunerSource, new RegExp(
+      `testID="${id}"[\\s\\S]*?accessibilityRole="button"[\\s\\S]*?accessibilityLabel=\\{t\\("signalGenerator", "${key}"\\)\\}`,
+    ));
+  }
+  assert.match(tunerSource, /testID="signal-target-edit"[\s\S]*?accessibilityRole="button"[\s\S]*?accessibilityLabel=.*t\("signalGenerator", "editTarget"\)/);
 });
 
 test("drum kit close control exposes a localized button action", () => {
@@ -38,7 +44,7 @@ test("menu header updates its accessible action when switching between menu and 
 
 test("icon-control accessibility labels and hints have Korean and English translations", () => {
   for (const [section, keys] of [
-    ["signalGenerator", ["close", "closeHint", "clearTarget", "clearTargetHint"]],
+    ["signalGenerator", ["close", "closeHint", "targetDecrease", "targetIncrease", "editTarget", "applyTarget", "micStart", "micStop", "referencePlay", "referenceStop", "useDetected"]],
     ["drumKit", ["close", "closeHint"]],
     ["switcher", ["openDial", "closeDial", "openDialHint", "closeDialHint"]],
     ["main", ["menuBack", "menuBackHint"]],

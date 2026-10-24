@@ -56,6 +56,7 @@ import {
   type AnalysisSummary,
 } from "@/lib/signal-analysis-session";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { TunerPanel } from "@/components/signal-generator/TunerPanel";
 
 const WAVE_CONFIGS: { type: WaveType; key: "sine" | "square" | "triangle" | "saw"; icon: string }[] = [
   { type: "sine", key: "sine", icon: "sine-wave" },
@@ -775,18 +776,17 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
   // explicit height, React Native Web lets the ScrollView measure to its full
   // content height, so short viewports cannot scroll to the waveform controls.
   const dynamicCardHeight = isLandscape ? winH * 0.88 : winH * 0.83;
-  const landscapeGap = isLandscape ? Math.max(8, winW * 0.012) : 0;
   const landscapePadH = isLandscape ? Math.max(12, winW * 0.018) : 0;
   const landscapePadV = isLandscape ? Math.max(10, winH * 0.025) : 0;
   const cardPad = isLandscape ? undefined : Math.max(16, S.ms(20, 0.4));
   const cardGap = isLandscape ? undefined : Math.max(16, S.ms(18, 0.4));
-  const micBtnSize = isLandscape ? 28 : Math.max(28, S.ms(30, 0.3));
-  const micIconSize = isLandscape ? 14 : Math.max(14, S.ms(15, 0.3));
   const [frequency, setFrequency] = useState(440);
+  const [showDetails, setShowDetails] = useState(false);
   const [waveType, setWaveType] = useState<WaveType>("sine");
   const [isPlaying, setIsPlaying] = useState(false);
   const [editingFreq, setEditingFreq] = useState(false);
   const [freqInput, setFreqInput] = useState("440");
+  const freqInputRef = useRef("440");
   const [selectedNote, setSelectedNote] = useState("A");
   const [selectedOctave, setSelectedOctave] = useState(4);
   const preGuideFreqRef = useRef<number | null>(null);
@@ -800,7 +800,6 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
     const f = noteToFreq(note, selectedOctave);
     if (f >= MIN_FREQ && f <= MAX_FREQ) {
       setFrequency(f);
-      setPitchTargetFreq(f);
     }
     setTimeout(() => { pickerDrivenRef.current = false; }, 150);
   }, [selectedOctave]);
@@ -811,7 +810,6 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
     const f = noteToFreq(selectedNote, oct);
     if (f >= MIN_FREQ && f <= MAX_FREQ) {
       setFrequency(f);
-      setPitchTargetFreq(f);
     }
     setTimeout(() => { pickerDrivenRef.current = false; }, 150);
   }, [selectedNote]);
@@ -836,7 +834,6 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
   const [micAnalyzed, setMicAnalyzed] = useState(false);
   const [micError, setMicError] = useState<"permission" | "startFailed" | "nativeUnavailable" | null>(null);
   const [micNoInput, setMicNoInput] = useState(false);
-  const [pitchTargetFreq, setPitchTargetFreq] = useState<number | null>(null);
   const [analysisPhase, setAnalysisPhase] = useState<AnalysisPhase>("idle");
   const [analysisElapsedMs, setAnalysisElapsedMs] = useState(0);
   const [analysisPositionSec, setAnalysisPositionSec] = useState(0);
@@ -872,7 +869,6 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
   const analysisPlaybackSubscriptionRef = useRef<{ remove: () => void } | null>(null);
   const analysisPlaybackAnchorSecRef = useRef(0);
   const analysisPlaybackStartedAtRef = useRef(0);
-  const analysisLongPressRef = useRef(false);
   const analysisTimelineWidthRef = useRef(1);
   const micToggleDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const startMicRef = useRef<() => void>(() => {});
@@ -1385,7 +1381,6 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
 
         if (rms >= MIC_GATE) {
           // 신호가 있을 때마다 스펙트럼 분석 (연속 감지)
-          lastSignalTime = nowMs;
           analyser.getFloatFrequencyData(fftBuf);
 
           // 스펙트럼 디스플레이용 데이터 캡처 (매 4프레임마다 UI 업데이트)
@@ -1400,18 +1395,20 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
           // HPS 기반 기음 탐지
           const result = fftPeakDetect(fftBuf, audioCtx.sampleRate, analyser.fftSize);
           if (result && result.freq > 20 && result.freq <= MAX_FREQ) {
+            lastSignalTime = nowMs;
             spectrumPeakBinRef.current = result.peakBin;
             readings.push(result.freq);
             // 최대 readings 수 초과시 오래된 것 제거
             if (readings.length > MAX_READINGS) readings.shift();
           }
-        } else if (nowMs - lastSignalTime > SILENCE_RESET_MS) {
-          // 침묵이 일정 시간 지속되면 readings 초기화
+        }
+        if (nowMs - lastSignalTime > SILENCE_RESET_MS) {
+          // Silence or unpitched input must not leave an old pitch looking live.
           readings = [];
           windowStart = nowMs;
-            // 스트림은 살아 있지만 입력이 무음인 상태를 "감지 중"과
-            // 구분해 사용자에게 표시한다.
-            setMicAnalyzed(true);
+          setMicAnalyzed(true);
+          setMicDetectedFreq(null);
+          setMicDetectedNote(null);
         }
 
         if (analysisActiveRef.current && analysisCaptureRef.current && nowMs - lastAnalysisFrameTime >= ANALYSIS_BUCKET_MS) {
@@ -1439,6 +1436,9 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
               setMicDetectedFreq(Math.round(dominant * 10) / 10);
               const noteInfo = frequencyToNote(dominant);
               setMicDetectedNote(`${noteInfo.name}${noteInfo.octave}`);
+            } else {
+              setMicDetectedFreq(null);
+              setMicDetectedNote(null);
             }
             // readings의 후반부만 유지해 연속 음 변화에 대응
             readings = readings.slice(-Math.floor(MAX_READINGS / 2));
@@ -1532,7 +1532,12 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
           let rms = 0;
           for (let i = 0; i < win.length; i++) rms += win[i] * win[i];
           rms = Math.sqrt(rms / win.length);
-          if (rms < 0.01) { setMicAnalyzed(true); continue; }
+          if (rms < 0.01) {
+            setMicAnalyzed(true);
+            setMicDetectedFreq(null);
+            setMicDetectedNote(null);
+            continue;
+          }
           for (let i = 0; i < WINDOW_SIZE; i++) {
             win[i] *= 0.5 * (1 - Math.cos(2 * Math.PI * i / (WINDOW_SIZE - 1)));
           }
@@ -1618,11 +1623,6 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
   useEffect(() => clearMicToggleDebounce, [clearMicToggleDebounce]);
 
   const handleMicPress = useCallback(() => {
-    if (analysisLongPressRef.current) {
-      analysisLongPressRef.current = false;
-      clearMicToggleDebounce();
-      return;
-    }
     clearMicToggleDebounce();
     if (onMicTap?.()) {
       stopPlayback();
@@ -1635,15 +1635,12 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
     }, 260);
   }, [onMicTap, stopPlayback, stopMic, toggleMic, clearMicToggleDebounce]);
 
-  const handleMicLongPress = useCallback(() => {
-    analysisLongPressRef.current = true;
-    openAnalysisMode();
-  }, [openAnalysisMode]);
-
   const handleClose = useCallback(() => {
     clearMicToggleDebounce();
     stopPlayback();
     stopMic();
+    setShowDetails(false);
+    setEditingFreq(false);
     onClose();
   }, [stopPlayback, stopMic, onClose, clearMicToggleDebounce]);
 
@@ -1659,20 +1656,34 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
 
   useEffect(() => { micDetectedFreqRef.current = micDetectedFreq; }, [micDetectedFreq]);
 
-  const clearPitchTarget = useCallback(() => {
+  const liveFrequency = micListening && !micError && !micNoInput &&
+    micDetectedFreq !== null && Number.isFinite(micDetectedFreq) &&
+    micDetectedFreq >= MIN_FREQ && micDetectedFreq <= MAX_FREQ ? micDetectedFreq : null;
+  const centsDifference = liveFrequency === null ? null :
+    Math.round(1200 * Math.log2(liveFrequency / frequency));
+  const microphoneStatus = micError
+    ? t("signalGenerator", micError === "permission" ? "micPermissionRequired" : micError === "nativeUnavailable" ? "micNativeUnavailable" : "micStartFailed")
+    : micNoInput ? t("signalGenerator", "micNoInput")
+    : !micListening ? t("signalGenerator", "micOffPrompt")
+    : liveFrequency !== null ? t("signalGenerator", "micActive")
+    : t("signalGenerator", micAnalyzed ? "noSignal" : "detecting");
+  const useDetectedTarget = () => {
+    if (liveFrequency === null) return;
     hapticFeedback();
-    setPitchTargetFreq(null);
-  }, [hapticFeedback]);
-
-  const pitchComparison = useMemo(() => {
-    if (!micListening || !micDetectedFreq || pitchTargetFreq === null) return null;
-    const centsDiff = Math.round(1200 * Math.log2(micDetectedFreq / pitchTargetFreq));
-    const targetNote = frequencyToNote(pitchTargetFreq);
-    const targetLabel = `${targetNote.name}${targetNote.octave}`;
-    if (Math.abs(centsDiff) <= 5) return { status: "exact" as const, cents: centsDiff, targetLabel };
-    if (centsDiff > 0) return { status: "high" as const, cents: centsDiff, targetLabel };
-    return { status: "low" as const, cents: centsDiff, targetLabel };
-  }, [micListening, micDetectedFreq, pitchTargetFreq]);
+    setFrequency(liveFrequency);
+  };
+  const openTuningGuide = () => {
+    hapticFeedback();
+    const capturedFreq = frequency;
+    onOpenTuningGuide(capturedFreq, (selectedFreq) => {
+      if (preGuideFreqRef.current === null) preGuideFreqRef.current = capturedFreq;
+      setFrequency(selectedFreq);
+    });
+  };
+  const toggleReference = () => {
+    hapticFeedback();
+    isPlaying ? stopPlayback() : startPlayback();
+  };
 
   const formatFreqDisplay = (f: number) => {
     if (f >= 1000) return (f / 1000).toFixed(f >= 10000 ? 1 : 2);
@@ -1681,18 +1692,23 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
 
   const freqDisplayUnit = frequency >= 1000 ? "kHz" : t("signalGenerator", "hzUnit");
 
-  const commitFreqInput = useCallback(() => {
+  const updateFreqInput = useCallback((text: string) => {
+    freqInputRef.current = text;
+    setFreqInput(text);
+  }, []);
+
+  const commitFreqInput = useCallback((submittedText?: string) => {
     setEditingFreq(false);
-    const val = parseFloat(freqInput);
+    const val = parseFloat(submittedText ?? freqInputRef.current);
     if (!isNaN(val) && val >= MIN_FREQ && val <= MAX_FREQ) {
       setFrequency(Math.round(val * 10) / 10);
     }
-  }, [freqInput]);
+  }, []);
 
   const openFreqEdit = useCallback(() => {
-    setFreqInput(String(frequency));
+    updateFreqInput(String(frequency));
     setEditingFreq(true);
-  }, [frequency]);
+  }, [frequency, updateFreqInput]);
 
   const topPeaks = useMemo(() => {
     const data = spectrumDataRef.current;
@@ -1987,14 +2003,10 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
           )}
 
           {analysisPhase !== "idle" ? analysisPanel : (
-          <View style={isLandscape
-            ? { flexDirection: "row" as const, gap: landscapeGap, alignItems: "stretch" as const, flex: 1 }
-            : { flex: 1, minHeight: 0 }
-          }>
-          {/* LEFT column: controls (same as portrait) */}
+          <View style={{ flex: 1, minHeight: 0, alignSelf: "stretch" }}>
           <ScrollView
             style={{ flex: 1, minHeight: 0 }}
-            contentContainerStyle={!isLandscape ? { flexGrow: 1 } : undefined}
+            contentContainerStyle={{ flexGrow: 1, gap: Spacing.md, paddingBottom: Spacing.sm }}
             showsVerticalScrollIndicator={false}
             bounces={false}
             nestedScrollEnabled
@@ -2002,6 +2014,61 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
             keyboardDismissMode="on-drag"
             testID="signal-scroll"
           >
+          <TunerPanel
+            detectedFrequency={liveFrequency}
+            detectedNote={liveFrequency === null ? null : micDetectedNote}
+            listening={micListening}
+            statusText={microphoneStatus}
+            targetFrequency={frequency}
+            targetNote={currentNoteLabel}
+            cents={centsDifference}
+            referencePlaying={isPlaying}
+            onToggleMic={handleMicPress}
+            onDecrease={() => setFrequency((value) => Math.max(MIN_FREQ, Math.round((value - 1) * 10) / 10))}
+            onIncrease={() => setFrequency((value) => Math.min(MAX_FREQ, Math.round((value + 1) * 10) / 10))}
+            onEditTarget={openFreqEdit}
+            onUseDetected={useDetectedTarget}
+            onToggleReference={toggleReference}
+            onOpenGuide={openTuningGuide}
+          />
+          {editingFreq && (
+            <View style={styles.freqEditRow}>
+              <TextInput
+                testID="signal-frequency-input"
+                accessibilityLabel={t("signalGenerator", "editTarget")}
+                style={[styles.freqEditInput, { color: C.accent, borderBottomColor: C.accent }]}
+                value={freqInput}
+                onChangeText={updateFreqInput}
+                onSubmitEditing={(event) => commitFreqInput(event.nativeEvent.text)}
+                keyboardType="numeric"
+                autoFocus
+                selectTextOnFocus
+              />
+              <Pressable onPress={() => commitFreqInput()} accessibilityRole="button" accessibilityLabel={t("signalGenerator", "applyTarget")} style={{ padding: 12 }}>
+                <Text style={{ color: C.accent }}>{t("signalGenerator", "applyTarget")}</Text>
+              </Pressable>
+            </View>
+          )}
+          <Pressable
+            testID="signal-details-toggle"
+            onPress={() => setShowDetails((value) => !value)}
+            accessibilityRole="button"
+            accessibilityState={{ expanded: showDetails }}
+            style={{ minHeight: 44, flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderTopWidth: 1, borderColor: C.border }}
+          >
+            <Text style={{ color: C.textSecondary, fontFamily: "SpaceGrotesk_500Medium", fontSize: 13 }}>{t("signalGenerator", "generatorDetails")}</Text>
+            <Ionicons name={showDetails ? "chevron-up" : "chevron-down"} size={18} color={C.textSecondary} />
+          </Pressable>
+          {showDetails && (
+          <View testID="signal-details" style={{ gap: 16 }}>
+          <Pressable
+            testID="signal-analysis-open"
+            onPress={openAnalysisMode}
+            accessibilityRole="button"
+            style={{ minHeight: 44, justifyContent: "center", alignItems: "center", borderWidth: 1, borderColor: C.border, borderRadius: Radius.md }}
+          >
+            <Text style={{ color: C.accent }}>{t("signalGenerator", "analysisTitle")}</Text>
+          </Pressable>
           <View style={styles.knobMicContainer}>
             <View style={styles.knobWrap}>
               <Knob
@@ -2017,156 +2084,17 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
                   if (captured) {
                     hapticFeedback();
                     setFrequency(captured);
-                    setPitchTargetFreq(captured);
                   }
                 } : undefined}
                 noteLabel={currentNoteLabel}
                 knobSize={dynamicKnobSize}
               />
             </View>
-            {/* 마이크 버튼 — 노브 아래 독립 행 */}
-            <View style={styles.micRow}>
-              <Pressable
-                onPress={handleMicPress}
-                onLongPress={handleMicLongPress}
-                delayLongPress={500}
-                style={[
-                  styles.micEmoji,
-                  micListening && styles.micEmojiActive,
-                  { width: micBtnSize, height: micBtnSize, borderRadius: micBtnSize / 2 },
-                ]}
-                hitSlop={8}
-                testID="signal-mic-toggle"
-                accessibilityLabel={t("signalGenerator", "tunerMic")}
-              >
-                <MaterialCommunityIcons
-                  name={micListening ? "microphone-off" : "microphone"}
-                  size={micIconSize}
-                  color={micListening ? C.danger : C.textSecondary}
-                />
-              </Pressable>
-              {pitchTargetFreq !== null && (
-                <View style={styles.targetChip}>
-                  <MaterialCommunityIcons name="target" size={10} color={C.accent} />
-                  <Text style={styles.targetChipText}>
-                    {frequencyToNote(pitchTargetFreq).name}{frequencyToNote(pitchTargetFreq).octave}
-                    {" "}{Math.round(pitchTargetFreq)} {t("signalGenerator", "hzUnit")}
-                  </Text>
-                  <Pressable
-                    onPress={clearPitchTarget}
-                    hitSlop={6}
-                    accessibilityRole="button"
-                    accessibilityLabel={t("signalGenerator", "clearTarget")}
-                    accessibilityHint={t("signalGenerator", "clearTargetHint")}
-                  >
-                    <Ionicons name="close-circle" size={12} color={C.textTertiary} />
-                  </Pressable>
-                </View>
-              )}
-            </View>
-            {(micDetectedFreq || micListening || micError) && (
-            <View style={[styles.micSection, isLandscape && { gap: Spacing.xs }]}>
-              {micError ? (
-                <Text style={[styles.micDetectedHint, { color: C.danger }, isLandscape && { fontSize: FontSize.micro }]}>
-                  {t("signalGenerator", micError === "permission" ? "micPermissionRequired" : micError === "nativeUnavailable" ? "micNativeUnavailable" : "micStartFailed")}
-                </Text>
-              ) : micNoInput ? (
-                <Text style={[styles.micDetectedHint, { color: C.danger }, isLandscape && { fontSize: FontSize.micro }]}>
-                  {t("signalGenerator", "micNoInput")}
-                </Text>
-              ) : micDetectedFreq ? (
-                <View style={[styles.micDetectedWrap, isLandscape && { marginTop: Spacing.xxs }]}>
-                  <View style={{ flexDirection: "row" as const, alignItems: "center" as const, gap: Spacing.xs, flexWrap: "wrap" as const, justifyContent: "center" as const }}>
-                    <Text testID="signal-mic-frequency" style={[styles.micDetectedHint, { color: micListening ? C.accent : C.textTertiary }, isLandscape && { fontSize: FontSize.micro }]}>
-                      {micDetectedFreq} {t("signalGenerator", "hzUnit")}
-                    </Text>
-                    <Text style={[styles.micDetectedHint, { color: micListening ? C.accent : C.textTertiary, opacity: 0.6 }, isLandscape && { fontSize: FontSize.micro }]}>|</Text>
-                    <Text testID="signal-mic-note" style={[styles.micDetectedHint, { color: micListening ? C.accent : C.textTertiary, fontWeight: "700" as const }, isLandscape && { fontSize: FontSize.micro }]}>
-                      {micDetectedNote}
-                    </Text>
-                  </View>
-                  {micListening && pitchComparison ? (
-                    <View style={[
-                      styles.pitchIndicator,
-                      isLandscape && { paddingHorizontal: 6, paddingVertical: Spacing.xxs },
-                      {
-                        backgroundColor: pitchComparison.status === "exact"
-                          ? "rgba(48,209,88,0.15)"
-                          : pitchComparison.status === "high"
-                          ? "rgba(255,159,10,0.15)"
-                          : "rgba(100,149,237,0.15)",
-                        borderColor: pitchComparison.status === "exact"
-                          ? "rgba(48,209,88,0.4)"
-                          : pitchComparison.status === "high"
-                          ? "rgba(255,159,10,0.4)"
-                          : "rgba(100,149,237,0.4)",
-                      }
-                    ]}>
-                      <Ionicons
-                        name={
-                          pitchComparison.status === "exact"
-                            ? "checkmark-circle"
-                            : pitchComparison.status === "high"
-                            ? "arrow-up"
-                            : "arrow-down"
-                        }
-                        size={isLandscape ? 10 : 12}
-                        color={
-                          pitchComparison.status === "exact"
-                            ? "#30D158"
-                            : pitchComparison.status === "high"
-                            ? "#FF9F0A"
-                            : "#6495ED"
-                        }
-                      />
-                      <Text style={[
-                        styles.pitchIndicatorText,
-                        isLandscape && { fontSize: 9 },
-                        {
-                          color: pitchComparison.status === "exact"
-                            ? "#30D158"
-                            : pitchComparison.status === "high"
-                            ? "#FF9F0A"
-                            : "#6495ED",
-                        }
-                      ]}>
-                        {pitchComparison.status === "exact"
-                          ? `${t("signalGenerator", "pitchExact")} (${pitchComparison.targetLabel})`
-                          : pitchComparison.status === "high"
-                          ? `${t("signalGenerator", "pitchHigh")} +${pitchComparison.cents}¢`
-                          : `${t("signalGenerator", "pitchLow")} ${pitchComparison.cents}¢`}
-                      </Text>
-                    </View>
-                  ) : null}
-                </View>
-              ) : micListening ? (
-                <Text style={[styles.micDetectedHint, isLandscape && { fontSize: FontSize.micro }]}>
-                  {micAnalyzed ? t("signalGenerator", "noSignal") : t("signalGenerator", "detecting")}
-                </Text>
-              ) : null}
-            </View>
-            )}
           </View>
 
           {!isLandscape && <View style={{ height: Math.max(14, S.ms(16, 0.4)) }} />}
 
           <View style={{ alignItems: "center" as const, gap: Math.max(18, S.ms(20, 0.4)), width: "100%" as const }}>
-            {editingFreq && (
-              <View style={styles.freqEditRow}>
-                <TextInput
-                  style={[styles.freqEditInput, { color: C.accent, borderBottomColor: C.accent }]}
-                  value={freqInput}
-                  onChangeText={setFreqInput}
-                  onSubmitEditing={commitFreqInput}
-                  onBlur={commitFreqInput}
-                  keyboardType="numeric"
-                  autoFocus
-                  selectTextOnFocus
-                />
-                <Text style={styles.freqEditUnit}>{t("signalGenerator", "hzUnit")}</Text>
-              </View>
-            )}
-
             <View style={styles.notePickerRow}>
               <PickerColumn
                 data={NOTE_NAMES}
@@ -2201,14 +2129,13 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
             </Pressable>
 
             <Pressable
-              testID="signal-tuning-guide"
+              testID="signal-tuning-guide-details"
               onPress={() => {
                 hapticFeedback();
                 const capturedFreq = frequency;
                 onOpenTuningGuide(capturedFreq, (selectedFreq) => {
                   if (preGuideFreqRef.current === null) preGuideFreqRef.current = capturedFreq;
                   setFrequency(selectedFreq);
-                  setPitchTargetFreq(selectedFreq);
                 });
               }}
               onLongPress={() => {
@@ -2252,44 +2179,16 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
               </View>
             </View>
 
-            <Pressable
-              onPress={() => {
-                hapticFeedback();
-                isPlaying ? stopPlayback() : startPlayback();
-              }}
-              style={({ pressed }) => [
-                styles.playBtn,
-                { backgroundColor: isPlaying ? C.danger : C.accent },
-                pressed && { opacity: 0.7, transform: [{ scale: 0.95 }] },
-              ]}
-              testID="signal-toggle"
-            >
-              <Ionicons
-                name={isPlaying ? "stop" : "play"}
-                size={S.ms(20, 0.4)}
-                color={isPlaying ? C.white : onAccentColor(C.accent)}
-              />
-              <Text style={[styles.playBtnText, { color: isPlaying ? C.white : onAccentColor(C.accent) }]}>
-                {isPlaying ? t("signalGenerator", "stop") : t("signalGenerator", "play")}
-              </Text>
-            </Pressable>
             </View>
-          </ScrollView>
 
-          {/* RIGHT column: detected Hz peaks (landscape only) */}
-          {isLandscape && (
-            <View style={{ flex: 1, borderLeftWidth: 1, borderLeftColor: C.border, paddingLeft: landscapePadH, paddingTop: Spacing.xs }}>
+          {/* Supplemental spectral peaks stay inside the scrollable details. */}
+            <View style={{ borderTopWidth: 1, borderTopColor: C.border, paddingTop: Spacing.sm }}>
               <Text style={{ color: C.textSecondary, fontFamily: "SpaceGrotesk_600SemiBold", fontSize: FontSize.micro, letterSpacing: 1.2, marginBottom: Spacing.sm, textTransform: "uppercase" as const }}>
                 {t("signalGenerator", "detectedFreqs")}
               </Text>
               {micListening ? (
                 topPeaks.length > 0 ? (
-                  <ScrollView
-                    showsVerticalScrollIndicator={false}
-                    style={{ flex: 1 }}
-                    keyboardShouldPersistTaps="handled"
-                    keyboardDismissMode="on-drag"
-                  >
+                  <View>
                     <View style={{ flexDirection: "row" as const, paddingBottom: Spacing.xs, borderBottomWidth: 0.5, borderBottomColor: C.border, marginBottom: Spacing.xxs }}>
                       <Text style={{ flex: 1.4, color: C.textTertiary, fontSize: 9, letterSpacing: 0.8, fontFamily: "SpaceGrotesk_500Medium" }}>Hz</Text>
                       <Text style={{ flex: 0.7, color: C.textTertiary, fontSize: 9, letterSpacing: 0.8, fontFamily: "SpaceGrotesk_500Medium", textAlign: "center" as const }}>{t("signalGenerator", "noteLabel")}</Text>
@@ -2323,7 +2222,7 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
                       </Pressable>
                       );
                     })}
-                  </ScrollView>
+                  </View>
                 ) : (
                   <Text style={{ color: C.textTertiary, fontSize: FontSize.small, fontFamily: "SpaceGrotesk_400Regular" }}>
                     {micAnalyzed ? t("signalGenerator", "noSignal") : t("signalGenerator", "detecting")}
@@ -2338,8 +2237,10 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
                 </View>
               )}
             </View>
+          </View>
           )}
-           </View>
+          </ScrollView>
+          </View>
           )}
 
 

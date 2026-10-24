@@ -9,6 +9,7 @@ const VIEWPORT = { width: 375, height: 667 };
 type MicMode = "tone" | "silence" | "denied";
 
 type MicProbe = {
+  inputMode: MicMode;
   contextsCreated: number;
   contextsClosed: number;
   streamsCreated: number;
@@ -19,6 +20,7 @@ type MicProbe = {
 async function installFakeMic(page: Page, mode: MicMode) {
   await page.addInitScript((micMode: MicMode) => {
     const probe: MicProbe = {
+      inputMode: micMode,
       contextsCreated: 0,
       contextsClosed: 0,
       streamsCreated: 0,
@@ -38,7 +40,7 @@ async function installFakeMic(page: Page, mode: MicMode) {
 
       getFloatTimeDomainData(buffer: Float32Array) {
         for (let i = 0; i < buffer.length; i++) {
-          buffer[i] = micMode === "tone"
+          buffer[i] = probe.inputMode === "tone"
             ? Math.sin(2 * Math.PI * targetFreq * i / 48000) * 0.25
             : 0;
         }
@@ -46,7 +48,7 @@ async function installFakeMic(page: Page, mode: MicMode) {
 
       getFloatFrequencyData(buffer: Float32Array) {
         buffer.fill(-100);
-        if (micMode !== "tone") return;
+        if (probe.inputMode !== "tone") return;
         const bin = Math.round(targetFreq / (48000 / this.fftSize));
         buffer[bin - 1] = -20;
         buffer[bin] = -10;
@@ -164,8 +166,21 @@ test.describe("SignalGeneratorModal microphone lifecycle", () => {
     const mic = page.locator('[data-testid="signal-mic-toggle"]');
     const beforeStart = await getProbe(page);
     await mic.click();
-    await expect(page.getByText(/328\.1 Hz/)).toBeVisible({ timeout: 5000 });
-    await expect(page.getByText("E4", { exact: true })).toBeVisible();
+    await expect(page.getByTestId("signal-mic-frequency")).toHaveText("328.1", { timeout: 5000 });
+    await expect(page.getByTestId("signal-mic-note")).toHaveText("E4");
+    await expect(page.getByTestId("signal-tuner-cents")).toHaveText(/^-/);
+    await page.getByTestId("signal-use-detected").click();
+    await expect(page.getByTestId("signal-target-frequency")).toHaveText(/328\.1/);
+    await expect(page.getByTestId("signal-tuner-cents")).toHaveText("0¢");
+    await page.evaluate(() => {
+      (window as Window & { __signalMicProbe: MicProbe }).__signalMicProbe.inputMode = "silence";
+    });
+    await expect(page.getByTestId("signal-mic-frequency")).toHaveCount(0, { timeout: 5000 });
+    await expect(page.getByTestId("signal-tuner-cents")).toHaveText("—");
+    await page.evaluate(() => {
+      (window as Window & { __signalMicProbe: MicProbe }).__signalMicProbe.inputMode = "tone";
+    });
+    await expect(page.getByTestId("signal-mic-frequency")).toHaveText("328.1", { timeout: 5000 });
 
     const started = await getProbe(page);
     expect(started.contextsCreated).toBe(beforeStart.contextsCreated + 1);
@@ -178,6 +193,8 @@ test.describe("SignalGeneratorModal microphone lifecycle", () => {
     expect(stopped.contextsClosed).toBe(beforeStart.contextsClosed + 1);
     expect(stopped.trackStops).toBe(beforeStart.trackStops + 1);
     expect(stopped.sourcesDisconnected).toBe(beforeStart.sourcesDisconnected + 1);
+    await expect(page.getByTestId("signal-mic-frequency")).toHaveCount(0);
+    await expect(page.getByTestId("signal-tuner-cents")).toHaveText("—");
 
     await mic.click();
     await expect.poll(async () => (await getProbe(page)).contextsCreated, {
@@ -186,11 +203,27 @@ test.describe("SignalGeneratorModal microphone lifecycle", () => {
     await expect.poll(async () => (await getProbe(page)).streamsCreated, {
       timeout: 5000,
     }).toBe(beforeStart.streamsCreated + 2);
-    await expect(page.getByText(/328\.1 Hz/)).toBeVisible({ timeout: 5000 });
+    await expect(page.getByTestId("signal-mic-frequency")).toHaveText("328.1", { timeout: 5000 });
     const restarted = await getProbe(page);
     expect(restarted.contextsCreated).toBe(beforeStart.contextsCreated + 2);
     expect(restarted.streamsCreated).toBe(beforeStart.streamsCreated + 2);
     await page.screenshot({ path: "/tmp/signal-mic-web-regression.png" });
+    for (const viewport of [
+      { width: 667, height: 375 },
+      { width: 768, height: 1024 },
+      { width: 1024, height: 768 },
+    ]) {
+      await page.setViewportSize(viewport);
+      await page.getByTestId("signal-scroll").evaluate((node) => { node.scrollTop = 0; });
+      await expect(page.getByTestId("signal-mic-frequency")).toBeInViewport();
+      await expect(page.getByTestId("signal-target-frequency")).toBeInViewport();
+      await expect(page.getByTestId("signal-mic-toggle")).toBeInViewport();
+      const bounds = await page.getByTestId("signal-tuner-panel").boundingBox();
+      expect(bounds).not.toBeNull();
+      expect(bounds!.x).toBeGreaterThanOrEqual(0);
+      expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(viewport.width);
+      await page.screenshot({ path: `/tmp/signal-tuner-${viewport.width}x${viewport.height}.png` });
+    }
   });
 
   test("shows no signal for a live but silent input", async ({ page }) => {

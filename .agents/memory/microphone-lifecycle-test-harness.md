@@ -15,6 +15,12 @@ Microphone result assertions must target the detected input, not arbitrary frequ
 
 **How to apply:** Scope frequency and note checks to the microphone result, and verify that no result appears before PCM arrives.
 
+Cent-difference assertions should use the detected frequency rather than the nominal frequency of a synthetic test tone.
+
+**Why:** FFT estimation and Hz rounding can shift the reading slightly, enough to change rounded cents by one without any target-state bug.
+
+**How to apply:** Derive expected cents from the displayed detected Hz and selected target. Check the detector's absolute accuracy separately with an appropriate tolerance.
+
 Native recorder test doubles must own subscriptions per recorder instance.
 
 **Why:** An old lifetime can finish cleanup after a new lifetime starts. A mock that clears every recorder's listeners invents a cross-instance cleanup failure that the real subscription API does not have.

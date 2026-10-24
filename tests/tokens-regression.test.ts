@@ -20,6 +20,7 @@ const TOKENIZED_FILES = [
   "components/NoteRecorderModal.tsx",
   "components/OnboardingModal.tsx",
   "components/SignalGeneratorModal.tsx",
+  "components/signal-generator/TunerPanel.tsx",
   "components/PracticeBookModal.tsx",
   "components/SettingsModal.tsx",
   "components/WorkUpOverviewModal.tsx",
