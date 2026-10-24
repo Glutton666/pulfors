@@ -8,3 +8,15 @@ Web Audio lifecycle tests must compare context, stream, track, and source counts
 **Why:** The preview app initializes another audio path during startup; absolute constructor-count assertions falsely reported a microphone regression.
 
 **How to apply:** In browser tests, assert deltas after each mic start/stop/restart. In Jest component tests, the repository's React Native stub needs local `FlatList` and `KeyboardAvoidingView` shims when rendering `SignalGeneratorModal`.
+
+Microphone result assertions must target the detected input, not arbitrary frequency/note text elsewhere in the generator.
+
+**Why:** The generator already displays 440 Hz / A4 without any microphone input. Broad text matches can falsely pass a broken detection test or falsely fail a stale-callback test.
+
+**How to apply:** Scope frequency and note checks to the microphone result, and verify that no result appears before PCM arrives.
+
+Native recorder test doubles must own subscriptions per recorder instance.
+
+**Why:** An old lifetime can finish cleanup after a new lifetime starts. A mock that clears every recorder's listeners invents a cross-instance cleanup failure that the real subscription API does not have.
+
+**How to apply:** Keep callback ownership local to each mocked recorder, while checking aggregate starts/stops separately.

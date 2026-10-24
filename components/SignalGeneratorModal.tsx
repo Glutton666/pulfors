@@ -24,6 +24,7 @@ import {
 import * as FileSystem from "expo-file-system/legacy";
 import { safePlay } from "@/lib/audio-utils";
 import { ensurePermission } from "@/lib/permissions";
+import { createNativeMicrophone, NativeMicrophoneUnavailableError } from "@/lib/signal-native-microphone";
 import { captureBreadcrumb } from "@/lib/error-tracking";
 import Colors from "@/constants/colors";
 import { Radius, FontSize, Spacing } from "@/constants/tokens";
@@ -39,7 +40,6 @@ import {
 import { TUNING_DATA } from "@/lib/tuning-data";
 import {
   NOTE_NAMES,
-  decodePcm16Base64,
   realFFT,
   frequencyToNote,
   fftPeakDetect,
@@ -55,19 +55,6 @@ import {
   type AnalysisFrame,
   type AnalysisSummary,
 } from "@/lib/signal-analysis-session";
-// react-native-audio-record는 네이티브 전용 — 웹이나 Expo Go에선 없을 수 있음
-let AudioRecord: typeof import("react-native-audio-record").default | null = null;
-if (Platform.OS !== "web") {
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    AudioRecord = require("react-native-audio-record").default;
-  } catch {
-    // Expo Go 또는 네이티브 모듈 미설치 환경 — 마이크 분석 기능 비활성화
-  }
-}
-
-
-
 import { useLanguage } from "@/contexts/LanguageContext";
 
 const WAVE_CONFIGS: { type: WaveType; key: "sine" | "square" | "triangle" | "saw"; icon: string }[] = [
@@ -847,7 +834,7 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
   const [micDetectedFreq, setMicDetectedFreq] = useState<number | null>(null);
   const [micDetectedNote, setMicDetectedNote] = useState<string | null>(null);
   const [micAnalyzed, setMicAnalyzed] = useState(false);
-  const [micError, setMicError] = useState<"permission" | "startFailed" | null>(null);
+  const [micError, setMicError] = useState<"permission" | "startFailed" | "nativeUnavailable" | null>(null);
   const [micNoInput, setMicNoInput] = useState(false);
   const [pitchTargetFreq, setPitchTargetFreq] = useState<number | null>(null);
   const [analysisPhase, setAnalysisPhase] = useState<AnalysisPhase>("idle");
@@ -867,7 +854,9 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
   const spectrumDataRef = useRef<Float32Array | null>(null);
   const spectrumPeakBinRef = useRef<number>(-1);
   const [spectrumTick, setSpectrumTick] = useState(0);
-  const audioRecordSubRef = useRef<{ remove: () => void } | null>(null);
+  const nativeMicRef = useRef<ReturnType<typeof createNativeMicrophone> | null>(null);
+  const micStartupEpochRef = useRef(0);
+  const nativeSampleRateRef = useRef(44100);
   const pcmBufferRef = useRef<number[]>([]);
   const micInputWatchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const micDataReceivedRef = useRef(false);
@@ -1005,13 +994,13 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
       engineRef.current.stopWeb();
       stopNativeSound();
       micActiveRef.current = false;
+      micStartupEpochRef.current++;
       if (micRafRef.current) cancelAnimationFrame(micRafRef.current);
       if (micSourceRef.current) { try { micSourceRef.current.disconnect(); } catch {} micSourceRef.current = null; }
       if (micAudioCtxRef.current) { try { micAudioCtxRef.current.close(); } catch {} micAudioCtxRef.current = null; }
       if (micStreamRef.current) { micStreamRef.current.getTracks().forEach((t: any) => t.stop()); micStreamRef.current = null; }
-      if (audioRecordSubRef.current) { audioRecordSubRef.current.remove(); audioRecordSubRef.current = null; }
+      nativeMicRef.current?.stop(); nativeMicRef.current = null;
       if (micInputWatchdogRef.current) { clearTimeout(micInputWatchdogRef.current); micInputWatchdogRef.current = null; }
-      if (Platform.OS !== "web") { try { AudioRecord!.stop(); } catch {} }
       if (analysisAnalysisTimerRef.current) clearInterval(analysisAnalysisTimerRef.current);
       if (analysisPlaybackTimerRef.current) clearInterval(analysisPlaybackTimerRef.current);
       if (analysisPlaybackSubscriptionRef.current) {
@@ -1037,6 +1026,7 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
 
 
   const stopMic = useCallback(() => {
+    micStartupEpochRef.current++;
     micActiveRef.current = false;
     setMicListening(false);
     setMicError(null);
@@ -1055,8 +1045,7 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
       if (micAudioCtxRef.current) { try { micAudioCtxRef.current.close(); } catch {} micAudioCtxRef.current = null; }
       if (micStreamRef.current) { micStreamRef.current.getTracks().forEach((t: any) => t.stop()); micStreamRef.current = null; }
     } else {
-      if (audioRecordSubRef.current) { audioRecordSubRef.current.remove(); audioRecordSubRef.current = null; }
-      try { AudioRecord!.stop(); } catch {}
+      nativeMicRef.current?.stop(); nativeMicRef.current = null;
       pcmBufferRef.current = [];
     }
     setMicAnalyzed(false);
@@ -1490,46 +1479,52 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
   }, [pickDominantFreq]);
 
   const startNativeMic = useCallback(async () => {
+    const epoch = ++micStartupEpochRef.current;
     const ok = await ensurePermission("mic", t);
+    if (epoch !== micStartupEpochRef.current) return;
     if (!ok) {
       setMicError("permission");
       setMicListening(false);
       return;
     }
     try {
-      if (!AudioRecord) throw new Error("AudioRecord native module unavailable");
       setMicError(null);
       setMicNoInput(false);
       setMicAnalyzed(false);
       setMicDetectedFreq(null);
       setMicDetectedNote(null);
       micDataReceivedRef.current = false;
-      AudioRecord!.init({
-        sampleRate: 44100,
-        channels: 1,
-        bitsPerSample: 16,
-        audioSource: 6, // VOICE_RECOGNITION — 마이크 직접 입력
-      });
-
       const WINDOW_SIZE = 8192;
-      const SR = 44100;
+      nativeSampleRateRef.current = 44100;
       pcmBufferRef.current = [];
-
-      const sub = AudioRecord!.on("data", (data: string) => {
-        if (!micActiveRef.current) return;
+      const session = createNativeMicrophone((samples, sampleRate) => {
+        if (!micActiveRef.current || epoch !== micStartupEpochRef.current) return;
+        if (!samples.length || samples.some((value) => !Number.isFinite(value))) return;
+        // A hardware route change may change the real capture sample rate.
+        if (sampleRate !== nativeSampleRateRef.current) {
+          nativeSampleRateRef.current = sampleRate;
+          pcmBufferRef.current = [];
+        }
         micDataReceivedRef.current = true;
         setMicNoInput(false);
         if (micInputWatchdogRef.current) {
           clearTimeout(micInputWatchdogRef.current);
           micInputWatchdogRef.current = null;
         }
-        const samples = decodePcm16Base64(data);
-        if (samples.length === 0) return;
-         const analysisCapture = analysisActiveRef.current ? analysisCaptureRef.current : null;
-         if (analysisCapture) {
-           const remaining = Math.max(0, Math.round(analysisCapture.sampleRate * ANALYSIS_DURATION_MS / 1000) - analysisCapture.samples.length);
-           if (remaining > 0) analysisCapture.samples.push(...Array.from(samples.subarray(0, remaining)));
-         }
+        const analysisCapture = analysisActiveRef.current ? analysisCaptureRef.current : null;
+        if (analysisCapture) {
+          if (!analysisCapture.samples.length) analysisCapture.sampleRate = sampleRate;
+          // Keep earlier audio if a hardware route changes rate mid-session.
+          // All replay samples must still have one consistent WAV sample rate.
+          const step = sampleRate / analysisCapture.sampleRate;
+          const limit = Math.round(analysisCapture.sampleRate * ANALYSIS_DURATION_MS / 1000);
+          for (let position = 0; position < samples.length && analysisCapture.samples.length < limit; position += step) {
+            const left = Math.floor(position);
+            const fraction = position - left;
+            analysisCapture.samples.push(samples[left] +
+              ((samples[Math.min(left + 1, samples.length - 1)] - samples[left]) * fraction));
+          }
+        }
         const buf = pcmBufferRef.current;
         for (let i = 0; i < samples.length; i++) buf.push(samples[i]);
         while (buf.length >= WINDOW_SIZE) {
@@ -1542,11 +1537,11 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
             win[i] *= 0.5 * (1 - Math.cos(2 * Math.PI * i / (WINDOW_SIZE - 1)));
           }
           const mag = realFFT(win);
-          const result = fftPeakDetect(mag, SR, WINDOW_SIZE);
-           if (analysisCapture) {
-             const frameTime = Math.max(0, Date.now() - analysisCapture.startedAt);
-             analysisCapture.frames.push(analyzePcmFrame(win, SR, frameTime, ANALYSIS_BUCKET_MS));
-           }
+          const result = fftPeakDetect(mag, sampleRate, WINDOW_SIZE);
+          if (analysisCapture) {
+            const frameTime = Math.max(0, Date.now() - analysisCapture.startedAt);
+            analysisCapture.frames.push(analyzePcmFrame(win, sampleRate, frameTime, ANALYSIS_BUCKET_MS));
+          }
           setMicAnalyzed(true);
           if (result && result.freq > 20 && result.freq <= 4200) {
             const freq = Math.round(result.freq * 10) / 10;
@@ -1558,26 +1553,35 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
             setMicDetectedNote(null);
           }
         }
+      }, (error) => {
+        if (epoch !== micStartupEpochRef.current) return;
+        logger.warn("[NativeMic] Capture error:", error);
+        nativeMicRef.current?.stop(); nativeMicRef.current = null;
+        micActiveRef.current = false;
+        setMicListening(false); setMicError("startFailed"); setMicNoInput(false);
+        if (micInputWatchdogRef.current) clearTimeout(micInputWatchdogRef.current);
+        micInputWatchdogRef.current = null;
       });
-
-      audioRecordSubRef.current = sub;
+      nativeMicRef.current = session;
       micActiveRef.current = true;
+      const started = await session.start();
+      if (epoch !== micStartupEpochRef.current) { session.stop(); return; }
+      if (!started) return;
       setMicListening(true);
-      AudioRecord!.start();
       micInputWatchdogRef.current = setTimeout(() => {
         micInputWatchdogRef.current = null;
         if (micActiveRef.current && !micDataReceivedRef.current) {
           setMicNoInput(true);
-          captureBreadcrumb({ category: "micTuner", message: "Native AudioRecord produced no input data", level: "warning" });
+          captureBreadcrumb({ category: "micTuner", message: "Native PCM recorder produced no input data", level: "warning" });
         }
       }, 2000);
     } catch (e) {
       logger.warn("[NativeMic] Error starting:", e);
-      captureBreadcrumb({ category: "micTuner", message: "Native AudioRecord start error", level: "error" });
-      if (audioRecordSubRef.current) { audioRecordSubRef.current.remove(); audioRecordSubRef.current = null; }
-      try { AudioRecord!.stop(); } catch {}
+      if (epoch !== micStartupEpochRef.current) return;
+      captureBreadcrumb({ category: "micTuner", message: `Native PCM start error: ${e instanceof Error ? e.message : String(e)}`, level: "error" });
+      nativeMicRef.current?.stop(); nativeMicRef.current = null;
       setMicListening(false);
-      setMicError("startFailed");
+      setMicError(e instanceof NativeMicrophoneUnavailableError ? "nativeUnavailable" : "startFailed");
       setMicNoInput(false);
       micActiveRef.current = false;
       if (micInputWatchdogRef.current) {
@@ -1598,7 +1602,7 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
 
   const toggleMic = useCallback(() => {
     hapticFeedback();
-    if (micListening) {
+    if (micListening || nativeMicRef.current) {
       stopMic();
     } else {
       startMic();
@@ -2064,7 +2068,7 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
             <View style={[styles.micSection, isLandscape && { gap: Spacing.xs }]}>
               {micError ? (
                 <Text style={[styles.micDetectedHint, { color: C.danger }, isLandscape && { fontSize: FontSize.micro }]}>
-                  {t("signalGenerator", micError === "permission" ? "micPermissionRequired" : "micStartFailed")}
+                  {t("signalGenerator", micError === "permission" ? "micPermissionRequired" : micError === "nativeUnavailable" ? "micNativeUnavailable" : "micStartFailed")}
                 </Text>
               ) : micNoInput ? (
                 <Text style={[styles.micDetectedHint, { color: C.danger }, isLandscape && { fontSize: FontSize.micro }]}>
@@ -2073,11 +2077,11 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
               ) : micDetectedFreq ? (
                 <View style={[styles.micDetectedWrap, isLandscape && { marginTop: Spacing.xxs }]}>
                   <View style={{ flexDirection: "row" as const, alignItems: "center" as const, gap: Spacing.xs, flexWrap: "wrap" as const, justifyContent: "center" as const }}>
-                    <Text style={[styles.micDetectedHint, { color: micListening ? C.accent : C.textTertiary }, isLandscape && { fontSize: FontSize.micro }]}>
+                    <Text testID="signal-mic-frequency" style={[styles.micDetectedHint, { color: micListening ? C.accent : C.textTertiary }, isLandscape && { fontSize: FontSize.micro }]}>
                       {micDetectedFreq} {t("signalGenerator", "hzUnit")}
                     </Text>
                     <Text style={[styles.micDetectedHint, { color: micListening ? C.accent : C.textTertiary, opacity: 0.6 }, isLandscape && { fontSize: FontSize.micro }]}>|</Text>
-                    <Text style={[styles.micDetectedHint, { color: micListening ? C.accent : C.textTertiary, fontWeight: "700" as const }, isLandscape && { fontSize: FontSize.micro }]}>
+                    <Text testID="signal-mic-note" style={[styles.micDetectedHint, { color: micListening ? C.accent : C.textTertiary, fontWeight: "700" as const }, isLandscape && { fontSize: FontSize.micro }]}>
                       {micDetectedNote}
                     </Text>
                   </View>

@@ -571,6 +571,7 @@ export const translations = {
     micNoInput: { ko: "마이크 입력을 받지 못했습니다", en: "No microphone input received" },
     micPermissionRequired: { ko: "마이크 권한이 필요합니다", en: "Microphone permission is required" },
     micStartFailed: { ko: "마이크를 시작할 수 없습니다", en: "Could not start the microphone" },
+    micNativeUnavailable: { ko: "이 앱 빌드에 실시간 마이크 모듈이 없습니다. 새 버전으로 다시 설치해 주세요.", en: "This app build is missing the live microphone module. Install a newly built version." },
     hzUnit: { ko: "Hz", en: "Hz" },
     pitchExact: { ko: "정확", en: "In Tune" },
     pitchHigh: { ko: "높음", en: "High" },

@@ -62,6 +62,7 @@
 - [Scheduled playback ownership](scheduled-playback-ownership.md) — preloaded starts need token ownership; modal unmount cleanup must use a latest-callback ref.
 - [Expo web static image URLs](expo-web-static-image-urls.md) — RN Image.resolveAssetSource is unavailable on web; use Expo asset metadata and Metro's unstable_path URL for CSS masks.
 - [Microphone lifecycle test harness](microphone-lifecycle-test-harness.md) — compare Web Audio resource counts to a pre-test baseline; native component tests need RN FlatList and KeyboardAvoidingView stubs.
+- [Native signal microphone boundary](signal-native-microphone-boundary.md) — legacy recorder exclusion protects startup; permission success and web tests cannot establish native PCM availability.
 - [Signal analysis session boundary](signal-analysis-session-boundary.md) — keep live single-note HPS tuning separate from temporary polyphonic timeline capture and replay.
 - [RN Web tutorial hit testing](rn-web-tutorial-hit-testing.md) — tutorial overlays must let underlying controls receive events; decorative BPM layers also need pointer-events disabled.
 - [Mode keyboard override persistence](mode-keyboard-override-persistence.md) — store only per-mode differences from global bindings, or later global rebinding changes are silently shadowed.

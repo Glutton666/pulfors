@@ -2,7 +2,7 @@
 import React from "react";
 import { act, fireEvent, render } from "@testing-library/react";
 
-type AudioRecordListener = (data: string) => void;
+type AudioRecordListener = (data: { buffer: { sampleRate: number; getChannelData: () => Float32Array } }) => void;
 
 const mockAudioRecordListeners = new Set<AudioRecordListener>();
 
@@ -30,25 +30,51 @@ jest.mock("react-native", () => {
   };
 });
 
-jest.mock("react-native-audio-record", () => {
+jest.mock("@/lib/audio-session", () => ({
+  acquireAudioSession: jest.fn(async () => {}),
+  releaseAudioSession: jest.fn(async () => {}),
+}));
+
+jest.mock("react-native-audio-api", () => {
   const audioRecord = {
-    init: jest.fn(),
-    start: jest.fn(),
-    stop: jest.fn(),
-    on: jest.fn((_event: string, listener: AudioRecordListener) => {
+    start: jest.fn(async () => ({ status: "success" })),
+    stop: jest.fn(async () => ({ status: "success" })),
+    onError: jest.fn(),
+    clearOnError: jest.fn(),
+    clearOnAudioReady: jest.fn(),
+    onAudioReady: jest.fn((_options: unknown, listener: AudioRecordListener) => {
       mockAudioRecordListeners.add(listener);
-      return {
-        remove: jest.fn(() => mockAudioRecordListeners.delete(listener)),
-      };
+      return { status: "success" };
     }),
-    __emit(data: string) {
-      mockAudioRecordListeners.forEach((listener: AudioRecordListener) => listener(data));
+    __emit(samples: Float32Array, sampleRate = 44100) {
+      mockAudioRecordListeners.forEach((listener) => listener({
+        buffer: { sampleRate, getChannelData: () => samples },
+      }));
     },
     __reset() {
       mockAudioRecordListeners.clear();
     },
   };
-  return { __esModule: true, default: audioRecord };
+  return {
+    __esModule: true,
+    AudioRecorder: jest.fn(() => {
+      let ownListener: AudioRecordListener | null = null;
+      return {
+        ...audioRecord,
+        onAudioReady: (options: unknown, listener: AudioRecordListener) => {
+          ownListener = listener;
+          return audioRecord.onAudioReady(options, listener);
+        },
+        clearOnAudioReady: () => {
+          audioRecord.clearOnAudioReady();
+          if (ownListener) mockAudioRecordListeners.delete(ownListener);
+          ownListener = null;
+        },
+      };
+    }),
+    AudioManager: { setAudioSessionOptions: jest.fn() },
+    __recorder: audioRecord,
+  };
 });
 
 jest.mock("@expo/vector-icons", () => {
@@ -108,12 +134,13 @@ jest.mock("expo-audio", () => ({
   })),
 }));
 
-const AudioRecord = require("react-native-audio-record").default as {
-  init: jest.Mock;
+const NativeApi = require("react-native-audio-api");
+const AudioRecord = NativeApi.__recorder as {
   start: jest.Mock;
   stop: jest.Mock;
-  on: jest.Mock;
-  __emit: (data: string) => void;
+  onAudioReady: jest.Mock;
+  onError: jest.Mock;
+  __emit: (samples: Float32Array, sampleRate?: number) => void;
   __reset: () => void;
 };
 const { SignalGeneratorModal } = require("@/components/SignalGeneratorModal") as typeof import("@/components/SignalGeneratorModal");
@@ -126,14 +153,12 @@ function makeProps() {
   };
 }
 
-function validPcm440Base64() {
-  const sampleRate = 44100;
-  const samples = Buffer.alloc(8192 * 2);
+function validPcm440(sampleRate = 44100) {
+  const samples = new Float32Array(8192);
   for (let i = 0; i < 8192; i++) {
-    const value = Math.round(Math.sin(2 * Math.PI * 440 * i / sampleRate) * 12000);
-    samples.writeInt16LE(value, i * 2);
+    samples[i] = Math.sin(2 * Math.PI * 440 * i / sampleRate) * 0.4;
   }
-  return samples.toString("base64");
+  return samples;
 }
 
 async function startNativeMic() {
@@ -157,15 +182,14 @@ describe("SignalGeneratorModal native microphone lifecycle", () => {
     jest.useRealTimers();
   });
 
-  test("initialization failure reports startFailed and cleans the native recorder", async () => {
-    AudioRecord.init.mockImplementationOnce(() => {
-      throw new Error("native init failed");
-    });
+  test("a rejected native start result reports failure and releases the recording session", async () => {
+    AudioRecord.start.mockResolvedValueOnce({ status: "error", message: "native init failed" });
 
     const view = await startNativeMic();
 
-    expect(AudioRecord.init).toHaveBeenCalledTimes(1);
+    expect(NativeApi.AudioRecorder).toHaveBeenCalledTimes(1);
     expect(AudioRecord.stop).toHaveBeenCalledTimes(1);
+    expect(require("@/lib/audio-session").releaseAudioSession).toHaveBeenCalledTimes(1);
     expect(view.getByText("signalGenerator.micStartFailed")).toBeTruthy();
   });
 
@@ -191,15 +215,15 @@ describe("SignalGeneratorModal native microphone lifecycle", () => {
     const view = await startNativeMic();
 
     act(() => {
-      AudioRecord.__emit("not-valid-base64");
+      AudioRecord.__emit(new Float32Array([NaN]));
     });
-    expect(view.queryByText(/signalGenerator\.\d+ hzUnit/)).toBeNull();
+    expect(view.queryByTestId("signal-mic-frequency")).toBeNull();
 
     act(() => {
-      AudioRecord.__emit(validPcm440Base64());
+      AudioRecord.__emit(validPcm440());
     });
-    expect(view.getByText(/440(\.0)? signalGenerator\.hzUnit/)).toBeTruthy();
-    expect(view.getAllByText("A4").length).toBeGreaterThanOrEqual(1);
+    expect(Number(view.getByTestId("signal-mic-frequency").textContent!.split(" ")[0])).toBeCloseTo(440, -1);
+    expect(view.getByTestId("signal-mic-note").textContent).toBe("A4");
   });
 
   test("long-pressing the microphone opens the analysis session without starting the tuner", () => {
@@ -209,7 +233,7 @@ describe("SignalGeneratorModal native microphone lifecycle", () => {
 
     expect(view.getByTestId("signal-analysis-panel")).toBeTruthy();
     expect(view.getByTestId("signal-analysis-start")).toBeTruthy();
-    expect(AudioRecord.init).not.toHaveBeenCalled();
+    expect(NativeApi.AudioRecorder).not.toHaveBeenCalled();
   });
 
   test("analysis start uses the existing microphone lifecycle", async () => {
@@ -221,8 +245,93 @@ describe("SignalGeneratorModal native microphone lifecycle", () => {
       await Promise.resolve();
     });
 
-    expect(AudioRecord.init).toHaveBeenCalledTimes(1);
+    expect(NativeApi.AudioRecorder).toHaveBeenCalledTimes(1);
     expect(AudioRecord.start).toHaveBeenCalledTimes(1);
     expect(view.getByTestId("signal-analysis-finish")).toBeTruthy();
+  });
+
+  test("a missing native binary shows a rebuild message, not a permission error", async () => {
+    NativeApi.AudioRecorder.mockImplementationOnce(() => { throw new Error("native module not found"); });
+    const view = await startNativeMic();
+    expect(view.getByText("signalGenerator.micNativeUnavailable")).toBeTruthy();
+    expect(view.queryByText("signalGenerator.micPermissionRequired")).toBeNull();
+  });
+
+  test("pitch detection follows the actual 48kHz hardware buffer rate", async () => {
+    const view = await startNativeMic();
+    act(() => AudioRecord.__emit(validPcm440(48000), 48000));
+    expect(Number(view.getByTestId("signal-mic-frequency").textContent!.split(" ")[0])).toBeCloseTo(440, -1);
+    expect(view.getByTestId("signal-mic-note").textContent).toBe("A4");
+    expect(NativeApi.AudioManager.setAudioSessionOptions).toHaveBeenCalledWith(expect.objectContaining({
+      iosCategory: "playAndRecord", iosMode: "measurement",
+    }));
+  });
+
+  test("closing during native startup cancels the late recorder and callbacks", async () => {
+    let resolveStart!: (result: { status: string }) => void;
+    AudioRecord.start.mockImplementationOnce(() => new Promise((resolve) => { resolveStart = resolve; }));
+    const view = await startNativeMic();
+    view.unmount();
+    await act(async () => { resolveStart({ status: "success" }); });
+    expect(AudioRecord.stop).toHaveBeenCalledTimes(1);
+    expect(mockAudioRecordListeners.size).toBe(0);
+  });
+
+  test("a callback setup failure also stops and releases the session", async () => {
+    AudioRecord.onAudioReady.mockReturnValueOnce({ status: "error", message: "input callback unavailable" });
+    const view = await startNativeMic();
+    expect(AudioRecord.start).not.toHaveBeenCalled();
+    expect(AudioRecord.stop).toHaveBeenCalledTimes(1);
+    expect(require("@/lib/audio-session").releaseAudioSession).toHaveBeenCalledTimes(1);
+    expect(view.getByText("signalGenerator.micStartFailed")).toBeTruthy();
+  });
+
+  test("capture errors stop the recorder instead of leaving a listening UI", async () => {
+    const view = await startNativeMic();
+    await act(async () => {
+      AudioRecord.onError.mock.calls[0][0]({ message: "input disconnected" });
+    });
+    expect(AudioRecord.stop).toHaveBeenCalledTimes(1);
+    expect(view.getByText("signalGenerator.micStartFailed")).toBeTruthy();
+    expect(mockAudioRecordListeners.size).toBe(0);
+  });
+
+  test("old lifetime callbacks cannot change a restarted tuner's result", async () => {
+    const view = await startNativeMic();
+    const oldCallback = AudioRecord.onAudioReady.mock.calls[0][1];
+    await act(async () => {
+      fireEvent.click(view.getByTestId("signal-mic-toggle"));
+      jest.advanceTimersByTime(260);
+    });
+    await act(async () => {
+      fireEvent.click(view.getByTestId("signal-mic-toggle"));
+      jest.advanceTimersByTime(260);
+    });
+    act(() => {
+      oldCallback({ buffer: { sampleRate: 44100, getChannelData: () => validPcm440() } });
+    });
+    expect(view.queryByTestId("signal-mic-frequency")).toBeNull();
+    act(() => AudioRecord.__emit(validPcm440()));
+    expect(view.getByTestId("signal-mic-note").textContent).toBe("A4");
+  });
+
+  test("a restart waits for a cancelled pending native start to be fully stopped", async () => {
+    let resolveStart!: (result: { status: string }) => void;
+    AudioRecord.start.mockImplementationOnce(() => new Promise((resolve) => { resolveStart = resolve; }));
+    const view = await startNativeMic();
+    await act(async () => {
+      fireEvent.click(view.getByTestId("signal-mic-toggle"));
+      jest.advanceTimersByTime(260);
+    });
+    await act(async () => {
+      fireEvent.click(view.getByTestId("signal-mic-toggle"));
+      jest.advanceTimersByTime(260);
+    });
+    expect(NativeApi.AudioRecorder).toHaveBeenCalledTimes(1);
+    await act(async () => { resolveStart({ status: "success" }); });
+    expect(AudioRecord.stop).toHaveBeenCalledTimes(1);
+    expect(NativeApi.AudioRecorder).toHaveBeenCalledTimes(2);
+    act(() => AudioRecord.__emit(validPcm440()));
+    expect(view.getByTestId("signal-mic-note").textContent).toBe("A4");
   });
 });

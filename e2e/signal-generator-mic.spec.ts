@@ -1,5 +1,9 @@
 import { test, expect, type Page } from "@playwright/test";
 
+test.use({
+  baseURL: process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : undefined,
+});
+
 const VIEWPORT = { width: 375, height: 667 };
 
 type MicMode = "tone" | "silence" | "denied";
@@ -186,6 +190,7 @@ test.describe("SignalGeneratorModal microphone lifecycle", () => {
     const restarted = await getProbe(page);
     expect(restarted.contextsCreated).toBe(beforeStart.contextsCreated + 2);
     expect(restarted.streamsCreated).toBe(beforeStart.streamsCreated + 2);
+    await page.screenshot({ path: "/tmp/signal-mic-web-regression.png" });
   });
 
   test("shows no signal for a live but silent input", async ({ page }) => {
