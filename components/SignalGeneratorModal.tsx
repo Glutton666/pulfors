@@ -13,6 +13,7 @@ import {
   useWindowDimensions,
 } from "react-native";
 import { AnimatedModal } from "@/components/AnimatedModal";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { logger } from "@/lib/logger";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
@@ -381,8 +382,8 @@ interface TuningGuideModalProps {
 
 export function TuningGuideModal({ visible, onClose, onSelectFreq, lang, accentColor, accentDim }: TuningGuideModalProps) {
   const { colors: C } = useTheme();
+  const insets = useSafeAreaInsets();
   const S = useScale();
-  const { width: winW } = useWindowDimensions();
   const tgStyles = make_tgStyles(C);
   const [tgNote, setTgNote] = useState("A");
   const [tgOctave, setTgOctave] = useState(4);
@@ -399,9 +400,8 @@ export function TuningGuideModal({ visible, onClose, onSelectFreq, lang, accentC
   const pickerFreq = noteToFreq(tgNote, tgOctave);
 
   return (
-    <AnimatedModal visible={visible} transparent onRequestClose={handleClose} statusBarTranslucent>
-      <View style={tgStyles.overlay}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={handleClose} />
+    <AnimatedModal visible={visible} onRequestClose={handleClose} statusBarTranslucent>
+      <View testID="tuning-guide-screen" style={[tgStyles.overlay, { backgroundColor: C.background, paddingTop: Math.max(insets.top, Platform.OS === "web" ? 67 : Spacing.md), paddingBottom: Math.max(insets.bottom, Platform.OS === "web" ? 34 : Spacing.md) }]}>
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : "height"}
           keyboardVerticalOffset={0}
@@ -409,7 +409,7 @@ export function TuningGuideModal({ visible, onClose, onSelectFreq, lang, accentC
         >
         <View
           testID="tuning-guide-card"
-          style={[tgStyles.card, { width: Math.min(338, Math.max(0, winW - 32)) }]}
+          style={[tgStyles.card, { width: "100%", maxWidth: 900, height: "100%", maxHeight: "100%", borderRadius: 0, borderWidth: 0, backgroundColor: C.background }]}
         >
           {/* Header */}
           <View style={tgStyles.header}>
@@ -641,7 +641,8 @@ const make_tgStyles = (C: typeof Colors) => StyleSheet.create({
     marginBottom: Spacing.sm,
   },
   scrollBody: {
-    flexGrow: 0,
+    flex: 1,
+    minHeight: 0,
   },
   rulerRow: {
     flexDirection: "row",
@@ -757,6 +758,7 @@ interface SignalGeneratorModalProps {
 
 export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningGuide }: SignalGeneratorModalProps) {
   const { colors: C } = useTheme();
+  const insets = useSafeAreaInsets();
   const pickerStyles = make_pickerStyles(C);
   const tgStyles = make_tgStyles(C);
   const styles = make_styles(C);
@@ -769,13 +771,6 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
   const dynamicKnobSize = isLandscape
     ? Math.min(Math.max(120, winH * 0.52), 280)
     : Math.min(Math.max(Math.min(100, winH * 0.22), Math.min(S.minDim, webMaxCard) * 0.42), S.isTablet ? 280 : 240);
-  const dynamicCardWidth = isLandscape
-    ? Math.min(winW * 0.92, 1100)
-    : Math.min(Math.max(300, S.screenWidth * 0.92), webMaxCard);
-  // Keep the portrait card bounded as well as max-constrained. Without an
-  // explicit height, React Native Web lets the ScrollView measure to its full
-  // content height, so short viewports cannot scroll to the waveform controls.
-  const dynamicCardHeight = isLandscape ? winH * 0.88 : winH * 0.83;
   const landscapePadH = isLandscape ? Math.max(12, winW * 0.018) : 0;
   const landscapePadV = isLandscape ? Math.max(10, winH * 0.025) : 0;
   const cardPad = isLandscape ? undefined : Math.max(16, S.ms(20, 0.4));
@@ -1958,18 +1953,16 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
   return (
     <AnimatedModal
       visible={visible}
-      transparent
       onRequestClose={handleClose}
       statusBarTranslucent
     >
-      <View style={styles.overlay}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={handleClose} />
+      <View testID="signal-generator-screen" style={[styles.overlay, { backgroundColor: C.background, paddingTop: Math.max(insets.top, Platform.OS === "web" ? 67 : Spacing.md), paddingBottom: Math.max(insets.bottom, Platform.OS === "web" ? 34 : Spacing.md) }]}>
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : "height"}
           keyboardVerticalOffset={0}
           style={styles.keyboardAvoiding}
         >
-        <View style={[styles.card, { backgroundColor: C.surface, borderColor: C.border, width: dynamicCardWidth, height: dynamicCardHeight }, !isLandscape && { padding: cardPad, gap: cardGap }, isLandscape && { paddingVertical: landscapePadV, paddingHorizontal: landscapePadH, maxHeight: "95%" as const, alignItems: "stretch" as const }]}>
+        <View style={[styles.card, { backgroundColor: C.background, borderColor: C.border, width: "100%", height: "100%", maxWidth: "100%", maxHeight: "100%", borderRadius: 0, borderWidth: 0 }, !isLandscape && { padding: cardPad, gap: cardGap }, isLandscape && { paddingVertical: landscapePadV, paddingHorizontal: landscapePadH, maxHeight: "100%" as const, alignItems: "stretch" as const }]}>
           {isLandscape && (
             <Pressable
               onPress={handleClose}

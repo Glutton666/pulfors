@@ -180,9 +180,9 @@ export function PitchQuizModal({ visible, initialMode = null, onClose }: PitchQu
   const topPadding = (insets.top || (Platform.OS === "web" ? 52 : 12)) + 10;
 
   return (
-    <AnimatedModal visible={visible} transparent onRequestClose={handleExit} statusBarTranslucent>
-      <View style={[styles.overlay, { paddingTop: topPadding, paddingBottom: (insets.bottom || 16) + 12 }]}>
-        <View style={[styles.card, { backgroundColor: C.surface, borderColor: C.border }]}>
+    <AnimatedModal visible={visible} onRequestClose={handleExit} statusBarTranslucent>
+      <View testID="pitch-quiz-screen" style={[styles.screen, { paddingTop: topPadding, paddingBottom: (insets.bottom || 16) + 12, backgroundColor: C.background }]}>
+        <View style={[styles.card, { backgroundColor: C.background, borderColor: C.border }]}>
           <Pressable
             onPress={handleExit}
             hitSlop={12}
@@ -195,7 +195,7 @@ export function PitchQuizModal({ visible, initialMode = null, onClose }: PitchQu
           </Pressable>
 
           {screen === "choice" ? (
-            <View style={styles.choiceContent}>
+            <ScrollView contentContainerStyle={styles.choiceContent}>
               <Ionicons name="ear-outline" size={42} color={C.accent} />
               <Text style={[styles.title, { color: C.text }]}>{t("pitchQuiz", "chooseTitle")}</Text>
               <Text style={[styles.subtitle, { color: C.textSecondary }]}>{t("pitchQuiz", "chooseHint")}</Text>
@@ -220,9 +220,9 @@ export function PitchQuizModal({ visible, initialMode = null, onClose }: PitchQu
               >
                 <Text style={[styles.secondaryButtonText, { color: C.text }]}>{t("pitchQuiz", "chord")}</Text>
               </Pressable>
-            </View>
+            </ScrollView>
           ) : screen === "results" ? (
-            <View style={styles.choiceContent}>
+            <ScrollView contentContainerStyle={styles.choiceContent}>
               <Ionicons name="trophy-outline" size={44} color={C.accent} />
               <Text style={[styles.title, { color: C.text }]}>{t("pitchQuiz", "resultsTitle")}</Text>
               <Text style={[styles.resultScore, { color: C.accent }]}>{correctCount} / {rounds}</Text>
@@ -235,7 +235,7 @@ export function PitchQuizModal({ visible, initialMode = null, onClose }: PitchQu
               >
                 <Text style={[styles.primaryButtonText, { color: onAccentColor(C.accent) }]}>{t("pitchQuiz", "close")}</Text>
               </Pressable>
-            </View>
+            </ScrollView>
           ) : (
             <ScrollView contentContainerStyle={styles.quizContent} showsVerticalScrollIndicator={false}>
               <Text style={[styles.eyebrow, { color: C.accent }]}>
@@ -321,10 +321,10 @@ export function PitchQuizModal({ visible, initialMode = null, onClose }: PitchQu
 }
 
 const makeStyles = (C: any) => StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.68)", justifyContent: "center", paddingHorizontal: 18 },
-  card: { width: "100%", maxWidth: 560, alignSelf: "center", borderWidth: 1, borderRadius: Radius.xl, padding: 24, minHeight: 410 },
+  screen: { flex: 1, justifyContent: "center", paddingHorizontal: 18 },
+  card: { flex: 1, width: "100%", maxWidth: 760, alignSelf: "center", borderWidth: 0, borderRadius: 0, padding: 24, minHeight: 0 },
   close: { position: "absolute", top: 14, right: 14, padding: 6, zIndex: 5 },
-  choiceContent: { flex: 1, alignItems: "center", justifyContent: "center", gap: 13, paddingTop: 24 },
+  choiceContent: { flexGrow: 1, alignItems: "center", justifyContent: "center", gap: 13, paddingTop: 24, paddingBottom: Spacing.lg },
   quizContent: { alignItems: "center", gap: 14, paddingTop: 24, paddingBottom: 8 },
   eyebrow: { fontFamily: "SpaceGrotesk_700Bold", letterSpacing: 1.6, fontSize: 12, textTransform: "uppercase" },
   title: { fontFamily: "SpaceGrotesk_700Bold", fontSize: 25, textAlign: "center" },

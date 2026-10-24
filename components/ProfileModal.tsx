@@ -20,26 +20,12 @@ export function ProfileModal({ visible, onClose, ...profileProps }: ProfileModal
   const insets = useSafeAreaInsets();
 
   return (
-    <AnimatedModal visible={visible} transparent onRequestClose={onClose} statusBarTranslucent>
-      <Pressable
-        style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.58)", paddingTop: (insets.top || (Platform.OS === "web" ? 67 : 0)) + 16 }}
-        onPress={onClose}
-      >
-        <Pressable
-          style={{
-            alignSelf: "center",
-            width: "92%",
-            maxWidth: 560,
-            maxHeight: "92%",
-            backgroundColor: C.surface,
-            borderColor: C.border,
-            borderWidth: 1,
-            borderRadius: 16,
-            overflow: "hidden",
-          }}
-          onPress={(event) => event.stopPropagation()}
-        >
+    <AnimatedModal visible={visible} onRequestClose={onClose} statusBarTranslucent>
+      <View testID="profile-screen" style={{ flex: 1, backgroundColor: C.background, paddingTop: insets.top || (Platform.OS === "web" ? 67 : 0), paddingBottom: insets.bottom || (Platform.OS === "web" ? 34 : 0) }}>
           <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 18, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: C.border }}>
+            <Pressable onPress={onClose} hitSlop={12} accessibilityRole="button" accessibilityLabel={t("a11y", "closeModal")} testID="profile-back">
+              <Ionicons name="arrow-back" size={22} color={C.textSecondary} />
+            </Pressable>
             <Ionicons name="person-circle-outline" size={S.ms(22, 0.4)} color={C.accent} />
             <Text style={{ flex: 1, marginLeft: 8, color: C.text, fontFamily: "SpaceGrotesk_700Bold", fontSize: 20 }}>
               {t("settings", "profileTab")}
@@ -49,14 +35,14 @@ export function ProfileModal({ visible, onClose, ...profileProps }: ProfileModal
             </Pressable>
           </View>
           <ScrollView
+            style={{ flex: 1 }}
             contentContainerStyle={{ padding: 18, paddingBottom: 28 }}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
           >
             <SettingsProfileTab visible={visible} {...profileProps} />
           </ScrollView>
-        </Pressable>
-      </Pressable>
+      </View>
     </AnimatedModal>
   );
 }

@@ -702,6 +702,16 @@ export function PracticeBookModal({
   const webTopInset = Platform.OS === "web" ? 67 : 0;
   const webBottomInset = Platform.OS === "web" ? 34 : 0;
 
+  if (exportEntry) {
+    return (
+      <ExportEntryModal
+        visible={visible}
+        entry={exportEntry}
+        onClose={() => setExportEntry(null)}
+      />
+    );
+  }
+
   const renderItem = ({ item }: { item: PracticeEntry }) => (
     <SwipeableEntry
       item={item}
@@ -727,7 +737,7 @@ export function PracticeBookModal({
 
   const content = (
       <View
-        testID={embedded ? "embedded-practice-book" : undefined}
+        testID={embedded ? "embedded-practice-book" : "practice-book-screen"}
         style={[
           styles.container,
           {
@@ -753,6 +763,18 @@ export function PracticeBookModal({
               {t("practiceBook", "title")}
             </Text>
           </Pressable>
+          {!embedded ? (
+            <Pressable
+              onPress={onClose}
+              hitSlop={12}
+              accessibilityRole="button"
+              accessibilityLabel={t("a11y", "closeModal")}
+              testID="practice-book-back"
+              style={{ padding: Spacing.sm }}
+            >
+              <Ionicons name="close" size={22} color={C.textSecondary} />
+            </Pressable>
+          ) : null}
           <Pressable
             onPress={toggleViewMode}
             testID="practice-view-toggle"
@@ -902,16 +924,18 @@ export function PracticeBookModal({
           />
         )}
 
-        <ExportEntryModal
-          visible={!!exportEntry}
-          entry={exportEntry}
-          onClose={() => setExportEntry(null)}
-        />
-
         {goalEntry && (
-          <View style={styles.goalOverlay}>
+          <View testID="practice-goal-screen" style={styles.goalOverlay}>
             <View style={[styles.goalDialog, { borderColor: C.accent }]}>
-              <Text style={styles.goalDialogTitle}>{t("practiceBook", "goalTitle")}</Text>
+              <View style={styles.goalDialogHeader}>
+                <Pressable onPress={() => setGoalEntry(null)} hitSlop={12} accessibilityRole="button" accessibilityLabel={t("practiceBook", "cancel")} testID="practice-goal-back">
+                  <Ionicons name="arrow-back" size={22} color={C.textSecondary} />
+                </Pressable>
+                <Text style={[styles.goalDialogTitle, { flex: 1, textAlign: "left" }]}>{t("practiceBook", "goalTitle")}</Text>
+                <Pressable onPress={() => setGoalEntry(null)} hitSlop={12} accessibilityRole="button" accessibilityLabel={t("practiceBook", "cancel")}>
+                  <Ionicons name="close" size={22} color={C.textSecondary} />
+                </Pressable>
+              </View>
               <Text style={styles.goalDialogSub}>&quot;{goalEntry.label}&quot; {t("practiceBook", "goalSub")}</Text>
               <View style={styles.goalInputRow}>
                 <TextInput
@@ -956,8 +980,10 @@ export function PracticeBookModal({
   return (
     <AnimatedSlideModal
       visible={visible}
-      presentationStyle="pageSheet"
-      onRequestClose={onClose}
+      onRequestClose={() => {
+        if (goalEntry) setGoalEntry(null);
+        else onClose();
+      }}
     >
       {content}
     </AnimatedSlideModal>
@@ -1220,18 +1246,29 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
   },
   goalOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.6)",
-    justifyContent: "center",
-    alignItems: "center",
+    backgroundColor: C.background,
+    justifyContent: "flex-start",
+    alignItems: "stretch",
     zIndex: 10,
   },
   goalDialog: {
-    width: "80%",
-    backgroundColor: C.surface,
-    borderRadius: 14,
-    borderWidth: 1,
+    flex: 1,
+    width: "100%",
+    maxWidth: 760,
+    alignSelf: "center",
+    backgroundColor: C.background,
+    borderWidth: 0,
     padding: 20,
     gap: 12,
+  },
+  goalDialogHeader: {
+    minHeight: 48,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: C.border,
+    paddingBottom: Spacing.sm,
   },
   goalDialogTitle: {
     fontFamily: "SpaceGrotesk_600SemiBold",

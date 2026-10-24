@@ -8,12 +8,11 @@ import {
   ScrollView,
   TextInput,
   ActivityIndicator,
-  Dimensions,
   Image,
   useWindowDimensions,
 } from "react-native";
 import { Alert } from "@/lib/alert";
-import { AnimatedModal, AnimatedSlideModal } from "@/components/AnimatedModal";
+import { AnimatedModal } from "@/components/AnimatedModal";
 import { logger } from "@/lib/logger";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
@@ -226,9 +225,7 @@ export function WorkUpOverviewModal({
   const { width: winW, height: winH } = useWindowDimensions();
   const isLandscape = winW > winH;
   const isTablet = Math.min(winW, winH) >= 600;
-  const topOffset = (insets.top || webTopInset) + 44;
   const bottomSafe = insets.bottom || (Platform.OS === "web" ? 34 : 0);
-  const sheetMaxH = Math.round(winH - topOffset - bottomSafe - 16);
 
   const [logs, setLogs] = useState<ActivityLog[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
@@ -724,14 +721,19 @@ export function WorkUpOverviewModal({
   );
 
   return (
-    <AnimatedModal visible={visible} transparent onRequestClose={onClose} statusBarTranslucent>
-      <Pressable style={s.overlay} onPress={onClose}>
+    <AnimatedModal visible={visible} onRequestClose={() => {
+      if (showShareModal) setShowShareModal(false);
+      else if (showYearlySummary) setShowYearlySummary(false);
+      else onClose();
+    }} statusBarTranslucent>
+      {!showShareModal && !showYearlySummary && (
+      <View testID="work-up-screen" style={[s.overlay, { backgroundColor: C.background }]}>
         <ScrollView
-          contentContainerStyle={[s.scrollContent, { paddingTop: topOffset }]}
+          contentContainerStyle={[s.scrollContent, { paddingHorizontal: 0, paddingTop: insets.top || webTopInset, paddingBottom: bottomSafe }]}
           showsVerticalScrollIndicator={false}
           bounces={false}
         >
-          <Pressable style={[s.sheet, { backgroundColor: C.surface, maxHeight: sheetMaxH }, isTablet && { maxWidth: 720, alignSelf: "center" as const, width: "100%" as const }]} onPress={(e) => e.stopPropagation()} onStartShouldSetResponder={() => true}>
+          <View style={[s.sheet, { backgroundColor: C.background, minHeight: "100%", width: "100%", borderRadius: 0, paddingHorizontal: isTablet ? 24 : 14 }, isTablet && { maxWidth: 1100, alignSelf: "center" as const }]}>
 
             <View style={s.header}>
               <Text style={[s.title, { color: C.text }]}>{t("workUp", "title")}</Text>
@@ -790,16 +792,17 @@ export function WorkUpOverviewModal({
 
               </View>
             )}
-          </Pressable>
+          </View>
         </ScrollView>
-      </Pressable>
+      </View>
+      )}
 
-      {/* ── Share Summary Modal ── */}
-      <AnimatedSlideModal visible={showShareModal} transparent onRequestClose={() => setShowShareModal(false)} statusBarTranslucent>
-        <View style={shareStyles.overlay}>
-          <View style={[shareStyles.container, { paddingTop: (insets.top || webTopInset) + 10, paddingBottom: insets.bottom + 10 }]}>
+      {/* ── Share Summary detail screen ── */}
+      {showShareModal && (
+        <View testID="work-up-share-screen" style={[shareStyles.overlay, { backgroundColor: C.background }]}>
+          <View style={[shareStyles.container, { paddingTop: insets.top || webTopInset, paddingBottom: insets.bottom || (Platform.OS === "web" ? 34 : 0) }]}>
             <View style={shareStyles.topBar}>
-              <Pressable onPress={() => setShowShareModal(false)} hitSlop={12}>
+              <Pressable onPress={() => setShowShareModal(false)} hitSlop={12} testID="work-up-share-back" accessibilityRole="button" accessibilityLabel={t("a11y", "closeModal")}>
                 <Ionicons name="close" size={24} color={C.text} />
               </Pressable>
               <Text style={shareStyles.topTitle}>{t("workUp", "shareSummary")}</Text>
@@ -963,20 +966,21 @@ export function WorkUpOverviewModal({
             </ScrollView>
           </View>
         </View>
-      </AnimatedSlideModal>
+      )}
 
-      {/* ── Yearly Summary Modal ── */}
-      <AnimatedModal visible={showYearlySummary} transparent onRequestClose={() => setShowYearlySummary(false)} statusBarTranslucent>
-        <Pressable style={yearStyles.overlay} onPress={() => setShowYearlySummary(false)}>
-          <Pressable style={[yearStyles.card, { backgroundColor: C.surface }]} onPress={(e) => e.stopPropagation()}>
+      {/* ── Yearly Summary detail screen ── */}
+      {showYearlySummary && (
+        <View testID="work-up-year-screen" style={[yearStyles.overlay, { backgroundColor: C.background, padding: 0, paddingTop: insets.top || webTopInset, paddingBottom: bottomSafe }]}>
+          <View style={[yearStyles.card, { backgroundColor: C.background, borderRadius: 0, width: "100%", maxWidth: 900, flex: 1, alignSelf: "center" }]}>
             <View style={yearStyles.header}>
               <Ionicons name="trophy" size={28} color="#FFD700" />
               <Text style={yearStyles.title}>{new Date().getFullYear() - 1} {t("workUp", "yearInReview")}</Text>
-              <Pressable onPress={() => setShowYearlySummary(false)} hitSlop={12}>
+              <Pressable onPress={() => setShowYearlySummary(false)} hitSlop={12} testID="work-up-year-back" accessibilityRole="button" accessibilityLabel={t("a11y", "closeModal")}>
                 <Ionicons name="close" size={22} color={C.textSecondary} />
               </Pressable>
             </View>
 
+            <ScrollView style={{ flex: 1, width: "100%" }} contentContainerStyle={{ alignItems: "center", gap: 20, paddingVertical: 20 }} showsVerticalScrollIndicator={false}>
             <View style={yearStyles.bigStat}>
               <Text style={[yearStyles.bigNum, { color: C.accent }]}>{formatMinutes(lastYearTotalTime)}</Text>
               <Text style={yearStyles.bigLabel}>{t("workUp", "minutesPracticed")}</Text>
@@ -998,9 +1002,10 @@ export function WorkUpOverviewModal({
             </View>
 
             <Text style={yearStyles.footerText}>{t("workUp", "keepUp")}</Text>
-          </Pressable>
-        </Pressable>
-      </AnimatedModal>
+            </ScrollView>
+          </View>
+        </View>
+      )}
     </AnimatedModal>
   );
 }

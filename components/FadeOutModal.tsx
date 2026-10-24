@@ -88,23 +88,21 @@ export function FadeOutModal({ visible, onClose, onStart }: FadeOutModalProps) {
   }, [nText, mText, kText, parseField]);
 
   return (
-    <AnimatedModal visible={visible} transparent onRequestClose={onClose}>
-      <Pressable style={styles.overlay} onPress={onClose}>
+    <AnimatedModal visible={visible} onRequestClose={onClose}>
+      <View testID="fade-out-screen" style={[styles.screen, { backgroundColor: C.background, paddingTop: insets.top || webTopInset, paddingBottom: insets.bottom || (Platform.OS === "web" ? 34 : 0) }]}>
         <View
-          style={[
-            styles.sheet,
-            {
-              backgroundColor: C.surface,
-              borderColor: C.border,
-              paddingTop: (insets.top || webTopInset) + 16,
-              paddingBottom: 24 + (insets.bottom || (Platform.OS === "web" ? 34 : 0)),
-            },
-          ]}
-          onStartShouldSetResponder={() => true}
+          style={[styles.sheet, { backgroundColor: C.background, borderColor: C.border }]}
         >
-          <ScrollView contentContainerStyle={{ gap: Spacing.md }} keyboardShouldPersistTaps="handled">
-            <View style={styles.handle} />
+          <View style={styles.header}>
+            <Pressable onPress={onClose} hitSlop={12} accessibilityRole="button" accessibilityLabel={t("fadeOut", "close")} testID="fade-out-back">
+              <Text style={[styles.backText, { color: C.accent }]}>‹</Text>
+            </Pressable>
             <Text style={[styles.title, { color: C.text }]}>{t("fadeOut", "title")}</Text>
+            <Pressable onPress={onClose} hitSlop={12} accessibilityRole="button" accessibilityLabel={t("fadeOut", "close")}>
+              <Text style={[styles.backText, { color: C.textSecondary }]}>×</Text>
+            </Pressable>
+          </View>
+          <ScrollView style={{ flex: 1 }} contentContainerStyle={{ gap: Spacing.md, padding: Spacing.lg, maxWidth: 720, width: "100%", alignSelf: "center" }} keyboardShouldPersistTaps="handled">
             <Text style={[styles.desc, { color: C.textSecondary }]}>{t("fadeOut", "description")}</Text>
 
             <View style={[styles.row, { borderColor: C.border }]}>
@@ -164,7 +162,7 @@ export function FadeOutModal({ visible, onClose, onStart }: FadeOutModalProps) {
             </Pressable>
           </ScrollView>
         </View>
-      </Pressable>
+      </View>
     </AnimatedModal>
   );
 }
@@ -201,27 +199,30 @@ function Field({
 
 const makeStyles = (C: any) =>
   StyleSheet.create({
-    overlay: {
+    screen: {
       flex: 1,
-      backgroundColor: "rgba(0,0,0,0.4)",
-      justifyContent: "flex-end" as const,
+      justifyContent: "center" as const,
     },
     sheet: {
-      borderTopLeftRadius: Radius.xl,
-      borderTopRightRadius: Radius.xl,
-      borderTopWidth: 1,
-      borderLeftWidth: 1,
-      borderRightWidth: 1,
-      paddingHorizontal: Spacing.lg,
-      maxHeight: "90%" as const,
+      flex: 1,
+      borderWidth: 0,
     },
-    handle: {
-      alignSelf: "center" as const,
-      width: 36,
-      height: 4,
-      borderRadius: 2,
-      backgroundColor: C.border,
-      marginBottom: Spacing.sm,
+    header: {
+      minHeight: 56,
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      justifyContent: "space-between" as const,
+      paddingHorizontal: Spacing.lg,
+      borderBottomWidth: 1,
+      borderBottomColor: C.border,
+      gap: Spacing.md,
+    },
+    backText: {
+      fontFamily: "SpaceGrotesk_600SemiBold",
+      fontSize: 28,
+      lineHeight: 32,
+      minWidth: 28,
+      textAlign: "center" as const,
     },
     title: {
       fontFamily: "SpaceGrotesk_600SemiBold",

@@ -181,10 +181,10 @@ export function ExportEntryModal({ visible, entry, onClose }: ExportEntryModalPr
   return (
     <AnimatedSlideModal
       visible={visible}
-      presentationStyle="pageSheet"
       onRequestClose={handleClose}
     >
       <View
+        testID="practice-export-screen"
         style={[
           styles.container,
           {
