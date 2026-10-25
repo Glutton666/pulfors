@@ -19,6 +19,8 @@ import { RhythmLiveFeedback } from "./RhythmLiveFeedback";
 import { RhythmEntryGuidance } from "./RhythmEntryGuidance";
 import { applyDraftCandidate, confirmDraftRegion, prepareValidatedDraft, reconstructNotation, reopenDraftRegion, verifyDraft } from "@/lib/rhythm-lab/verification";
 import { useRhythmEntryMode } from "@/hooks/useRhythmEntryMode";
+import { useRhythmRecovery } from "@/hooks/useRhythmRecovery";
+import { hasRhythmWork, rhythmRecovery } from "@/lib/rhythm-lab/recovery";
 
 type InputMode = "pad" | "drums" | "keyboard";
 const DURS = [1, 2, 4, 8, 16, 24, 32, 64];
@@ -34,18 +36,27 @@ export function RhythmWorkspace({ active = true, initialDocument }: { active?: b
   const text = ko
     ? { headline: "연주를 먼저, 표기는 나중에.", intro: "원래 타격 시각은 보존됩니다. 해석은 초안이며 언제든 수정할 수 있습니다.", bpm: "템포", meter: "박자", countIn: "예비박", bars: "마디 제한", start: "녹음 시작", stop: "마침", pad: "패드", drums: "드럼", keyboard: "건반", press: "누르고 떼어 연주", provisional: "임시 기보", listen: "듣기", original: "원본 입력", notation: "기보 비교", save: "기록 저장", library: "저장 기록", candidates: "다른 해석", simplify: "정리 정도", selected: "선택된 타격", flam: "플램", drag: "드래그", regular: "일반", diddle: "더블", accent: "악센트", confirm: "확정", rest: "쉼표 추가", duration: "길이", onset: "시작 박", tuplet: "연음", actual: "실제", normal: "표기", apply: "적용", symbols: "사용자 기호", newSymbol: "기호 만들기", shapes: "도형 추가", meaning: "의미", role: "역할", description: "설명", unsupported: "미지원 의미는 주석으로만 표시됩니다.", practice: "따라 치기", calibrate: "타이밍 보정", taps: "탭", manual: "수동 오프셋 ms", beginPractice: "연습 시작", endPractice: "연습 종료", result: "종합 점수", difficulty: "난이도", empty: "아직 연주가 없습니다. 설정 후 패드를 눌러 기록하세요.", title: "제목", open: "열기", delete: "삭제", error: "오류", noDoc: "저장된 리듬이 없습니다.", hit: "타격", values: "음가", inputFlow: "입력", reviewFlow: "검토", practiceFlow: "연습" }
     : { headline: "Play it first. Notate it later.", intro: "Raw hit times stay intact. Interpretation is a draft, ready for your ear and hand.", bpm: "Tempo", meter: "Meter", countIn: "Count-in", bars: "Bar limit", start: "Start recording", stop: "Finish", pad: "Pad", drums: "Drums", keyboard: "Keys", press: "Press and release to play", provisional: "Live draft", listen: "Listen", original: "Original take", notation: "Notation pass", save: "Save take", library: "Saved takes", candidates: "Alternate readings", simplify: "Simplify", selected: "Selected hits", flam: "Flam", drag: "Drag", regular: "Regular", diddle: "Diddle", accent: "Accent", confirm: "Confirm", rest: "Insert rest", duration: "Duration", onset: "Start beat", tuplet: "Tuplet", actual: "Actual", normal: "Normal", apply: "Apply", symbols: "Personal symbols", newSymbol: "Build symbol", shapes: "Add shape", meaning: "Meaning", role: "Role", description: "Description", unsupported: "Unsupported meanings stay annotations.", practice: "Practice", calibrate: "Timing calibration", taps: "Taps", manual: "Manual offset ms", beginPractice: "Start practice", endPractice: "Finish practice", result: "Overall score", difficulty: "Difficulty", empty: "No performance yet. Set the pulse, then play the pad.", title: "Title", open: "Open", delete: "Delete", error: "Error", noDoc: "No saved rhythm documents.", hit: "hit", values: "Values", inputFlow: "Input", reviewFlow: "Review", practiceFlow: "Practice" };
-  const [doc, setDoc] = useState<RhythmDocument>(() => initialDocument
+  const [doc, setDocument] = useState<RhythmDocument>(() => initialDocument
     ? prepareValidatedDraft(initialDocument)
     : createRhythmDocument({ title: ko ? "새 리듬" : "New rhythm", bpm: 92, meter: { numerator: 4, denominator: 4 } }));
+  const docRef = useRef(doc);
+  const setDoc = (action: React.SetStateAction<RhythmDocument>) => {
+    const next = typeof action === "function" ? action(docRef.current) : action;
+    docRef.current = next;
+    setDocument(next);
+  };
+  const recovery = useRhythmRecovery(doc);
+  const [recoveryChoice, setRecoveryChoice] = useState<string | null>(null);
+  const recoverable = recovery.documents.filter((item) => item.id !== doc.id);
+  const recoveryTarget = recoverable.find((item) => item.id === recoveryChoice) ??
+    recoverable.find((item) => item.id === recovery.previous?.id) ?? recoverable.at(-1);
+  const recordingPhase = useRef<"idle" | "count-in" | "recording">("idle");
   const [recording, setRecording] = useState(false);
   const [recordPending, setRecordPending] = useState(false);
   const { entryMode, chooseEntryMode, entryModeReady, entryModeError } = useRhythmEntryMode();
   const [recordRequest, setRecordRequest] = useState(false);
   const recordRequestRef = useRef(false);
   const [inputEpoch, setInputEpoch] = useState(0);
-  const [stoppedHint, setStoppedHint] = useState(false);
-  const stoppedHintShown = useRef(false);
-  const stoppedHintTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [liveElapsedMs, setLiveElapsedMs] = useState(0);
   const [mode, setMode] = useState<InputMode>(() => initialDocument
     ? initialDocument.hits.some((hit) => hit.midi !== undefined) ? "keyboard"
@@ -130,58 +141,77 @@ export function RhythmWorkspace({ active = true, initialDocument }: { active?: b
   const clearHeldInput = () => { activeMidi.current = []; stopPreviewNote(); setInputEpoch((value) => value + 1); };
   const setPlaybackActive = (value: boolean) => { playingRef.current = value; setPlaying(value); };
   const cleanupPlayback = () => { playbackEpoch.current++; audioSession.current?.stop(); clearHeldInput(); setPlaybackActive(false); };
-  const cleanupRecording = () => { recordTimers.current.forEach(clearTimeout); recordTimers.current = []; if (recordMetro.current) clearInterval(recordMetro.current); recordMetro.current = null; if (recordTicker.current) clearInterval(recordTicker.current); recordTicker.current = null; clickSession.current?.stop(); };
+  const cleanupRecording = () => { recordingPhase.current = "idle"; recordTimers.current.forEach(clearTimeout); recordTimers.current = []; if (recordMetro.current) clearInterval(recordMetro.current); recordMetro.current = null; if (recordTicker.current) clearInterval(recordTicker.current); recordTicker.current = null; clickSession.current?.stop(); };
   const cleanupPractice = () => { practiceTimers.current.forEach(clearTimeout); practiceTimers.current = []; audioSession.current?.stop(); clickSession.current?.stop(); setPracticeOn(false); setPracticePending(false); clearHeldInput(); };
   const cleanupAll = () => { cleanupPlayback(); cleanupRecording(); cleanupPractice(); calibrationTimers.current.forEach(clearTimeout); calibrationTimers.current = []; recordRequestRef.current = false; setRecordRequest(false); };
   const cleanupAllRef = useRef(cleanupAll);
   cleanupAllRef.current = cleanupAll;
   useEffect(() => () => cleanupAllRef.current(), []);
-  useEffect(() => () => { if (stoppedHintTimer.current) clearTimeout(stoppedHintTimer.current); }, []);
+  const checkpoint = () => {
+    const now = Math.max(0, clockNow() - startRef.current);
+    const openIds = new Set(Object.values(releaseRef.current));
+    const current = docRef.current;
+    const closed = { ...current, hits: current.hits.map((hit) =>
+      openIds.has(hit.id) && hit.releaseMs === undefined ? { ...hit, releaseMs: now } : hit) };
+    docRef.current = closed;
+    rhythmRecovery.remember(closed, true);
+    void rhythmRecovery.flush();
+  };
+  const checkpointRef = useRef(checkpoint);
+  checkpointRef.current = checkpoint;
+  useEffect(() => () => checkpointRef.current(), []);
   useEffect(() => {
     const subscription = AppState.addEventListener("change", (state) => {
-      if (state !== "active") { cleanupAllRef.current(); setRecording(false); setRecordPending(false); }
+      if (state !== "active") { checkpointRef.current(); cleanupAllRef.current(); setRecording(false); setRecordPending(false); }
     });
     return () => subscription.remove();
   }, []);
   const update = (next: RhythmDocument) => { if (!playingRef.current) setDoc({ ...next, updatedAt: Date.now() }); };
-  const startFreshTake = () => {
+  const startFreshTake = (immediateAt?: number) => {
     if (!active || !recordRequestRef.current) return;
     recordRequestRef.current = false; setRecordRequest(false);
     chooseEntryMode("capture");
-    cleanupRecording(); cleanupPlayback();
+    cleanupRecording();
+    // Do not remount the input surface on the first down: its matching up
+    // (and other fingers in the same touch event) still belongs to this take.
+    if (immediateAt === undefined) cleanupPlayback();
     calibrationTimers.current.forEach(clearTimeout); calibrationTimers.current = [];
     setSelected([]); setReviewMeasure(null); setScrubPosition("0"); setReviewTool(null); setFlow("input"); setPracticeResult(null); setDoc((prev) => ({
       ...createRhythmDocument({ title: prev.title, bpm: prev.bpm, meter: prev.meter }),
       symbols: prev.symbols, offsetMs: prev.offsetMs, simplification: prev.simplification,
     }));
     releaseRef.current = {};
-    setRecordPending(true);
+    recordingPhase.current = "count-in";
+    setRecordPending(immediateAt === undefined);
     const beatMs = 60000 / doc.bpm * 4 / doc.meter.denominator;
-    const count = countIn ? Math.max(1, doc.meter.numerator) : 0;
+    const count = immediateAt === undefined && countIn ? Math.max(1, doc.meter.numerator) : 0;
     const delay = count * beatMs;
     if (countIn) for (let i = 0; i < count; i++) recordTimers.current.push(setTimeout(() => clickSession.current?.play(), i * beatMs));
-    recordTimers.current.push(setTimeout(() => {
-      startRef.current = clockNow(); setLiveElapsedMs(0); setRecordPending(false); setRecording(true); clickSession.current?.play();
+    const activate = () => {
+      startRef.current = immediateAt ?? clockNow(); recordingPhase.current = "recording";
+      setLiveElapsedMs(0); setRecordPending(false); setRecording(true); clickSession.current?.play();
       recordMetro.current = setInterval(() => clickSession.current?.play(), beatMs);
       recordTicker.current = setInterval(() => setLiveElapsedMs(Math.max(0, clockNow() - startRef.current)), 80);
       const limit = Number(barLimit);
       if (limit > 0) recordTimers.current.push(setTimeout(finishRecord, limit * doc.meter.numerator * beatMs));
-    }, delay));
+    };
+    if (immediateAt !== undefined) activate();
+    else recordTimers.current.push(setTimeout(activate, delay));
   };
   const beginRecord = () => {
     if (!entryModeReady || interactionLocked || recordRequestRef.current) return;
     clearHeldInput();
     recordRequestRef.current = true; setRecordRequest(true);
-    const hasWork = !!(doc.hits.length || doc.overrides.length || doc.manualEvents?.length || doc.tuplets.length);
+    const hasWork = hasRhythmWork(docRef.current);
     if (!hasWork) { startFreshTake(); return; }
     Alert.alert(ko ? "새 녹음" : "Start a new take", ko ? "현재 연주를 먼저 저장하거나 버릴까요?" : "Save or discard the current performance before starting over?", [
       { text: ko ? "취소" : "Cancel", style: "cancel", onPress: () => { recordRequestRef.current = false; setRecordRequest(false); } },
-      { text: ko ? "버리고 시작" : "Discard & start", style: "destructive", onPress: startFreshTake },
+      { text: ko ? "버리고 시작" : "Discard & start", style: "destructive", onPress: () => startFreshTake() },
       { text: ko ? "저장 후 시작" : "Save & start", onPress: () => { void saveRhythmDocument(doc).then(async () => { await loadLibrary(); startFreshTake(); }).catch((error) => { recordRequestRef.current = false; setRecordRequest(false); Alert.alert(text.error, error instanceof Error ? error.message : String(error)); }); } },
     ], { cancelable: true, onDismiss: () => { recordRequestRef.current = false; setRecordRequest(false); } });
   };
   const finishRecord = () => {
-    if (recordPending && !recording) {
+    if (recordingPhase.current === "count-in") {
       cleanupRecording();
       setRecordPending(false);
       return;
@@ -215,20 +245,23 @@ export function RhythmWorkspace({ active = true, initialDocument }: { active?: b
     if (playingRef.current || inputLocked) return;
     if (action === "down") {
       const now = clockNow();
-      if (recording) {
+      if (flow === "input" && entryMode === "capture" && recordingPhase.current === "idle" &&
+        !practiceOn && !practicePending && !recordRequestRef.current) {
+        rhythmRecovery.remember(docRef.current, true);
+        void rhythmRecovery.flush();
+        recordRequestRef.current = true;
+        startFreshTake(now);
+      }
+      if (recordingPhase.current === "recording") {
         const onsetMs = Math.max(0, now - startRef.current);
         const hit: Hit = { id: genId("hit"), onsetMs, ...(mode === "keyboard" ? { midi } : { drum: mode === "drums" ? drum : "snare" }), ...(mode === "keyboard" && midi ? { midi } : {}) };
         setDoc((prev) => ({ ...prev, hits: [...prev.hits, hit], updatedAt: Date.now() }));
         releaseRef.current[id] = hit.id;
       }
-      if (flow === "input" && !recording && !recordPending && !practiceOn && !practicePending && entryMode === "notation") {
+      if (flow === "input" && recordingPhase.current === "idle" && !practiceOn && !practicePending && entryMode === "notation") {
         setDoc((prev) => insertNotationNote(prev, playheadQ, duration,
           mode === "keyboard" ? { midi } : { drum: mode === "drums" ? drum : "snare" }));
         if (mode !== "keyboard") setScrubPosition(String(playheadQ + duration));
-      }
-      if (flow === "input" && entryMode === "capture" && !recording && !recordPending && !stoppedHintShown.current) {
-        stoppedHintShown.current = true; setStoppedHint(true);
-        stoppedHintTimer.current = setTimeout(() => setStoppedHint(false), 2600);
       }
       if (mode === "keyboard" && midi) {
         activeMidi.current = [...new Set([...activeMidi.current, midi])];
@@ -251,7 +284,7 @@ export function RhythmWorkspace({ active = true, initialDocument }: { active?: b
         if (activeMidi.current.length) playChord(activeMidi.current, 500, 0.5);
         else stopPreviewNote();
       }
-      if (recording && releaseRef.current[id]) {
+      if (recordingPhase.current === "recording" && releaseRef.current[id]) {
         const releaseMs = Math.max(0, clockNow() - startRef.current);
         const hitId = releaseRef.current[id];
         setDoc((prev) => {
@@ -263,6 +296,21 @@ export function RhythmWorkspace({ active = true, initialDocument }: { active?: b
         delete releaseRef.current[id];
       }
     }
+  };
+  const restorePrevious = () => {
+    if (interactionLocked || !recoveryTarget) return;
+    const previous = recoveryTarget;
+    rhythmRecovery.remember(docRef.current, true);
+    cleanupAllRef.current();
+    releaseRef.current = {};
+    setSelected([]); setReviewMeasure(null); setScrubPosition("0"); setReviewTool(null);
+    setDoc(previous);
+    setRecoveryChoice(null);
+    setMode(previous.hits.some((hit) => hit.midi !== undefined) ? "keyboard"
+      : previous.hits.some((hit) => hit.drum !== undefined) ? "drums" : "pad");
+    setOffsetText(String(previous.offsetMs));
+    setFlow("review");
+    void rhythmRecovery.flush();
   };
   const changeBpm = (value: string) => setDoc((prev) => ({ ...prev, bpm: Math.max(30, Math.min(260, Number(value) || 30)) }));
   const play = (kind: "original" | "notation") => {
@@ -302,6 +350,11 @@ export function RhythmWorkspace({ active = true, initialDocument }: { active?: b
   };
   const openSaved = (item: RhythmDocument) => {
     if (recording || recordPending || practiceOn || practicePending) return;
+    rhythmRecovery.remember(docRef.current, true);
+    const opened = prepareValidatedDraft(item);
+    // Reopening an older book version in this same workspace must not replace
+    // the only recovery copy of newer edits sharing its document ID.
+    rhythmRecovery.remember(opened, false, true);
     cleanupAllRef.current();
     setReviewMeasure(null);
     setReviewTool(null);
@@ -310,7 +363,7 @@ export function RhythmWorkspace({ active = true, initialDocument }: { active?: b
     setMode(item.hits.some((hit) => hit.midi !== undefined) ? "keyboard"
       : item.hits.some((hit) => hit.drum !== undefined) ? "drums" : "pad");
     activeMidi.current = [];
-    update(prepareValidatedDraft(item));
+    update(opened);
     setOffsetText(String(item.offsetMs ?? 0));
     setFlow("review");
     setLibraryOpen(false);
@@ -539,11 +592,27 @@ export function RhythmWorkspace({ active = true, initialDocument }: { active?: b
     : recording ? (ko ? "탭 기록 중 · 누름·뗌 저장 · 모드 전환 잠김" : "Recording taps · down/up captured · mode locked")
     : practiceOn || practicePending || flow === "practice" ? (ko ? "따라 치기 · 원본 악보는 바뀌지 않음" : "Play along · the score stays unchanged")
     : entryMode === "notation" ? (ko ? "누른 타이밍은 기록되지 않음" : "Tap timing is not recorded")
-    : (ko ? "녹음 시작을 누른 뒤 패드를 치세요" : "Press Start recording, then play the pad");
+    : (ko ? "첫 탭부터 즉시 기록 · 예비박 없이 시작" : "First tap records immediately · no count-in");
 
   return (
     <View style={s.workspace}>
     <ScrollView ref={workspaceScroll} testID="rhythm-workspace-scroll" style={s.scroll} contentContainerStyle={s.container} keyboardShouldPersistTaps="handled">
+      {(recovery.error || recoveryTarget) && <View testID="rhythm-recovery" style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 6 }}>
+        {recovery.error && <><Text testID="rhythm-recovery-error" accessibilityLiveRegion="polite" style={{ color: C.accent, fontSize: 10 }}>
+          {ko ? "임시 저장 실패 · 이 실행 중인 앱에는 복구 사본 유지" : "Recovery save failed · copy kept in this app session"}
+        </Text><Pressable testID="rhythm-recovery-retry" accessibilityRole="button" onPress={recovery.retry} style={s.chip}>
+          <Text style={{ color: C.accent, fontSize: 11 }}>{ko ? "재시도" : "Retry"}</Text>
+        </Pressable></>}
+        {recoveryTarget && <Pressable testID="rhythm-recovery-restore" accessibilityRole="button"
+          disabled={interactionLocked} onPress={restorePrevious} style={[s.chip, { borderColor: C.border, opacity: interactionLocked ? 0.45 : 1 }]}>
+          <Text numberOfLines={1} style={{ color: C.text, fontSize: 11 }}>{ko ? "이전 작업 복원" : "Restore previous work"} · {recoveryTarget.title} · {recoveryTarget.hits.length} {text.hit}</Text>
+        </Pressable>}
+        {recoverable.length > 1 && <Pressable testID="rhythm-recovery-next" accessibilityRole="button" disabled={interactionLocked}
+          onPress={() => setRecoveryChoice(recoverable[(recoverable.findIndex((item) => item.id === recoveryTarget?.id) + 1) % recoverable.length].id)}
+          style={[s.chip, { opacity: interactionLocked ? 0.45 : 1 }]}>
+          <Text style={{ color: C.textSecondary, fontSize: 11 }}>{ko ? "다른 작업" : "Other work"} ({recoverable.findIndex((item) => item.id === recoveryTarget?.id) + 1}/{recoverable.length})</Text>
+        </Pressable>}
+      </View>}
       {flow !== "input" && <View style={s.flowRow}>{([["input", text.inputFlow], ["review", text.reviewFlow], ["practice", text.practiceFlow]] as const).map(([key, label]) => <Pressable key={key} testID={`rhythm-flow-${key}`} accessibilityRole="button" accessibilityState={{ selected: flow === key }} disabled={recording || recordPending || practiceOn || practicePending} onPress={() => changeFlow(key)} style={[s.flowChip, { borderColor: flow === key ? C.accent : C.border, backgroundColor: flow === key ? C.surfaceLight : "transparent", opacity: recording || recordPending || practiceOn || practicePending ? 0.45 : 1 }]}><Text style={{ color: flow === key ? C.accent : C.textSecondary, fontSize: 11 }}>{label}</Text></Pressable>)}</View>}
       {flow === "input" && <View testID="rhythm-input-stage">
         <View style={[s.inputToolbar, compactDock && s.compactInputToolbar]}>
@@ -686,7 +755,7 @@ export function RhythmWorkspace({ active = true, initialDocument }: { active?: b
         <RhythmEntryGuidance message={entryModeError ? `${entryGuidance} · ${ko ? "모드 환경설정 오류 · 다시 선택해 재시도" : "Mode preference error · select again to retry"}` : entryGuidance}
           ko={ko} compact={compactDock} width={Math.min(180, Math.max(100, windowWidth - 464))} manual={entryMode === "notation" && flow === "input"} duration={duration}
           onDuration={(value) => { setDuration(value); setDurationText(String(value)); }}
-          disabled={interactionLocked || !entryModeReady} hint={stoppedHint && !interactionLocked && flow === "input"} />
+          disabled={interactionLocked || !entryModeReady} hint={false} />
         <View style={{ flex: compactDock ? 1 : undefined, width: mode === "keyboard" ? "100%" : undefined, minWidth: 0, alignItems: "center" }}>
         {mode === "keyboard" ? <RhythmKeyboard key={inputEpoch} disabled={inputLocked} onDown={(midi) => addHit(`key_${midi}`, "down", midi)} onUp={(midi) => addHit(`key_${midi}`, "up", midi)} /> :
           <RhythmInputSurface key={inputEpoch} disabled={inputLocked} label={text.press} testID="rhythm-pad" onDown={tapPad} onUp={() => addHit("pad", "up")} style={[s.bigPad, compactDock && s.compactPad, { backgroundColor: mode === "drums" && drum === "kick" ? "#b6a77b" : C.accent }]}><View style={s.padMark} /><Text style={s.padLabel}>{text.press.toUpperCase()}</Text></RhythmInputSurface>}
