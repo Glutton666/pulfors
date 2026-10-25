@@ -14,3 +14,9 @@ Analysis collects while the microphone button is held and finishes on release, n
 **Why:** The user explicitly replaced the separate ten-second workflow with hold-to-capture and requested removing the redundant details area.
 
 **How to apply:** Preserve tap-to-toggle live detection. Reject late permission, recorder, and playback completions after release, close, or a newer session.
+
+The user wants noise gating in both live detection and held-session analysis, not only the live tuner. The live display should favor a stable, strongest main note; analysis must still allow real simultaneous notes rather than collapsing to that one displayed note.
+
+**Why:** The user requested a gate and a dominant-note live display, then repeated that noise must also be excluded from analysis.
+
+**How to apply:** Keep noise rejection consistent across web/native analysis paths, preserve quiet timeline gaps and actual chords, and leave original replay audio intact. This is detection filtering, not a promise to remove all noise from the recorded waveform.

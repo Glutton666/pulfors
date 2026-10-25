@@ -39,6 +39,7 @@ import {
   generateToneBase64,
 } from "@/lib/signal-generator-engine";
 import { TUNING_DATA } from "@/lib/tuning-data";
+import { SIGNAL_GATE_RMS, signalGateFloor } from "@/lib/signal-noise-gate";
 import {
   NOTE_NAMES,
   realFFT,
@@ -1409,7 +1410,7 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
 
       // 연속 감지: 임팩트 전용이 아닌 RMS 게이트 기반 지속 분석
       // 임팩트 전용 모드는 지속음/약한 연주를 놓치는 문제가 있었음
-      const MIC_GATE = 0.018;       // 낮은 임계값으로 조용한 악기도 감지
+      const MIC_GATE = SIGNAL_GATE_RMS;
       const SILENCE_RESET_MS = 600; // 침묵 지속시 readings 초기화
       const UPDATE_MS = 250;        // UI 업데이트 주기
       const MAX_READINGS = 60;      // 최대 보관 readings 수 (메모리 제한)
@@ -1442,7 +1443,9 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
           }
 
           // HPS 기반 기음 탐지
-          const result = fftPeakDetect(fftBuf, audioCtx.sampleRate, analyser.fftSize);
+          const gateFloor = signalGateFloor(fftBuf, audioCtx.sampleRate, analyser.fftSize, rms);
+          const result = gateFloor === null ? null
+            : fftPeakDetect(fftBuf, audioCtx.sampleRate, analyser.fftSize, 27.5, MAX_FREQ, gateFloor - 6);
           if (result && result.freq > 20 && result.freq <= MAX_FREQ) {
             lastSignalTime = nowMs;
             spectrumPeakBinRef.current = result.peakBin;
@@ -1581,10 +1584,16 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
         for (let i = 0; i < samples.length; i++) buf.push(samples[i]);
         while (buf.length >= WINDOW_SIZE) {
           const win = new Float32Array(buf.splice(0, WINDOW_SIZE));
+          // Analyze unwindowed PCM, including quiet frames. Applying Hann twice
+          // changes the gate level and skipping silence shifts the timeline.
+          if (analysisCapture) {
+            const frameTime = Math.max(0, Date.now() - analysisCapture.startedAt);
+            analysisCapture.frames.push(analyzePcmFrame(win, sampleRate, frameTime, ANALYSIS_BUCKET_MS));
+          }
           let rms = 0;
           for (let i = 0; i < win.length; i++) rms += win[i] * win[i];
           rms = Math.sqrt(rms / win.length);
-          if (rms < 0.01) {
+          if (rms < SIGNAL_GATE_RMS) {
             setMicAnalyzed(true);
             setMicDetectedFreq(null);
             setMicDetectedNote(null);
@@ -1594,11 +1603,9 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
             win[i] *= 0.5 * (1 - Math.cos(2 * Math.PI * i / (WINDOW_SIZE - 1)));
           }
           const mag = realFFT(win);
-          const result = fftPeakDetect(mag, sampleRate, WINDOW_SIZE);
-          if (analysisCapture) {
-            const frameTime = Math.max(0, Date.now() - analysisCapture.startedAt);
-            analysisCapture.frames.push(analyzePcmFrame(win, sampleRate, frameTime, ANALYSIS_BUCKET_MS));
-          }
+          const gateFloor = signalGateFloor(mag, sampleRate, WINDOW_SIZE, rms);
+          const result = gateFloor === null ? null
+            : fftPeakDetect(mag, sampleRate, WINDOW_SIZE, 27.5, 4200, gateFloor - 6);
           setMicAnalyzed(true);
           if (result && result.freq > 20 && result.freq <= 4200) {
             const freq = Math.round(result.freq * 10) / 10;
