@@ -177,7 +177,7 @@ export function verifyDraft(doc: RhythmDocument, interpretation: Interpretation 
       const tolerance = toleranceFor(hit.onsetMs);
       severeTiming ||= error > tolerance * 2;
       let closeness = Math.max(0, 1 - error / (tolerance * 2));
-      if (hit.releaseMs !== undefined && hit.releaseMs - hit.onsetMs >= Math.max(80, ms / 4)) {
+      if (hit.midi !== undefined && hit.releaseMs !== undefined && hit.releaseMs - hit.onsetMs >= Math.max(80, ms / 4)) {
         const durationError = Math.abs((recovered.durationMs ?? 0) - (hit.releaseMs - hit.onsetMs));
         closeness = closeness * 0.8 + Math.max(0, 1 - durationError / (ms * 0.5)) * 0.2;
         heldMismatch ||= durationError > tolerance;
@@ -200,7 +200,7 @@ export function verifyDraft(doc: RhythmDocument, interpretation: Interpretation 
       .map((event) => [event.hitIds, event.startQ,
         event.hitIds.some((id) => {
           const hit = hits.find((source) => source.id === id);
-          return hit?.releaseMs !== undefined && hit.releaseMs - hit.onsetMs >= Math.max(80, ms / 4);
+           return hit?.midi !== undefined && hit.releaseMs !== undefined && hit.releaseMs - hit.onsetMs >= Math.max(80, ms / 4);
         }) ? event.durationQ : null]))));
     const confirmed = doc.reviewConfirmations?.some((entry) => entry.measureIndex === index &&
       entry.fingerprint === regionFingerprint(doc, index, events));

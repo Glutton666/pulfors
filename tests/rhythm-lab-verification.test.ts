@@ -79,7 +79,7 @@ test("duplicate references, collapsed strikes, and overlaps cannot get a valid p
   assert.ok(collapsed.issues.some((issue) => issue.code === "collapsed-hits"));
 });
 test("bar duration and unfilled gaps are checked independently of hit matches", () => {
-  const doc = makeDoc([0, 500]);
+  const doc = makeDoc([500, 1000]);
   const result = interpretRhythm(doc);
   const report = verifyDraft(doc, { ...result, events: result.events.filter((event) => event.kind === "note") });
   assert.equal(report.valid, false);
@@ -87,8 +87,12 @@ test("bar duration and unfilled gaps are checked independently of hit matches", 
   assert.ok(report.issues.some((issue) => issue.code === "bar-total"));
 });
 test("poorly fitting but structurally valid edited notation remains unresolved", () => {
-  const doc = makeDoc([0, 500, 1000]);
-  const event = interpretRhythm(doc).events.find((item) => item.hitIds.includes("hit1"))!;
+  const source = makeDoc([0, 500, 1000]);
+  const initial = interpretRhythm(source).events.find((item) => item.hitIds.includes("hit1"))!;
+  // Keep space for the intentional timing displacement; moving a full
+  // quarter into its neighbour would test overlap rather than timing.
+  const doc = setEventDuration(source, initial.id, 0.25);
+  const event = interpretRhythm(doc).events.find((item) => item.id === initial.id)!;
   const moved = moveNotationEvent(doc, event.id, 1.5);
   const report = verifyDraft(moved);
   assert.equal(report.valid, true);

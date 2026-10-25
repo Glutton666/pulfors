@@ -35,15 +35,15 @@ test("ordinary dotted durations retain their correct base glyph", () => {
   assert.deepEqual(describeDuration(1.5), { value: 4 });
   assert.deepEqual(describeDuration(3), { value: 2 });
 });
-test("triplet taps and intervening rests stay on the same rhythmic family", () => {
+test("triplet taps use their inter-onset eighth-triplet values, not short contact durations", () => {
   const doc = makeDoc([0, 167, 332, 501]);
   const result = interpretRhythm(doc);
   assert.equal(result.candidates[0].grid, 12);
   const firstBeat = result.events.filter((event) => toNumber(event.startQ) < 1);
-  assert.equal(firstBeat.length, 6);
+  assert.equal(firstBeat.length, 3);
   for (const event of firstBeat) {
-    assert.ok(Math.abs(toNumber(event.durationQ) - 1 / 6) < 1e-7);
-    assert.equal(event.value, 16);
+    assert.ok(Math.abs(toNumber(event.durationQ) - 1 / 3) < 1e-7);
+    assert.equal(event.value, 8);
     assert.deepEqual(event.tuplet, { actual: 3, normal: 2 });
   }
   assert.ok(result.events.every((event) => event.value <= 16));
@@ -66,11 +66,11 @@ test("slightly early next downbeat is not turned into an exotic fine-grid note",
   assert.equal(hitNotes[4].measureIndex, 1);
   assert.ok(result.events.every((event) => !event.tuplet));
 });
-test("quarter-spaced short taps use one dotted eighth rest, not tiny fragments", () => {
+test("quarter-spaced short pad taps read as quarters without artificial rests", () => {
   const events = interpretRhythm(makeDoc([0, 500, 1000, 1500])).events;
   const rests = events.filter((event) => event.kind === "rest");
-  assert.equal(rests.length, 4);
-  assert.ok(rests.every((event) => event.value === 8 && toNumber(event.durationQ) === 0.75));
+  assert.equal(rests.length, 0);
+  assert.ok(events.every((event) => event.value === 4 && toNumber(event.durationQ) === 1));
 });
 test("silence is an explicit rest and held keyboard duration is retained", () => {
   const doc = makeDoc([0, 1000]);

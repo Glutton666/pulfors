@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { PanResponder, ScrollView, StyleSheet, View } from "react-native";
 import Svg, { Circle, Ellipse, G, Line, Path, Rect, Text as SvgText } from "react-native-svg";
 import type { Meter, NotationEvent, UserSymbol } from "@/lib/rhythm-lab/types";
@@ -61,6 +61,8 @@ type Props = {
   onMoveCommit: (eventId: string, startQ: number) => void;
   onMoveCancel: () => void;
   playheadQ: number;
+  singleLine?: boolean;
+  followPlayhead?: boolean;
 };
 
 type BeamPair = { a: NotationEvent; b: NotationEvent };
@@ -163,13 +165,14 @@ function eventPitches(event: NotationEvent) {
   return [...new Set(pitches)].sort((a, b) => a - b);
 }
 
-export function RhythmStaff({ events, meter, selected, symbols, onSelect, onMovePreview, onMoveCommit, onMoveCancel, playheadQ }: Props) {
+export function RhythmStaff({ events, meter, selected, symbols, onSelect, onMovePreview, onMoveCommit, onMoveCancel, playheadQ, singleLine = false, followPlayhead = false }: Props) {
   const [viewportWidth, setViewportWidth] = useState(0);
+  const scrollRef = useRef<ScrollView>(null);
   const left = 28;
   const rightInset = 22;
   const spanQ = meter.numerator * (4 / meter.denominator);
   const measures = Math.max(1, Math.floor(playheadQ / spanQ) + 1, ...events.map((event) => event.measureIndex + 1));
-  const measuresPerRow = viewportWidth >= 620 ? 2 : 1;
+  const measuresPerRow = singleLine ? measures : viewportWidth >= 620 ? 2 : 1;
   const measureWidths = Array.from({ length: measures }, (_, measureIndex) => {
     const measureEvents = events.filter((event) => event.measureIndex === measureIndex);
     const onsets = [...new Set(measureEvents.map((event) => toNumber(event.startQ)))].sort((a, b) => a - b);
@@ -213,9 +216,13 @@ export function RhythmStaff({ events, meter, selected, symbols, onSelect, onMove
   const beamed = new Set(beamPairs.flatMap(({ a, b }) => [a.id, b.id]));
   const tupletGroups = buildTupletGroups(events, spanQ, meter);
   const flagsFor = (event: NotationEvent) => beamLevel(event);
+  const followX = Math.max(0, playheadX * NOTATION_SCALE - viewportWidth * 0.65);
+  useEffect(() => {
+    if (followPlayhead && singleLine) scrollRef.current?.scrollTo({ x: followX, animated: false });
+  }, [followPlayhead, singleLine, followX]);
 
   return <View testID="rhythm-staff" onLayout={(event) => setViewportWidth(event.nativeEvent.layout.width)} style={styles.frame}>
-    <ScrollView horizontal showsHorizontalScrollIndicator contentContainerStyle={{ minWidth: renderedWidth }}>
+    <ScrollView ref={scrollRef} horizontal showsHorizontalScrollIndicator contentContainerStyle={{ minWidth: renderedWidth }}>
       <View style={{ width: renderedWidth, height: renderedHeight, position: "relative" }}>
         <Svg width={renderedWidth} height={renderedHeight} viewBox={`0 0 ${width} ${height}`} style={{ backgroundColor: "#FFFFFF" }}>
           {Array.from({ length: rowCount }, (_, row) => <G key={`staff-${row}`}>

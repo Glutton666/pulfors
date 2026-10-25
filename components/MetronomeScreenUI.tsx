@@ -420,8 +420,8 @@ export function MetronomeScreenUI(props: Props) {
       {labScoreTab !== null && (
         <View style={[StyleSheet.absoluteFillObject, {
           zIndex: 950, backgroundColor: C.background,
-          paddingTop: insets.top || webTopInset,
-          paddingBottom: insets.bottom || webBottomInset,
+          paddingTop: insets.top,
+          paddingBottom: insets.bottom,
         }]}>
           <LabScoreWorkspace initialTab={labScoreTab} initialDocument={labRhythmDocument} onClose={() => {
             setLabScoreTab(null);

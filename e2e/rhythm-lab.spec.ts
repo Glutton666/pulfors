@@ -29,6 +29,18 @@ async function enterLab(page: Page, entry: "rhythm" | "notebook") {
   await expect(page.getByTestId(`lab-score-tab-${entry}`)).toBeVisible();
 }
 
+async function openSavedTake(page: Page) {
+  await page.getByTestId("rhythm-load").click();
+  await page.locator('[data-testid^="rhythm-saved-open-"]').first().click();
+}
+
+async function disableCountIn(page: Page, flow: "input" | "practice" = "input") {
+  await page.getByTestId(flow === "input" ? "rhythm-settings" : "rhythm-settings-practice").click();
+  await page.getByTestId("rhythm-count-in").click();
+  await page.getByTestId("rhythm-settings-close").click();
+  await expect(page.getByTestId("rhythm-settings-modal")).toHaveCount(0);
+}
+
 test("triplet recording renders grouped notation without tiny fabricated rests", async ({ page }) => {
   const doc = {
     ...createRhythmDocument({ title: "Triplet notation regression", bpm: 120 }),
@@ -39,7 +51,7 @@ test("triplet recording renders grouped notation without tiny fabricated rests",
     localStorage.setItem("rhythm_lab_documents_v1", JSON.stringify([document]));
   }, doc);
   await enterLab(page, "rhythm");
-  await page.getByRole("button", { name: /^Open from Saved takes$|^저장 기록에서 열기$/ }).click();
+  await openSavedTake(page);
   const notation = page.getByTestId("rhythm-staff");
   await notation.scrollIntoViewIfNeeded();
   await expect(notation.locator('svg text').filter({ hasText: /^3$/ })).toHaveCount(2);
@@ -79,7 +91,8 @@ test("notation similarity and intent confirmation persist separately", async ({ 
     localStorage.setItem("rhythm_lab_documents_v1", JSON.stringify([document]));
   }, doc);
   await enterLab(page, "rhythm");
-  await page.getByRole("button", { name: /^Open from Saved takes$|^저장 기록에서 열기$/ }).click();
+  await openSavedTake(page);
+  await page.getByTestId("rhythm-tool-validation").click();
   const panel = page.getByTestId("rhythm-validation-panel");
   await expect(page.getByTestId("rhythm-similarity")).toHaveText("91%");
   await panel.getByTestId("rhythm-review-region-0").click();
@@ -111,7 +124,8 @@ test("a structural calculation failure cannot be approved by the user", async ({
     localStorage.setItem("rhythm_lab_documents_v1", JSON.stringify([document]));
   }, invalid);
   await enterLab(page, "rhythm");
-  await page.getByRole("button", { name: /^Open from Saved takes$|^저장 기록에서 열기$/ }).click();
+  await openSavedTake(page);
+  await page.getByTestId("rhythm-tool-validation").click();
   const panel = page.getByTestId("rhythm-validation-panel");
   await expect(page.getByTestId("rhythm-similarity")).toHaveText("—");
   await panel.getByTestId("rhythm-review-region-0").click();
@@ -161,6 +175,7 @@ test("rhythm capture persists actual input and permits switching to the independ
   await expect(page.getByTestId("rhythm-review-stage")).toBeVisible();
   await expect(page.getByTestId("rhythm-input-stage")).toHaveCount(0);
   await expect(page.getByTestId("rhythm-pad")).toHaveCount(0);
+  await page.getByTestId("rhythm-tool-validation").click();
   const staff = await page.getByTestId("rhythm-staff").boundingBox();
   const validation = await page.getByTestId("rhythm-validation-panel").boundingBox();
   expect(staff!.y).toBeLessThan(validation!.y);
@@ -182,10 +197,11 @@ test("desktop keyboard records a held chord with independent key releases", asyn
   await page.setViewportSize({ width: 1280, height: 900 });
   await enterLab(page, "rhythm");
   await page.getByText(/^Keys$|^건반$/).click();
-  await page.getByRole("switch").click();
+  await disableCountIn(page);
   await page.getByTestId("rhythm-record").click();
   await expect(page.getByTestId("rhythm-record-status")).toHaveText(/Recording|녹음 중/);
   await page.getByTestId("rhythm-keyboard").focus();
+  await expect(page.getByTestId("rhythm-keyboard")).toBeFocused();
   await page.keyboard.down("a");
   await page.keyboard.down("d");
   await page.keyboard.down("g");
@@ -247,7 +263,7 @@ test("main practice book opens a full rhythm for correction, saving and practice
   await expect(page.getByTestId("rhythm-practice-stage")).toBeVisible();
   await expect(page.getByTestId("rhythm-validation-panel")).toHaveCount(0);
   await expect(page.getByTestId("rhythm-pad")).toBeVisible();
-  await page.getByRole("switch").click();
+  await disableCountIn(page, "practice");
   await page.getByText(/^Start practice$|^연습 시작$/).click();
   await expect(page.getByTestId("rhythm-flow-review")).toBeDisabled();
   await page.getByTestId("rhythm-pad").tap();
@@ -265,6 +281,7 @@ test("main practice book opens a full rhythm for correction, saving and practice
 test("manual notation can be saved and practised without fabricating raw hits", async ({ page }) => {
   await enterLab(page, "rhythm");
   await page.getByTestId("rhythm-flow-review").click();
+  await page.getByTestId("rhythm-tool-edit").click();
   await page.getByTestId("rhythm-insert-note").click();
   await expect(page.getByTestId("rhythm-staff").locator("ellipse")).toHaveCount(1);
   await page.getByTestId("rhythm-save").click();
@@ -272,14 +289,64 @@ test("manual notation can be saved and practised without fabricating raw hits", 
   const okay = page.getByText(/^OK$|^확인$/).last();
   if (await okay.isVisible()) await okay.click();
   await page.getByTestId("rhythm-flow-practice").click();
-  await page.getByRole("switch").click();
+  await disableCountIn(page, "practice");
   await page.getByText(/^Start practice$|^연습 시작$/).click();
   await expect(page.getByText(/Overall score:|종합 점수:/)).toBeVisible({ timeout: 10_000 });
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem("practice_book")!)[0].rhythmDocument.hits)).toEqual([]);
 });
 
+test("capture settings and practice book popups preserve the full real take", async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 667 });
+  await enterLab(page, "rhythm");
+  await expect(page.getByText("Play it first. Notate it later.", { exact: true })).toHaveCount(0);
+  await page.getByTestId("rhythm-settings").click();
+  await page.getByTestId("rhythm-title-input").fill("Live interval take");
+  await page.getByTestId("rhythm-bpm-input").fill("120");
+  await page.getByTestId("rhythm-count-in").click();
+  await page.getByTestId("rhythm-settings-close").click();
+  await expect(page.getByTestId("rhythm-settings-modal")).toHaveCount(0);
+  await page.getByTestId("rhythm-record").click();
+  await expect(page.getByTestId("rhythm-record-status")).toHaveText(/Recording|녹음 중/);
+  await expect(page.getByTestId("rhythm-settings")).toBeDisabled();
+  await expect(page.getByTestId("rhythm-load")).toBeDisabled();
+  const pad = page.getByTestId("rhythm-pad");
+  await pad.tap();
+  await page.waitForTimeout(250);
+  await pad.tap();
+  await page.waitForTimeout(500);
+  await pad.tap();
+  await expect(page.getByTestId("rhythm-interval-3")).toBeVisible();
+  await expect(page.getByTestId("rhythm-live-verification")).not.toContainText(/Invalid notation|기보 구조 오류/);
+  const rawInterval = Number((await page.getByTestId("rhythm-live-interval").innerText()).replace(/[^\d]/g, ""));
+  expect(rawInterval).toBeGreaterThan(450);
+  expect(rawInterval).toBeLessThan(850);
+  await expect(page.getByTestId("rhythm-staff").locator("ellipse")).toHaveCount(3);
+  await page.screenshot({ path: "/tmp/rhythm-live-recording.png" });
+  await page.getByTestId("rhythm-record").click();
+  await page.getByTestId("rhythm-save").click();
+  const okay = page.getByText(/^OK$|^확인$/).last();
+  await okay.click();
+  const document = await page.evaluate(() => JSON.parse(localStorage.getItem("practice_book")!).find((entry: { mode: string }) => entry.mode === "rhythm").rhythmDocument);
+  expect(document.hits).toHaveLength(3);
+  expect(document.hits.every((hit: { onsetMs: number; releaseMs: number }) => hit.releaseMs >= hit.onsetMs)).toBe(true);
+  const intervals = document.hits.slice(1).map((hit: { onsetMs: number }, index: number) => hit.onsetMs - document.hits[index].onsetMs);
+  expect(Math.abs(intervals.at(-1) - rawInterval)).toBeLessThanOrEqual(1);
+  const values = interpretRhythm(document).events.filter((event) => event.kind === "note").map((event) => event.durationQ.n / event.durationQ.d);
+  expect(values[1]).toBeGreaterThan(values[0]);
+  await page.getByTestId("rhythm-library-open-review").click();
+  await page.getByTestId(`rhythm-saved-open-${document.id}`).click();
+  await expect(page.getByTestId("rhythm-review-stage")).toBeVisible();
+  await page.getByTestId("rhythm-library-open-review").click();
+  await page.getByTestId(`rhythm-saved-delete-${document.id}`).click();
+  await page.getByText(/^Delete$|^삭제$/).last().click();
+  await expect(page.getByTestId(`rhythm-saved-${document.id}`)).toHaveCount(0);
+  const entries = await page.evaluate(() => JSON.parse(localStorage.getItem("practice_book") ?? "[]"));
+  expect(entries.filter((entry: { mode: string }) => entry.mode === "rhythm")).toHaveLength(0);
+  await page.getByTestId("rhythm-library-close").click();
+});
+
 for (const viewport of [{ width: 375, height: 667 }, { width: 740, height: 375 }]) {
-  test(`rhythm input stays fixed while settings scroll at ${viewport.width}x${viewport.height}`, async ({ page }) => {
+  test(`essential live capture fits one screen at ${viewport.width}x${viewport.height}`, async ({ page }) => {
     await page.setViewportSize(viewport);
     await enterLab(page, "rhythm");
     const scroll = page.getByTestId("rhythm-workspace-scroll");
@@ -289,22 +356,34 @@ for (const viewport of [{ width: 375, height: 667 }, { width: 740, height: 375 }
     expect(initial.y).toBeGreaterThan(0);
     expect(initial.y + initial.height).toBeLessThanOrEqual(viewport.height);
     expect(await pad.evaluate((element) => !!element.closest('[data-testid="rhythm-workspace-scroll"]'))).toBe(false);
+    const scrollBounds = (await scroll.boundingBox())!;
+    await page.screenshot({ path: `/tmp/rhythm-layout-${viewport.width}.png` });
+    for (const id of ["rhythm-settings", "rhythm-load", "rhythm-record", "rhythm-record-status", "rhythm-live-interval", "rhythm-live-verification", "rhythm-staff"]) {
+      const box = (await page.getByTestId(id).boundingBox())!;
+      expect(box.y).toBeGreaterThanOrEqual(0);
+      expect(box.y + box.height, `${id} must fit vertically`).toBeLessThanOrEqual(viewport.height);
+      if (id === "rhythm-staff" || id === "rhythm-settings" || id === "rhythm-live-verification") {
+        expect(box.y).toBeGreaterThanOrEqual(scrollBounds.y);
+        expect(box.y + box.height, `${id} must not be clipped by dock`).toBeLessThanOrEqual(scrollBounds.y + scrollBounds.height);
+      }
+    }
+    await page.screenshot({ path: `/tmp/rhythm-fixed-input-${viewport.width}.png` });
     await scroll.evaluate((element) => { element.scrollTop = element.scrollHeight; });
-    await expect.poll(() => scroll.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
     const afterScroll = (await pad.boundingBox())!;
     expect(afterScroll.y).toBeCloseTo(initial.y, 1);
     expect(afterScroll.height).toBeCloseTo(initial.height, 1);
-    await page.screenshot({ path: `/tmp/rhythm-fixed-input-${viewport.width}.png` });
 
     // Scrolling above the pad must not disable actual recording or move its
     // strike target. A held vertical drag must retain one down/up pair.
-    await page.getByRole("switch").click();
+    await disableCountIn(page);
     await page.getByTestId("rhythm-record").click();
     await expect(page.getByTestId("rhythm-record-status")).toHaveText(/Recording|녹음 중/);
     await scroll.evaluate((element) => { element.scrollTop = element.scrollHeight; });
     await pad.tap();
     await page.waitForTimeout(150);
     await pad.tap();
+    await expect(page.getByTestId("rhythm-live-interval")).not.toHaveText(/—/);
+    await expect(page.getByTestId("rhythm-interval-2")).toBeVisible({ visible: viewport.height > 500 });
     const target = (await pad.boundingBox())!;
     const touch = await page.context().newCDPSession(page);
     const x = target.x + target.width / 2;

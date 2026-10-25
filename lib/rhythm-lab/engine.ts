@@ -2,6 +2,7 @@ import type {
   Fraction, Hit, Interpretation, InterpretationCandidate, InterpretationOverride,
   Meter, NotationEvent, PlaybackHit, RhythmDocument, TupletSpan,
 } from "./types";
+import { notationSpelling } from "./notation";
 
 let serial = 0;
 export const newRhythmId = (prefix = "rh") => `${prefix}-${Date.now().toString(36)}-${(++serial).toString(36)}`;
@@ -60,6 +61,20 @@ function correctedQ(doc: RhythmDocument, hit: Hit) {
   return Math.max(0, (hit.onsetMs - doc.offsetMs) * doc.bpm / 60000);
 }
 
+/** An onset-only instrument describes rhythm, not finger contact duration.
+ * Use the next onset as context, spelling any remainder as an explicit rest.
+ * An unfinished final onset provisionally repeats the preceding interval. */
+function percussionDuration(gap: number, grid: number): number {
+  const spelling = describeDuration(gap);
+  const base = 4 / spelling.value * (spelling.tuplet ? spelling.tuplet.normal / spelling.tuplet.actual : 1);
+  if (Math.abs(base - gap) < 1e-7 || Math.abs(base * 1.5 - gap) < 1e-7) return gap;
+  const ratio = (grid & (grid - 1)) === 0 ? 1 : 2 ** Math.floor(Math.log2(grid)) / grid;
+  const values = [4, 2, 1, 0.5, 0.25, 0.125, 0.0625, 0.03125]
+    .flatMap((value) => [value, value * 1.5, value * ratio, value * ratio * 1.5])
+    .filter((value) => value <= gap + 1e-7);
+  return values.length ? Math.max(...values) : gap;
+}
+
 function candidateForMeasure(doc: RhythmDocument, index: number, hits: Hit[], grid: number): InterpretationCandidate {
   const capacity = measureQuarters(doc.meter);
   const start = index * capacity;
@@ -76,6 +91,13 @@ function candidateForMeasure(doc: RhythmDocument, index: number, hits: Hit[], gr
     // grid cell backwards made finer and finer grids win for ordinary jitter.
     const q = clamp(start + Math.round((observed - start) / step) * step, start, start + capacity);
     error += ((q - observed) * beatMs) ** 2;
+    if (hit.midi !== undefined && hit.releaseMs !== undefined) {
+      const held = (hit.releaseMs - hit.onsetMs) / beatMs;
+      if (held * beatMs >= Math.max(80, beatMs / 4)) {
+        const quantizedHeld = Math.max(step, Math.round(held / step) * step);
+        error += ((quantizedHeld - held) * beatMs) ** 2;
+      }
+    }
     return { hit, q };
   });
   const grouped: { hits: Hit[]; q: number }[] = [];
@@ -88,19 +110,24 @@ function candidateForMeasure(doc: RhythmDocument, index: number, hits: Hit[], gr
     } else grouped.push({ hits: [p.hit], q: p.q });
   }
   const notes: NotationEvent[] = grouped.map((group, i) => {
-    const nextQ = grouped[i + 1]?.q ?? Math.max(start + capacity, group.q + step);
-    // Keep short taps on the selected rhythmic family. A fixed binary 1/4 Q
-    // inside a triplet creates spurious 64th/128th rests between every hit.
+    const measureEnd = (Math.floor((group.q + 1e-7) / capacity) + 1) * capacity;
+    // Context is deliberately bounded to this measure; later bars must not
+    // silently rewrite a completed earlier bar.
+    const nextOnset = grouped[i + 1]?.q;
+    const previousOnset = grouped[i - 1]?.q;
+    const inferredGap = nextOnset !== undefined ? nextOnset - group.q
+      : previousOnset !== undefined ? group.q - previousOnset : 1;
+    const nextQ = Math.min(nextOnset ?? measureEnd, measureEnd);
+    // Keyboard gates remain independent of onset-only pad/drum interpretation.
     let tapDuration = 0.25;
     const binaryGrid = (grid & (grid - 1)) === 0;
     if (!binaryGrid) {
       const binaryBase = 2 ** Math.floor(Math.log2(grid));
       tapDuration = 0.25 * binaryBase / grid;
     }
-    const previousGap = i > 0 ? group.q - grouped[i - 1].q : Number.POSITIVE_INFINITY;
-    const nextGap = grouped[i + 1] ? nextQ - group.q : previousGap;
-    tapDuration = Math.min(tapDuration, nextGap);
+    tapDuration = Math.min(tapDuration, inferredGap);
     const releaseDurations = group.hits.map((h) => {
+      if (h.midi === undefined) return percussionDuration(Math.min(inferredGap, nextQ - group.q), grid);
       const held = (h.releaseMs ?? h.onsetMs) - h.onsetMs;
       return held >= Math.max(80, beatMs / 4) ? Math.max(step, Math.round(held / beatMs / step) * step) : tapDuration;
     });
@@ -193,9 +220,17 @@ export function interpretRhythm(doc: RhythmDocument): Interpretation {
   const candidates: InterpretationCandidate[] = [];
   const auto: NotationEvent[] = [];
   for (const [index, hits] of byMeasure) {
-    const choices = grids.filter((g) => 4 / g <= capacity).map((g) => candidateForMeasure(doc, index, hits, g)).sort((a, b) => a.score - b.score);
-    candidates.push(...choices.slice(0, 4).map((c) => ({ ...c, events: withRests(doc, c.events, index + 1, index).filter((e) => e.kind === "note" || e.measureIndex === index) })));
-    auto.push(...(choices[0]?.events ?? []));
+    const choices = grids.filter((g) => 4 / g <= capacity)
+      .map((g) => candidateForMeasure(doc, index, hits, g))
+      .map((candidate) => ({ ...candidate, events: withRests(doc, candidate.events, index + 1, index)
+        .filter((event) => event.kind === "note" || event.measureIndex === index) }))
+      // A numerically close onset grid is not a usable score if its note/rest
+      // durations cannot be expressed by the renderer's actual glyphs.
+      .filter((candidate) => candidate.events.every((event) => notationSpelling(event).supported))
+      .sort((a, b) => a.score - b.score);
+    if (!choices.length) throw new Error("No representable rhythm interpretation");
+    candidates.push(...choices.slice(0, 4));
+    auto.push(...choices[0].events.filter((event) => event.kind === "note"));
   }
   const manual = doc.manualEvents ?? [];
   const coveredHits = new Set(manual.flatMap((e) => [...e.hitIds, ...(e.graceHitIds ?? [])]));
