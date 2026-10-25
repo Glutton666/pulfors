@@ -277,3 +277,68 @@ test("manual notation can be saved and practised without fabricating raw hits", 
   await expect(page.getByText(/Overall score:|종합 점수:/)).toBeVisible({ timeout: 10_000 });
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem("practice_book")!)[0].rhythmDocument.hits)).toEqual([]);
 });
+
+for (const viewport of [{ width: 375, height: 667 }, { width: 740, height: 375 }]) {
+  test(`rhythm input stays fixed while settings scroll at ${viewport.width}x${viewport.height}`, async ({ page }) => {
+    await page.setViewportSize(viewport);
+    await enterLab(page, "rhythm");
+    const scroll = page.getByTestId("rhythm-workspace-scroll");
+    const dock = page.getByTestId("rhythm-input-dock");
+    const pad = page.getByTestId("rhythm-pad");
+    const initial = (await pad.boundingBox())!;
+    expect(initial.y).toBeGreaterThan(0);
+    expect(initial.y + initial.height).toBeLessThanOrEqual(viewport.height);
+    expect(await pad.evaluate((element) => !!element.closest('[data-testid="rhythm-workspace-scroll"]'))).toBe(false);
+    await scroll.evaluate((element) => { element.scrollTop = element.scrollHeight; });
+    await expect.poll(() => scroll.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+    const afterScroll = (await pad.boundingBox())!;
+    expect(afterScroll.y).toBeCloseTo(initial.y, 1);
+    expect(afterScroll.height).toBeCloseTo(initial.height, 1);
+    await page.screenshot({ path: `/tmp/rhythm-fixed-input-${viewport.width}.png` });
+
+    // Scrolling above the pad must not disable actual recording or move its
+    // strike target. A held vertical drag must retain one down/up pair.
+    await page.getByRole("switch").click();
+    await page.getByTestId("rhythm-record").click();
+    await expect(page.getByTestId("rhythm-record-status")).toHaveText(/Recording|녹음 중/);
+    await scroll.evaluate((element) => { element.scrollTop = element.scrollHeight; });
+    await pad.tap();
+    await page.waitForTimeout(150);
+    await pad.tap();
+    const target = (await pad.boundingBox())!;
+    const touch = await page.context().newCDPSession(page);
+    const x = target.x + target.width / 2;
+    const y = target.y + target.height * 0.7;
+    await touch.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x, y }] });
+    await touch.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x, y: y - 35 }] });
+    await page.waitForTimeout(160);
+    await touch.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+    await touch.detach();
+    expect((await pad.boundingBox())!.y).toBeCloseTo(initial.y, 1);
+    await page.getByTestId("rhythm-record").click();
+    await expect(dock).toHaveCount(0);
+    await page.getByTestId("rhythm-save").click();
+    await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("practice_book") ?? "[]").find((entry: { mode: string }) => entry.mode === "rhythm")?.rhythmDocument.hits.length)).toBe(3);
+    const hits = await page.evaluate(() => JSON.parse(localStorage.getItem("practice_book")!)[0].rhythmDocument.hits);
+    expect(hits.every((hit: { onsetMs: number; releaseMs: number }) => hit.releaseMs >= hit.onsetMs)).toBe(true);
+    expect(hits[2].releaseMs - hits[2].onsetMs).toBeGreaterThanOrEqual(140);
+    const okay = page.getByText(/^OK$|^확인$/).last();
+    if (await okay.isVisible()) await okay.click();
+
+    await page.getByTestId("rhythm-flow-practice").click();
+    await expect(dock).toBeVisible();
+    const practicePad = (await pad.boundingBox())!;
+    await scroll.evaluate((element) => { element.scrollTop = element.scrollHeight; });
+    expect((await pad.boundingBox())!.y).toBeCloseTo(practicePad.y, 1);
+    expect(practicePad.y + practicePad.height).toBeLessThanOrEqual(viewport.height);
+    await page.screenshot({ path: `/tmp/rhythm-fixed-practice-${viewport.width}.png` });
+    await page.getByTestId("rhythm-flow-input").click();
+    await page.getByText(/^Keys$|^건반$/).click();
+    const keyboard = page.getByTestId("rhythm-keyboard");
+    const keysBefore = (await keyboard.boundingBox())!;
+    expect(keysBefore.y + keysBefore.height).toBeLessThanOrEqual(viewport.height);
+    expect(await keyboard.evaluate((element) => !!element.closest('[data-testid="rhythm-workspace-scroll"]'))).toBe(false);
+    await scroll.evaluate((element) => { element.scrollTop = element.scrollHeight; });
+    expect((await keyboard.boundingBox())!.y).toBeCloseTo(keysBefore.y, 1);
+  });
+}

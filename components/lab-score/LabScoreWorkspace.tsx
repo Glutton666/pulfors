@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Modal, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -15,6 +15,8 @@ export function LabScoreWorkspace({ onClose, initialTab = "rhythm", initialDocum
   const { colors: C } = useTheme();
   const { language } = useLanguage();
   const ko = language === "ko";
+  const { width, height } = useWindowDimensions();
+  const compact = height < 500 && width > height;
   const [tab, setTab] = useState<LabScoreTab>(initialTab);
   const [help, setHelp] = useState(false);
   const labels = ko
@@ -22,7 +24,7 @@ export function LabScoreWorkspace({ onClose, initialTab = "rhythm", initialDocum
     : { title: "RHYTHM LAB", rhythm: "Capture", notebook: "Staff notebook", close: "Close", explain: "Two ways to keep a rhythm", help: "Capture preserves your performance while you refine its notation. Staff notebook is simply white paper and black ink; drawings are never interpreted or played back.", understood: "Got it" };
   return (
     <View style={[s.root, { backgroundColor: C.background }]}>
-      <View style={[s.header, { borderBottomColor: C.border }]}>
+      <View style={[s.header, compact && s.compactHeader, { borderBottomColor: C.border }]}>
         <Pressable onPress={() => Alert.alert(labels.close,
           ko ? "저장하지 않은 내용은 사라집니다. 나가기 전에 각 탭의 저장 버튼으로 보관해 주세요." : "Unsaved work will be lost. Use Save in each tab before leaving.",
           [{ text: ko ? "계속 작업" : "Keep editing", style: "cancel" }, { text: labels.close, style: "destructive", onPress: onClose }])}
@@ -37,18 +39,18 @@ export function LabScoreWorkspace({ onClose, initialTab = "rhythm", initialDocum
           <Ionicons name="information-circle-outline" size={22} color={C.textSecondary} />
         </Pressable>
       </View>
-      <View style={[s.switcher, { backgroundColor: C.surface }]}>
+      <View style={[s.switcher, compact && s.compactSwitcher, { backgroundColor: C.surface }]}>
         {(["rhythm", "notebook"] as const).map((item) => (
           <Pressable key={item} testID={`lab-score-tab-${item}`} onPress={() => setTab(item)}
-            style={[s.tab, tab === item && { backgroundColor: C.accent }]}>
+            style={[s.tab, compact && s.compactTab, tab === item && { backgroundColor: C.accent }]}>
             <Text style={{ color: tab === item ? C.background : C.textSecondary, fontFamily: "SpaceGrotesk_700Bold", fontSize: 13 }}>
               {item === "rhythm" ? labels.rhythm : labels.notebook}
             </Text>
           </Pressable>
         ))}
       </View>
-      <View style={{ flex: 1, display: tab === "rhythm" ? "flex" : "none" }}><RhythmWorkspace active={tab === "rhythm"} initialDocument={initialDocument} /></View>
-      <View style={{ flex: 1, display: tab === "notebook" ? "flex" : "none" }}><StaffNotebookWorkspace active={tab === "notebook"} /></View>
+      <View style={{ flex: 1, minHeight: 0, display: tab === "rhythm" ? "flex" : "none" }}><RhythmWorkspace active={tab === "rhythm"} initialDocument={initialDocument} /></View>
+      <View style={{ flex: 1, minHeight: 0, display: tab === "notebook" ? "flex" : "none" }}><StaffNotebookWorkspace active={tab === "notebook"} /></View>
       <Modal transparent visible={help} animationType="fade" onRequestClose={() => setHelp(false)}>
         <View style={s.modalBackdrop}>
           <ScrollView style={[s.helpCard, { backgroundColor: C.surface, borderColor: C.border, maxHeight: "82%" }]} contentContainerStyle={{ flexGrow: 1 }}>
@@ -65,8 +67,11 @@ export function LabScoreWorkspace({ onClose, initialTab = "rhythm", initialDocum
 }
 
 const s = StyleSheet.create({
-  root: { flex: 1, minHeight: "100%" },
+  root: { flex: 1, minHeight: 0 },
   header: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth },
+  compactHeader: { paddingVertical: 4 },
+  compactSwitcher: { marginTop: 4, marginBottom: 4 },
+  compactTab: { paddingVertical: 5 },
   eyebrow: { fontFamily: "SpaceGrotesk_700Bold", letterSpacing: 2, fontSize: 10 },
   heading: { fontFamily: "SpaceGrotesk_700Bold", fontSize: 19 },
   iconButton: { width: 42, height: 42, alignItems: "center", justifyContent: "center" },

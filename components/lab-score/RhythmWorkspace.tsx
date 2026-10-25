@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { AppState, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from "react-native";
+import { AppState, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View, useWindowDimensions } from "react-native";
 import { Alert } from "@/lib/alert";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/contexts/ThemeContext";
@@ -26,6 +26,8 @@ export function RhythmWorkspace({ active = true, initialDocument }: { active?: b
   const { colors: C } = useTheme();
   const { language } = useLanguage();
   const ko = language === "ko";
+  const { height: windowHeight, width: windowWidth } = useWindowDimensions();
+  const compactDock = windowHeight < 500 && windowWidth > windowHeight;
   const text = ko
     ? { headline: "연주를 먼저, 표기는 나중에.", intro: "원래 타격 시각은 보존됩니다. 해석은 초안이며 언제든 수정할 수 있습니다.", bpm: "템포", meter: "박자", countIn: "예비박", bars: "마디 제한", start: "녹음 시작", stop: "마침", pad: "패드", drums: "드럼", keyboard: "건반", press: "누르고 떼어 연주", provisional: "임시 기보", listen: "듣기", original: "원본 입력", notation: "기보 비교", save: "기록 저장", library: "저장 기록", candidates: "다른 해석", simplify: "정리 정도", selected: "선택된 타격", flam: "플램", drag: "드래그", regular: "일반", diddle: "더블", accent: "악센트", confirm: "확정", rest: "쉼표 추가", duration: "길이", onset: "시작 박", tuplet: "연음", actual: "실제", normal: "표기", apply: "적용", symbols: "사용자 기호", newSymbol: "기호 만들기", shapes: "도형 추가", meaning: "의미", role: "역할", description: "설명", unsupported: "미지원 의미는 주석으로만 표시됩니다.", practice: "따라 치기", calibrate: "타이밍 보정", taps: "탭", manual: "수동 오프셋 ms", beginPractice: "연습 시작", endPractice: "연습 종료", result: "종합 점수", difficulty: "난이도", empty: "아직 연주가 없습니다. 설정 후 패드를 눌러 기록하세요.", title: "제목", open: "열기", delete: "삭제", error: "오류", noDoc: "저장된 리듬이 없습니다.", hit: "타격", values: "음가", inputFlow: "입력", reviewFlow: "검토", practiceFlow: "연습" }
     : { headline: "Play it first. Notate it later.", intro: "Raw hit times stay intact. Interpretation is a draft, ready for your ear and hand.", bpm: "Tempo", meter: "Meter", countIn: "Count-in", bars: "Bar limit", start: "Start recording", stop: "Finish", pad: "Pad", drums: "Drums", keyboard: "Keys", press: "Press and release to play", provisional: "Live draft", listen: "Listen", original: "Original take", notation: "Notation pass", save: "Save take", library: "Saved takes", candidates: "Alternate readings", simplify: "Simplify", selected: "Selected hits", flam: "Flam", drag: "Drag", regular: "Regular", diddle: "Diddle", accent: "Accent", confirm: "Confirm", rest: "Insert rest", duration: "Duration", onset: "Start beat", tuplet: "Tuplet", actual: "Actual", normal: "Normal", apply: "Apply", symbols: "Personal symbols", newSymbol: "Build symbol", shapes: "Add shape", meaning: "Meaning", role: "Role", description: "Description", unsupported: "Unsupported meanings stay annotations.", practice: "Practice", calibrate: "Timing calibration", taps: "Taps", manual: "Manual offset ms", beginPractice: "Start practice", endPractice: "Finish practice", result: "Overall score", difficulty: "Difficulty", empty: "No performance yet. Set the pulse, then play the pad.", title: "Title", open: "Open", delete: "Delete", error: "Error", noDoc: "No saved rhythm documents.", hit: "hit", values: "Values", inputFlow: "Input", reviewFlow: "Review", practiceFlow: "Practice" };
@@ -453,7 +455,8 @@ export function RhythmWorkspace({ active = true, initialDocument }: { active?: b
   useEffect(() => { if (!active) deactivateRef.current(); }, [active]);
 
   return (
-    <ScrollView ref={workspaceScroll} contentContainerStyle={s.container} keyboardShouldPersistTaps="handled">
+    <View style={s.workspace}>
+    <ScrollView ref={workspaceScroll} testID="rhythm-workspace-scroll" style={s.scroll} contentContainerStyle={s.container} keyboardShouldPersistTaps="handled">
       {flow === "input" && <>
         <Text style={[s.kicker, { color: C.accent }]}>{text.headline}</Text>
         <Text style={[s.intro, { color: C.textSecondary }]}>{text.intro}</Text>
@@ -472,15 +475,7 @@ export function RhythmWorkspace({ active = true, initialDocument }: { active?: b
         <TextInput value={doc.title} onChangeText={(title) => setDoc((prev) => ({ ...prev, title }))} style={[s.titleInput, { color: C.text, borderColor: C.border }]} accessibilityLabel={text.title} />
         <View style={s.modeRow}>{([["pad", text.pad], ["drums", text.drums], ["keyboard", text.keyboard]] as const).map(([key, label]) => <Pressable key={key} accessibilityRole="button" accessibilityLabel={label} onPress={() => setMode(key)} style={[s.mode, { backgroundColor: mode === key ? C.accent : C.background }]}><Text style={{ color: mode === key ? C.background : C.textSecondary, fontSize: 12, fontFamily: "SpaceGrotesk_700Bold" }}>{label}</Text></Pressable>)}</View>
         {mode === "drums" && <View style={s.modeRow}>{(["snare", "kick", "hihat_closed"] as const).map((value) => <Pressable key={value} onPress={() => setDrum(value)} style={[s.chip, { borderColor: drum === value ? C.accent : C.border }]}><Text style={{ color: C.text, fontSize: 11 }}>{value}</Text></Pressable>)}</View>}
-        <View style={s.recordRow}><Pressable testID="rhythm-record" onPress={recording ? finishRecord : recordPending ? finishRecord : beginRecord} style={[s.primaryButton, { backgroundColor: recording ? C.accent : C.text }]}><Ionicons name={recording ? "stop" : recordPending ? "close" : "radio-button-on"} size={17} color={C.background} /><Text style={{ color: C.background, fontFamily: "SpaceGrotesk_700Bold" }}>{recording ? text.stop : recordPending ? text.stop : text.start}</Text></Pressable><Text style={[s.muted, { color: C.textSecondary }]}>{doc.hits.length} {text.hit}{doc.hits.length === 1 ? "" : "s"}</Text></View>
-        <Text testID="rhythm-record-status" style={[s.muted, { color: C.textSecondary }]}>
-          {recording ? (ko ? "녹음 중" : "Recording") : recordPending ? (ko ? "예비박" : "Count-in") : (ko ? "정지" : "Stopped")}
-        </Text>
         {(recording || events.length > 0) ? <View style={{ marginTop: 12 }}><Text style={[s.cardTitle, { color: C.text, marginBottom: 7 }]}>{text.provisional}</Text><RhythmStaff events={interpretation.events} meter={doc.meter} selected={selected} symbols={doc.symbols} onSelect={selectEvent} onMovePreview={previewMove} onMoveCommit={commitMove} onMoveCancel={cancelMove} playheadQ={playheadQ} /></View> : null}
-        {!recordPending ? <View style={s.padRow}>
-          {mode === "keyboard" ? <RhythmKeyboard onDown={(midi) => addHit(`key_${midi}`, "down", midi)} onUp={(midi) => addHit(`key_${midi}`, "up", midi)} /> :
-            <RhythmInputSurface label={text.press} testID="rhythm-pad" onDown={tapPad} onUp={() => addHit("pad", "up")} style={[s.bigPad, { backgroundColor: mode === "drums" && drum === "kick" ? "#b6a77b" : C.accent }]}><View style={s.padMark} /><Text style={s.padLabel}>{text.press.toUpperCase()}</Text></RhythmInputSurface>}
-        </View> : <Text style={[s.muted, { color: C.textSecondary, marginTop: 9 }]}>{text.empty}</Text>}
       </View>
       <View style={s.sectionHeader}><Text style={[s.cardTitle, { color: C.text }]}>{text.library}</Text><Pressable onPress={() => void loadLibrary()}><Ionicons name="refresh" color={C.accent} size={18} /></Pressable></View>
       {loadError ? <Text style={{ color: C.accent }}>{loadError}</Text> : null}
@@ -548,19 +543,47 @@ export function RhythmWorkspace({ active = true, initialDocument }: { active?: b
         <View style={s.modeRow}>{([["pad", text.pad], ["drums", text.drums], ["keyboard", text.keyboard]] as const).map(([key, label]) => <Pressable key={key} accessibilityRole="button" accessibilityLabel={label} onPress={() => setMode(key)} style={[s.mode, { backgroundColor: mode === key ? C.accent : C.background }]}><Text style={{ color: mode === key ? C.background : C.textSecondary, fontSize: 12, fontFamily: "SpaceGrotesk_700Bold" }}>{label}</Text></Pressable>)}</View>
         {mode === "drums" && <View style={s.modeRow}>{(["snare", "kick", "hihat_closed"] as const).map((value) => <Pressable key={value} onPress={() => setDrum(value)} style={[s.chip, { borderColor: drum === value ? C.accent : C.border }]}><Text style={{ color: C.text, fontSize: 11 }}>{value}</Text></Pressable>)}</View>}
         <View style={s.setupHead}><Text style={[s.muted, { color: C.textSecondary }]}>{text.countIn}</Text><Switch value={countIn} onValueChange={setCountIn} trackColor={{ true: C.accent }} /><Text style={[s.muted, { color: C.textSecondary }]}>{text.difficulty}</Text></View>
-        <Text style={[s.muted, { color: C.textSecondary, marginTop: 5 }]}>{practicePending ? (ko ? "예비박" : "Count-in") : practiceOn ? (liveJudgment || text.practice) : (ko ? "원본 연주를 듣고 따라 연주하세요." : "Listen to the original take, then play along.")} {practiceOn ? ` · ${practiceTaps.length} / ${practiceExpectedRef.current.length}` : ""}</Text>
-        <View style={s.padRow}>{mode === "keyboard" ? <RhythmKeyboard onDown={(midi) => addHit(`key_${midi}`, "down", midi)} onUp={(midi) => addHit(`key_${midi}`, "up", midi)} /> :
-          <RhythmInputSurface label={text.press} testID="rhythm-pad" onDown={tapPad} onUp={() => addHit("pad", "up")} style={[s.bigPad, { backgroundColor: mode === "drums" && drum === "kick" ? "#b6a77b" : C.accent }]}><View style={s.padMark} /><Text style={s.padLabel}>{text.press.toUpperCase()}</Text></RhythmInputSurface>}</View>
-         <View style={s.listenRow}><Pressable disabled={practicePending || practiceOn} onPress={beginPractice} style={[s.smallPrimary, { backgroundColor: C.accent, opacity: practicePending || practiceOn ? 0.5 : 1 }]}><Text style={{ color: C.background }}>{text.beginPractice}</Text></Pressable>{(practicePending || practiceOn) && <Pressable onPress={stopPractice} style={[s.smallPrimary, { backgroundColor: C.text }]}><Text style={{ color: C.background }}>{text.endPractice}</Text></Pressable>}{practiceResult && <Text style={{ color: C.accent, fontFamily: "SpaceGrotesk_700Bold" }}>{text.result}: {practiceResult.score}</Text>}</View>
         {practiceResult && <Text style={[s.muted, { color: C.textSecondary }]}>Timing {practiceResult.timingScore} · coverage {practiceResult.coverageScore} · missed {practiceResult.missed} · extra {practiceResult.extra} · mean error {Math.round(practiceResult.meanErrorMs)} ms</Text>}
       </View>
       <Pressable onPress={() => changeFlow("review")} style={[s.listenButton, { borderColor: C.border, alignSelf: "flex-start", marginBottom: 10 }]}><Text style={{ color: C.text }}>{ko ? "검토로 돌아가기" : "Return to review"}</Text></Pressable>
       </View>}
     </ScrollView>
+    {flow !== "review" && <View testID="rhythm-input-dock" style={[s.dock, compactDock && s.compactDock, { backgroundColor: C.background, borderTopColor: C.border }]}>
+      <View style={compactDock ? s.compactDockInfo : undefined}>
+      {flow === "input" ? (
+      <View style={s.dockControls}>
+        <Pressable testID="rhythm-record" accessibilityRole="button" onPress={recording || recordPending ? finishRecord : beginRecord} style={[s.primaryButton, { backgroundColor: recording ? C.accent : C.text }]}>
+          <Ionicons name={recording ? "stop" : recordPending ? "close" : "radio-button-on"} size={17} color={C.background} />
+          <Text style={{ color: C.background, fontFamily: "SpaceGrotesk_700Bold" }}>{recording || recordPending ? text.stop : text.start}</Text>
+        </Pressable>
+        <Text style={[s.muted, { color: C.textSecondary }]}>{doc.hits.length} {text.hit}{doc.hits.length === 1 ? "" : "s"}</Text>
+        <Text testID="rhythm-record-status" style={[s.muted, { color: C.textSecondary }]}>
+          {recording ? (ko ? "녹음 중" : "Recording") : recordPending ? (ko ? "예비박" : "Count-in") : (ko ? "정지" : "Stopped")}
+        </Text>
+      </View>
+      ) : (<>
+      <Text style={[s.muted, { color: C.textSecondary, marginBottom: 8 }]}>
+        {practicePending ? (ko ? "예비박" : "Count-in") : practiceOn ? (liveJudgment || text.practice) : (ko ? "원본 연주를 듣고 따라 연주하세요." : "Listen to the original take, then play along.")} {practiceOn ? ` · ${practiceTaps.length} / ${practiceExpectedRef.current.length}` : ""}
+      </Text>
+      <View style={s.dockControls}>
+        <Pressable disabled={practicePending || practiceOn} onPress={beginPractice} style={[s.smallPrimary, { backgroundColor: C.accent, opacity: practicePending || practiceOn ? 0.5 : 1 }]}><Text style={{ color: C.background }}>{text.beginPractice}</Text></Pressable>
+        {(practicePending || practiceOn) && <Pressable onPress={stopPractice} style={[s.smallPrimary, { backgroundColor: C.text }]}><Text style={{ color: C.background }}>{text.endPractice}</Text></Pressable>}
+        {practiceResult && <Text style={{ color: C.accent, fontFamily: "SpaceGrotesk_700Bold" }}>{text.result}: {practiceResult.score}</Text>}
+      </View>
+      </>)}
+      </View>
+      <View style={[s.padRow, compactDock && s.compactDockSurface, Platform.OS === "web" ? ({ touchAction: "none", overscrollBehavior: "contain" } as any) : null]}>
+        {mode === "keyboard" ? <RhythmKeyboard onDown={(midi) => addHit(`key_${midi}`, "down", midi)} onUp={(midi) => addHit(`key_${midi}`, "up", midi)} /> :
+          <RhythmInputSurface label={text.press} testID="rhythm-pad" onDown={tapPad} onUp={() => addHit("pad", "up")} style={[s.bigPad, compactDock && s.compactPad, { backgroundColor: mode === "drums" && drum === "kick" ? "#b6a77b" : C.accent }]}><View style={s.padMark} /><Text style={s.padLabel}>{text.press.toUpperCase()}</Text></RhythmInputSurface>}
+      </View>
+    </View>}
+    </View>
   );
 }
 
 const s = StyleSheet.create({
+  workspace: { flex: 1, minHeight: 0 },
+  scroll: { flex: 1, minHeight: 0 },
   container: { paddingHorizontal: 16, paddingBottom: 38 },
   kicker: { fontFamily: "SpaceGrotesk_700Bold", fontSize: 22, marginTop: 10, letterSpacing: -0.5 },
   intro: { fontSize: 12, lineHeight: 18, marginTop: 4, marginBottom: 12 },
@@ -579,6 +602,12 @@ const s = StyleSheet.create({
   recordRow: { flexDirection: "row", alignItems: "center", gap: 12, marginTop: 12 },
   primaryButton: { flexDirection: "row", alignItems: "center", gap: 7, paddingVertical: 12, paddingHorizontal: 15, borderRadius: 10 },
   padRow: { marginTop: 11, alignItems: "center" },
+  dock: { flexShrink: 0, paddingHorizontal: 16, paddingTop: 8, paddingBottom: 8, borderTopWidth: StyleSheet.hairlineWidth },
+  compactDock: { flexDirection: "row", alignItems: "center", gap: 12 },
+  compactDockInfo: { width: 200, flexShrink: 0 },
+  compactDockSurface: { flex: 1, minWidth: 0, marginTop: 0 },
+  compactPad: { height: 110 },
+  dockControls: { minHeight: 38, flexDirection: "row", alignItems: "center", gap: 10, flexWrap: "wrap" },
   bigPad: { width: 184, height: 130, borderRadius: 28, alignItems: "center", justifyContent: "center", elevation: 3, shadowColor: "#000", shadowOpacity: 0.15, shadowRadius: 6 },
   padMark: { width: 42, height: 42, borderRadius: 21, borderWidth: 2, borderColor: "rgba(20,20,20,0.4)", marginBottom: 11 },
   padLabel: { fontSize: 9, letterSpacing: 1.4, color: "#1B1B1B", fontFamily: "SpaceGrotesk_700Bold" },
