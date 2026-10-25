@@ -49,7 +49,15 @@ export interface NotationEvent {
   measureIndex: number;
   /** Denominator of displayed ordinary note; non-power-of-two values use tuplets. */
   value: number;
-  tuplet?: { actual: number; normal: number };
+  tuplet?: {
+    actual: number; normal: number;
+    groupId?: string; startQ?: Fraction; endQ?: Fraction;
+    layers?: { actual: number; normal: number }[];
+  };
+  /** An independent sounding voice, not a monophonic collision. */
+  voiceId?: string;
+  /** All pieces retain source IDs; only part zero attacks in playback. */
+  tie?: { id: string; part: number; count: number };
   graceHitIds?: string[];
   symbolId?: string;
   accent?: boolean;
@@ -59,6 +67,8 @@ export interface NotationEvent {
 }
 export interface RhythmDocument {
   version: 1;
+  /** Missing/1 is the legacy interval-based reader; 2 uses short percussion. */
+  notationVersion?: 1 | 2;
   id: string;
   title: string;
   bpm: number;
@@ -88,6 +98,7 @@ export interface InterpretationCandidate {
 export interface Interpretation {
   events: NotationEvent[];
   candidates: InterpretationCandidate[];
+  conflicts?: { measureIndex: number; hitIds: string[]; code: string }[];
 }
 export interface PlaybackHit { id: string; timeMs: number; durationMs?: number; midi?: number; accent?: boolean; drum?: Hit["drum"] }
 export type Difficulty = "easy" | "normal" | "strict";

@@ -41,6 +41,73 @@ async function disableCountIn(page: Page, flow: "input" | "practice" = "input") 
   await expect(page.getByTestId("rhythm-settings-modal")).toHaveCount(0);
 }
 
+test("mixed binary and triplet notes retain local brackets on the visible staff", async ({ page }) => {
+  const doc = { ...createRhythmDocument({ title: "Mixed local groups", bpm: 120 }),
+    hits: [0, 125, 250, 1000 / 3, 1250 / 3].map((onsetMs, i) =>
+      ({ id: `mixed-${i}`, onsetMs, drum: "snare" as const })) };
+  await page.addInitScript((document) => localStorage.setItem("rhythm_lab_documents_v1", JSON.stringify([document])), doc);
+  await enterLab(page, "rhythm");
+  await openSavedTake(page);
+  const staff = page.getByTestId("rhythm-staff");
+  await staff.scrollIntoViewIfNeeded();
+  await expect(staff.locator("ellipse")).toHaveCount(5);
+  await expect(staff.locator("svg text").filter({ hasText: /^3$/ })).toHaveCount(1);
+  await page.getByTestId("rhythm-tool-validation").click();
+  await expect(page.getByTestId("rhythm-similarity")).toHaveText("100%");
+  await page.screenshot({ path: "/tmp/rhythm-mixed-local-groups.png" });
+});
+
+test("long polyphonic gates render ties and permit independent connected-note editing", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  const doc = { ...createRhythmDocument({ title: "Independent tied gates", bpm: 120 }),
+    hits: [{ id: "long", midi: 60, onsetMs: 1750, releaseMs: 5750 },
+      { id: "short", midi: 64, onsetMs: 2000, releaseMs: 2500 }] };
+  await page.addInitScript((document) => localStorage.setItem("rhythm_lab_documents_v1", JSON.stringify([document])), doc);
+  await enterLab(page, "rhythm");
+  await openSavedTake(page);
+  const staff = page.getByTestId("rhythm-staff");
+  await staff.scrollIntoViewIfNeeded();
+  expect(await staff.locator('path[stroke-width="1.3"]').count()).toBeGreaterThanOrEqual(3);
+  await expect(staff.locator("ellipse")).toHaveCount(5);
+  // C4 needs one ledger per fragment, including after the wrapped row.
+  expect(await staff.locator("line").evaluateAll((lines) => lines.filter((line) =>
+    Math.abs(Number(line.getAttribute("x2")) - Number(line.getAttribute("x1")) - 20) < 0.01).length)).toBe(4);
+  await page.getByTestId("rhythm-tool-validation").click();
+  await expect(page.getByTestId("rhythm-validation-panel")).toContainText(/key duration|건반 음 길이/i);
+  await page.getByTestId("rhythm-tool-edit").click();
+  await page.getByTestId("rhythm-note-target-note-long").click();
+  await expect(page.locator('input[value="8"]')).toHaveCount(1);
+  await page.screenshot({ path: "/tmp/rhythm-polyphonic-ties-desktop.png" });
+  await page.locator('input[value="8"]').fill("4");
+  await page.getByText(/^Apply$|^적용$/).first().click();
+  await page.getByTestId("rhythm-save").click();
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("practice_book") ?? "[]")
+    .find((entry: { mode: string }) => entry.mode === "rhythm")?.rhythmDocument.notationVersion)).toBe(2);
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("practice_book")!)[0].rhythmDocument.hits)).toEqual(doc.hits);
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("practice_book")!)[0].rhythmDocument.manualEvents
+    .filter((event: { hitIds: string[] }) => event.hitIds.includes("long"))
+    .reduce((sum: number, event: { durationQ: { n: number; d: number } }) => sum + event.durationQ.n / event.durationQ.d, 0))).toBe(4);
+});
+
+test("legacy scores change notation only after explicit opt-in and keep original timestamps", async ({ page }) => {
+  const doc = { ...createRhythmDocument({ title: "Legacy notation choice", bpm: 120 }), notationVersion: undefined,
+    hits: [0, 500, 1000, 1500].map((onsetMs, i) => ({ id: `old-${i}`, onsetMs, drum: "snare" as const })) };
+  await page.addInitScript((document) => localStorage.setItem("rhythm_lab_documents_v1", JSON.stringify([document])), doc);
+  await enterLab(page, "rhythm");
+  await openSavedTake(page);
+  const staff = page.getByTestId("rhythm-staff");
+  await expect(staff.locator("ellipse")).toHaveCount(4);
+  await expect(staff.locator("path")).toHaveCount(0);
+  await page.getByTestId("rhythm-upgrade-notation").click();
+  await expect(page.getByTestId("rhythm-upgrade-notation")).toHaveCount(0);
+  // Four dotted-eighth rests plus two flag paths per un-beamed sixteenth.
+  await expect(staff.locator("path")).toHaveCount(12);
+  await expect(staff.locator("circle")).toHaveCount(4);
+  await page.getByTestId("rhythm-save").click();
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("practice_book") ?? "[]")[0]?.rhythmDocument.notationVersion)).toBe(2);
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("practice_book")!)[0].rhythmDocument.hits)).toEqual(doc.hits);
+});
+
 test("triplet recording renders grouped notation without tiny fabricated rests", async ({ page }) => {
   const doc = {
     ...createRhythmDocument({ title: "Triplet notation regression", bpm: 120 }),

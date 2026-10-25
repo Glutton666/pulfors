@@ -12,25 +12,25 @@ const makeDoc = (times: number[], extra: Partial<RhythmDocument> = {}): RhythmDo
 });
 const noteDurations = (doc: RhythmDocument) => interpretRhythm(doc).events.filter((event) => event.kind === "note").map((event) => toNumber(event.durationQ));
 
-test("same tap count with different intervals produces different readable note values", () => {
-  assert.deepEqual(noteDurations(makeDoc([0, 500, 1000, 1500])), [1, 1, 1, 1]);
-  assert.deepEqual(noteDurations(makeDoc([0, 250, 500, 750])), [0.5, 0.5, 0.5, 0.5]);
+test("different intervals change rests and onsets, not the default short percussion gate", () => {
+  assert.deepEqual(noteDurations(makeDoc([0, 500, 1000, 1500])), [0.25, 0.25, 0.25, 0.25]);
+  assert.deepEqual(noteDurations(makeDoc([0, 250, 500, 750])), [0.25, 0.25, 0.25, 0.25]);
   assert.deepEqual(noteDurations(makeDoc([0, 125, 250, 375])), [0.25, 0.25, 0.25, 0.25]);
 });
 
-test("mixed and dotted intervals set values, preserving all original down/up timestamps", () => {
+test("mixed and dotted intervals leave explicit silence, preserving all original down/up timestamps", () => {
   const doc = makeDoc([0, 250, 750, 1500]);
   const before = JSON.stringify(doc.hits);
-  assert.deepEqual(noteDurations(doc), [0.5, 1, 1.5, 1]);
+  assert.deepEqual(noteDurations(doc), [0.25, 0.25, 0.25, 0.25]);
   assert.deepEqual(reconstructNotation(doc).map((hit) => hit.timeMs), [0, 250, 750, 1500]);
   assert.equal(JSON.stringify(doc.hits), before);
   assert.equal(verifyDraft(doc).valid, true);
 });
 
-test("provisional final pad value updates when next rhythmic context arrives", () => {
-  assert.deepEqual(noteDurations(makeDoc([0])), [1]);
-  assert.deepEqual(noteDurations(makeDoc([0, 250])), [0.5, 0.5]);
-  assert.deepEqual(noteDurations(makeDoc([0, 250, 1000])), [0.5, 1.5, 1.5]);
+test("the final percussion gate never copies the preceding gap or a quarter", () => {
+  assert.deepEqual(noteDurations(makeDoc([0])), [0.25]);
+  assert.deepEqual(noteDurations(makeDoc([0, 250])), [0.25, 0.25]);
+  assert.deepEqual(noteDurations(makeDoc([0, 250, 1000])), [0.25, 0.25, 0.25]);
 });
 
 test("initial silence remains explicit, and context across a bar is clipped to its boundary", () => {
@@ -39,7 +39,7 @@ test("initial silence remains explicit, and context across a bar is clipped to i
   assert.equal(first.kind, "rest");
   assert.equal(toNumber(first.durationQ), 1);
   const doc = makeDoc([0, 500, 1500, 2000, 2250]);
-  assert.deepEqual(noteDurations(doc), [1, 2, 1, 0.5, 0.5]);
+  assert.deepEqual(noteDurations(doc), [0.25, 0.25, 0.25, 0.25, 0.25]);
   assert.equal(verifyDraft(doc).valid, true);
 });
 
@@ -53,7 +53,7 @@ test("keyboard holds, independent releases, and intervening rests are not replac
 test("pad contact length is not misreported as a held-note mismatch", () => {
   const doc = makeDoc([0, 500, 1000, 1500]);
   doc.hits = doc.hits.map((hit) => ({ ...hit, releaseMs: hit.onsetMs + 170 }));
-  assert.deepEqual(noteDurations(doc), [1, 1, 1, 1]);
+  assert.deepEqual(noteDurations(doc), [0.25, 0.25, 0.25, 0.25]);
   assert.equal(verifyDraft(doc).similarity, 100);
 });
 

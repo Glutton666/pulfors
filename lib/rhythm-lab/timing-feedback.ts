@@ -38,7 +38,7 @@ export function compareTapTiming(document: RhythmDocument, interpretation: Inter
     /** Both onset displacement and spacing must fit; a constant late sequence
      * must not pass merely because its successive intervals are identical. */
     matches: ordered.length >= 2 && report.valid && report.comparedCount === ordered.length
-      && report.regions.every((region) => region.status !== "invalid" && region.status !== "unresolved")
+      && report.regions.every((region) => region.onsetMatches !== false)
       && compared.every((row) => Math.abs(row.errorMs!) <= Math.max(4, Math.min(30, row.actualMs * 0.1))
         && Math.abs(row.onsetErrorMs!) <= Math.min(30, 60000 / document.bpm * 0.05)),
   };

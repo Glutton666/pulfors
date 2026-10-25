@@ -45,6 +45,10 @@ const ISSUE_LABELS: Record<string, { ko: string; en: string }> = {
   ambiguous: { ko: "이 마디는 여러 해석이 가능해요", en: "This measure has multiple possible readings" },
   timing_mismatch: { ko: "타격 시점이 입력과 달라요", en: "Hit timing differs from the input" },
   no_events: { ko: "비교할 기보가 없어요", en: "There is no notation to compare" },
+  "protected-boundary": { ko: "보호된 입력 경계와 충돌합니다.", en: "This conflicts with a protected input boundary." },
+  protected_boundary: { ko: "보호된 입력 경계와 충돌합니다.", en: "This conflicts with a protected input boundary." },
+  "tie-chain": { ko: "붙임줄 연결이 끊겼거나 일치하지 않습니다.", en: "The tie chain is broken or inconsistent." },
+  tie_chain: { ko: "붙임줄 연결이 끊겼거나 일치하지 않습니다.", en: "The tie chain is broken or inconsistent." },
 };
 
 export function RhythmValidationPanel({
@@ -67,6 +71,9 @@ export function RhythmValidationPanel({
   );
   const selected = regions.find((region) => region.measureIndex === selectedMeasure) ?? null;
   const issueRegions = report.issues.filter((issue) => issue.measureIndex === selectedMeasure);
+  const outcomeText = (value: boolean | null | undefined) => value == null
+    ? (ko ? "측정 안 됨" : "Not measured")
+    : value ? (ko ? "일치" : "Match") : (ko ? "차이 있음" : "Differs");
   const canConfirm = (region: Region) =>
     (region.status === "ambiguous" || region.status === "ready" || region.status === "confirmed");
 
@@ -77,7 +84,7 @@ export function RhythmValidationPanel({
   const score = report.similarity == null ? "—" : `${report.similarity}%`;
 
   const reasonText = (reason: string) => {
-    const code = CODE_LABELS[reason];
+    const code = ISSUE_LABELS[reason] ?? CODE_LABELS[reason];
     return code ? (ko ? code.ko : code.en) : (ko ? "검토가 필요해요" : "Needs review");
   };
   const issueText = (code: string) => {
@@ -162,6 +169,14 @@ export function RhythmValidationPanel({
           ? "원래 타격 시점과 기보의 리듬 시점을 비교합니다. 이 수치는 확신도나 연주 성적이 아닙니다."
           : "Compares the original hit timing with the written rhythm. This is not confidence or a performance score."}
       </Text>
+
+      <View style={styles.checkGrid} testID="rhythm-validation-checks">
+        <Check label={ko ? "타격 시점" : "Onset match"} value={outcomeText(report.onsetMatches)} C={C} />
+        <Check label={ko ? "측정된 건반 음 길이" : "Measured key duration"} value={outcomeText(report.durationMatches)} C={C} />
+        <Check label={ko ? "구조 검증" : "Structural validity"} value={report.valid ? (ko ? "유효" : "Valid") : (ko ? "오류" : "Invalid")} C={C} />
+        <Check label={ko ? "의도 승인" : "Intent approval"} value={regions.length > 0 && regions.every((region) => region.status === "confirmed")
+          ? (ko ? "확정됨" : "Confirmed") : (ko ? "미확정" : "Not approved")} C={C} />
+      </View>
 
       {!report.valid && (
         <View style={[styles.failure, { backgroundColor: C.background, borderColor: C.border }]}>
@@ -263,6 +278,17 @@ export function RhythmValidationPanel({
             <Metric label={ko ? "평균 오차" : "Mean"} value={`${Math.round(selected.meanErrorMs * 10) / 10} ms`} C={C} />
             <Metric label={ko ? "최대 오차" : "Peak"} value={`${Math.round(selected.maxErrorMs * 10) / 10} ms`} C={C} />
             <Metric label={ko ? "빠짐 / 추가" : "Missing / extra"} value={`${selected.missing} / ${selected.extra}`} C={C} />
+            <Metric label={ko ? "음 길이 최대 오차" : "Duration peak"} value={selected.maxDurationErrorMs == null ? "—" : `${Math.round(selected.maxDurationErrorMs * 10) / 10} ms`} C={C} />
+          </View>
+          <View style={styles.checkGrid} testID={`rhythm-region-checks-${selected.measureIndex}`}>
+            <Check label={ko ? "타격 시점" : "Onset match"} value={outcomeText(selected.onsetMatches)} C={C} />
+            <Check
+              label={ko ? `건반 음 길이${selected.comparedDurations ? ` · ${selected.comparedDurations}` : ""}` : `Key duration${selected.comparedDurations ? ` · ${selected.comparedDurations}` : ""}`}
+              value={outcomeText(selected.durationMatches)}
+              C={C}
+            />
+            <Check label={ko ? "구조 검증" : "Structure"} value={issueRegions.length ? (ko ? "오류" : "Invalid") : (ko ? "유효" : "Valid")} C={C} />
+            <Check label={ko ? "의도 승인" : "Intent approval"} value={selected.status === "confirmed" ? (ko ? "확정됨" : "Confirmed") : (ko ? "미확정" : "Not approved")} C={C} />
           </View>
 
           {(selected.reasons.length > 0 || issueRegions.length > 0) && (
@@ -310,6 +336,13 @@ function Metric({ label, value, C }: { label: string; value: string; C: ReturnTy
   );
 }
 
+function Check({ label, value, C }: { label: string; value: string; C: ReturnType<typeof useTheme>["colors"] }) {
+  return <View style={[styles.check, { borderColor: C.border, backgroundColor: C.background }]}>
+    <Text style={[styles.checkLabel, { color: C.textTertiary }]}>{label}</Text>
+    <Text style={[styles.checkValue, { color: C.text }]}>{value}</Text>
+  </View>;
+}
+
 const styles = StyleSheet.create({
   panel: { borderWidth: 1, borderRadius: 14, padding: 14, gap: 12, overflow: "hidden" },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
@@ -322,6 +355,10 @@ const styles = StyleSheet.create({
   similarityCaption: { fontSize: 8, letterSpacing: 0.8, fontFamily: "SpaceGrotesk_700Bold" },
   similarity: { fontSize: 20, lineHeight: 24, fontFamily: "SpaceGrotesk_700Bold" },
   explanation: { fontSize: 11, lineHeight: 16, marginTop: -3 },
+  checkGrid: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
+  check: { flexGrow: 1, flexBasis: "46%", minWidth: 125, borderWidth: 1, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 6, gap: 3 },
+  checkLabel: { fontSize: 9 },
+  checkValue: { fontSize: 11, fontFamily: "SpaceGrotesk_700Bold" },
   failure: { flexDirection: "row", gap: 9, alignItems: "flex-start", borderWidth: 1, borderRadius: 10, padding: 10 },
   failureCopy: { flex: 1, gap: 3 },
   failureTitle: { fontSize: 12, fontFamily: "SpaceGrotesk_700Bold" },

@@ -66,7 +66,14 @@ type Props = {
 };
 
 type BeamPair = { a: NotationEvent; b: NotationEvent };
-type TupletGroup = { events: NotationEvent[]; actual: number };
+type TupletGroup = {
+  id: string;
+  events: NotationEvent[];
+  fullEvents: NotationEvent[];
+  actual: number;
+  normal: number;
+  layers: { actual: number; normal: number }[];
+};
 
 const BLACK = "#111111";
 const GOLD = "#C39A2E";
@@ -85,73 +92,100 @@ function displayValue(event: NotationEvent) {
   return notationSpelling(event).value;
 }
 
+function tupletFamily(event: NotationEvent) {
+  if (!event.tuplet) return "ordinary";
+  return event.tuplet.groupId ?? `${event.tuplet.actual}:${event.tuplet.normal}`;
+}
+
 function buildBeamPairs(events: NotationEvent[], spanQ: number, meter: Meter): BeamPair[] {
   const compound = meter.denominator === 8 && meter.numerator >= 6 && meter.numerator % 3 === 0;
   const beatQ = compound ? 1.5 : 4 / meter.denominator;
-  const ordered = [...events].sort((a, b) => a.measureIndex - b.measureIndex || toNumber(a.startQ) - toNumber(b.startQ));
   const pairs: BeamPair[] = [];
-  let group: NotationEvent[] = [];
-  const flush = () => {
-    if (group.length > 1) {
-      for (let i = 0; i < group.length - 1; i++) {
-        const a = group[i];
-        const b = group[i + 1];
-        pairs.push({ a, b });
+  const voices = new Map<string, NotationEvent[]>();
+  events.forEach((event) => {
+    if (event.kind !== "note" || !beamLevel(event)) return;
+    const voice = event.voiceId ?? `legacy-${event.midi?.join(",") ?? "unpitched"}`;
+    voices.set(voice, [...(voices.get(voice) ?? []), event]);
+  });
+  for (const voiceEvents of voices.values()) {
+    const ordered = [...voiceEvents].sort((a, b) => a.measureIndex - b.measureIndex || toNumber(a.startQ) - toNumber(b.startQ));
+    let group: NotationEvent[] = [];
+    const flush = () => {
+      if (group.length > 1) {
+        for (let i = 0; i < group.length - 1; i++) {
+          pairs.push({ a: group[i], b: group[i + 1] });
+        }
       }
-    }
-    group = [];
-  };
-  let previousBeatKey = "";
-  let previous: NotationEvent | undefined;
-  for (const event of ordered) {
-    const localQ = ((toNumber(event.startQ) % spanQ) + spanQ) % spanQ;
-    const beatIndex = Math.floor((localQ + EPSILON) / beatQ);
-    const beatKey = `${event.measureIndex}:${beatIndex}`;
-    const adjacent = previous
-      && previous.kind === "note"
-      && event.kind === "note"
-      && previous.measureIndex === event.measureIndex
-      && Math.abs(toNumber(previous.startQ) + toNumber(previous.durationQ) - toNumber(event.startQ)) < EPSILON;
-    if (event.kind !== "note" || !beamLevel(event) || beatKey !== previousBeatKey || !adjacent) flush();
-    if (event.kind === "note" && beamLevel(event)) {
-      if (group.length && beatKey !== previousBeatKey) flush();
+      group = [];
+    };
+    let previousBeatKey = "";
+    let previous: NotationEvent | undefined;
+    for (const event of ordered) {
+      const localQ = ((toNumber(event.startQ) % spanQ) + spanQ) % spanQ;
+      const beatIndex = Math.floor((localQ + EPSILON) / beatQ);
+      const beatKey = `${event.measureIndex}:${beatIndex}`;
+      const adjacent = previous
+        && previous.measureIndex === event.measureIndex
+        && Math.abs(toNumber(previous.startQ) + toNumber(previous.durationQ) - toNumber(event.startQ)) < EPSILON
+        && tupletFamily(previous) === tupletFamily(event);
+      if (beatKey !== previousBeatKey || !adjacent) flush();
+      if (group.length && tupletFamily(group[0]) !== tupletFamily(event)) flush();
       group.push(event);
-    } else {
-      flush();
+      previous = event;
+      previousBeatKey = beatKey;
     }
-    previous = event;
-    previousBeatKey = beatKey;
+    flush();
   }
-  flush();
   return pairs;
 }
 
-function buildTupletGroups(events: NotationEvent[], spanQ: number, meter: Meter) {
+function buildTupletGroups(events: NotationEvent[], spanQ: number, meter: Meter, measuresPerRow: number) {
+  const explicit = new Map<string, NotationEvent[]>();
+  const legacy = events.filter((event) => event.tuplet && !event.tuplet.groupId)
+    .sort((a, b) => a.measureIndex - b.measureIndex || toNumber(a.startQ) - toNumber(b.startQ));
+  events.filter((event) => event.tuplet?.groupId).forEach((event) => {
+    const id = event.tuplet!.groupId!;
+    explicit.set(id, [...(explicit.get(id) ?? []), event]);
+  });
+  const groups: TupletGroup[] = [...explicit.entries()].map(([id, members]) => {
+    const ordered = members.sort((a, b) => toNumber(a.startQ) - toNumber(b.startQ));
+    const tuplet = ordered[0].tuplet!;
+    return { id, events: ordered, fullEvents: ordered, actual: tuplet.actual, normal: tuplet.normal,
+      layers: tuplet.layers?.length ? tuplet.layers : [{ actual: tuplet.actual, normal: tuplet.normal }] };
+  });
   const compound = meter.denominator === 8 && meter.numerator >= 6 && meter.numerator % 3 === 0;
   const beatQ = compound ? 1.5 : 4 / meter.denominator;
-  const ordered = events.filter((event) => event.tuplet)
-    .sort((a, b) => a.measureIndex - b.measureIndex || toNumber(a.startQ) - toNumber(b.startQ));
-  const groups: TupletGroup[] = [];
   let current: NotationEvent[] = [];
-  const flush = () => {
-    if (current.length) groups.push({ events: current, actual: current[0].tuplet!.actual });
+  const flushLegacy = () => {
+    if (!current.length) return;
+    const tuplet = current[0].tuplet!;
+    const fullEvents = [...current];
+    groups.push({ id: `legacy-${fullEvents[0].id}`, events: fullEvents, fullEvents,
+      actual: tuplet.actual, normal: tuplet.normal,
+      layers: tuplet.layers?.length ? tuplet.layers : [{ actual: tuplet.actual, normal: tuplet.normal }] });
     current = [];
   };
-  for (const event of ordered) {
+  let previousBeatKey = "";
+  for (const event of legacy) {
     const previous = current[current.length - 1];
-    const sameRatio = previous?.tuplet?.actual === event.tuplet?.actual && previous?.tuplet?.normal === event.tuplet?.normal;
-    const adjacent = previous && Math.abs(toNumber(previous.startQ) + toNumber(previous.durationQ) - toNumber(event.startQ)) < EPSILON;
     const localQ = ((toNumber(event.startQ) % spanQ) + spanQ) % spanQ;
     const beatIndex = Math.floor((localQ + EPSILON) / beatQ);
-    const previousLocalQ = previous ? ((toNumber(previous.startQ) % spanQ) + spanQ) % spanQ : 0;
-    const previousBeatIndex = Math.floor((previousLocalQ + EPSILON) / beatQ);
-    const beatChanged = previous && (previous.measureIndex !== event.measureIndex || previousBeatIndex !== beatIndex);
-    const groupComplete = previous && current.length >= (previous.tuplet?.actual ?? Infinity);
-    if (previous && (!sameRatio || !adjacent || beatChanged || groupComplete)) flush();
+    const beatKey = `${event.measureIndex}:${beatIndex}`;
+    const sameRatio = previous?.tuplet?.actual === event.tuplet?.actual && previous?.tuplet?.normal === event.tuplet?.normal;
+    const adjacent = previous && Math.abs(toNumber(previous.startQ) + toNumber(previous.durationQ) - toNumber(event.startQ)) < EPSILON;
+    if (previous && (!sameRatio || !adjacent || beatKey !== previousBeatKey || current.length >= (previous.tuplet?.actual ?? Infinity))) flushLegacy();
     current.push(event);
+    previousBeatKey = beatKey;
   }
-  flush();
-  return groups;
+  flushLegacy();
+  return groups.flatMap((group) => {
+    const segments = new Map<string, NotationEvent[]>();
+    group.events.forEach((event) => {
+      const key = `${event.measureIndex}:${Math.floor(event.measureIndex / measuresPerRow)}`;
+      segments.set(key, [...(segments.get(key) ?? []), event]);
+    });
+    return [...segments.values()].map((segment) => ({ ...group, events: segment.sort((a, b) => toNumber(a.startQ) - toNumber(b.startQ)) }));
+  });
 }
 
 function pitchStep(midi: number) {
@@ -214,7 +248,58 @@ export function RhythmStaff({ events, meter, selected, symbols, onSelect, onMove
   const playheadX = (measureStarts[playheadMeasure] ?? left) + edgePadding + playheadLocalQ / spanQ * measureWidthAt(playheadMeasure);
   const beamPairs = buildBeamPairs(events, spanQ, meter);
   const beamed = new Set(beamPairs.flatMap(({ a, b }) => [a.id, b.id]));
-  const tupletGroups = buildTupletGroups(events, spanQ, meter);
+  const tupletGroups = buildTupletGroups(events, spanQ, meter, measuresPerRow);
+  const glyphXOffsets = new Map<string, number>();
+  events.filter((event) => event.kind === "note" && event.voiceId).forEach((event) => {
+    const pitches = eventPitches(event);
+    const start = toNumber(event.startQ);
+    const peers = events.filter((other) => other.kind === "note" && other.voiceId && other.voiceId !== event.voiceId
+      && other.measureIndex === event.measureIndex && Math.abs(toNumber(other.startQ) - start) < EPSILON
+      && eventPitches(other).some((midi) => pitches.includes(midi)))
+      .sort((a, b) => a.id.localeCompare(b.id));
+    if (!peers.length) return;
+    const cluster = [...new Map([event, ...peers].map((item) => [item.id, item])).values()].sort((a, b) => a.id.localeCompare(b.id));
+    cluster.forEach((item, index) => glyphXOffsets.set(item.id, (index - (cluster.length - 1) / 2) * 7));
+  });
+  const glyphXFor = (event: NotationEvent) => xFor(event) + (glyphXOffsets.get(event.id) ?? 0);
+  const noteHeadPoint = (event: NotationEvent, midi?: number) => {
+    const pitches = eventPitches(event);
+    if (midi === undefined || pitches.length === 0) return { x: glyphXFor(event), y: yFor(event) };
+    const index = pitches.indexOf(midi);
+    const prior = pitches[index - 1];
+    const adjacent = prior !== undefined && Math.abs(pitchStep(midi) - pitchStep(prior)) <= 1;
+    const headX = glyphXFor(event) + (pitches.length > 1 ? 2 : 0);
+    return {
+      x: headX + (adjacent ? (index % 2 === 0 ? -3 : 3) : 0),
+      y: yFor(event) + 25 - (pitchStep(midi) - pitchStep(60)) * 4.5,
+    };
+  };
+  const targetPoint = (event: NotationEvent) => {
+    const pitches = eventPitches(event);
+    return event.kind === "note" && pitches.length
+      ? noteHeadPoint(event, pitches[Math.floor((pitches.length - 1) / 2)])
+      : { x: xFor(event), y: yFor(event) };
+  };
+  const stemDirections = new Map<string, boolean>();
+  events.filter((event) => event.kind === "note").forEach((event) => {
+    const pitches = eventPitches(event);
+    const headYs = pitches.length
+      ? pitches.map((midi) => yFor(event) + 25 - (pitchStep(midi) - pitchStep(60)) * 4.5)
+      : [yFor(event)];
+    stemDirections.set(event.id, headYs.reduce((sum, value) => sum + value, 0) / headYs.length >= 52);
+  });
+  events.filter((event) => event.kind === "note" && event.voiceId).forEach((event) => {
+    const start = toNumber(event.startQ);
+    const end = start + toNumber(event.durationQ);
+    const simultaneous = events.filter((other) => other.kind === "note" && other.voiceId && other.voiceId !== event.voiceId
+      && other.measureIndex === event.measureIndex && toNumber(other.startQ) < end - EPSILON
+      && toNumber(other.startQ) + toNumber(other.durationQ) > start + EPSILON)
+      .sort((a, b) => toNumber(a.startQ) - toNumber(b.startQ) || a.id.localeCompare(b.id));
+    if (!simultaneous.length) return;
+    const cluster = [...new Map([event, ...simultaneous].map((item) => [item.id, item])).values()]
+      .sort((a, b) => toNumber(a.startQ) - toNumber(b.startQ) || a.id.localeCompare(b.id));
+    cluster.forEach((item, index) => stemDirections.set(item.id, index % 2 === 0));
+  });
   const flagsFor = (event: NotationEvent) => beamLevel(event);
   const followX = Math.max(0, playheadX * NOTATION_SCALE - viewportWidth * 0.65);
   useEffect(() => {
@@ -240,9 +325,9 @@ export function RhythmStaff({ events, meter, selected, symbols, onSelect, onMove
           {playheadMeasure < measures && <Line x1={playheadX} x2={playheadX} y1={34 + Math.floor(playheadMeasure / measuresPerRow) * rowHeight} y2={70 + Math.floor(playheadMeasure / measuresPerRow) * rowHeight} stroke={GOLD} strokeWidth={1.5} />}
 
           {beamPairs.map(({ a, b }, index) => {
-            const firstX = xFor(a) + 6;
-            const secondX = xFor(b) + 6;
-            const beamY = rowFor(a) * rowHeight + 17;
+            const firstX = glyphXFor(a) + 6;
+            const secondX = glyphXFor(b) + 6;
+            const beamY = rowFor(a) * rowHeight + (stemDirections.get(a.id) === false ? 88 : 17);
             return <G key={`beam-${index}`}>
               <Line x1={firstX} y1={beamY} x2={secondX} y2={beamY} stroke={BLACK} strokeWidth={3} />
               {Array.from({ length: Math.max(flagsFor(a), flagsFor(b)) - 1 }, (_, levelIndex) => {
@@ -260,23 +345,67 @@ export function RhythmStaff({ events, meter, selected, symbols, onSelect, onMove
           {tupletGroups.map((group, index) => {
             const first = group.events[0];
             const last = group.events[group.events.length - 1];
-            const x1 = xFor(first) - 8;
-            const x2 = xFor(last) + 13;
+            const x1 = glyphXFor(first) - 8;
+            const x2 = glyphXFor(last) + 13;
             const y = yFor(first) - 52;
             const middle = (x1 + x2) / 2;
+            const all = group.fullEvents;
+            const hasEarlier = all.some((event) => toNumber(event.startQ) < toNumber(first.startQ) - EPSILON);
+            const hasLater = all.some((event) => toNumber(event.startQ) > toNumber(last.startQ) + EPSILON);
+            const standard = group.layers.length === 1 && group.normal === 2 ** Math.floor(Math.log2(group.actual));
+            const ratio = standard && !hasEarlier && !hasLater
+              ? String(group.actual)
+              : group.layers.map((layer) => `${layer.actual}:${layer.normal}`).join(" × ");
             return <G key={`tuplet-${first.id}-${index}`} testID={`rhythm-tuplet-bracket-${first.id}`}>
-              <Line x1={x1} y1={y + 5} x2={middle - 7} y2={y + 5} stroke={BLACK} strokeWidth={1} />
-              <Line x1={middle + 7} y1={y + 5} x2={x2} y2={y + 5} stroke={BLACK} strokeWidth={1} />
-              <Line x1={x1} y1={y + 5} x2={x1} y2={y + 10} stroke={BLACK} strokeWidth={1} />
-              <Line x1={x2} y1={y + 5} x2={x2} y2={y + 10} stroke={BLACK} strokeWidth={1} />
-              <SvgText x={middle} y={y + 8} fill={BLACK} fontSize="10" textAnchor="middle">{group.actual}</SvgText>
+              <Line x1={x1} y1={y + 5} x2={middle - 18} y2={y + 5} stroke={BLACK} strokeWidth={1} />
+              <Line x1={middle + 18} y1={y + 5} x2={x2} y2={y + 5} stroke={BLACK} strokeWidth={1} />
+              {!hasEarlier && <Line x1={x1} y1={y + 5} x2={x1} y2={y + 10} stroke={BLACK} strokeWidth={1} />}
+              {!hasLater && <Line x1={x2} y1={y + 5} x2={x2} y2={y + 10} stroke={BLACK} strokeWidth={1} />}
+              <SvgText x={middle} y={y + 8} fill={BLACK} fontSize="9" textAnchor="middle">{ratio}{hasEarlier ? " ‹" : ""}{hasLater ? " ›" : ""}</SvgText>
             </G>;
           })}
 
+          {(() => {
+            const chains = new Map<string, NotationEvent[]>();
+            events.filter((event) => event.tie).forEach((event) => {
+              chains.set(event.tie!.id, [...(chains.get(event.tie!.id) ?? []), event]);
+            });
+            return [...chains.entries()].flatMap(([tieId, pieces]) => {
+              const ordered = pieces.sort((a, b) => a.tie!.part - b.tie!.part);
+              return ordered.slice(0, -1).flatMap((piece, index) => {
+                const next = ordered[index + 1];
+                if (!next) return [];
+                const sharedPitches = eventPitches(piece).filter((midi) => eventPitches(next).includes(midi));
+                const tiePitches: (number | undefined)[] = sharedPitches.length ? sharedPitches : [undefined];
+                return tiePitches.map((midi, pitchIndex) => {
+                  const start = noteHeadPoint(piece, midi);
+                  const end = noteHeadPoint(next, midi);
+                  const x1 = start.x + 7;
+                  const x2 = end.x - 7;
+                  const y1 = start.y + 6;
+                  const y2 = end.y + 6;
+                  const key = `tie-${tieId}-${index}-${pitchIndex}`;
+                  if (rowFor(piece) === rowFor(next)) {
+                    const mid = (x1 + x2) / 2;
+                    return <Path key={key} testID={key}
+                      d={`M${x1},${y1} Q${mid},${y1 + 10} ${x2},${y2}`} fill="none" stroke={BLACK} strokeWidth={1.3} />;
+                  }
+                  const edgeOut = rowEnds[rowFor(piece)] - 3;
+                  const edgeIn = left + 3;
+                  return <G key={key} testID={key}>
+                    <Path d={`M${x1},${y1} Q${(x1 + edgeOut) / 2},${y1 + 9} ${edgeOut},${y1 + 3}`} fill="none" stroke={BLACK} strokeWidth={1.3} />
+                    <Path d={`M${edgeIn},${y2 + 3} Q${(edgeIn + x2) / 2},${y2 + 9} ${x2},${y2}`} fill="none" stroke={BLACK} strokeWidth={1.3} />
+                  </G>;
+                });
+              });
+            });
+          })()}
+
           {events.map((event) => {
-            const x = xFor(event);
+            const x = event.kind === "note" ? glyphXFor(event) : xFor(event);
             const y = yFor(event);
-            const isSelected = selected.includes(event.id) || event.hitIds.some((id) => selected.includes(id));
+            const isSelected = selected.includes(event.id) || event.hitIds.some((id) => selected.includes(id)) ||
+              !!event.tie && events.some((piece) => piece.tie?.id === event.tie!.id && selected.includes(piece.id));
             const value = displayValue(event);
             const dotted = notationSpelling(event).dotted;
             const open = value <= 2;
@@ -285,15 +414,17 @@ export function RhythmStaff({ events, meter, selected, symbols, onSelect, onMove
             const supported = symbol && ((symbol.role === "rhythm" && ["flam", "drag", "diddle"].includes(symbol.meaning)) || (symbol.role === "expression" && symbol.meaning === "accent"));
             const symbolCaption = symbol ? supported ? symbol.name : `annotation: ${symbol.name}` : "";
             const pitches = eventPitches(event);
-            const pitchY = (midi: number) => y + 25 - (pitchStep(midi) - pitchStep(60)) * 4.5;
+            const pitchY = (midi: number) => noteHeadPoint(event, midi).y;
             const headYs = pitches.length ? pitches.map(pitchY) : [y];
             const isBeamed = beamed.has(event.id);
-            const stemUp = isBeamed || headYs.reduce((sum, n) => sum + n, 0) / headYs.length >= 52;
+            const stemUp = stemDirections.has(event.id)
+              ? stemDirections.get(event.id)!
+              : isBeamed || headYs.reduce((sum, n) => sum + n, 0) / headYs.length >= 52;
             const headX = x + (pitches.length > 1 ? 2 : 0);
             const stemX = stemUp ? x + 6 : headX - 6;
-            const stemEndY = isBeamed ? rowFor(event) * rowHeight + 17 : stemUp ? Math.min(...headYs) - 37 : Math.max(...headYs) + 37;
+            const stemEndY = isBeamed ? rowFor(event) * rowHeight + (stemUp ? 17 : 88) : stemUp ? Math.min(...headYs) - 37 : Math.max(...headYs) + 37;
             return <G key={event.id} testID={`rhythm-glyph-${event.kind}-${event.id}`}>
-              {isSelected && <Circle cx={x} cy={y} r={14} fill="none" stroke={GOLD} strokeWidth={1.7} />}
+              {isSelected && <Circle cx={x} cy={headYs[0]} r={14} fill="none" stroke={GOLD} strokeWidth={1.7} />}
               {event.kind === "rest" ? <>
                 {value === 1
                   ? <Rect testID={`rhythm-rest-glyph-${value}-${event.id}`} x={x - 7} y={y - 10} width={14} height={4} fill={BLACK} />
@@ -309,10 +440,11 @@ export function RhythmStaff({ events, meter, selected, symbols, onSelect, onMove
                   const neighbor = pitches[pitchIndex - 1];
                   const adjacentStep = neighbor !== undefined && Math.abs(pitchStep(midi) - pitchStep(neighbor)) <= 1;
                   const noteX = headX + (adjacentStep ? (pitchIndex % 2 === 0 ? -3 : 3) : 0);
-                  const ledgerLines = noteY < 34
-                    ? Array.from({ length: Math.floor((34 - noteY + 4.5) / 9) }, (_, i) => 34 - (i + 1) * 9)
-                    : noteY > 70
-                      ? Array.from({ length: Math.floor((noteY - 70 + 4.5) / 9) }, (_, i) => 70 + (i + 1) * 9)
+                  const staffTop = 34 + rowFor(event) * rowHeight, staffBottom = staffTop + 36;
+                  const ledgerLines = noteY < staffTop
+                    ? Array.from({ length: Math.floor((staffTop - noteY + 4.5) / 9) }, (_, i) => staffTop - (i + 1) * 9)
+                    : noteY > staffBottom
+                      ? Array.from({ length: Math.floor((noteY - staffBottom + 4.5) / 9) }, (_, i) => staffBottom + (i + 1) * 9)
                       : [];
                   return <G key={`pitch-${midi}-${pitchIndex}`}>
                     {ledgerLines.map((ledgerY, i) => <Line key={i} x1={noteX - 10} x2={noteX + 10} y1={ledgerY} y2={ledgerY} stroke={BLACK} strokeWidth={1} />)}
@@ -325,8 +457,8 @@ export function RhythmStaff({ events, meter, selected, symbols, onSelect, onMove
                   const flagY = stemEndY + (stemUp ? i * 5 : -i * 5);
                   return <Path key={i} d={stemUp ? `M${stemX},${flagY} q12,5 5,13` : `M${stemX},${flagY} q-12,-5 -5,-13`} fill="none" stroke={BLACK} strokeWidth={1.5} />;
                 })}
-                {dotted && <Circle testID={`rhythm-dotted-dot-${event.id}`} cx={headX + 11} cy={y} r={1.8} fill={BLACK} />}
-                {event.accent && <Path d={`M${x - 5},${y - 20} l11,3 -11,3`} fill="none" stroke={BLACK} strokeWidth={1.2} />}
+                {dotted && <Circle testID={`rhythm-dotted-dot-${event.id}`} cx={headX + 11} cy={headYs[0]} r={1.8} fill={BLACK} />}
+                {event.accent && <Path d={`M${x - 5},${Math.min(...headYs) - 20} l11,3 -11,3`} fill="none" stroke={BLACK} strokeWidth={1.2} />}
                 {(event.graceHitIds ?? []).map((hitId, i) => {
                   const graceX = x - 14 - i * 9;
                   const graceY = y + 10;
@@ -342,7 +474,10 @@ export function RhythmStaff({ events, meter, selected, symbols, onSelect, onMove
           })}
         </Svg>
         <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>
-          {events.map((event) => <EventTarget key={`target-${event.id}`} event={event} x={xFor(event) * NOTATION_SCALE} y={yFor(event) * NOTATION_SCALE} measureWidth={measureWidthFor(event) * NOTATION_SCALE} spanQ={spanQ} draggable={event.kind === "note"} onSelect={onSelect} onPreview={onMovePreview} onCommit={onMoveCommit} onCancel={onMoveCancel} />)}
+          {events.map((event) => {
+            const point = targetPoint(event);
+            return <EventTarget key={`target-${event.id}`} event={event} x={point.x * NOTATION_SCALE} y={point.y * NOTATION_SCALE} measureWidth={measureWidthFor(event) * NOTATION_SCALE} spanQ={spanQ} draggable={event.kind === "note"} onSelect={onSelect} onPreview={onMovePreview} onCommit={onMoveCommit} onCancel={onMoveCancel} />;
+          })}
         </View>
       </View>
     </ScrollView>

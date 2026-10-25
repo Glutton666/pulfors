@@ -3,6 +3,9 @@ import type {
   Meter, NotationEvent, PlaybackHit, RhythmDocument, TupletSpan,
 } from "./types";
 import { notationSpelling } from "./notation";
+import { mergeAutomatic } from "./automatic";
+import { invalidTiePieces, musicalTime, num, splitNote } from "./spans";
+import { scoreTimeline } from "./score-timeline";
 
 let serial = 0;
 export const newRhythmId = (prefix = "rh") => `${prefix}-${Date.now().toString(36)}-${(++serial).toString(36)}`;
@@ -26,7 +29,7 @@ const scaleFraction = (a: Fraction, n: number, d: number) => fraction(a.n * n, a
 export function createRhythmDocument(options: { title?: string; bpm?: number; meter?: Meter } = {}): RhythmDocument {
   const now = Date.now();
   return {
-    version: 1, id: newRhythmId(), title: options.title ?? "",
+    version: 1, notationVersion: 2, id: newRhythmId(), title: options.title ?? "",
     bpm: clamp(options.bpm ?? 120, 20, 300),
     meter: options.meter ?? { numerator: 4, denominator: 4 },
     createdAt: now, updatedAt: now, hits: [], overrides: [], tuplets: [], symbols: [],
@@ -208,6 +211,7 @@ function withRests(doc: RhythmDocument, notes: NotationEvent[], minimumMeasures:
 }
 
 export function interpretRhythm(doc: RhythmDocument): Interpretation {
+  if (doc.notationVersion === 2) return mergeAutomatic(doc);
   const capacity = measureQuarters(doc.meter);
   const byMeasure = new Map<number, Hit[]>();
   for (const hit of doc.hits) {
@@ -265,7 +269,9 @@ export function applyInterpretation(
 }
 
 export function chooseCandidate(doc: RhythmDocument, candidate: InterpretationCandidate): RhythmDocument {
-  const existing = (doc.manualEvents ?? []).filter((e) => e.measureIndex !== candidate.measureIndex || e.locked);
+  const replacing = new Set(candidate.events.flatMap((e) => e.hitIds));
+  const existing = (doc.manualEvents ?? []).filter((e) => e.locked ||
+    e.measureIndex !== candidate.measureIndex && !e.hitIds.some((id) => replacing.has(id)));
   const protectedIds = new Set(existing.flatMap((e) => [...e.hitIds, ...(e.graceHitIds ?? [])]));
   const selected = candidate.events.filter((e) => e.kind === "note" && !e.hitIds.some((id) => protectedIds.has(id)));
   return { ...doc, updatedAt: Date.now(), manualEvents: [...existing, ...selected.map((e) => ({ ...e, locked: true }))] };
@@ -275,6 +281,7 @@ export function moveNotationEvent(doc: RhythmDocument, eventId: string, newStart
   const event = interpretRhythm(doc).events.find((e) => e.id === eventId);
   if (!event) throw new Error("Note not found");
   const start = Math.max(0, snap ? Math.round(newStartQ * 16) / 16 : newStartQ);
+  if (doc.notationVersion === 2 && event.kind === "note") return editConnectedNote(doc, event, start);
   const moved = { ...event, startQ: qFraction(start), measureIndex: Math.floor(start / measureQuarters(doc.meter)), locked: true };
   return { ...doc, updatedAt: Date.now(), manualEvents: [...(doc.manualEvents ?? []).filter((e) => e.id !== eventId), moved] };
 }
@@ -283,8 +290,32 @@ export function setEventDuration(doc: RhythmDocument, eventId: string, durationQ
   if (!(durationQ > 0) || !Number.isFinite(durationQ)) throw new Error("Duration must be positive");
   const event = interpretRhythm(doc).events.find((e) => e.id === eventId);
   if (!event) throw new Error("Note not found");
+  if (doc.notationVersion === 2 && event.kind === "note") return editConnectedNote(doc, event, undefined, durationQ);
   const edited: NotationEvent = { ...event, durationQ: qFraction(durationQ), ...describeDuration(durationQ), locked: true };
   return { ...doc, updatedAt: Date.now(), manualEvents: [...(doc.manualEvents ?? []).filter((e) => e.id !== eventId), edited] };
+}
+
+/** Editing one tied sound is an edit to that logical gate, not an extra attack. */
+function editConnectedNote(doc: RhythmDocument, event: NotationEvent, start?: number, duration?: number): RhythmDocument {
+  const all = interpretRhythm(doc).events;
+  const chain = event.tie ? all.filter((e) => e.tie?.id === event.tie!.id).sort((a, b) => num(a.startQ) - num(b.startQ)) : [event];
+  const root = chain[0];
+  const ids = new Set(chain.map((e) => e.id));
+  const logical: NotationEvent = { ...root, tie: undefined,
+    startQ: musicalTime(start === undefined ? num(root.startQ) : Math.max(0, num(root.startQ) + start - num(event.startQ))),
+    durationQ: musicalTime(duration ?? chain.reduce((sum, e) => sum + num(e.durationQ), 0)), locked: true };
+  if (duration !== undefined) {
+    const spelling = describeDuration(duration);
+    logical.value = spelling.value;
+    logical.tuplet = root.tuplet ?? spelling.tuplet;
+    if (root.tuplet) logical.value = [1, 2, 4, 8, 16, 32, 64, 128].find((value) =>
+      notationSpelling({ ...logical, value }).supported) ?? root.value;
+  }
+  const pieces = splitNote(logical, measureQuarters(doc.meter));
+  return { ...doc, updatedAt: Date.now(),
+    tuplets: doc.tuplets.map((group) => group.eventIds.some((id) => ids.has(id)) ?
+      { ...group, eventIds: [...group.eventIds.filter((id) => !ids.has(id)), ...pieces.map((piece) => piece.id)] } : group),
+    manualEvents: [...(doc.manualEvents ?? []).filter((e) => !ids.has(e.id)), ...pieces] };
 }
 
 export function insertRest(doc: RhythmDocument, startQ: number, durationQ: number): RhythmDocument {
@@ -325,9 +356,37 @@ export function applyTuplet(doc: RhythmDocument, eventIds: string[], actual: num
     const relative = addFraction(e.startQ, { n: -start.n, d: start.d });
     const onset = addFraction(start, scaleFraction(relative, normal, actual));
     return { ...e, startQ: onset, durationQ: scaleFraction(e.durationQ, normal, actual),
-      measureIndex: Math.floor(toNumber(onset) / measureQuarters(doc.meter)), tuplet: { actual, normal }, locked: true };
+      measureIndex: Math.floor(toNumber(onset) / measureQuarters(doc.meter)),
+      tuplet: { actual, normal, groupId: `manual-${eventIds.join("-")}-${actual}-${normal}`,
+        ...(e.tuplet ? { layers: [...(e.tuplet.layers ?? [{ actual: e.tuplet.actual, normal: e.tuplet.normal }]), { actual, normal }] } : {}) }, locked: true };
   });
   const group: TupletSpan = { id: newRhythmId("tuplet"), eventIds: [...eventIds], actual, normal, ...(parentId ? { parentId } : {}) };
+  if (doc.notationVersion === 2) {
+    const all = interpretRhythm(doc).events;
+    const ties = new Set(selected.filter((e) => e.tie).map((e) => e.tie!.id));
+    const expanded = all.filter((e) => eventIds.includes(e.id) || e.tie && ties.has(e.tie.id));
+    const origins = expanded.filter((e) => !e.tie || e.tie.part === 0);
+    const originStart = origins.sort((a, b) => toNumber(a.startQ) - toNumber(b.startQ))[0].startQ;
+    const pieces = origins.flatMap((e) => {
+      const members = e.tie ? expanded.filter((piece) => piece.tie?.id === e.tie!.id) : [e];
+      const duration = members.reduce((sum, piece) => sum + toNumber(piece.durationQ), 0);
+      const relative = addFraction(e.startQ, { n: -originStart.n, d: originStart.d });
+      const onset = addFraction(originStart, scaleFraction(relative, normal, actual));
+      const logical: NotationEvent = { ...e, tie: undefined, startQ: onset,
+        durationQ: scaleFraction(musicalTime(duration), normal, actual),
+        measureIndex: Math.floor(toNumber(onset) / measureQuarters(doc.meter)),
+        tuplet: { actual, normal, groupId: group.id,
+          ...(e.tuplet ? { layers: [...(e.tuplet.layers ?? [{ actual: e.tuplet.actual, normal: e.tuplet.normal }]), { actual, normal }] } : {}) },
+        locked: true };
+      return e.kind === "note" ? splitNote(logical, measureQuarters(doc.meter)) : [logical];
+    });
+    group.eventIds = pieces.map((e) => e.id);
+    const replaced = new Set(expanded.map((e) => e.id));
+    const parents = doc.tuplets.map((span) => ancestorIds.has(span.id) ?
+      { ...span, eventIds: [...span.eventIds.filter((id) => !replaced.has(id)), ...pieces.map((e) => e.id)] } : span);
+    return { ...doc, updatedAt: Date.now(), tuplets: [...parents, group],
+      manualEvents: [...(doc.manualEvents ?? []).filter((e) => !replaced.has(e.id)), ...pieces] };
+  }
   return { ...doc, updatedAt: Date.now(), tuplets: [...doc.tuplets, group],
     manualEvents: [...(doc.manualEvents ?? []).filter((e) => !eventIds.includes(e.id)), ...changed] };
 }
@@ -337,6 +396,7 @@ export function buildRhythmPlayback(doc: RhythmDocument, mode: "original" | "not
     id: h.id, timeMs: h.onsetMs, midi: h.midi, drum: h.drum,
     durationMs: Math.max(25, (h.releaseMs ?? h.onsetMs + 100) - h.onsetMs),
   })).sort((a, b) => a.timeMs - b.timeMs);
+  if (doc.notationVersion === 2) return scoreTimeline(doc, interpretRhythm(doc).events);
   const msPerQ = 60000 / doc.bpm;
   const byId = new Map(doc.hits.map((h) => [h.id, h]));
   const result: PlaybackHit[] = [];
@@ -400,6 +460,10 @@ export function validateRhythmDocument(value: unknown): RhythmDocument {
     offsetMs: finite(d.offsetMs, -2000, 2000), simplification: finite(d.simplification, 0, 1),
     hits: [], overrides: [], tuplets: [], symbols: [],
   };
+  if (d.notationVersion !== undefined) {
+    if (d.notationVersion !== 1 && d.notationVersion !== 2) throw new Error("Unsupported notation version");
+    doc.notationVersion = d.notationVersion;
+  }
   doc.hits = array(d.hits, 20000).map((value) => {
     const h = object(value);
     const hit: Hit = { id: text(h.id), onsetMs: finite(h.onsetMs, 0, 86400000) };
@@ -459,7 +523,32 @@ export function validateRhythmDocument(value: unknown): RhythmDocument {
     if (e.graceHitIds !== undefined) event.graceHitIds = readIds(e.graceHitIds);
     if (e.locked !== undefined) { if (typeof e.locked !== "boolean") throw new Error("Invalid lock"); event.locked = e.locked; }
     if (e.accent !== undefined) { if (typeof e.accent !== "boolean") throw new Error("Invalid accent"); event.accent = e.accent; }
-    if (e.tuplet !== undefined) { const t = object(e.tuplet); event.tuplet = { actual: finite(t.actual, 2, 128), normal: finite(t.normal, 1, 128) }; }
+    if (e.tuplet !== undefined) {
+      const t = object(e.tuplet), actual = finite(t.actual, 2, 128), normal = finite(t.normal, 1, 128);
+      if (!Number.isInteger(actual) || !Number.isInteger(normal)) throw new Error("Invalid tuplet ratio");
+      event.tuplet = { actual, normal };
+    }
+    if (e.tuplet !== undefined && event.tuplet) {
+      const t = object(e.tuplet);
+      if (t.groupId !== undefined) event.tuplet.groupId = text(t.groupId, 1000);
+      if (t.startQ !== undefined) event.tuplet.startQ = readFraction(t.startQ);
+      if (t.endQ !== undefined) event.tuplet.endQ = readFraction(t.endQ, true);
+      if (!!event.tuplet.startQ !== !!event.tuplet.endQ ||
+        event.tuplet.startQ && event.tuplet.endQ && num(event.tuplet.endQ) <= num(event.tuplet.startQ))
+        throw new Error("Invalid tuplet bounds");
+      if (t.layers !== undefined) event.tuplet.layers = array(t.layers, 16).map((value) => {
+        const layer = object(value);
+        const actual = finite(layer.actual, 2, 128), normal = finite(layer.normal, 1, 128);
+        if (!Number.isInteger(actual) || !Number.isInteger(normal)) throw new Error("Invalid nested ratio");
+        return { actual, normal };
+      });
+    }
+    if (e.voiceId !== undefined) event.voiceId = text(e.voiceId, 1000);
+    if (e.tie !== undefined) {
+      const t = object(e.tie), part = finite(t.part, 0, 32767), count = finite(t.count, 2, 32768);
+      if (!Number.isInteger(part) || !Number.isInteger(count) || part >= count || e.kind !== "note") throw new Error("Invalid tie");
+      event.tie = { id: text(t.id, 1000), part, count };
+    }
     if (e.symbolId !== undefined) { event.symbolId = text(e.symbolId); if (!symbolIds.has(event.symbolId)) throw new Error("Missing symbol"); }
     if (e.midi !== undefined) event.midi = array(e.midi, 128).map((x) => finite(x, 0, 127));
     if (e.drum !== undefined) {
@@ -468,6 +557,9 @@ export function validateRhythmDocument(value: unknown): RhythmDocument {
     }
     return event;
   });
+  if (new Set(doc.manualEvents?.map((e) => e.id)).size !== (doc.manualEvents?.length ?? 0))
+    throw new Error("Duplicate notation event IDs");
+  if (invalidTiePieces(doc.manualEvents ?? []).length) throw new Error("Invalid tie chain");
   const eventIds = new Set(interpretRhythm(doc).events.map((e) => e.id));
   doc.tuplets = array(d.tuplets, 20000).map((value) => {
     const t = object(value);

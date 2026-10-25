@@ -1,5 +1,7 @@
 import { interpretRhythm, measureQuarters, toNumber } from "./engine";
 import { notationSpelling } from "./notation";
+import { scoreTimeline } from "./score-timeline";
+import { invalidTiePieces } from "./spans";
 import type { Interpretation, InterpretationCandidate, NotationEvent, PlaybackHit, RhythmDocument } from "./types";
 
 export interface DraftIssue {
@@ -18,6 +20,10 @@ export interface DraftRegion {
   status: "ready" | "ambiguous" | "unresolved" | "confirmed" | "invalid";
   reasons: string[];
   candidateCount: number;
+  onsetMatches?: boolean;
+  durationMatches?: boolean | null;
+  maxDurationErrorMs?: number | null;
+  comparedDurations?: number;
 }
 export interface DraftReport {
   similarity: number | null;
@@ -26,12 +32,15 @@ export interface DraftReport {
   regions: DraftRegion[];
   onsetCount: number;
   comparedCount: number;
+  onsetMatches?: boolean;
+  durationMatches?: boolean | null;
 }
 
 const EPS = 0.00003;
 /** Onsets are score coordinates, durations are decoded from glyph semantics.
  * Structure validation below checks their sequential coverage independently. */
 export function reconstructNotation(doc: RhythmDocument, events = interpretRhythm(doc).events): PlaybackHit[] {
+  if (doc.notationVersion === 2) return scoreTimeline(doc, events);
   const ms = 60000 / doc.bpm;
   const sources = new Map(doc.hits.map((hit) => [hit.id, hit]));
   const result: PlaybackHit[] = [];
@@ -67,9 +76,13 @@ export function regionFingerprint(doc: RhythmDocument, index: number, events = i
   const ids = new Set(events.filter((event) => event.measureIndex === index)
     .flatMap((event) => [...event.hitIds, ...(event.graceHitIds ?? [])]));
   // Store a bounded deterministic hash, not a second copy of the performance.
-  const value = JSON.stringify([doc.bpm, doc.meter, doc.offsetMs,
+  const payload = [doc.bpm, doc.meter, doc.offsetMs,
     events.filter((event) => event.measureIndex === index),
-    doc.hits.filter((hit) => ids.has(hit.id))]);
+    doc.hits.filter((hit) => ids.has(hit.id))];
+  const canonical = (value: unknown): unknown => Array.isArray(value) ? value.map(canonical) :
+    value && typeof value === "object" ? Object.fromEntries(Object.entries(value)
+      .filter(([, item]) => item !== undefined).sort(([a], [b]) => a.localeCompare(b)).map(([key, item]) => [key, canonical(item)])) : value;
+  const value = JSON.stringify(doc.notationVersion === 2 ? canonical(payload) : payload);
   let hash = 2166136261;
   for (let i = 0; i < value.length; i++) hash = Math.imul(hash ^ value.charCodeAt(i), 16777619);
   return (hash >>> 0).toString(16);
@@ -77,7 +90,9 @@ export function regionFingerprint(doc: RhythmDocument, index: number, events = i
 
 /** A valid candidate can replace provisional notes, never protected edits. */
 export function applyDraftCandidate(doc: RhythmDocument, candidate: InterpretationCandidate): RhythmDocument {
-  const retained = (doc.manualEvents ?? []).filter((event) => event.locked || event.measureIndex !== candidate.measureIndex);
+  const replacing = new Set(candidate.events.flatMap((e) => e.hitIds));
+  const retained = (doc.manualEvents ?? []).filter((event) => event.locked ||
+    event.measureIndex !== candidate.measureIndex && !event.hitIds.some((id) => replacing.has(id)));
   const protectedIds = new Set(retained.flatMap((event) => [...event.hitIds, ...(event.graceHitIds ?? [])]));
   const notes = candidate.events.filter((event) => event.kind === "note" &&
     !event.hitIds.some((id) => protectedIds.has(id)));
@@ -90,6 +105,7 @@ function structuralIssues(doc: RhythmDocument, events: NotationEvent[]): DraftIs
   const sourceIds = new Set(doc.hits.map((hit) => hit.id));
   const sourceById = new Map(doc.hits.map((hit) => [hit.id, hit]));
   const seen = new Set<string>();
+  const eventIds = new Set<string>();
   const byMeasure = new Map<number, NotationEvent[]>();
   const add = (code: string, event: NotationEvent) => issues.push({
     code, measureIndex: event.measureIndex, eventId: event.id, message: code,
@@ -98,12 +114,15 @@ function structuralIssues(doc: RhythmDocument, events: NotationEvent[]): DraftIs
     const start = toNumber(event.startQ);
     const duration = notationSpelling(event);
     if (!duration.supported) add("glyph-duration", event);
+    if (eventIds.has(event.id)) add("duplicate-event", event);
+    eventIds.add(event.id);
     if (event.measureIndex !== Math.floor((start + EPS) / capacity)) add("bar-position", event);
     if (start + duration.durationQ > (event.measureIndex + 1) * capacity + EPS) add("bar-overflow", event);
     const list = byMeasure.get(event.measureIndex) ?? [];
     list.push(event); byMeasure.set(event.measureIndex, list);
     for (const id of [...event.hitIds, ...(event.graceHitIds ?? [])]) {
       if (!sourceIds.has(id)) add("unknown-hit", event);
+      if (event.tie && event.tie.part !== 0) continue;
       if (seen.has(id)) add("duplicate-hit", event);
       seen.add(id);
     }
@@ -112,6 +131,7 @@ function structuralIssues(doc: RhythmDocument, events: NotationEvent[]): DraftIs
       add("collapsed-hits", event);
     }
   }
+  invalidTiePieces(events).forEach((piece) => add("tie-chain", piece));
   for (const hit of doc.hits) if (!seen.has(hit.id)) issues.push({
     code: "missing-hit", measureIndex: Math.floor(Math.max(0, hit.onsetMs - doc.offsetMs) * doc.bpm / 60000 / capacity),
     message: "missing-hit",
@@ -119,16 +139,19 @@ function structuralIssues(doc: RhythmDocument, events: NotationEvent[]): DraftIs
   for (const [index, measureEvents] of byMeasure) {
     const sorted = [...measureEvents].sort((a, b) => toNumber(a.startQ) - toNumber(b.startQ));
     let cursor = index * capacity;
-    let previous: NotationEvent | undefined;
+    const occupied: NotationEvent[] = [];
     for (const event of sorted) {
       const start = toNumber(event.startQ);
-      const chord = previous?.kind === "note" && event.kind === "note" &&
-        previous.midi?.length && event.midi?.length &&
-        Math.abs(toNumber(previous.startQ) - start) < EPS;
       if (start > cursor + EPS) add("unfilled-gap", event);
-      if (start < cursor - EPS && !chord) add("overlap", event);
+      const overlaps = occupied.filter((e) => toNumber(e.startQ) + notationSpelling(e).durationQ > start + EPS);
+      if (event.kind === "note" && !event.midi?.length && overlaps.some((e) => e.kind === "note" &&
+        !e.midi?.length && Math.abs(toNumber(e.startQ) - start) < EPS)) add("collapsed-hits", event);
+      const independent = (other: NotationEvent) => other.kind === "note" && event.kind === "note" &&
+        other.midi?.length && event.midi?.length &&
+        (other.voiceId && event.voiceId ? other.voiceId !== event.voiceId : !other.midi.some((m) => event.midi!.includes(m)));
+      if (overlaps.some((other) => !independent(other))) add("overlap", event);
       cursor = Math.max(cursor, start + notationSpelling(event).durationQ);
-      previous = event;
+      occupied.push(event);
     }
     if (Math.abs(cursor - (index + 1) * capacity) > EPS && sorted[0]) add("bar-total", sorted[0]);
   }
@@ -144,7 +167,8 @@ export function verifyDraft(doc: RhythmDocument, interpretation: Interpretation 
   const capacity = measureQuarters(doc.meter);
   const eventForHit = new Map<string, NotationEvent>();
   const timelineByMeasure = new Map<number, PlaybackHit[]>();
-  events.forEach((event) => [...event.hitIds, ...(event.graceHitIds ?? [])].forEach((id) => eventForHit.set(id, event)));
+  events.filter((e) => !e.tie || e.tie.part === 0).forEach((event) =>
+    [...event.hitIds, ...(event.graceHitIds ?? [])].forEach((id) => eventForHit.set(id, event)));
   const eventById = new Map(events.map((event) => [event.id, event]));
   for (const hit of timeline) {
     const event = eventForHit.get(hit.id) ?? eventById.get(hit.id.slice(0, hit.id.lastIndexOf("-")));
@@ -169,18 +193,20 @@ export function verifyDraft(doc: RhythmDocument, interpretation: Interpretation 
     const gaps = new Map(times.map((time, i) => [time, Math.min(i ? time - times[i - 1] : Infinity,
       i < times.length - 1 ? times[i + 1] - time : Infinity)]));
     let similaritySum = 0, errors = 0, maxErrorMs = 0, matched = 0, heldMismatch = false, severeTiming = false;
+    let comparedDurations = 0, maxDurationErrorMs = 0, onsetMatches = true;
     const toleranceFor = (time: number) => Math.max(4, Math.min(ms * 0.1, 60, (gaps.get(time) ?? Infinity) * 0.45));
     for (const hit of hits) {
       const recovered = byId.get(hit.id);
       if (!recovered) continue;
       const error = Math.abs(recovered.timeMs - Math.max(0, hit.onsetMs - doc.offsetMs));
       const tolerance = toleranceFor(hit.onsetMs);
+      onsetMatches &&= error <= tolerance;
       severeTiming ||= error > tolerance * 2;
       let closeness = Math.max(0, 1 - error / (tolerance * 2));
-      if (hit.midi !== undefined && hit.releaseMs !== undefined && hit.releaseMs - hit.onsetMs >= Math.max(80, ms / 4)) {
+      if (hit.midi !== undefined && hit.releaseMs !== undefined) {
         const durationError = Math.abs((recovered.durationMs ?? 0) - (hit.releaseMs - hit.onsetMs));
-        closeness = closeness * 0.8 + Math.max(0, 1 - durationError / (ms * 0.5)) * 0.2;
         heldMismatch ||= durationError > tolerance;
+        comparedDurations++; maxDurationErrorMs = Math.max(maxDurationErrorMs, durationError);
       }
       similaritySum += closeness;
       errors += error; maxErrorMs = Math.max(maxErrorMs, error); matched++;
@@ -210,17 +236,24 @@ export function verifyDraft(doc: RhythmDocument, interpretation: Interpretation 
     if (extra) reasons.push("extra");
     if (maxErrorMs > Math.min(ms * 0.05, 30)) reasons.push("timing");
     if (heldMismatch) reasons.push("duration");
+    const conflict = interpretation.conflicts?.some((item) => item.measureIndex === index);
+    if (conflict) reasons.push("protected-boundary");
     if (signatures.size > 1) reasons.push("ambiguous");
-    const status = invalid ? "invalid" : confirmed ? "confirmed" :
-      similarity !== null && (similarity < 65 || missing || extra || severeTiming) ? "unresolved" :
+    const status = conflict ? "unresolved" : invalid ? "invalid" : confirmed ? "confirmed" :
+      conflict || heldMismatch || similarity !== null && (similarity < 65 || missing || extra || severeTiming) ? "unresolved" :
       reasons.length ? "ambiguous" : "ready";
     regions.push({ measureIndex: index, similarity: invalid ? null : similarity,
       meanErrorMs: matched ? errors / matched : 0, maxErrorMs, missing, extra, status, reasons,
-      candidateCount: choices.length });
+      candidateCount: choices.length, onsetMatches: onsetMatches && !missing && !extra,
+      durationMatches: comparedDurations ? !heldMismatch : null,
+      maxDurationErrorMs: comparedDurations ? maxDurationErrorMs : null, comparedDurations });
     aggregate += similaritySum; totalWeight += weight; comparedCount += matched;
   }
   return { similarity: issues.length || !totalWeight ? null : Math.round(100 * aggregate / totalWeight),
-    valid: issues.length === 0, issues, regions, onsetCount: doc.hits.length, comparedCount };
+    valid: issues.length === 0, issues, regions, onsetCount: doc.hits.length, comparedCount,
+    onsetMatches: !!doc.hits.length && !issues.length && regions.every((region) => region.onsetMatches),
+    durationMatches: regions.some((r) => r.comparedDurations)
+      ? regions.every((r) => r.durationMatches !== false) : null };
 }
 
 /** Only structurally valid hypotheses may reach intent review. Try alternative
@@ -229,7 +262,10 @@ export function prepareValidatedDraft(doc: RhythmDocument): RhythmDocument {
   let next = doc;
   const initial = verifyDraft(next);
   const candidates = interpretRhythm(doc).candidates;
-  const needsRepair = initial.regions.filter((region) => region.status === "invalid" || region.status === "unresolved");
+  const latestMeasure = Math.max(0, ...doc.hits.map((h) =>
+    Math.floor(Math.max(0, h.onsetMs - doc.offsetMs) * doc.bpm / 60000 / measureQuarters(doc.meter))));
+  const needsRepair = initial.regions.filter((region) => (region.status === "invalid" || region.status === "unresolved") &&
+    (doc.notationVersion !== 2 || region.measureIndex >= latestMeasure - 1));
   for (const region of needsRepair) {
     let best = next;
     let bestSimilarity = region.status === "invalid" ? -1 : region.similarity ?? -1;
@@ -256,14 +292,18 @@ export function confirmDraftRegion(doc: RhythmDocument, index: number): RhythmDo
     throw new Error("This region has not passed notation validation");
   }
   const events = interpretRhythm(doc).events;
-  const frozen = events.filter((event) => event.measureIndex === index && event.kind === "note" && !event.locked);
+  const connected = new Set(events.filter((event) => event.measureIndex === index && event.tie).map((e) => e.tie!.id));
+  const frozen = events.filter((event) => (event.measureIndex === index || event.tie && connected.has(event.tie.id)) && event.kind === "note" && !event.locked);
   const ids = new Set(frozen.map((event) => event.id));
+  const owned = new Set(doc.reviewConfirmations?.flatMap((entry) => entry.eventIds));
+  const shared = events.filter((event) => owned.has(event.id) &&
+    (event.measureIndex === index || event.tie && connected.has(event.tie.id))).map((event) => event.id);
   const previouslyFrozen = doc.reviewConfirmations?.find((entry) => entry.measureIndex === index)?.eventIds ?? [];
   const next = { ...doc, manualEvents: [...(doc.manualEvents ?? []).filter((event) => !ids.has(event.id)),
     ...frozen.map((event) => ({ ...event, locked: true }))] };
   return { ...next, reviewConfirmations: [...(doc.reviewConfirmations ?? []).filter((entry) => entry.measureIndex !== index),
     { measureIndex: index, fingerprint: regionFingerprint(next, index),
-      eventIds: [...new Set([...previouslyFrozen, ...ids])].filter((id) => next.manualEvents.some((event) => event.id === id)) }] };
+      eventIds: [...new Set([...previouslyFrozen, ...ids, ...shared])].filter((id) => next.manualEvents.some((event) => event.id === id)) }] };
 }
 
 /** A user explicitly reopening an approval only releases notes frozen by that
@@ -271,6 +311,7 @@ export function confirmDraftRegion(doc: RhythmDocument, index: number): RhythmDo
 export function reopenDraftRegion(doc: RhythmDocument, index: number): RhythmDocument {
   const entry = doc.reviewConfirmations?.find((item) => item.measureIndex === index);
   const ids = new Set(entry?.eventIds ?? []);
-  return { ...doc, manualEvents: doc.manualEvents?.map((event) => ids.has(event.id) ? { ...event, locked: false } : event),
+  const otherApprovals = new Set(doc.reviewConfirmations?.filter((item) => item.measureIndex !== index).flatMap((item) => item.eventIds));
+  return { ...doc, manualEvents: doc.manualEvents?.map((event) => ids.has(event.id) && !otherApprovals.has(event.id) ? { ...event, locked: false } : event),
     reviewConfirmations: doc.reviewConfirmations?.filter((item) => item.measureIndex !== index) };
 }

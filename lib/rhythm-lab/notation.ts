@@ -5,7 +5,9 @@ import type { NotationEvent } from "./types";
 export function notationSpelling(event: NotationEvent) {
   const value = event.value;
   const ordinary = [1, 2, 4, 8, 16, 32, 64, 128].includes(value);
-  const ratio = event.tuplet ? event.tuplet.normal / event.tuplet.actual : 1;
+  const ratio = event.tuplet?.layers?.length
+    ? event.tuplet.layers.reduce((r, layer) => r * layer.normal / layer.actual, 1)
+    : event.tuplet ? event.tuplet.normal / event.tuplet.actual : 1;
   const baseQ = 4 / value * ratio;
   const storedQ = event.durationQ.n / event.durationQ.d;
   const dotted = Math.abs(storedQ - baseQ * 1.5) < 0.00003;

@@ -434,7 +434,14 @@ export function RhythmWorkspace({ active = true, initialDocument }: { active?: b
     const original = buildRhythmPlayback(doc, "original").filter((hit) => ids.has(hit.id) ||
       (hit.timeMs - doc.offsetMs >= from && hit.timeMs - doc.offsetMs < to))
       .map((hit) => ({ ...hit, timeMs: Math.max(0, hit.timeMs - doc.offsetMs - from) }));
-    const notated = reconstructNotation(doc, localEvents).map((hit) => ({ ...hit, timeMs: hit.timeMs - from }));
+    // Decode whole connected sounds first: decoding only this bar would drop
+    // tied continuations or truncate a gate at the selected bar.
+    const notated = reconstructNotation(doc).filter((hit) => ids.has(hit.id) ||
+      hit.timeMs >= from && hit.timeMs < to).map((hit) => {
+      const skip = Math.max(0, from - hit.timeMs);
+      return { ...hit, timeMs: Math.max(0, hit.timeMs - from),
+        durationMs: hit.durationMs === undefined ? undefined : Math.max(0, hit.durationMs - skip) };
+    });
     // Distinct sounds make the two streams audible in overlay comparison.
     const sequence = kind === "original" ? original : kind === "notation" ? notated :
       [...original.map((hit) => ({ ...hit, midi: undefined, drum: "snare" as const })),
@@ -451,8 +458,9 @@ export function RhythmWorkspace({ active = true, initialDocument }: { active?: b
   };
   const editEvent = (event: NotationEvent, start: number, dur: number) => {
     try {
-      const moved = moveNotationEvent(doc, event.id, start, snapEdits);
-      const next = setEventDuration(moved, event.id, dur);
+      const root = event.tie ? events.find((e) => e.tie?.id === event.tie!.id && e.tie.part === 0) ?? event : event;
+      const moved = moveNotationEvent(doc, root.id, start, snapEdits);
+      const next = setEventDuration(moved, root.id, dur);
       update({ ...next, manualEvents: next.manualEvents?.map((item) => item.id === event.id ? { ...item, locked: true } : item) });
     } catch (error) { Alert.alert(text.error, error instanceof Error ? error.message : String(error)); }
   };
@@ -572,9 +580,12 @@ export function RhythmWorkspace({ active = true, initialDocument }: { active?: b
   };
   const selectEvent = (event: NotationEvent) => {
     if (playing || recording || recordPending || practiceOn || practicePending) return;
+    if (event.tie) event = events.find((e) => e.tie?.id === event.tie!.id && e.tie.part === 0) ?? event;
     setSelected((prev) => prev.includes(event.id) ? prev.filter((id) => id !== event.id) : [...prev, event.id]);
     setManualStart(String(toNumber(event.startQ))); setScrubPosition(String(toNumber(event.startQ)));
-    setDuration(toNumber(event.durationQ)); setDurationText(String(toNumber(event.durationQ)));
+    const wholeDuration = event.tie ? events.filter((e) => e.tie?.id === event.tie!.id)
+      .reduce((sum, e) => sum + toNumber(e.durationQ), 0) : toNumber(event.durationQ);
+    setDuration(wholeDuration); setDurationText(String(wholeDuration));
   };
   useEffect(() => { void loadLibrary(); }, []);
   const deactivateRef = useRef<() => void>(() => {});
@@ -642,6 +653,15 @@ export function RhythmWorkspace({ active = true, initialDocument }: { active?: b
         </View>
       </View>}
       {flow === "review" && <View testID="rhythm-review-stage">
+        {doc.notationVersion !== 2 && <View style={{ gap: 4, marginVertical: 4 }}>
+          <Text style={{ color: C.textSecondary, fontSize: 11 }}>{ko ? "기존 기보 규칙으로 열었습니다. 원본과 수동 수정은 유지됩니다." : "Opened with legacy notation. Original input and manual edits are retained."}</Text>
+          <Pressable testID="rhythm-upgrade-notation" accessibilityRole="button" disabled={interactionLocked}
+            onPress={() => { rhythmRecovery.remember(docRef.current, true, true);
+              setDoc((current) => ({ ...current, notationVersion: 2, updatedAt: Date.now() })); }}
+            style={[s.chip, { borderColor: C.border }]}>
+            <Text style={{ color: C.text }}>{ko ? "새 기보 규칙으로 검토" : "Review with new notation rules"}</Text>
+          </Pressable>
+        </View>}
         <View style={s.sectionHeader}>
           <View><Text style={[s.cardTitle, { color: C.text }]}>{text.provisional}</Text><Text style={[s.muted, { color: C.textSecondary }]}>{events.length} events · {doc.hits.length} raw hits</Text></View>
           <View style={{ flexDirection: "row", flexWrap: "wrap", maxWidth: "100%", gap: 7 }}>

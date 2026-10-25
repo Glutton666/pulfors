@@ -7,7 +7,7 @@ import type { Interpretation, RhythmDocument } from "@/lib/rhythm-lab/types";
 
 const signed = (value: number) => `${value > 0 ? "+" : ""}${Math.round(value)}`;
 
-export function RhythmLiveFeedback({ document, interpretation, recording, compact = false }: {
+export function RhythmLiveFeedback({ document, interpretation, compact = false }: {
   document: RhythmDocument;
   interpretation: Interpretation;
   recording: boolean;
@@ -47,10 +47,16 @@ export function RhythmLiveFeedback({ document, interpretation, recording, compac
       {ko ? "실제 → 악보" : "Tap → score"} {Math.round(latest.actualMs)} → {latest.notationMs === null ? "—" : Math.round(latest.notationMs)} ms
       {latest.errorMs !== null ? ` · ${signed(latest.errorMs)} ms` : ""}
     </Text>}
-    <Text style={{ color: C.textTertiary, fontSize: 10 }}>
+    <Text style={{ color: C.textTertiary, fontSize: 10, lineHeight: 14 }}>
       {document.hits.some((hit) => hit.midi !== undefined)
-        ? (ko ? "건반: 누른 길이 반영" : "Keys: held duration")
-        : (ko ? `패드: 탭 간격으로 음가 해석 · 마지막 음가 추정${recording ? " 중" : ""}` : "Pad: interval-based values · last value estimated")}
+        ? (ko ? "건반: 릴리스 데이터가 있을 때만 입력 음 길이를 측정합니다." : "Keys: input note duration is measured only when release data is available.")
+        : document.notationVersion === 2
+          ? (ko
+            ? "패드 v2: 기본 16분음표, 빠른 간격은 짧게·튜플릿은 비율대로. 남은 쉼은 표시하며 패드 누름 길이는 측정하지 않습니다."
+            : "Pad v2: sixteenth default, shortened for faster gaps and scaled for tuplets. Rests are explicit; pad duration is not measured.")
+          : (ko
+            ? "레거시 패드 기보: 탭 간격 기반 해석, 누름 길이는 측정 안 됨."
+            : "Legacy pad notation: interval-based; pad duration is not measured.")}
     </Text>
   </View>;
 }
