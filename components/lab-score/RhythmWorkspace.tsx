@@ -16,7 +16,9 @@ import { RhythmInputSurface } from "./RhythmInputSurface";
 import { RhythmKeyboard } from "./RhythmKeyboard";
 import { RhythmValidationPanel } from "./RhythmValidationPanel";
 import { RhythmLiveFeedback } from "./RhythmLiveFeedback";
+import { RhythmEntryGuidance } from "./RhythmEntryGuidance";
 import { applyDraftCandidate, confirmDraftRegion, prepareValidatedDraft, reconstructNotation, reopenDraftRegion, verifyDraft } from "@/lib/rhythm-lab/verification";
+import { useRhythmEntryMode } from "@/hooks/useRhythmEntryMode";
 
 type InputMode = "pad" | "drums" | "keyboard";
 const DURS = [1, 2, 4, 8, 16, 24, 32, 64];
@@ -37,6 +39,13 @@ export function RhythmWorkspace({ active = true, initialDocument }: { active?: b
     : createRhythmDocument({ title: ko ? "새 리듬" : "New rhythm", bpm: 92, meter: { numerator: 4, denominator: 4 } }));
   const [recording, setRecording] = useState(false);
   const [recordPending, setRecordPending] = useState(false);
+  const { entryMode, chooseEntryMode, entryModeReady, entryModeError } = useRhythmEntryMode();
+  const [recordRequest, setRecordRequest] = useState(false);
+  const recordRequestRef = useRef(false);
+  const [inputEpoch, setInputEpoch] = useState(0);
+  const [stoppedHint, setStoppedHint] = useState(false);
+  const stoppedHintShown = useRef(false);
+  const stoppedHintTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [liveElapsedMs, setLiveElapsedMs] = useState(0);
   const [mode, setMode] = useState<InputMode>(() => initialDocument
     ? initialDocument.hits.some((hit) => hit.midi !== undefined) ? "keyboard"
@@ -62,6 +71,8 @@ export function RhythmWorkspace({ active = true, initialDocument }: { active?: b
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [reviewTool, setReviewTool] = useState<"validation" | "edit" | "candidates" | "symbols" | "calibration" | null>(null);
   const [playing, setPlaying] = useState(false);
+  const playingRef = useRef(false);
+  const playbackEpoch = useRef(0);
   const [dragPreviewDocument, setDragPreviewDocument] = useState<RhythmDocument | null>(null);
   const [symbolName, setSymbolName] = useState("");
   const [symbolDescription, setSymbolDescription] = useState("");
@@ -114,22 +125,29 @@ export function RhythmWorkspace({ active = true, initialDocument }: { active?: b
     .filter((candidate) => !candidateOpen || verifyDraft(applyDraftCandidate(reopenDraftRegion(doc, candidateMeasure), candidate))
       .regions.some((region) => region.measureIndex === candidateMeasure && region.status !== "invalid"));
   const selectedHitIds = [...new Set([...selectedEvents.flatMap((event) => [...event.hitIds, ...(event.graceHitIds ?? [])]), ...selected.filter((id) => doc.hits.some((hit) => hit.id === id))])];
-  const interactionLocked = recording || recordPending || practiceOn || practicePending;
-  const cleanupPlayback = () => { audioSession.current?.stop(); stopPreviewNote(); setPlaying(false); };
+  const interactionLocked = recording || recordPending || practiceOn || practicePending || recordRequest || playing;
+  const inputLocked = !active || !entryModeReady || playing || recordRequest;
+  const clearHeldInput = () => { activeMidi.current = []; stopPreviewNote(); setInputEpoch((value) => value + 1); };
+  const setPlaybackActive = (value: boolean) => { playingRef.current = value; setPlaying(value); };
+  const cleanupPlayback = () => { playbackEpoch.current++; audioSession.current?.stop(); clearHeldInput(); setPlaybackActive(false); };
   const cleanupRecording = () => { recordTimers.current.forEach(clearTimeout); recordTimers.current = []; if (recordMetro.current) clearInterval(recordMetro.current); recordMetro.current = null; if (recordTicker.current) clearInterval(recordTicker.current); recordTicker.current = null; clickSession.current?.stop(); };
-  const cleanupPractice = () => { practiceTimers.current.forEach(clearTimeout); practiceTimers.current = []; audioSession.current?.stop(); clickSession.current?.stop(); setPracticeOn(false); setPracticePending(false); stopPreviewNote(); };
-  const cleanupAll = () => { cleanupPlayback(); cleanupRecording(); cleanupPractice(); calibrationTimers.current.forEach(clearTimeout); calibrationTimers.current = []; };
+  const cleanupPractice = () => { practiceTimers.current.forEach(clearTimeout); practiceTimers.current = []; audioSession.current?.stop(); clickSession.current?.stop(); setPracticeOn(false); setPracticePending(false); clearHeldInput(); };
+  const cleanupAll = () => { cleanupPlayback(); cleanupRecording(); cleanupPractice(); calibrationTimers.current.forEach(clearTimeout); calibrationTimers.current = []; recordRequestRef.current = false; setRecordRequest(false); };
   const cleanupAllRef = useRef(cleanupAll);
   cleanupAllRef.current = cleanupAll;
   useEffect(() => () => cleanupAllRef.current(), []);
+  useEffect(() => () => { if (stoppedHintTimer.current) clearTimeout(stoppedHintTimer.current); }, []);
   useEffect(() => {
     const subscription = AppState.addEventListener("change", (state) => {
       if (state !== "active") { cleanupAllRef.current(); setRecording(false); setRecordPending(false); }
     });
     return () => subscription.remove();
   }, []);
-  const update = (next: RhythmDocument) => setDoc({ ...next, updatedAt: Date.now() });
+  const update = (next: RhythmDocument) => { if (!playingRef.current) setDoc({ ...next, updatedAt: Date.now() }); };
   const startFreshTake = () => {
+    if (!active || !recordRequestRef.current) return;
+    recordRequestRef.current = false; setRecordRequest(false);
+    chooseEntryMode("capture");
     cleanupRecording(); cleanupPlayback();
     calibrationTimers.current.forEach(clearTimeout); calibrationTimers.current = [];
     setSelected([]); setReviewMeasure(null); setScrubPosition("0"); setReviewTool(null); setFlow("input"); setPracticeResult(null); setDoc((prev) => ({
@@ -151,14 +169,16 @@ export function RhythmWorkspace({ active = true, initialDocument }: { active?: b
     }, delay));
   };
   const beginRecord = () => {
-    if (recording || recordPending || practiceOn || practicePending) return;
+    if (!entryModeReady || interactionLocked || recordRequestRef.current) return;
+    clearHeldInput();
+    recordRequestRef.current = true; setRecordRequest(true);
     const hasWork = !!(doc.hits.length || doc.overrides.length || doc.manualEvents?.length || doc.tuplets.length);
     if (!hasWork) { startFreshTake(); return; }
     Alert.alert(ko ? "새 녹음" : "Start a new take", ko ? "현재 연주를 먼저 저장하거나 버릴까요?" : "Save or discard the current performance before starting over?", [
-      { text: ko ? "취소" : "Cancel", style: "cancel" },
+      { text: ko ? "취소" : "Cancel", style: "cancel", onPress: () => { recordRequestRef.current = false; setRecordRequest(false); } },
       { text: ko ? "버리고 시작" : "Discard & start", style: "destructive", onPress: startFreshTake },
-      { text: ko ? "저장 후 시작" : "Save & start", onPress: () => { void saveRhythmDocument(doc).then(async () => { await loadLibrary(); startFreshTake(); }).catch((error) => Alert.alert(text.error, error instanceof Error ? error.message : String(error))); } },
-    ]);
+      { text: ko ? "저장 후 시작" : "Save & start", onPress: () => { void saveRhythmDocument(doc).then(async () => { await loadLibrary(); startFreshTake(); }).catch((error) => { recordRequestRef.current = false; setRecordRequest(false); Alert.alert(text.error, error instanceof Error ? error.message : String(error)); }); } },
+    ], { cancelable: true, onDismiss: () => { recordRequestRef.current = false; setRecordRequest(false); } });
   };
   const finishRecord = () => {
     if (recordPending && !recording) {
@@ -168,7 +188,7 @@ export function RhythmWorkspace({ active = true, initialDocument }: { active?: b
     }
     const releasedAt = Math.max(0, clockNow() - startRef.current);
     const openHitIds = new Set(Object.values(releaseRef.current));
-    cleanupRecording(); setRecording(false); setRecordPending(false); setFlow("review"); stopPreviewNote();
+    cleanupRecording(); setRecording(false); setRecordPending(false); setFlow("review"); clearHeldInput();
     releaseRef.current = {};
     setDoc((prev) => prepareValidatedDraft({
       ...prev,
@@ -177,10 +197,12 @@ export function RhythmWorkspace({ active = true, initialDocument }: { active?: b
     requestAnimationFrame(() => workspaceScroll.current?.scrollTo({ y: 0, animated: true }));
   };
   const previewMove = (eventId: string, startQ: number) => {
+    if (playingRef.current || interactionLocked) return;
     try { setDragPreviewDocument(moveNotationEvent(doc, eventId, startQ, snapEdits)); }
     catch { setDragPreviewDocument(null); }
   };
   const commitMove = (eventId: string, startQ: number) => {
+    if (playingRef.current || interactionLocked) return;
     try {
       update(moveNotationEvent(doc, eventId, startQ, snapEdits));
       setDragPreviewDocument(null); setSelected([eventId]); setManualStart(String(startQ)); setScrubPosition(String(startQ));
@@ -189,6 +211,8 @@ export function RhythmWorkspace({ active = true, initialDocument }: { active?: b
   const cancelMove = () => setDragPreviewDocument(null);
   const scrubAt = (x: number) => setScrubPosition(String(Math.max(0, Math.min(scrubMaxQ, x / scrubTrackWidth.current * scrubMaxQ)).toFixed(2)));
   const addHit = (id: string, action: "down" | "up", midi?: number) => {
+    // Include async playback preparation, not just audible playback.
+    if (playingRef.current || inputLocked) return;
     if (action === "down") {
       const now = clockNow();
       if (recording) {
@@ -197,10 +221,14 @@ export function RhythmWorkspace({ active = true, initialDocument }: { active?: b
         setDoc((prev) => ({ ...prev, hits: [...prev.hits, hit], updatedAt: Date.now() }));
         releaseRef.current[id] = hit.id;
       }
-      if (!recording && !recordPending && !practiceOn && !practicePending && !playing) {
+      if (flow === "input" && !recording && !recordPending && !practiceOn && !practicePending && entryMode === "notation") {
         setDoc((prev) => insertNotationNote(prev, playheadQ, duration,
           mode === "keyboard" ? { midi } : { drum: mode === "drums" ? drum : "snare" }));
         if (mode !== "keyboard") setScrubPosition(String(playheadQ + duration));
+      }
+      if (flow === "input" && entryMode === "capture" && !recording && !recordPending && !stoppedHintShown.current) {
+        stoppedHintShown.current = true; setStoppedHint(true);
+        stoppedHintTimer.current = setTimeout(() => setStoppedHint(false), 2600);
       }
       if (mode === "keyboard" && midi) {
         activeMidi.current = [...new Set([...activeMidi.current, midi])];
@@ -215,12 +243,10 @@ export function RhythmWorkspace({ active = true, initialDocument }: { active?: b
         const nearest = targets.reduce((best, target) => Math.abs(target.timeMs - correctedTime) < Math.abs(best) ? target.timeMs - correctedTime : best, Number.POSITIVE_INFINITY);
         setLiveJudgment(Number.isFinite(nearest) ? `${nearest >= 0 ? "+" : ""}${Math.round(nearest)} ms` : "Tap captured");
       }
-      if (recording || practiceOn) {
-        if (mode === "pad") previewScoreDrum("snare");
-        if (mode === "drums") previewScoreDrum(drum);
-      }
+      if (mode === "pad") previewScoreDrum("snare");
+      if (mode === "drums") previewScoreDrum(drum);
     } else {
-      if (mode === "keyboard" && midi) {
+      if (mode === "keyboard" && midi && activeMidi.current.includes(midi)) {
         activeMidi.current = activeMidi.current.filter((value) => value !== midi);
         if (activeMidi.current.length) playChord(activeMidi.current, 500, 0.5);
         else stopPreviewNote();
@@ -240,8 +266,11 @@ export function RhythmWorkspace({ active = true, initialDocument }: { active?: b
   };
   const changeBpm = (value: string) => setDoc((prev) => ({ ...prev, bpm: Math.max(30, Math.min(260, Number(value) || 30)) }));
   const play = (kind: "original" | "notation") => {
+    if (recording || recordPending || recordRequestRef.current || playingRef.current) return;
     if (practiceOn || practicePending) cleanupPractice();
     cleanupPlayback();
+    calibrationTimers.current.forEach(clearTimeout); calibrationTimers.current = [];
+    clickSession.current?.stop();
     try {
       if (kind === "notation" && !draftReport.valid) {
         Alert.alert(text.error, ko ? "기보 계산 검증을 통과하지 못했습니다. 원본은 그대로 보존되어 있습니다." : "Notation validation failed. The original take is preserved.");
@@ -249,9 +278,11 @@ export function RhythmWorkspace({ active = true, initialDocument }: { active?: b
       }
       const sequence = kind === "notation" ? reconstructNotation(doc, events) : buildRhythmPlayback(doc, kind);
       if (!sequence.length) { Alert.alert(text.listen, text.empty); return; }
-      setPlaying(true);
-      void audioSession.current?.play(sequence, () => setPlaying(true), () => setPlaying(false)).catch((error) => {
-        setPlaying(false); Alert.alert(text.error, error instanceof Error ? error.message : String(error));
+      setPlaybackActive(true);
+      const owner = playbackEpoch.current;
+      void audioSession.current?.play(sequence, undefined, () => { if (owner === playbackEpoch.current) setPlaybackActive(false); }).catch((error) => {
+        if (owner !== playbackEpoch.current) return;
+        setPlaybackActive(false); Alert.alert(text.error, error instanceof Error ? error.message : String(error));
       });
     } catch (error) { Alert.alert(text.error, error instanceof Error ? error.message : String(error)); }
   };
@@ -334,7 +365,10 @@ export function RhythmWorkspace({ active = true, initialDocument }: { active?: b
     catch (error) { Alert.alert(text.error, error instanceof Error ? error.message : String(error)); }
   };
   const listenRegion = (index: number, kind: "original" | "notation" | "overlay") => {
+    if (interactionLocked || playingRef.current) return;
     cleanupPlayback();
+    calibrationTimers.current.forEach(clearTimeout); calibrationTimers.current = [];
+    clickSession.current?.stop();
     const region = draftReport.regions.find((item) => item.measureIndex === index);
     if (kind !== "original" && (!region || region.status === "invalid")) {
       Alert.alert(text.error, ko ? "기보 계산 오류가 있는 구간은 비교 재생하지 않습니다." : "Cannot play notation that failed structural validation.");
@@ -354,9 +388,12 @@ export function RhythmWorkspace({ active = true, initialDocument }: { active?: b
         ...notated.map((hit) => ({ ...hit, id: `notation-${hit.id}`, midi: undefined, drum: "hihat_closed" as const }))];
     const lead = Math.max(0, -Math.min(0, ...sequence.map((hit) => hit.timeMs)));
     if (!sequence.length) return;
+    setPlaybackActive(true);
+    const owner = playbackEpoch.current;
     void audioSession.current?.play(sequence.map((hit) => ({ ...hit, timeMs: hit.timeMs + lead })),
-      () => setPlaying(true), () => setPlaying(false)).catch((error) => {
-      setPlaying(false); Alert.alert(text.error, error instanceof Error ? error.message : String(error));
+      undefined, () => { if (owner === playbackEpoch.current) setPlaybackActive(false); }).catch((error) => {
+       if (owner !== playbackEpoch.current) return;
+       setPlaybackActive(false); Alert.alert(text.error, error instanceof Error ? error.message : String(error));
     });
   };
   const editEvent = (event: NotationEvent, start: number, dur: number) => {
@@ -417,6 +454,7 @@ export function RhythmWorkspace({ active = true, initialDocument }: { active?: b
   };
   const startCalibration = () => { setCalTaps([]); setOffsetText("0"); };
   const playCalibrationReference = () => {
+    if (playingRef.current) return;
     cleanupPlayback();
     calibrationTimers.current.forEach(clearTimeout); calibrationTimers.current = [];
     const beat = 60000 / doc.bpm * 4 / doc.meter.denominator;
@@ -424,6 +462,7 @@ export function RhythmWorkspace({ active = true, initialDocument }: { active?: b
     for (let i = 0; i < 16; i++) calibrationTimers.current.push(setTimeout(() => clickSession.current?.play(), i * beat));
   };
   const calibrationTap = () => {
+    if (playingRef.current) return;
     const now = clockNow(); const next = [...calTaps, now]; setCalTaps(next);
     if (next.length >= 16) {
       const interval = 60000 / doc.bpm * 4 / doc.meter.denominator;
@@ -439,7 +478,7 @@ export function RhythmWorkspace({ active = true, initialDocument }: { active?: b
     if (!expected.length) { Alert.alert(text.practice, text.empty); return; }
     calibrationTimers.current.forEach(clearTimeout); calibrationTimers.current = [];
     practiceExpectedRef.current = expected;
-    cleanupPractice(); setFlow("practice"); setPracticeResult(null); practiceTapsRef.current = []; setPracticeTaps([]); setPracticePending(true); setLiveJudgment(text.beginPractice);
+    cleanupPlayback(); cleanupPractice(); setFlow("practice"); setPracticeResult(null); practiceTapsRef.current = []; setPracticeTaps([]); setPracticePending(true); setLiveJudgment(text.beginPractice);
     const beatMs = 60000 / doc.bpm * 4 / doc.meter.denominator;
     const count = countIn ? Math.max(1, doc.meter.numerator) : 0;
     if (countIn) for (let i = 0; i < count; i++) practiceTimers.current.push(setTimeout(() => clickSession.current?.play(), i * beatMs));
@@ -460,7 +499,7 @@ export function RhythmWorkspace({ active = true, initialDocument }: { active?: b
   };
   const stopPractice = () => practiceOn ? finishPractice() : cleanupPractice();
   const changeFlow = (next: "input" | "review" | "practice") => {
-    if (recording || recordPending || practiceOn || practicePending) return;
+    if (recording || recordPending || practiceOn || practicePending || recordRequestRef.current) return;
     if (next === "practice" && !buildRhythmPlayback(doc, doc.hits.length ? "original" : "notation").length) {
       Alert.alert(text.practice, text.empty);
       return;
@@ -493,6 +532,15 @@ export function RhythmWorkspace({ active = true, initialDocument }: { active?: b
   };
   useEffect(() => { if (!active) deactivateRef.current(); }, [active]);
 
+  const entryGuidance = !entryModeReady ? (ko ? "입력 모드 불러오는 중…" : "Restoring input mode…")
+    : playing ? (ko ? "재생 중 입력 잠김" : "Input locked during playback")
+    : recordRequest ? (ko ? "새 녹음 확인 중 · 입력 잠김" : "New take confirmation · input locked")
+    : recordPending ? (ko ? "예비박 · 소리만 나며 타격은 기록되지 않음 · 모드 전환 잠김" : "Count-in · sound only, no hits captured · mode locked")
+    : recording ? (ko ? "탭 기록 중 · 누름·뗌 저장 · 모드 전환 잠김" : "Recording taps · down/up captured · mode locked")
+    : practiceOn || practicePending || flow === "practice" ? (ko ? "따라 치기 · 원본 악보는 바뀌지 않음" : "Play along · the score stays unchanged")
+    : entryMode === "notation" ? (ko ? "누른 타이밍은 기록되지 않음" : "Tap timing is not recorded")
+    : (ko ? "녹음 시작을 누른 뒤 패드를 치세요" : "Press Start recording, then play the pad");
+
   return (
     <View style={s.workspace}>
     <ScrollView ref={workspaceScroll} testID="rhythm-workspace-scroll" style={s.scroll} contentContainerStyle={s.container} keyboardShouldPersistTaps="handled">
@@ -500,14 +548,21 @@ export function RhythmWorkspace({ active = true, initialDocument }: { active?: b
       {flow === "input" && <View testID="rhythm-input-stage">
         <View style={[s.inputToolbar, compactDock && s.compactInputToolbar]}>
           <View style={{ flex: 1, minWidth: 0 }}>
-            <Text numberOfLines={1} style={[s.stageTitle, { color: C.text }]}>{doc.title || text.title}</Text>
+            <View style={{ flexDirection: "row", width: "100%", maxWidth: 180, borderWidth: 1, borderColor: C.border, borderRadius: 6 }}>
+              {([["capture", ko ? "탭 기록" : "Tap capture"], ["notation", ko ? "음표 직접 입력" : "Note entry"]] as const).map(([value, label]) =>
+                <Pressable key={value} testID={`rhythm-entry-${value}`} accessibilityRole="button" accessibilityState={{ selected: entryMode === value, disabled: interactionLocked }}
+                  disabled={interactionLocked} onPress={() => { clearHeldInput(); chooseEntryMode(value); }}
+                  style={{ flex: 1, minWidth: 0, paddingHorizontal: 4, paddingVertical: 5, borderRadius: 5, backgroundColor: entryMode === value ? C.surfaceLight : "transparent", opacity: interactionLocked ? 0.5 : 1 }}>
+                  <Text style={{ color: entryMode === value ? C.accent : C.textSecondary, fontSize: 10 }}>{label}</Text>
+                </Pressable>)}
+            </View>
             <Text style={[s.muted, { color: C.textSecondary }]}>{doc.bpm} BPM · {doc.meter.numerator}/{doc.meter.denominator} · {doc.hits.length} {text.hit}{doc.hits.length === 1 ? "" : "s"}</Text>
           </View>
           <Pressable testID="rhythm-settings" accessibilityRole="button" accessibilityLabel={ko ? "설정 열기" : "Open settings"} disabled={interactionLocked} onPress={openSettings} style={[s.toolbarButton, { borderColor: C.border, opacity: interactionLocked ? 0.45 : 1 }]}>
             <Ionicons name="options-outline" size={17} color={C.text} /><Text style={{ color: C.text }}>{ko ? "설정" : "Settings"}</Text>
           </Pressable>
           <Pressable testID="rhythm-load" accessibilityRole="button" accessibilityLabel={ko ? "연습장 열기" : "Open practice book"} disabled={interactionLocked} onPress={openLibrary} style={[s.toolbarButton, { borderColor: C.border, opacity: interactionLocked ? 0.45 : 1 }]}>
-            <Ionicons name="book-outline" size={17} color={C.accent} /><Text style={{ color: C.text }}>{ko ? "연습장" : "Practice book"}</Text>
+            <Ionicons name="book-outline" size={17} color={C.accent} /><Text style={{ color: C.text }}>{ko ? "연습장" : windowWidth < 400 ? "Book" : "Practice book"}</Text>
           </Pressable>
         </View>
         <View style={compactDock ? s.captureLandscape : undefined}>
@@ -556,7 +611,7 @@ export function RhythmWorkspace({ active = true, initialDocument }: { active?: b
           <View style={[s.scrubThumb, { left: `${Math.min(100, playheadQ / scrubMaxQ * 100)}%`, backgroundColor: C.accent }]} />
         </View>
         {dragPreviewDocument && <Text style={[s.muted, { color: C.accent, marginBottom: 7 }]}>{ko ? "이동 미리보기 · 선택한 음표만 움직이고 주변 쉼표와 간격이 다시 계산됩니다." : "Move preview · this note moves alone; surrounding rests and gaps recalculate."}</Text>}
-        <View style={s.listenRow}><Text style={[s.muted, { color: C.textSecondary }]}>{text.listen}</Text><Pressable onPress={() => playing ? cleanupPlayback() : play("original")} style={[s.listenButton, { borderColor: C.border }]}><Ionicons name={playing ? "stop" : "play"} size={15} color={C.text} /><Text style={{ color: C.text }}>{text.original}</Text></Pressable><Pressable onPress={() => playing ? cleanupPlayback() : play("notation")} style={[s.listenButton, { borderColor: C.border }]}><Ionicons name="musical-notes-outline" size={15} color={C.text} /><Text style={{ color: C.text }}>{text.notation}</Text></Pressable></View>
+        <View style={s.listenRow}><Text style={[s.muted, { color: C.textSecondary }]}>{playing ? (ko ? "재생 중 입력 잠김" : "Input locked during playback") : text.listen}</Text><Pressable testID="rhythm-play-original" onPress={() => playing ? cleanupPlayback() : play("original")} style={[s.listenButton, { borderColor: C.border }]}><Ionicons name={playing ? "stop" : "play"} size={15} color={C.text} /><Text style={{ color: C.text }}>{text.original}</Text></Pressable><Pressable testID="rhythm-play-notation" onPress={() => playing ? cleanupPlayback() : play("notation")} style={[s.listenButton, { borderColor: C.border }]}><Ionicons name="musical-notes-outline" size={15} color={C.text} /><Text style={{ color: C.text }}>{text.notation}</Text></Pressable></View>
         {reviewTool === "edit" && <View onLayout={(event) => { editPanelY.current = event.nativeEvent.layout.y; }} pointerEvents={playing ? "none" : "auto"} style={[s.editBox, { borderColor: C.border, backgroundColor: C.surface }]}><Text style={[s.cardTitle, { color: C.text }]}>{text.selected}: {selected.length}</Text>
           <View style={s.setupHead}><Pressable testID="rhythm-insert-note" onPress={() => { try { update(insertNotationNote(doc, playheadQ, duration, mode === "keyboard" ? {} : { drum: mode === "drums" ? drum : "snare" })); } catch (error) { Alert.alert(text.error, error instanceof Error ? error.message : String(error)); } }} style={[s.listenButton, { borderColor: C.border }]}><Text style={{ color: C.text }}>{ko ? "음표 삽입" : "Insert note"}</Text></Pressable><Text style={[s.muted, { color: C.textSecondary }]}>{ko ? "빈 악보는 타격을 추가하지 않고 직접 작성할 수 있습니다." : "Write into an empty score without adding raw hits."}</Text></View>
           <View style={s.chipWrap}>{(["flam", "drag", "regular", "diddle", "accent"] as const).map((kind) => <Pressable key={kind} onPress={() => applyKind(kind)} style={[s.chip, { borderColor: C.border }]}><Text style={{ color: C.text }}>{text[kind]}</Text></Pressable>)}</View>
@@ -601,15 +656,15 @@ export function RhythmWorkspace({ active = true, initialDocument }: { active?: b
     {flow !== "review" && <View testID="rhythm-input-dock" style={[s.dock, compactDock && s.compactDock, { backgroundColor: C.background, borderTopColor: C.border }]}>
       <View style={compactDock ? s.compactDockInfo : undefined}>
       <View style={s.dockModes}>
-        <View style={s.modeRow}>{([["pad", text.pad], ["drums", text.drums], ["keyboard", text.keyboard]] as const).map(([key, label]) => <Pressable key={key} accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ selected: mode === key, disabled: recording || recordPending || practiceOn || practicePending }} disabled={recording || recordPending || practiceOn || practicePending} onPress={() => setMode(key)} style={[s.mode, { backgroundColor: mode === key ? C.accent : C.surface, opacity: recording || recordPending || practiceOn || practicePending ? 0.52 : 1 }]}><Text style={{ color: mode === key ? C.background : C.textSecondary, fontSize: 11, fontFamily: "SpaceGrotesk_700Bold" }}>{label}</Text></Pressable>)}
-        {flow === "input" && (["review", "practice"] as const).map((next) => <Pressable key={next} testID={`rhythm-flow-${next}`} accessibilityRole="button" disabled={interactionLocked} onPress={() => changeFlow(next)} style={[s.mode, { backgroundColor: C.surface, opacity: interactionLocked ? 0.5 : 1 }]}><Text style={{ color: C.textSecondary, fontSize: 11 }}>{next === "review" ? text.reviewFlow : text.practiceFlow}</Text></Pressable>)}</View>
+        <View style={s.modeRow}>{([["pad", text.pad], ["drums", text.drums], ["keyboard", text.keyboard]] as const).map(([key, label]) => <Pressable key={key} accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ selected: mode === key, disabled: interactionLocked }} disabled={interactionLocked} onPress={() => { clearHeldInput(); setMode(key); }} style={[s.mode, compactDock && s.compactMode, { backgroundColor: mode === key ? C.accent : C.surface, opacity: interactionLocked ? 0.52 : 1 }]}><Text style={{ color: mode === key ? C.background : C.textSecondary, fontSize: compactDock ? 10 : 11, fontFamily: "SpaceGrotesk_700Bold" }}>{label}</Text></Pressable>)}
+        {flow === "input" && (["review", "practice"] as const).map((next) => <Pressable key={next} testID={`rhythm-flow-${next}`} accessibilityRole="button" disabled={interactionLocked} onPress={() => changeFlow(next)} style={[s.mode, compactDock && s.compactMode, { backgroundColor: C.surface, opacity: interactionLocked ? 0.5 : 1 }]}><Text style={{ color: C.textSecondary, fontSize: compactDock ? 10 : 11 }}>{next === "review" ? text.reviewFlow : text.practiceFlow}</Text></Pressable>)}</View>
         {mode === "drums" && <View style={s.modeRow}>{(["snare", "kick", "hihat_closed"] as const).map((value) => <Pressable key={value} accessibilityRole="button" accessibilityLabel={value} accessibilityState={{ selected: drum === value, disabled: recording || recordPending || practiceOn || practicePending }} disabled={recording || recordPending || practiceOn || practicePending} onPress={() => setDrum(value)} style={[s.chip, { borderColor: drum === value ? C.accent : C.border, opacity: recording || recordPending || practiceOn || practicePending ? 0.52 : 1 }]}><Text style={{ color: C.text, fontSize: 10 }}>{value}</Text></Pressable>)}</View>}
       </View>
       {flow === "input" ? (
       <View style={s.dockControls}>
-        <Pressable testID="rhythm-record" accessibilityRole="button" onPress={recording || recordPending ? finishRecord : beginRecord} style={[s.primaryButton, { backgroundColor: recording ? C.accent : C.text }]}>
+        <Pressable testID="rhythm-record" accessibilityRole="button" disabled={!entryModeReady || recordRequest || playing} onPress={recording || recordPending ? finishRecord : beginRecord} style={[s.primaryButton, { backgroundColor: recording ? C.accent : C.text }]}>
           <Ionicons name={recording ? "stop" : recordPending ? "close" : "radio-button-on"} size={17} color={C.background} />
-          <Text style={{ color: C.background, fontFamily: "SpaceGrotesk_700Bold" }}>{recording || recordPending ? text.stop : text.start}</Text>
+          <Text style={{ color: C.background, flexShrink: 1, fontSize: 12, fontFamily: "SpaceGrotesk_700Bold" }}>{recording || recordPending ? text.stop : entryMode === "notation" ? (ko ? "탭 기록으로 전환·녹음" : "Switch to tap capture & record") : text.start}</Text>
         </Pressable>
         <Text style={[s.muted, { color: C.textSecondary }]}>{doc.hits.length} {text.hit}{doc.hits.length === 1 ? "" : "s"}</Text>
         <Text testID="rhythm-record-status" accessibilityLiveRegion="polite" accessibilityLabel={recording ? (ko ? "녹음 중" : "Recording") : recordPending ? (ko ? "예비박 진행 중" : "Count-in in progress") : (ko ? "정지" : "Stopped")} style={[s.muted, { color: C.textSecondary }]}>
@@ -628,8 +683,14 @@ export function RhythmWorkspace({ active = true, initialDocument }: { active?: b
       </>)}
       </View>
       <View style={[s.padRow, compactDock && s.compactDockSurface, Platform.OS === "web" ? ({ touchAction: "none", overscrollBehavior: "contain" } as any) : null]}>
-        {mode === "keyboard" ? <RhythmKeyboard onDown={(midi) => addHit(`key_${midi}`, "down", midi)} onUp={(midi) => addHit(`key_${midi}`, "up", midi)} /> :
-          <RhythmInputSurface label={text.press} testID="rhythm-pad" onDown={tapPad} onUp={() => addHit("pad", "up")} style={[s.bigPad, compactDock && s.compactPad, { backgroundColor: mode === "drums" && drum === "kick" ? "#b6a77b" : C.accent }]}><View style={s.padMark} /><Text style={s.padLabel}>{text.press.toUpperCase()}</Text></RhythmInputSurface>}
+        <RhythmEntryGuidance message={entryModeError ? `${entryGuidance} · ${ko ? "모드 환경설정 오류 · 다시 선택해 재시도" : "Mode preference error · select again to retry"}` : entryGuidance}
+          ko={ko} compact={compactDock} width={Math.min(180, Math.max(100, windowWidth - 464))} manual={entryMode === "notation" && flow === "input"} duration={duration}
+          onDuration={(value) => { setDuration(value); setDurationText(String(value)); }}
+          disabled={interactionLocked || !entryModeReady} hint={stoppedHint && !interactionLocked && flow === "input"} />
+        <View style={{ flex: compactDock ? 1 : undefined, width: mode === "keyboard" ? "100%" : undefined, minWidth: 0, alignItems: "center" }}>
+        {mode === "keyboard" ? <RhythmKeyboard key={inputEpoch} disabled={inputLocked} onDown={(midi) => addHit(`key_${midi}`, "down", midi)} onUp={(midi) => addHit(`key_${midi}`, "up", midi)} /> :
+          <RhythmInputSurface key={inputEpoch} disabled={inputLocked} label={text.press} testID="rhythm-pad" onDown={tapPad} onUp={() => addHit("pad", "up")} style={[s.bigPad, compactDock && s.compactPad, { backgroundColor: mode === "drums" && drum === "kick" ? "#b6a77b" : C.accent }]}><View style={s.padMark} /><Text style={s.padLabel}>{text.press.toUpperCase()}</Text></RhythmInputSurface>}
+        </View>
       </View>
     </View>}
     <Modal transparent visible={settingsOpen} animationType="slide" onRequestClose={() => setSettingsOpen(false)}>
@@ -736,15 +797,16 @@ const s = StyleSheet.create({
   titleInput: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8, marginTop: 8 },
   modeRow: { flexDirection: "row", gap: 5, alignItems: "center", marginTop: 3, flexWrap: "wrap" },
   mode: { paddingHorizontal: 9, paddingVertical: 6, borderRadius: 8 },
+  compactMode: { paddingHorizontal: 6, paddingVertical: 4 },
   chip: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 9, paddingVertical: 6 },
   recordRow: { flexDirection: "row", alignItems: "center", gap: 12, marginTop: 12 },
-  primaryButton: { minHeight: 34, flexDirection: "row", alignItems: "center", gap: 7, paddingVertical: 7, paddingHorizontal: 12, borderRadius: 9 },
+  primaryButton: { minHeight: 34, maxWidth: "100%", flexDirection: "row", alignItems: "center", gap: 7, paddingVertical: 7, paddingHorizontal: 12, borderRadius: 9 },
   padRow: { marginTop: 5, alignItems: "center" },
   dock: { flexShrink: 0, paddingHorizontal: 12, paddingTop: 6, paddingBottom: 6, borderTopWidth: StyleSheet.hairlineWidth },
   compactDock: { height: 126, flexDirection: "row", alignItems: "center", gap: 8 },
-  compactDockInfo: { width: 200, flexShrink: 0 },
-  compactDockSurface: { flex: 1, minWidth: 0, marginTop: 0 },
-  compactPad: { height: 104 },
+  compactDockInfo: { width: 240, flexShrink: 0 },
+  compactDockSurface: { flex: 1, minWidth: 0, marginTop: 0, flexDirection: "row", gap: 8 },
+  compactPad: { height: 104, width: "100%", maxWidth: 184 },
   dockControls: { minHeight: 34, flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" },
   bigPad: { width: 184, height: 116, borderRadius: 24, alignItems: "center", justifyContent: "center", elevation: 3, shadowColor: "#000", shadowOpacity: 0.15, shadowRadius: 6 },
   padMark: { width: 34, height: 34, borderRadius: 17, borderWidth: 2, borderColor: "rgba(20,20,20,0.4)", marginBottom: 7 },

@@ -421,3 +421,114 @@ for (const viewport of [{ width: 375, height: 667 }, { width: 740, height: 375 }
     expect((await keyboard.boundingBox())!.y).toBeCloseTo(keysBefore.y, 1);
   });
 }
+
+for (const viewport of [{ width: 375, height: 667 }, { width: 740, height: 375 }]) {
+  test(`stopped capture and explicit note entry are distinct without moving the pad at ${viewport.width}x${viewport.height}`, async ({ page }) => {
+    await page.setViewportSize(viewport);
+    await page.addInitScript(() => {
+      (window as any).__rhythmSounds = 0;
+      for (const prototype of [AudioBufferSourceNode.prototype, OscillatorNode.prototype]) {
+        const original = prototype.start;
+        prototype.start = function (...args: any[]) {
+          (window as any).__rhythmSounds++;
+          return original.apply(this, args as [number]);
+        };
+      }
+    });
+    await enterLab(page, "rhythm");
+    const pad = page.getByTestId("rhythm-pad");
+    const before = (await pad.boundingBox())!;
+    const guidance = page.getByTestId("rhythm-input-guidance");
+    await expect(guidance).toContainText(/Press Start recording|녹음 시작을 누른 뒤/);
+    const audioBefore = await page.evaluate(() => (window as any).__rhythmSounds);
+    await page.mouse.move(before.x + before.width / 2, before.y + before.height / 2);
+    await page.mouse.down();
+    await expect(pad).toHaveAttribute("aria-pressed", "true");
+    await page.mouse.up();
+    await expect(pad).toHaveAttribute("aria-pressed", "false");
+    await expect(page.getByTestId("rhythm-stopped-hint")).toBeVisible();
+    await expect.poll(() => page.evaluate(() => (window as any).__rhythmSounds)).toBeGreaterThan(audioBefore);
+    await expect(page.getByTestId("rhythm-staff").locator("ellipse")).toHaveCount(0);
+    expect((await pad.boundingBox())!.y).toBeCloseTo(before.y, 1);
+    await expect(page.getByTestId("rhythm-stopped-hint")).toHaveCount(0);
+    await pad.tap();
+    await expect(page.getByTestId("rhythm-stopped-hint")).toHaveCount(0);
+    expect((await pad.boundingBox())!.height).toBeCloseTo(before.height, 1);
+    expect((await pad.boundingBox())!.y).toBeCloseTo(before.y, 1);
+
+    await page.getByTestId("rhythm-entry-notation").click();
+    await expect(guidance).toContainText(/timing is not recorded|누른 타이밍은 기록되지 않음/);
+    await page.getByTestId("rhythm-entry-value-8").click();
+    await pad.tap();
+    await expect(page.getByTestId("rhythm-staff").locator("ellipse")).toHaveCount(1);
+    await page.getByTestId("rhythm-record").click();
+    await page.getByRole("button", { name: /^Cancel$|^취소$/ }).click();
+    await expect(page.getByTestId("rhythm-record")).toContainText(/Switch to tap capture|탭 기록으로 전환/);
+    await expect(page.getByTestId("rhythm-staff").locator("ellipse")).toHaveCount(1);
+    const guidanceBox = (await guidance.boundingBox())!;
+    expect(guidanceBox.y + guidanceBox.height).toBeLessThanOrEqual(viewport.height);
+    const staff = (await page.getByTestId("rhythm-staff").boundingBox())!;
+    const scroll = (await page.getByTestId("rhythm-workspace-scroll").boundingBox())!;
+    expect(staff.y + staff.height).toBeLessThanOrEqual(scroll.y + scroll.height);
+    await page.screenshot({ path: `/tmp/rhythm-entry-modes-${viewport.width}.png` });
+    await page.getByTestId("rhythm-flow-review").click();
+    await page.getByTestId("rhythm-save").click();
+    await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("practice_book") ?? "[]")
+      .find((entry: any) => entry.mode === "rhythm")?.rhythmDocument.manualEvents?.length)).toBe(1);
+    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("practice_book")!).find((entry: any) => entry.mode === "rhythm").rhythmDocument);
+    expect(saved.hits).toEqual([]);
+    expect(saved.manualEvents[0].durationQ).toEqual({ n: 1, d: 2 });
+  });
+}
+
+test("a saved direct-entry choice keeps its timing warning on revisit; count-in does not collect preview taps", async ({ page }) => {
+  await enterLab(page, "rhythm");
+  await page.getByTestId("rhythm-entry-notation").click();
+  await expect.poll(() => page.evaluate(() => localStorage.getItem("rhythm_lab_entry_mode_v1"))).toBe("notation");
+  await enterLab(page, "rhythm");
+  await expect(page.getByTestId("rhythm-input-guidance")).toContainText(/timing is not recorded|누른 타이밍은 기록되지 않음/);
+  await page.getByTestId("rhythm-record").click();
+  await expect(page.getByTestId("rhythm-record-status")).toHaveText(/Count-in|예비박/);
+  await expect(page.getByTestId("rhythm-entry-notation")).toBeDisabled();
+  await expect(page.getByTestId("rhythm-input-guidance")).toContainText(/no hits captured|타격은 기록되지 않음/);
+  await page.getByTestId("rhythm-pad").tap();
+  await expect(page.getByTestId("rhythm-staff").locator("ellipse")).toHaveCount(0);
+  await expect(page.getByTestId("rhythm-record-status")).toHaveText(/Recording|녹음 중/, { timeout: 6000 });
+  await page.getByTestId("rhythm-pad").tap();
+  await page.getByTestId("rhythm-record").click();
+  await page.getByTestId("rhythm-save").click();
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("practice_book") ?? "[]")
+    .find((entry: any) => entry.mode === "rhythm")?.rhythmDocument.hits.length)).toBe(1);
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("practice_book")!).find((entry: any) => entry.mode === "rhythm").rhythmDocument);
+  expect(saved.hits[0].releaseMs).toBeGreaterThanOrEqual(saved.hits[0].onsetMs);
+  expect(await page.evaluate(() => localStorage.getItem("rhythm_lab_entry_mode_v1"))).toBe("capture");
+});
+
+for (const viewport of [{ width: 375, height: 667 }, { width: 740, height: 375 }]) {
+  test(`Korean drum controls and nearby guidance stay separate at ${viewport.width}x${viewport.height}`, async ({ page }) => {
+    await page.setViewportSize(viewport);
+    await page.addInitScript(() => localStorage.setItem("metronome_language", "ko"));
+    await enterLab(page, "rhythm");
+    await page.getByTestId("rhythm-entry-notation").click();
+    await page.getByRole("button", { name: "드럼", exact: true }).click();
+    await page.getByRole("button", { name: "kick", exact: true }).click();
+    const mode = (await page.getByTestId("rhythm-entry-notation").boundingBox())!;
+    const settings = (await page.getByTestId("rhythm-settings").boundingBox())!;
+    expect(mode.x + mode.width).toBeLessThanOrEqual(settings.x);
+    await expect(page.getByTestId("rhythm-input-guidance")).toContainText("누른 타이밍은 기록되지 않음");
+    for (const id of ["rhythm-record", "rhythm-input-guidance", "rhythm-entry-current-value", "rhythm-pad"]) {
+      const bounds = (await page.getByTestId(id).boundingBox())!;
+      expect(bounds.x).toBeGreaterThanOrEqual(0);
+      expect(bounds.y).toBeGreaterThanOrEqual(0);
+      expect(bounds.x + bounds.width).toBeLessThanOrEqual(viewport.width);
+      expect(bounds.y + bounds.height).toBeLessThanOrEqual(viewport.height);
+    }
+    await page.getByTestId("rhythm-record").click();
+    await expect(page.getByTestId("rhythm-input-guidance")).toContainText("모드 전환 잠김");
+    const guide = (await page.getByTestId("rhythm-input-guidance").boundingBox())!;
+    const pad = (await page.getByTestId("rhythm-pad").boundingBox())!;
+    if (viewport.width > viewport.height) expect(guide.x + guide.width).toBeLessThanOrEqual(pad.x);
+    else expect(guide.y + guide.height).toBeLessThanOrEqual(pad.y);
+    await page.screenshot({ path: `/tmp/rhythm-entry-korean-${viewport.width}.png` });
+  });
+}
