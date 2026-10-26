@@ -27,6 +27,30 @@ async function hold(page: Page, x: number, y: number, ms = 700) {
   await page.mouse.move(x, y); await page.mouse.down(); await page.waitForTimeout(ms); await page.mouse.up();
 }
 
+test("calibration completes from actual reference dispatch and keeps the applied value", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await enter(page);
+  await page.getByTestId("rhythm-settings").click();
+  await page.evaluate(() => {
+    const original = AudioBufferSourceNode.prototype.start;
+    (window as any).__calibrationStarts = [];
+    AudioBufferSourceNode.prototype.start = function (...args: Parameters<typeof original>) {
+      (window as any).__calibrationStarts.push(performance.now());
+      return original.apply(this, args);
+    };
+  });
+  await page.getByTestId("rhythm-calibration-reference").click();
+  const tap = page.getByTestId("rhythm-calibration-tap");
+  await tap.scrollIntoViewIfNeeded();
+  for (let i = 0; i < 20; i++) {
+    await page.waitForFunction((i) => (window as any).__calibrationStarts.length > i, i);
+    if (i >= 4) await tap.click();
+  }
+  await expect(page.getByTestId("rhythm-calibration-status")).toHaveText(/보정 적용:|Applied:/);
+  expect(Number(await page.getByTestId("rhythm-offset-input").inputValue())).toBeGreaterThanOrEqual(0);
+  await page.screenshot({ path: "generated-artifacts/rhythm-calibration-complete.jpg" });
+});
+
 test("hold starts without recording the activation gesture; score drag cancels stop and score hold finishes", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await enter(page);

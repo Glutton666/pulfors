@@ -2,6 +2,7 @@ import React from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
 import { useTheme } from "@/contexts/ThemeContext";
 import type { useRhythmCalibration } from "@/hooks/useRhythmCalibration";
+import { RhythmInputSurface } from "./RhythmInputSurface";
 
 export function RhythmCalibrationPanel({ ko, calibration, offset, onOffset, onReset, onStart, onTap, disabled }: {
   ko: boolean; calibration: ReturnType<typeof useRhythmCalibration>; offset: string;
@@ -25,10 +26,12 @@ export function RhythmCalibrationPanel({ ko, calibration, offset, onOffset, onRe
       <Pressable testID="rhythm-calibration-reset" accessibilityRole="button" disabled={disabled} onPress={onReset} style={{ padding: 10 }}><Text style={{ color: C.text }}>{ko ? "초기화" : "Reset"}</Text></Pressable>
       <Pressable testID="rhythm-calibration-reference" accessibilityRole="button" disabled={disabled} onPress={onStart} style={{ padding: 10, borderWidth: 1, borderColor: C.border, borderRadius: 8 }}><Text style={{ color: C.text }}>{ko ? "기준음 시작 / 다시 시작" : "Start / restart reference"}</Text></Pressable>
     </View>
-    <Pressable testID="rhythm-calibration-tap" accessibilityRole="button" disabled={disabled || calibration.phase !== "playing" || calibration.count >= 16}
-      onPressIn={onTap} style={{ backgroundColor: C.accent, opacity: disabled || calibration.phase !== "playing" ? 0.45 : 1, borderRadius: 12, minHeight: 64, alignItems: "center", justifyContent: "center" }}>
+    <RhythmInputSurface testID="rhythm-calibration-tap" label={ko ? "기준음에 맞춰 탭" : "Tap with the reference"}
+      disabled={disabled || calibration.phase !== "playing" || calibration.count >= 16}
+      onDown={onTap} onUp={() => {}}
+      style={{ backgroundColor: C.accent, borderRadius: 12, minHeight: 64, alignItems: "center", justifyContent: "center" }}>
       <Text style={{ color: C.background }}>{ko ? "기준음에 맞춰 탭" : "Tap with the reference"} · {Math.min(16, calibration.count)}/16</Text>
-    </Pressable>
+    </RhythmInputSurface>
     <Text style={{ color: C.textSecondary, fontSize: 10 }}>{ko ? "개인의 듣기·입력 오차 보정입니다. 원본 시각은 바뀌지 않습니다. +값은 늦은 입력을 앞당깁니다." : "Personal listening/input offset, not a hardware-only measurement. Raw times stay intact. Positive values compensate late taps."}</Text>
   </View>;
 }
