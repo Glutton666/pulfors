@@ -81,6 +81,7 @@ import {
   getPrepareBatchSize,
   instrumentToWaveform,
   prepareScoreAudio,
+  prepareRhythmReferenceAudio,
   previewScoreNote,
   scheduleMeasureNotes,
   stopAllScoreNotes,
@@ -90,6 +91,38 @@ import { buildPlayTimeline } from "../lib/score-playback";
 import type { ScoreDocument } from "../lib/score-types";
 
 import * as audioRenderer from "../lib/audio-renderer";
+
+describe("calibration reference output acknowledgement", () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+    audioStub.createAudioPlayer.mockClear();
+  });
+  afterEach(() => {
+    stopAllScoreNotes();
+    jest.useRealTimers();
+  });
+  it("stamps accepted native output, not merely the timer dispatch", async () => {
+    await prepareRhythmReferenceAudio();
+    let accept!: () => void;
+    const player = { play: jest.fn(() => new Promise<void>((resolve) => { accept = resolve; })), pause: jest.fn(), remove: jest.fn(), volume: 1 };
+    audioStub.createAudioPlayer.mockReturnValueOnce(player);
+    const started = jest.fn();
+    scheduleMeasureNotes([{ midiNote: 0, drumType: "hihat_closed", startOffsetMs: 0, durationMs: 100 }], 0.7, undefined, started);
+    jest.advanceTimersByTime(0);
+    expect(player.play).toHaveBeenCalledTimes(1);
+    expect(started).not.toHaveBeenCalled();
+    accept(); await Promise.resolve(); await Promise.resolve();
+    expect(started).toHaveBeenCalledWith(0);
+  });
+  it("failed playback never validates a calibration beat", async () => {
+    await prepareRhythmReferenceAudio();
+    audioStub.createAudioPlayer.mockReturnValueOnce({ play: jest.fn(() => { throw new Error("no output"); }), remove: jest.fn() });
+    const started = jest.fn();
+    scheduleMeasureNotes([{ midiNote: 0, drumType: "hihat_closed", startOffsetMs: 0, durationMs: 100 }], 0.7, undefined, started);
+    jest.advanceTimersByTime(0); await Promise.resolve(); await Promise.resolve();
+    expect(started).not.toHaveBeenCalled();
+  });
+});
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers — MIDI note allocation

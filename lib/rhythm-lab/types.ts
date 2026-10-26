@@ -84,6 +84,8 @@ export interface RhythmDocument {
   simplification: number;
   /** Positive values compensate consistently late taps, never change raw hits. */
   offsetMs: number;
+  /** Display only: overrides are anchored to the first measure of a row. */
+  staffLayout?: { barsPerRow: number; rowOverrides: { startMeasure: number; count: number }[] };
   /** Intent approval is separate from measured similarity and invalidates on edit. */
   reviewConfirmations?: { measureIndex: number; fingerprint: string; eventIds: string[] }[];
 }

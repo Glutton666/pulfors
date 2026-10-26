@@ -21,6 +21,12 @@ jest.mock("react-native", () => {
   return { ...actual,
     AppState: { addEventListener: jest.fn(() => ({ remove: jest.fn() })) },
     Modal: ({ visible, children }: any) => visible ? React.createElement("div", null, children) : null,
+    Switch: ({ value, onValueChange, testID }: any) => React.createElement("input", {
+      type: "checkbox", checked: value, "data-testid": testID, onChange: (event: any) => onValueChange(event.target.checked),
+    }),
+    TextInput: ({ value, onChangeText, testID, onBlur }: any) => React.createElement("input", {
+      value, "data-testid": testID, onChange: (event: any) => onChangeText(event.target.value), onBlur,
+    }),
   };
 });
 jest.mock("@expo/vector-icons", () => ({ Ionicons: () => null }));
@@ -56,6 +62,14 @@ const doc = () => ({
   hits: [{ id: "existing", onsetMs: 0, releaseMs: 100, drum: "snare" as const }],
 });
 const tick = async (ms: number) => { await act(async () => { jest.advanceTimersByTime(ms); }); };
+const startImmediate = async (screen: ReturnType<typeof render>) => {
+  fireEvent.click(screen.getByTestId("rhythm-settings"));
+  fireEvent.click(screen.getByTestId("rhythm-count-in"));
+  fireEvent.click(screen.getByTestId("rhythm-settings-close"));
+  jest.useFakeTimers();
+  fireEvent.click(screen.getByTestId("rhythm-record"));
+  await tick(0);
+};
 
 describe("RhythmWorkspace state-specific input", () => {
   beforeEach(async () => {
@@ -73,10 +87,10 @@ describe("RhythmWorkspace state-specific input", () => {
     return screen;
   };
 
-  test("video reproduction: the first down starts immediately and preserves batched down/up events exactly once", async () => {
+  test("explicit activation starts the clock; batched down/up events remain exactly once", async () => {
     const screen = await mount();
-    await waitFor(() => expect(screen.getByTestId("rhythm-pad").hasAttribute("disabled")).toBe(false));
-    jest.useFakeTimers();
+    expect(screen.getByTestId("rhythm-pad").hasAttribute("disabled")).toBe(true);
+    await startImmediate(screen);
     act(() => { mockPad.onDown(); jest.advanceTimersByTime(10); mockPad.onUp();
       jest.advanceTimersByTime(90); mockPad.onDown(); jest.advanceTimersByTime(20); mockPad.onUp(); });
     expect(previewScoreDrum).toHaveBeenCalledTimes(2);
@@ -89,6 +103,53 @@ describe("RhythmWorkspace state-specific input", () => {
     await act(async () => {});
     const hits = jest.mocked(saveRhythmDocument).mock.calls[0][0].hits;
     expect(hits.map((hit) => [hit.onsetMs, hit.releaseMs])).toEqual([[0, 10], [100, 120]]);
+  });
+
+  test("holding activation starts immediately after count-in; starting hold is excluded and a delayed first tap keeps its silence", async () => {
+    const screen = await mount();
+    jest.useFakeTimers();
+    fireEvent.contextMenu(screen.getByTestId("rhythm-activate-pad"));
+    expect(screen.getByTestId("rhythm-record-status").textContent).toBe("Count-in");
+    expect(notes()).toHaveLength(0);
+    await tick(4 * 60000 / 92);
+    expect(screen.getByTestId("rhythm-record-status").textContent).toBe("Recording");
+    await tick(150); pressPad();
+    fireEvent.click(screen.getByTestId("rhythm-record"));
+    fireEvent.click(screen.getByTestId("rhythm-save"));
+    await act(async () => {});
+    const hits = jest.mocked(saveRhythmDocument).mock.calls[0][0].hits;
+    expect(hits).toHaveLength(1);
+    expect(hits[0].onsetMs).toBeGreaterThanOrEqual(150);
+  });
+
+  test("calibration reset changes the applied document value as well as the displayed text", async () => {
+    const initial = { ...doc(), offsetMs: 120 };
+    const screen = render(<RhythmWorkspace initialDocument={initial} />);
+    await act(async () => {});
+    fireEvent.click(screen.getByTestId("rhythm-flow-input"));
+    fireEvent.click(screen.getByTestId("rhythm-settings"));
+    expect((screen.getByTestId("rhythm-offset-input") as HTMLInputElement).value).toBe("120");
+    fireEvent.click(screen.getByTestId("rhythm-calibration-reset"));
+    expect((screen.getByTestId("rhythm-offset-input") as HTMLInputElement).value).toBe("0");
+    fireEvent.click(screen.getByTestId("rhythm-settings-close"));
+    fireEvent.click(screen.getByTestId("rhythm-flow-review"));
+    fireEvent.click(screen.getByTestId("rhythm-save"));
+    await act(async () => {});
+    expect(jest.mocked(saveRhythmDocument).mock.calls[0][0].offsetMs).toBe(0);
+    expect(jest.mocked(saveRhythmDocument).mock.calls[0][0].hits).toEqual(initial.hits);
+  });
+
+  test("practice corrects the reference and tap once with the same positive offset", async () => {
+    const initial = { ...doc(), offsetMs: 60, hits: [{ id: "existing", onsetMs: 260, releaseMs: 300, drum: "snare" as const }] };
+    const screen = render(<RhythmWorkspace initialDocument={initial} />);
+    await act(async () => {});
+    fireEvent.click(screen.getByTestId("rhythm-flow-practice"));
+    jest.useFakeTimers();
+    fireEvent.click(screen.getByText("Start practice")); await tick(2000);
+    await tick(260); pressPad();
+    fireEvent.click(screen.getByText("Finish practice"));
+    expect(screen.getByText("Overall score: 100")).toBeTruthy();
+    expect(mockAudio.play.mock.calls.at(-1)![0]).toMatchObject([{ timeMs: 200 }]);
   });
 
   test("only explicit direct entry inserts the chosen value; changing modes preserves notation and raw hits", async () => {
@@ -134,23 +195,12 @@ describe("RhythmWorkspace state-specific input", () => {
     expect(jest.mocked(saveRhythmDocument).mock.calls[0][0].hits).toEqual(initial.hits);
   });
 
-  test("direct-entry record Cancel and failed Save preserve both document and entry mode; Discard switches and starts", async () => {
+  test("starting from direct entry preserves the old document in recovery, uses count-in and permits cancellation", async () => {
     const screen = await mount();
     fireEvent.click(screen.getByTestId("rhythm-entry-notation")); pressPad();
-    const before = JSON.stringify(notes());
-    fireEvent.click(screen.getByTestId("rhythm-record"));
-    act(() => alertButtons().find((button) => button.text === "Cancel")!.onPress!());
-    expect(JSON.stringify(notes())).toBe(before);
-    expect(screen.getByTestId("rhythm-record").textContent).toContain("Switch to tap");
-    jest.mocked(saveRhythmDocument).mockRejectedValueOnce(new Error("disk full"));
-    fireEvent.click(screen.getByTestId("rhythm-record"));
-    await act(async () => { alertButtons().find((button) => button.text === "Save & start")!.onPress!(); });
-    expect(JSON.stringify(notes())).toBe(before);
-    expect(screen.getByTestId("rhythm-record").textContent).toContain("Switch to tap");
-    expect(screen.getByTestId("rhythm-record-status").textContent).toBe("Stopped");
     jest.useFakeTimers();
     fireEvent.click(screen.getByTestId("rhythm-record"));
-    act(() => alertButtons().find((button) => button.text === "Discard & start")!.onPress!());
+    expect(Alert.alert).not.toHaveBeenCalled();
     expect(screen.getByTestId("rhythm-record-status").textContent).toBe("Count-in");
     expect(notes()).toHaveLength(0);
     expect(screen.getByTestId("rhythm-entry-notation").hasAttribute("disabled")).toBe(true);
@@ -167,13 +217,13 @@ describe("RhythmWorkspace state-specific input", () => {
     expect(saved.hits.every((hit) => hit.releaseMs! >= hit.onsetMs)).toBe(true);
   });
 
-  test("successful Save & start saves the existing manual document before switching", async () => {
+  test("starting a fresh take automatically checkpoints existing manual notation before switching", async () => {
     const screen = await mount();
     fireEvent.click(screen.getByTestId("rhythm-entry-notation")); pressPad();
     jest.useFakeTimers();
     fireEvent.click(screen.getByTestId("rhythm-record"));
-    await act(async () => { alertButtons().find((button) => button.text === "Save & start")!.onPress!(); });
-    expect(jest.mocked(saveRhythmDocument).mock.calls[0][0].manualEvents).toHaveLength(1);
+    await act(async () => { await rhythmRecovery.flush(); });
+    expect(JSON.parse((await AsyncStorage.getItem(RHYTHM_RECOVERY_KEY))!).documents.some((item: any) => item.manualEvents?.length === 1)).toBe(true);
     expect(screen.getByTestId("rhythm-record-status").textContent).toBe("Count-in");
     expect(await AsyncStorage.getItem("rhythm_lab_entry_mode_v1")).toBe("capture");
   });
@@ -187,7 +237,6 @@ describe("RhythmWorkspace state-specific input", () => {
     expect(notes()).toHaveLength(2);
     jest.useFakeTimers();
     fireEvent.click(screen.getByTestId("rhythm-record"));
-    act(() => alertButtons().find((button) => button.text === "Discard & start")!.onPress!());
     await tick(2700);
     act(() => mockKey.onDown(60)); act(() => mockKey.onDown(64));
     await tick(200); act(() => mockKey.onUp(60));
@@ -205,11 +254,10 @@ describe("RhythmWorkspace state-specific input", () => {
     expect(hits[1].releaseMs! - hits[1].onsetMs).toBeGreaterThan(hits[0].releaseMs! - hits[0].onsetMs);
   });
 
-  test("automatic keyboard start retains all fingers in one event and independent releases", async () => {
+  test("activated keyboard retains all fingers in one event and independent releases", async () => {
     const screen = await mount();
-    await waitFor(() => expect(screen.getByTestId("rhythm-pad").hasAttribute("disabled")).toBe(false));
     fireEvent.click(screen.getByText("Keys"));
-    jest.useFakeTimers();
+    await startImmediate(screen);
     act(() => { mockKey.onDown(60); mockKey.onDown(64); mockKey.onDown(67);
       jest.advanceTimersByTime(80); mockKey.onUp(60);
       jest.advanceTimersByTime(120); mockKey.onUp(64); mockKey.onUp(67); });
@@ -225,7 +273,7 @@ describe("RhythmWorkspace state-specific input", () => {
     const screen = render(<RhythmWorkspace initialDocument={original} />);
     await act(async () => {});
     fireEvent.click(screen.getByTestId("rhythm-flow-input"));
-    jest.useFakeTimers();
+    await startImmediate(screen);
     pressPad();
     expect(Alert.alert).not.toHaveBeenCalled();
     expect(screen.getByTestId("rhythm-record-status").textContent).toBe("Recording");
@@ -252,6 +300,7 @@ describe("RhythmWorkspace state-specific input", () => {
     const failing = jest.spyOn(AsyncStorage, "setItem").mockImplementation((key, value) =>
       key === RHYTHM_RECOVERY_KEY ? Promise.reject(new Error("full")) : setItem(key, value));
     fireEvent.click(screen.getByTestId("rhythm-flow-input"));
+    await startImmediate(screen);
     pressPad();
     await act(async () => { await rhythmRecovery.flush(); });
     expect(screen.getByTestId("rhythm-recovery-error").textContent).toContain("copy kept");
@@ -267,8 +316,7 @@ describe("RhythmWorkspace state-specific input", () => {
 
   test("leaving during a held first tap closes it in recovery and offers it after re-entry", async () => {
     const screen = await mount();
-    await waitFor(() => expect(screen.getByTestId("rhythm-pad").hasAttribute("disabled")).toBe(false));
-    jest.useFakeTimers();
+    await startImmediate(screen);
     act(() => { mockPad.onDown(); jest.advanceTimersByTime(80); });
     screen.unmount();
     await act(async () => { await rhythmRecovery.flush(); });
@@ -287,6 +335,7 @@ describe("RhythmWorkspace state-specific input", () => {
     const first = render(<RhythmWorkspace initialDocument={original} />);
     await act(async () => {});
     fireEvent.click(first.getByTestId("rhythm-flow-input"));
+    await startImmediate(first);
     pressPad();
     fireEvent.click(first.getByTestId("rhythm-record"));
     first.unmount();
@@ -336,7 +385,7 @@ describe("RhythmWorkspace state-specific input", () => {
     const screen = render(<RhythmWorkspace initialDocument={doc()} />);
     await act(async () => {});
     fireEvent.click(screen.getByTestId("rhythm-flow-input"));
-    await waitFor(() => expect(screen.getByTestId("rhythm-pad").hasAttribute("disabled")).toBe(false));
+    fireEvent.click(screen.getByTestId("rhythm-entry-notation"));
     const stalePad = mockPad!;
     fireEvent.click(screen.getByTestId("rhythm-flow-review"));
     for (const kind of ["original", "notation"]) {

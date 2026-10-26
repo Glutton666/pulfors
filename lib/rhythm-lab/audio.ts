@@ -1,4 +1,4 @@
-import { prepareDrumAudio, prepareScoreAudio, scheduleMeasureNotes } from "../score-audio";
+import { prepareDrumAudio, prepareScoreAudio, prepareRhythmReferenceAudio, scheduleMeasureNotes } from "../score-audio";
 import type { PlayNoteEvent } from "../score-playback";
 import type { PlaybackHit } from "./types";
 
@@ -17,7 +17,7 @@ export function createRhythmAudioSession() {
   };
   return {
     stop,
-    async play(hits: PlaybackHit[], onStarted?: () => void, onEnded?: () => void): Promise<void> {
+    async play(hits: PlaybackHit[], onStarted?: () => void, onEnded?: () => void, onHitStarted?: (index: number) => void): Promise<void> {
       stop();
       const owner = generation;
       const midiHits = hits.filter((h) => h.midi !== undefined);
@@ -25,6 +25,7 @@ export function createRhythmAudioSession() {
       await Promise.all([
         prepareScoreAudio(midiHits.map((h) => h.midi!), undefined, 4, "piano"),
         prepareDrumAudio(drumHits.map((h) => h.drum ?? "snare")),
+        ...(onHitStarted ? [prepareRhythmReferenceAudio()] : []),
       ]);
       if (owner !== generation) return;
       const events: PlayNoteEvent[] = hits.map((h) => ({
@@ -33,7 +34,9 @@ export function createRhythmAudioSession() {
         velocity: h.accent ? 1 : 0.7,
         ...(h.midi === undefined ? { drumType: h.drum ?? "snare" } : {}),
       }));
-      stopNotes = scheduleMeasureNotes(events, 0.7, "piano");
+      stopNotes = scheduleMeasureNotes(events, 0.7, "piano", onHitStarted ? (index) => {
+        if (owner === generation) onHitStarted?.(index);
+      } : undefined);
       onStarted?.();
       const length = Math.max(0, ...hits.map((h) => h.timeMs + (h.durationMs ?? 100)));
       endTimer = setTimeout(() => {

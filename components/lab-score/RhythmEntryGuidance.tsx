@@ -5,14 +5,14 @@ import { useTheme } from "@/contexts/ThemeContext";
 const values = [1, 2, 4, 8, 16, 24, 32, 64];
 
 /** A reserved guidance area keeps the strike target still when the hint expires. */
-export function RhythmEntryGuidance({ message, manual, duration, onDuration, disabled, hint, ko, compact, width }: {
+export function RhythmEntryGuidance({ message, manual, duration, onDuration, disabled, hint, ko, compact, width, stacked = false }: {
   message: string; manual: boolean; duration: number; onDuration: (value: number) => void;
-  disabled: boolean; hint: boolean; ko: boolean; compact: boolean; width?: number;
+  disabled: boolean; hint: boolean; ko: boolean; compact: boolean; width?: number; stacked?: boolean;
 }) {
   const { colors: C } = useTheme();
   const denominator = values.find((value) => Math.abs(duration - 4 / value) < 0.001);
   const valueLabel = denominator === 24 ? "16³" : denominator ? `1/${denominator}` : `${duration}${ko ? "박" : "q"}`;
-  return <View testID="rhythm-entry-guidance" style={{ height: compact ? 104 : 58, width: compact ? width : "100%", justifyContent: "center", gap: 3 }}>
+  return <View testID="rhythm-entry-guidance" style={{ height: compact && stacked ? (manual ? 48 : 28) : compact ? 104 : 58, width: compact && !stacked ? width : "100%", justifyContent: "center", gap: 3 }}>
     <Text testID="rhythm-input-guidance" accessibilityLiveRegion="polite" style={{ color: C.textSecondary, fontSize: 11, lineHeight: 14 }}>{message}</Text>
     {manual ? <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
       <Text testID="rhythm-entry-current-value" style={{ color: C.textSecondary, fontSize: 10 }}>{ko ? "음가" : "Value"} {valueLabel}</Text>

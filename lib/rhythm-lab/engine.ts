@@ -464,6 +464,20 @@ export function validateRhythmDocument(value: unknown): RhythmDocument {
     if (d.notationVersion !== 1 && d.notationVersion !== 2) throw new Error("Unsupported notation version");
     doc.notationVersion = d.notationVersion;
   }
+  if (d.staffLayout !== undefined) {
+    const layout = object(d.staffLayout);
+    const integer = (value: unknown, min: number, max: number) => {
+      const result = finite(value, min, max);
+      if (!Number.isInteger(result)) throw new Error("Invalid staff layout");
+      return result;
+    };
+    const overrides = array(layout.rowOverrides, 4096).map((value) => {
+      const row = object(value);
+      return { startMeasure: integer(row.startMeasure, 0, 4095), count: integer(row.count, 1, 16) };
+    });
+    if (new Set(overrides.map((row) => row.startMeasure)).size !== overrides.length) throw new Error("Duplicate staff row");
+    doc.staffLayout = { barsPerRow: integer(layout.barsPerRow, 1, 16), rowOverrides: overrides };
+  }
   doc.hits = array(d.hits, 20000).map((value) => {
     const h = object(value);
     const hit: Hit = { id: text(h.id), onsetMs: finite(h.onsetMs, 0, 86400000) };

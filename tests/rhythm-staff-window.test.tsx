@@ -142,6 +142,24 @@ test("empty notation still has a staff and the playhead can extend a single line
 
 const rowPixels = STAFF_ROW_HEIGHT * NOTATION_SCALE;
 
+test("fixed columns and row exceptions fit narrow screens and keep glyph/target alignment", () => {
+  const p = { ...props(), singleLine: false, layout: { barsPerRow: 4, rowOverrides: [{ startMeasure: 4, count: 2 }] } };
+  const screen = render(<RhythmStaff {...p} onSelectRow={jest.fn()} verticalViewport={{ top: 0, height: 400 }} />);
+  layout(screen, 320);
+  expect(screen.container.querySelector("svg")!.getAttribute("width")).toBe("320");
+  expect(screen.getByTestId("rhythm-row-0")).toBeTruthy();
+  expect(screen.getByTestId("rhythm-row-4")).toBeTruthy();
+  expect(screen.getByTestId("rhythm-row-6")).toBeTruthy();
+  const before = screen.getByTestId("rhythm-note-target-n4").style.top;
+  layout(screen, 740);
+  expect(screen.container.querySelector("svg")!.getAttribute("width")).toBe("740");
+  expect(screen.getByTestId("rhythm-note-target-n4").style.top).not.toBe(before);
+  // Row boundaries do not change when rotating, only engraving scale does.
+  expect(screen.getByTestId("rhythm-row-4")).toBeTruthy();
+  expect(screen.queryByTestId("rhythm-row-8")).toBeNull();
+  expect(targets(screen).length).toBeLessThan(25);
+});
+
 test("row windows use staff-relative parent coordinates and exclude staffs outside the viewport", () => {
   expect(staffRowWindow(100, -400, 300)).toEqual({ first: 0, last: -1 });
   expect(staffRowWindow(100, 100 * rowPixels, 300)).toEqual({ first: 0, last: -1 });
@@ -151,7 +169,7 @@ test("row windows use staff-relative parent coordinates and exclude staffs outsi
 });
 
 test.each([38, 125])("wrapped %i-measure notation limits rows, preserves full height, and remounts old targets", (count) => {
-  const p = { ...props(Array.from({ length: count }, (_, i) => note(i))), singleLine: false };
+  const p = { ...props(Array.from({ length: count }, (_, i) => note(i))), singleLine: false, layout: { barsPerRow: 1, rowOverrides: [] } };
   const viewport = { top: 20 * rowPixels, height: 2 * rowPixels };
   const screen = render(<RhythmStaff {...p} verticalViewport={viewport} playheadQ={80} />);
   layout(screen);
@@ -168,18 +186,18 @@ test.each([38, 125])("wrapped %i-measure notation limits rows, preserves full he
   const now = jest.spyOn(Date, "now").mockReturnValue(1000);
   act(() => target.__gesture.onPanResponderGrant());
   now.mockReturnValue(1400);
-  act(() => target.__gesture.onPanResponderMove({}, { dx: 44.8, dy: 0 }));
+  act(() => target.__gesture.onPanResponderMove({}, { dx: 72.8, dy: 0 }));
   act(() => target.__gesture.onPanResponderRelease());
   expect(p.onMoveCommit).toHaveBeenLastCalledWith("n20", 81);
   now.mockRestore();
   screen.rerender(<RhythmStaff {...p} verticalViewport={{ top: 0, height: 2 * rowPixels }} />);
   expect(screen.getByTestId("rhythm-note-target-n0")).toBeTruthy();
   expect(screen.queryByTestId("rhythm-staff-playhead")).toBeTruthy(); // playhead now at zero
-  // Rotation changes columns without changing the source document or row origin.
+  // Rotation fits the same chosen count; it never silently changes columns.
   layout(screen, 900);
-  expect(targets(screen)).toHaveLength(6);
+  expect(targets(screen)).toHaveLength(3);
   screen.rerender(<RhythmStaff {...p} verticalViewport={{ top: 10 * rowPixels, height: 2 * rowPixels }} />);
-  expect(screen.getByTestId("rhythm-note-target-n20")).toBeTruthy();
+  expect(screen.getByTestId("rhythm-note-target-n10")).toBeTruthy();
   screen.rerender(<RhythmStaff {...p} events={[note(0)]} verticalViewport={{ top: 10 * rowPixels, height: 2 * rowPixels }} />);
   expect(targets(screen)).toHaveLength(0);
   screen.rerender(<RhythmStaff {...p} events={[note(0)]} verticalViewport={{ top: 0, height: 300 }} />);
@@ -191,7 +209,7 @@ test("wrapped boundary ties only draw mounted halves; tuplets and offscreen sele
     tie: { id: "held", part: i, count: 30 }, midi: [60, 64],
     tuplet: { actual: 3, normal: 2, groupId: "crossing" },
   }));
-  const screen = render(<RhythmStaff {...props(events)} singleLine={false} selected={["n0"]}
+  const screen = render(<RhythmStaff {...props(events)} singleLine={false} layout={{ barsPerRow: 1, rowOverrides: [] }} selected={["n0"]}
     verticalViewport={{ top: 15 * rowPixels, height: rowPixels }} playheadQ={60} />);
   layout(screen);
   expect(targets(screen)).toHaveLength(3);

@@ -4,6 +4,7 @@ import { prepareScoreAudio, prepareDrumAudio, scheduleMeasureNotes } from "../li
 jest.mock("../lib/score-audio", () => ({
   prepareScoreAudio: jest.fn(async () => undefined),
   prepareDrumAudio: jest.fn(async () => undefined),
+  prepareRhythmReferenceAudio: jest.fn(async () => undefined),
   scheduleMeasureNotes: jest.fn(() => jest.fn()),
 }));
 
@@ -60,5 +61,17 @@ describe("Rhythm Lab audio ownership", () => {
     jest.runAllTimers();
     expect(cleanup).toHaveBeenCalled();
     expect(done).not.toHaveBeenCalled();
+  });
+
+  test("calibration references are stamped by output dispatch after preparation and ignored after stop", async () => {
+    const session = createRhythmAudioSession(), beat = jest.fn();
+    await session.play([{ id: "ref", timeMs: 0, drum: "hihat_closed" }], undefined, undefined, beat);
+    expect(beat).not.toHaveBeenCalled();
+    const onOutput = jest.mocked(scheduleMeasureNotes).mock.calls[0][3]!;
+    onOutput(0);
+    expect(beat).toHaveBeenCalledWith(0);
+    session.stop();
+    onOutput(1);
+    expect(beat).toHaveBeenCalledTimes(1);
   });
 });

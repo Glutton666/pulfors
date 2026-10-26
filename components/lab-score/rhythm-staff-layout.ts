@@ -1,9 +1,34 @@
-import type { NotationEvent } from "@/lib/rhythm-lab/types";
+import type { NotationEvent, RhythmDocument } from "@/lib/rhythm-lab/types";
 import { toNumber } from "@/lib/rhythm-lab/engine";
 
 export const NOTATION_SCALE = 0.8;
 export const STAFF_LEFT = 28;
 export const STAFF_ROW_HEIGHT = 118;
+
+export function staffRows(count: number, layout?: RhythmDocument["staffLayout"]) {
+  const perRow = layout?.barsPerRow ?? 2;
+  const overrides = new Map(layout?.rowOverrides.map((row) => [row.startMeasure, row.count]));
+  const rows: { start: number; count: number }[] = [];
+  const rowByMeasure: number[] = [];
+  for (let start = 0; start < count;) {
+    const size = overrides.get(start) ?? perRow;
+    const row = rows.length;
+    rows.push({ start, count: size });
+    for (let m = start; m < Math.min(count, start + size); m++) rowByMeasure[m] = row;
+    start += size;
+  }
+  return { rows, rowByMeasure };
+}
+
+/** Changing one row deliberately clears downstream exceptions and reflows
+ * those measures with the default, without changing musical timing. */
+export function changeStaffRow(layout: RhythmDocument["staffLayout"], startMeasure: number, count?: number) {
+  const base = layout ?? { barsPerRow: 2, rowOverrides: [] };
+  return { ...base, rowOverrides: [
+    ...base.rowOverrides.filter((row) => row.startMeasure < startMeasure),
+    ...(count === undefined ? [] : [{ startMeasure, count }]),
+  ] };
+}
 
 // top/height are the parent's actual viewport, relative to the staff, in
 // rendered pixels. Do not clamp negative top before testing intersection:

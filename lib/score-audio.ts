@@ -315,7 +315,7 @@ function _playWebDrum(drumType: DrumType, volume: number): () => void {
 
 // ── 네이티브: 드럼 WAV 파일 기반 발음 ────────────────────────
 
-async function _playNativeDrum(drumType: DrumType, volume: number): Promise<() => void> {
+async function _playNativeDrum(drumType: DrumType, volume: number, onAccepted?: () => void): Promise<() => void> {
   const cacheKey = `drum_${drumType}`;
   const uri = _fileCache.get(cacheKey);
   if (!uri) return () => {};
@@ -326,8 +326,12 @@ async function _playNativeDrum(drumType: DrumType, volume: number): Promise<() =
     const { createAudioPlayer } = require("expo-audio") as typeof import("expo-audio");
     player = createAudioPlayer({ uri });
     player.volume = Math.max(0, Math.min(1, volume));
-    safePlay(player, "score-audio.play-drum");
+    if (onAccepted) {
+      await player.play();
+      onAccepted();
+    } else safePlay(player, "score-audio.play-drum");
   } catch {
+    try { player?.remove(); } catch {}
     return () => {};
   }
 
@@ -501,6 +505,16 @@ export async function prepareDrumAudio(drumTypes: DrumType[]): Promise<void> {
   await Promise.all(unique.map((dt) => _ensureDrumFile(dt)));
 }
 
+/** Calibration must not stamp beats while an AudioContext is still resuming. */
+export async function prepareRhythmReferenceAudio(): Promise<void> {
+  if (Platform.OS === "web") {
+    const ctx = getWebAudioContext();
+    if (!ctx) throw new Error("Audio output unavailable");
+    if (ctx.state === "suspended") await ctx.resume();
+    if (ctx.state !== "running") throw new Error("Audio output not running");
+  } else await prepareDrumAudio(["hihat_closed"]);
+}
+
 /**
  * 마디 내 음표들을 setTimeout으로 스케줄링합니다.
  * 이전 마디의 예약이 남아 있으면 먼저 취소합니다.
@@ -512,6 +526,7 @@ export function scheduleMeasureNotes(
   notes: PlayNoteEvent[],
   volume = 0.7,
   instrumentId?: string,
+  onNoteStarted?: (index: number) => void,
 ): () => void {
   // 이전 마디 취소
   if (_currentMeasureStop) {
@@ -523,7 +538,7 @@ export function scheduleMeasureNotes(
   const myStopFns: Array<() => void> = [];
   let cancelled = false;
 
-  for (const note of notes) {
+  for (const [noteIndex, note] of notes.entries()) {
     if (!note.drumType && (note.midiNote < 21 || note.midiNote > 108)) continue;
     if (note.durationMs <= 0) continue;
 
@@ -544,15 +559,17 @@ export function scheduleMeasureNotes(
           ? _playWebDrum(drumType, noteVolume)
           : _playWebNote(note.midiNote, note.durationMs, noteVolume, noteWaveform);
         myStopFns.push(stop);
+        if (onNoteStarted && getWebAudioContext()?.state === "running") onNoteStarted(noteIndex);
       } else {
         const playPromise = drumType
-          ? _playNativeDrum(drumType, noteVolume)
+          ? _playNativeDrum(drumType, noteVolume, onNoteStarted ? () => { if (!cancelled) onNoteStarted(noteIndex); } : undefined)
           : _playNativeNote(note.midiNote, note.durationMs, noteVolume, noteWaveform);
         playPromise.then((stop) => {
           if (cancelled) {
             stop();
           } else {
             myStopFns.push(stop);
+            if (!drumType) onNoteStarted?.(noteIndex);
           }
         });
       }

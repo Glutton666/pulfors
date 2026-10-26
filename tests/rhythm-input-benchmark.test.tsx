@@ -50,6 +50,12 @@ jest.mock("../components/lab-score/RhythmInputSurface", () => ({
 jest.mock("react-native", () => {
   const React = require("react");
   return { ...jest.requireActual("react-native"),
+    ScrollView: React.forwardRef(({ children, testID, onLayout, onScroll }: any, ref: any) => React.createElement("div", {
+      "data-testid": testID, ref: (node: any) => {
+        if (node) { node.__onLayout = onLayout; node.__onScroll = onScroll; node.scrollTo = jest.fn(); }
+        if (typeof ref === "function") ref(node); else if (ref) ref.current = node;
+      },
+    }, children)),
     AppState: { addEventListener: jest.fn(() => ({ remove: jest.fn() })) },
     Modal: ({ visible, children }: any) => visible ? React.createElement("div", null, children) : null,
   };
@@ -62,7 +68,7 @@ benchmark.each([300, 1000])("input to DOM commit with %i existing hits", async (
   Element.prototype.scrollTo = jest.fn();
   const screen = render(<RhythmWorkspace />);
   try {
-    await waitFor(() => expect(screen.getByTestId("rhythm-pad").hasAttribute("disabled")).toBe(false));
+    await waitFor(() => expect(screen.getByTestId("rhythm-activate-pad")).toBeTruthy());
     const seed = { ...engine.createRhythmDocument(), hits: Array.from({ length: size }, (_, i) => ({
       id: `h${i}`, onsetMs: i * 250 + [0, 8, -4, 3][i % 4], releaseMs: i * 250 + 30,
       drum: "snare" as const,
@@ -75,14 +81,20 @@ benchmark.each([300, 1000])("input to DOM commit with %i existing hits", async (
     expect(screen.getByTestId("rhythm-record-status").textContent).toBe("Recording");
     const staff = screen.getByTestId("rhythm-staff");
     act(() => (staff as any).__onLayout({ nativeEvent: { layout: { width: 360 } } }));
+    const scroll = screen.getByTestId("rhythm-workspace-scroll") as any;
+    act(() => scroll.__onLayout({ nativeEvent: { layout: { width: 375, height: 400 } } }));
+    const startedAt = performance.now();
     const clock = jest.spyOn(performance, "now");
     const samples: number[] = [];
     let previousIds = [...staff.querySelectorAll('[data-testid^="rhythm-notehead-note-"]')].map((node) => node.getAttribute("data-testid"));
     for (let i = 0; i < 9; i++) {
-      clock.mockReturnValue(2000 + (size + i + 1) * 250);
+      const positionMs = (size + i + 1) * 250;
+      clock.mockReturnValue(startedAt + positionMs);
       // Keep the independent 80ms recording ticker near the next attack, as
       // during real capture, rather than freezing the viewport at time zero.
       act(() => jest.advanceTimersByTime(80));
+      const row = Math.floor(positionMs * seed.bpm / 60000 / 8);
+      act(() => scroll.__onScroll({ nativeEvent: { contentOffset: { y: Math.max(0, row - 1) * 118 * 0.8 }, layoutMeasurement: { height: 400 } } }));
       const start = process.hrtime.bigint();
       act(() => mockPad.onDown());
       const elapsed = Number(process.hrtime.bigint() - start) / 1e6;

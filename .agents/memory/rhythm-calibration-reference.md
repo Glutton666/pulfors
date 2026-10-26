@@ -1,0 +1,10 @@
+---
+name: Rhythm calibration reference
+description: Personal timing offset measurement boundaries and consistent practice correction.
+---
+
+리듬 보정은 준비가 끝난 출력 요청의 수락 시각과 탭의 단조 시계를 비교하는 개인 청각·입력 오프셋으로 취급한다. 순수 하드웨어 지연이나 물리적인 DAC 출력 시각을 측정했다고 설명하지 않는다.
+
+**Why:** 기준음 준비를 포함한 버튼 누름 시각은 탭과 비교할 기준이 아니며, 웹 AudioContext 실행과 네이티브 재생 수락도 실제 스피커 발음 시각을 보장하지 않는다. 물리 출력 측정 장치 없이 이를 하드웨어 지연으로 단정할 수 없다.
+
+**How to apply:** 출력 준비/재시작/실패와 누락·중복 박을 별도로 검증한다. 연습에서 입력 오프셋을 빼면 원본 기준 타격에도 같은 시간축 변환을 한 번 적용한다. 원본 타격 시각은 저장·원본 듣기를 위해 그대로 유지한다.
