@@ -2,7 +2,7 @@
 import React from "react";
 import { act, render } from "@testing-library/react";
 import { RhythmStaff } from "../components/lab-score/RhythmStaff";
-import { indexStaffEvents, layoutStaffMeasures, staffWindow } from "../components/lab-score/rhythm-staff-layout";
+import { indexStaffEvents, layoutStaffMeasures, staffWindow, staffRowWindow, STAFF_ROW_HEIGHT, NOTATION_SCALE } from "../components/lab-score/rhythm-staff-layout";
 import type { NotationEvent } from "../lib/rhythm-lab/types";
 
 jest.mock("react-native-svg", () => {
@@ -15,7 +15,7 @@ jest.mock("react-native-svg", () => {
 jest.mock("react-native", () => {
   const React = require("react"), actual = jest.requireActual("react-native");
   const View = React.forwardRef(({ children, testID, onLayout, onScroll, __gesture, style }: any, ref: any) =>
-    React.createElement("div", { "data-testid": testID, style: actual.StyleSheet.flatten(style), ref: (node: any) => {
+    React.createElement("div", { "data-testid": testID, style: Array.isArray(style) ? Object.assign({}, ...style.flat(Infinity)) : actual.StyleSheet.flatten(style), ref: (node: any) => {
       if (node) {
         node.__onLayout = onLayout;
         node.__onScroll = onScroll;
@@ -138,4 +138,71 @@ test("empty notation still has a staff and the playhead can extend a single line
   expect(targets(screen)).toHaveLength(0);
   screen.rerender(<RhythmStaff {...p} followPlayhead playheadQ={4000} />);
   expect(Number(screen.container.querySelector("svg")!.getAttribute("width"))).toBeLessThan(1500);
+});
+
+const rowPixels = STAFF_ROW_HEIGHT * NOTATION_SCALE;
+
+test("row windows use staff-relative parent coordinates and exclude staffs outside the viewport", () => {
+  expect(staffRowWindow(100, -400, 300)).toEqual({ first: 0, last: -1 });
+  expect(staffRowWindow(100, 100 * rowPixels, 300)).toEqual({ first: 0, last: -1 });
+  expect(staffRowWindow(100, 0, 0)).toEqual({ first: 0, last: -1 });
+  expect(staffRowWindow(100, 20 * rowPixels, 2 * rowPixels)).toEqual({ first: 19, last: 22 });
+  expect(staffRowWindow(100, -100, 150)).toEqual({ first: 0, last: 1 });
+});
+
+test.each([38, 125])("wrapped %i-measure notation limits rows, preserves full height, and remounts old targets", (count) => {
+  const p = { ...props(Array.from({ length: count }, (_, i) => note(i))), singleLine: false };
+  const viewport = { top: 20 * rowPixels, height: 2 * rowPixels };
+  const screen = render(<RhythmStaff {...p} verticalViewport={viewport} playheadQ={80} />);
+  layout(screen);
+  expect(targets(screen)).toHaveLength(4);
+  expect(screen.getByTestId("rhythm-note-target-n20")).toBeTruthy();
+  expect(screen.queryByTestId("rhythm-note-target-n0")).toBeNull();
+  const svg = screen.container.querySelector("svg")!;
+  expect(svg.getAttribute("viewBox")).toBe(`0 ${19 * 118} 450 ${4 * 118}`);
+  expect(svg.parentElement!.parentElement!.style.height).toBe(`${count * rowPixels}px`);
+  expect(screen.getByTestId("rhythm-staff-playhead").getAttribute("y1")).toBe(String(34 + 20 * 118));
+  // Global identity, time scale and local target Y must agree after culling.
+  const target = screen.getByTestId("rhythm-note-target-n20") as any;
+  expect(target.style.top).toBe(`${(118 + 54) * 0.8 - 18}px`);
+  const now = jest.spyOn(Date, "now").mockReturnValue(1000);
+  act(() => target.__gesture.onPanResponderGrant());
+  now.mockReturnValue(1400);
+  act(() => target.__gesture.onPanResponderMove({}, { dx: 44.8, dy: 0 }));
+  act(() => target.__gesture.onPanResponderRelease());
+  expect(p.onMoveCommit).toHaveBeenLastCalledWith("n20", 81);
+  now.mockRestore();
+  screen.rerender(<RhythmStaff {...p} verticalViewport={{ top: 0, height: 2 * rowPixels }} />);
+  expect(screen.getByTestId("rhythm-note-target-n0")).toBeTruthy();
+  expect(screen.queryByTestId("rhythm-staff-playhead")).toBeTruthy(); // playhead now at zero
+  // Rotation changes columns without changing the source document or row origin.
+  layout(screen, 900);
+  expect(targets(screen)).toHaveLength(6);
+  screen.rerender(<RhythmStaff {...p} verticalViewport={{ top: 10 * rowPixels, height: 2 * rowPixels }} />);
+  expect(screen.getByTestId("rhythm-note-target-n20")).toBeTruthy();
+  screen.rerender(<RhythmStaff {...p} events={[note(0)]} verticalViewport={{ top: 10 * rowPixels, height: 2 * rowPixels }} />);
+  expect(targets(screen)).toHaveLength(0);
+  screen.rerender(<RhythmStaff {...p} events={[note(0)]} verticalViewport={{ top: 0, height: 300 }} />);
+  expect(targets(screen)).toHaveLength(1);
+});
+
+test("wrapped boundary ties only draw mounted halves; tuplets and offscreen selections keep full membership", () => {
+  const events = Array.from({ length: 30 }, (_, i) => note(i, {
+    tie: { id: "held", part: i, count: 30 }, midi: [60, 64],
+    tuplet: { actual: 3, normal: 2, groupId: "crossing" },
+  }));
+  const screen = render(<RhythmStaff {...props(events)} singleLine={false} selected={["n0"]}
+    verticalViewport={{ top: 15 * rowPixels, height: rowPixels }} playheadQ={60} />);
+  layout(screen);
+  expect(targets(screen)).toHaveLength(3);
+  expect(screen.getByTestId("tie-held-13-0").querySelectorAll("path")).toHaveLength(1);
+  expect(screen.getByTestId("tie-held-14-0").querySelectorAll("path")).toHaveLength(2);
+  expect(screen.getByTestId("tie-held-16-0").querySelectorAll("path")).toHaveLength(1);
+  expect(screen.getByTestId("rhythm-tuplet-bracket-n15").textContent).toContain("3:2 ‹ ›");
+  expect(screen.getByTestId("rhythm-glyph-note-n15").querySelector("circle")).toBeTruthy();
+  expect(screen.getByTestId("rhythm-staff-playhead")).toBeTruthy();
+  screen.rerender(<RhythmStaff {...props(events)} singleLine={false}
+    verticalViewport={{ top: -500, height: 300 }} />);
+  expect(screen.container.querySelector("svg")).toBeNull();
+  expect(targets(screen)).toHaveLength(0);
 });

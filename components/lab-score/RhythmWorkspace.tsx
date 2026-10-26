@@ -119,6 +119,13 @@ export function RhythmWorkspace({ active = true, initialDocument }: { active?: b
   const activeMidi = useRef<number[]>([]);
   const scrubTrackWidth = useRef(1);
   const workspaceScroll = useRef<ScrollView>(null);
+  const [scrollViewport, setScrollViewport] = useState({ top: 0, height: 0 });
+  const [stageY, setStageY] = useState({ review: 0, practice: 0 });
+  const [staffY, setStaffY] = useState({ review: 0, practice: 0 });
+  const staffViewport = (stage: "review" | "practice") => ({
+    top: scrollViewport.top - stageY[stage] - staffY[stage],
+    height: scrollViewport.height,
+  });
   const editPanelY = useRef(0);
   const candidatePanelY = useRef(0);
   if (!audioSession.current) audioSession.current = createRhythmAudioSession();
@@ -607,7 +614,11 @@ export function RhythmWorkspace({ active = true, initialDocument }: { active?: b
 
   return (
     <View style={s.workspace}>
-    <ScrollView ref={workspaceScroll} testID="rhythm-workspace-scroll" style={s.scroll} contentContainerStyle={s.container} keyboardShouldPersistTaps="handled">
+    <ScrollView ref={workspaceScroll} testID="rhythm-workspace-scroll" style={s.scroll} contentContainerStyle={s.container} keyboardShouldPersistTaps="handled"
+      scrollEventThrottle={16}
+      onLayout={(event) => { const height = event.nativeEvent.layout.height; setScrollViewport((prev) => prev.height === height ? prev : { ...prev, height }); }}
+      onScroll={(event) => { const top = event.nativeEvent.contentOffset.y, height = event.nativeEvent.layoutMeasurement.height;
+        setScrollViewport((prev) => prev.top === top && prev.height === height ? prev : { top, height }); }}>
       {(recovery.error || recoveryTarget) && <View testID="rhythm-recovery" style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 6 }}>
         {recovery.error && <><Text testID="rhythm-recovery-error" accessibilityLiveRegion="polite" style={{ color: C.accent, fontSize: 10 }}>
           {ko ? "임시 저장 실패 · 이 실행 중인 앱에는 복구 사본 유지" : "Recovery save failed · copy kept in this app session"}
@@ -652,7 +663,7 @@ export function RhythmWorkspace({ active = true, initialDocument }: { active?: b
         </View>
         </View>
       </View>}
-      {flow === "review" && <View testID="rhythm-review-stage">
+      {flow === "review" && <View testID="rhythm-review-stage" onLayout={(event) => { const y = event.nativeEvent.layout.y; setStageY((prev) => prev.review === y ? prev : { ...prev, review: y }); }}>
         {doc.notationVersion !== 2 && <View style={{ gap: 4, marginVertical: 4 }}>
           <Text style={{ color: C.textSecondary, fontSize: 11 }}>{ko ? "기존 기보 규칙으로 열었습니다. 원본과 수동 수정은 유지됩니다." : "Opened with legacy notation. Original input and manual edits are retained."}</Text>
           <Pressable testID="rhythm-upgrade-notation" accessibilityRole="button" disabled={interactionLocked}
@@ -672,7 +683,9 @@ export function RhythmWorkspace({ active = true, initialDocument }: { active?: b
             <Pressable onPress={save} style={[s.smallPrimary, { backgroundColor: C.accent }]} testID="rhythm-save"><Ionicons name="save-outline" size={15} color={C.background} /><Text style={{ color: C.background, fontFamily: "SpaceGrotesk_700Bold" }}>{ko ? "연습장에 저장" : "Save to practice book"}</Text></Pressable>
           </View>
         </View>
-        <RhythmStaff events={displayEvents} meter={doc.meter} selected={selected} symbols={doc.symbols} onSelect={selectEvent} onMovePreview={playing ? () => {} : previewMove} onMoveCommit={playing ? () => {} : commitMove} onMoveCancel={cancelMove} playheadQ={playheadQ} />
+        <View onLayout={(event) => { const y = event.nativeEvent.layout.y; setStaffY((prev) => prev.review === y ? prev : { ...prev, review: y }); }}>
+        <RhythmStaff events={displayEvents} meter={doc.meter} selected={selected} symbols={doc.symbols} onSelect={selectEvent} onMovePreview={playing ? () => {} : previewMove} onMoveCommit={playing ? () => {} : commitMove} onMoveCancel={cancelMove} playheadQ={playheadQ} verticalViewport={staffViewport("review")} />
+        </View>
         <View style={s.toolButtons} accessibilityLabel={ko ? "검토 도구" : "Review tools"}>
           {([
             ["validation", ko ? "검증 및 마디 검토" : "Validation & measures", "checkmark-done-outline"],
@@ -728,13 +741,15 @@ export function RhythmWorkspace({ active = true, initialDocument }: { active?: b
         <View style={s.setupHead}><Pressable disabled={interactionLocked} onPress={startCalibration} style={[s.listenButton, { borderColor: C.border, opacity: interactionLocked ? 0.5 : 1 }]}><Text style={{ color: C.text }}>{ko ? "초기화" : "Reset"}</Text></Pressable><Pressable disabled={interactionLocked} onPress={playCalibrationReference} style={[s.listenButton, { borderColor: C.border, opacity: interactionLocked ? 0.5 : 1 }]}><Text style={{ color: C.text }}>{ko ? "16박 기준음" : "16-beat reference"}</Text></Pressable><Pressable disabled={interactionLocked} onPress={calibrationTap} style={[s.smallPrimary, { backgroundColor: C.accent, opacity: interactionLocked ? 0.5 : 1 }]}><Text style={{ color: C.background }}>{text.taps} {calTaps.length + 1}</Text></Pressable><TextInput editable={!interactionLocked} value={offsetText} onChangeText={(v) => { setOffsetText(v); setDoc((prev) => ({ ...prev, offsetMs: Number(v) || 0 })); }} keyboardType="numbers-and-punctuation" style={[s.numInput, { color: C.text, borderColor: C.border }]} /><Text style={[s.muted, { color: C.textSecondary }]}>{text.manual}</Text></View>
         </>}
       </View>}
-      {flow === "practice" && <View testID="rhythm-practice-stage">
+      {flow === "practice" && <View testID="rhythm-practice-stage" onLayout={(event) => { const y = event.nativeEvent.layout.y; setStageY((prev) => prev.practice === y ? prev : { ...prev, practice: y }); }}>
       <View style={s.practiceActions}>
         <Pressable testID="rhythm-settings-practice" accessibilityRole="button" disabled={interactionLocked} onPress={openSettings} style={[s.toolbarButton, { borderColor: C.border, opacity: interactionLocked ? 0.5 : 1 }]}><Ionicons name="options-outline" size={15} color={C.text} /><Text style={{ color: C.text }}>{ko ? "설정" : "Settings"}</Text></Pressable>
         <Pressable testID="rhythm-library-open-practice" accessibilityRole="button" disabled={interactionLocked} onPress={openLibrary} style={[s.toolbarButton, { borderColor: C.border, opacity: interactionLocked ? 0.5 : 1 }]}><Ionicons name="book-outline" size={15} color={C.accent} /><Text style={{ color: C.text }}>{ko ? "연습장" : "Practice book"}</Text></Pressable>
         <Pressable accessibilityRole="button" onPress={() => changeFlow("review")} style={[s.toolbarButton, { borderColor: C.border }]}><Text style={{ color: C.text }}>{ko ? "검토" : "Review"}</Text></Pressable>
       </View>
-      <RhythmStaff events={events} meter={doc.meter} selected={[]} symbols={doc.symbols} onSelect={() => {}} onMovePreview={() => {}} onMoveCommit={() => {}} onMoveCancel={() => {}} playheadQ={playheadQ} />
+      <View onLayout={(event) => { const y = event.nativeEvent.layout.y; setStaffY((prev) => prev.practice === y ? prev : { ...prev, practice: y }); }}>
+      <RhythmStaff events={events} meter={doc.meter} selected={[]} symbols={doc.symbols} onSelect={() => {}} onMovePreview={() => {}} onMoveCommit={() => {}} onMoveCancel={() => {}} playheadQ={playheadQ} verticalViewport={staffViewport("practice")} />
+      </View>
       <View style={[s.editBox, { borderColor: C.border, backgroundColor: C.surface }]}>
         <View style={s.sectionHeader}><Text style={[s.cardTitle, { color: C.text }]}>{text.practice}</Text>{(["easy", "normal", "strict"] as const).map((value) => <Pressable key={value} disabled={practicePending || practiceOn} accessibilityRole="button" accessibilityState={{ selected: difficulty === value, disabled: practicePending || practiceOn }} onPress={() => setDifficulty(value)} style={[s.chip, { borderColor: difficulty === value ? C.accent : C.border, opacity: practicePending || practiceOn ? 0.5 : 1 }]}><Text style={{ color: C.text, fontSize: 10 }}>{value}</Text></Pressable>)}</View>
         <View style={s.setupHead}><Text style={[s.muted, { color: C.textSecondary }]}>{text.difficulty}</Text></View>

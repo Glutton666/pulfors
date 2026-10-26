@@ -4,7 +4,7 @@ import Svg, { Circle, Ellipse, G, Line, Path, Rect, Text as SvgText } from "reac
 import type { Meter, NotationEvent, UserSymbol } from "@/lib/rhythm-lab/types";
 import { toNumber } from "@/lib/rhythm-lab/engine";
 import { notationSpelling } from "@/lib/rhythm-lab/notation";
-import { indexStaffEvents, layoutStaffMeasures, staffWindow, NOTATION_SCALE, STAFF_LEFT } from "./rhythm-staff-layout";
+import { indexStaffEvents, layoutStaffMeasures, staffWindow, staffRowWindow, NOTATION_SCALE, STAFF_LEFT, STAFF_ROW_HEIGHT } from "./rhythm-staff-layout";
 
 type TargetProps = {
   event: NotationEvent;
@@ -64,6 +64,8 @@ type Props = {
   playheadQ: number;
   singleLine?: boolean;
   followPlayhead?: boolean;
+  /** Parent vertical viewport relative to this staff, in rendered pixels. */
+  verticalViewport?: { top: number; height: number };
 };
 
 type BeamPair = { a: NotationEvent; b: NotationEvent };
@@ -205,7 +207,7 @@ function eventPitches(event: NotationEvent) {
   return [...new Set(pitches)].sort((a, b) => a - b);
 }
 
-export function RhythmStaff({ events, meter, selected, symbols, onSelect, onMovePreview, onMoveCommit, onMoveCancel, playheadQ, singleLine = false, followPlayhead = false }: Props) {
+export function RhythmStaff({ events, meter, selected, symbols, onSelect, onMovePreview, onMoveCommit, onMoveCancel, playheadQ, singleLine = false, followPlayhead = false, verticalViewport }: Props) {
   const [viewportWidth, setViewportWidth] = useState(0);
   const [scrollX, setScrollX] = useState(0);
   const scrollRef = useRef<ScrollView>(null);
@@ -223,7 +225,7 @@ export function RhythmStaff({ events, meter, selected, symbols, onSelect, onMove
   const rowCount = Math.ceil(measures / measuresPerRow);
   const contentWidth = Math.max(viewportWidth / NOTATION_SCALE, ...rowEnds.map((end) => end + rightInset));
   const width = Math.max(260, contentWidth);
-  const rowHeight = 118;
+  const rowHeight = STAFF_ROW_HEIGHT;
   const height = Math.max(rowHeight, rowCount * rowHeight);
   const renderedWidth = width * NOTATION_SCALE;
   const renderedHeight = height * NOTATION_SCALE;
@@ -244,13 +246,20 @@ export function RhythmStaff({ events, meter, selected, symbols, onSelect, onMove
   const followX = Math.max(0, Math.min(renderedWidth - viewportWidth, playheadX * NOTATION_SCALE - viewportWidth * 0.65));
   const pendingFollow = singleLine && followPlayhead && appliedFollowX.current !== followX;
   const effectiveScrollX = Math.max(0, Math.min(renderedWidth - viewportWidth, pendingFollow ? followX : scrollX));
+  const rows = !singleLine && verticalViewport
+    ? staffRowWindow(rowCount, verticalViewport.top, verticalViewport.height)
+    : { first: 0, last: rowCount - 1 };
   const range = singleLine ? staffWindow(measureStarts, measureWidths, effectiveScrollX, viewportWidth || 320)
-    : { first: 0, last: measures - 1 };
+    : { first: rows.first * measuresPerRow, last: Math.min(measures - 1, (rows.last + 1) * measuresPerRow - 1) };
   const visibleMeasures = Array.from({ length: range.last - range.first + 1 }, (_, i) => range.first + i);
   const visibleEvents = visibleMeasures.flatMap((i) => index.byMeasure.get(i) ?? []);
   const windowLeft = singleLine ? Math.max(0, measureStarts[range.first] - left) : 0;
   const windowRight = singleLine ? Math.min(width, measureStarts[range.last] + measureWidths[range.last] + rightInset) : width;
   const windowWidth = windowRight - windowLeft;
+  const windowTop = rows.first * rowHeight;
+  const windowHeight = Math.max(0, (rows.last - rows.first + 1) * rowHeight);
+  const visibleRows = Array.from({ length: Math.max(0, rows.last - rows.first + 1) }, (_, i) => rows.first + i);
+  const isRowVisible = (row: number) => row >= rows.first && row <= rows.last;
   const beamPairs = buildBeamPairs(visibleEvents, spanQ, meter);
   const beamed = new Set(beamPairs.flatMap(({ a, b }) => [a.id, b.id]));
   // Retain full tuplet membership so continuation labels survive window edges.
@@ -360,9 +369,9 @@ export function RhythmStaff({ events, meter, selected, symbols, onSelect, onMove
       scrollEventThrottle={16} onScroll={(event) => setScrollX(event.nativeEvent.contentOffset.x)}
       contentContainerStyle={{ minWidth: renderedWidth }}>
       <View style={{ width: renderedWidth, height: renderedHeight, position: "relative" }}>
-        <View style={{ position: "absolute", left: windowLeft * NOTATION_SCALE, width: windowWidth * NOTATION_SCALE, height: renderedHeight }}>
-        <Svg width={windowWidth * NOTATION_SCALE} height={renderedHeight} viewBox={`${windowLeft} 0 ${windowWidth} ${height}`} style={{ backgroundColor: "#FFFFFF" }}>
-          {Array.from({ length: rowCount }, (_, row) => <G key={`staff-${row}`}>
+        {windowHeight > 0 && <View style={{ position: "absolute", left: windowLeft * NOTATION_SCALE, top: windowTop * NOTATION_SCALE, width: windowWidth * NOTATION_SCALE, height: windowHeight * NOTATION_SCALE }}>
+        <Svg width={windowWidth * NOTATION_SCALE} height={windowHeight * NOTATION_SCALE} viewBox={`${windowLeft} ${windowTop} ${windowWidth} ${windowHeight}`} style={{ backgroundColor: "#FFFFFF" }}>
+          {visibleRows.map((row) => <G key={`staff-${row}`} testID={`rhythm-staff-row-${row}`}>
             {Array.from({ length: 5 }, (_, i) => <Line key={`staff-line-${i}`} x1={left} x2={rowEnds[row]} y1={34 + row * rowHeight + i * 9} y2={34 + row * rowHeight + i * 9} stroke={BLACK} strokeWidth={1} />)}
             <SvgText x={left + 5} y={24 + row * rowHeight} fontSize="11" fill={BLACK}>{meter.numerator}/{meter.denominator}</SvgText>
           </G>)}
@@ -374,7 +383,7 @@ export function RhythmStaff({ events, meter, selected, symbols, onSelect, onMove
               <Line x1={x + measureWidths[i]} x2={x + measureWidths[i]} y1={34 + row * rowHeight} y2={70 + row * rowHeight} stroke={BLACK} strokeWidth={1} />
             </G>;
           })}
-          {playheadMeasure < measures && <Line x1={playheadX} x2={playheadX} y1={34 + Math.floor(playheadMeasure / measuresPerRow) * rowHeight} y2={70 + Math.floor(playheadMeasure / measuresPerRow) * rowHeight} stroke={GOLD} strokeWidth={1.5} />}
+          {playheadMeasure < measures && isRowVisible(Math.floor(playheadMeasure / measuresPerRow)) && <Line testID="rhythm-staff-playhead" x1={playheadX} x2={playheadX} y1={34 + Math.floor(playheadMeasure / measuresPerRow) * rowHeight} y2={70 + Math.floor(playheadMeasure / measuresPerRow) * rowHeight} stroke={GOLD} strokeWidth={1.5} />}
 
           {beamPairs.map(({ a, b }, index) => {
             const firstX = glyphXFor(a) + 6;
@@ -436,8 +445,8 @@ export function RhythmStaff({ events, meter, selected, symbols, onSelect, onMove
                   const edgeOut = rowEnds[rowFor(piece)] - 3;
                   const edgeIn = left + 3;
                   return <G key={key} testID={key}>
-                    <Path d={`M${x1},${y1} Q${(x1 + edgeOut) / 2},${y1 + 9} ${edgeOut},${y1 + 3}`} fill="none" stroke={BLACK} strokeWidth={1.3} />
-                    <Path d={`M${edgeIn},${y2 + 3} Q${(edgeIn + x2) / 2},${y2 + 9} ${x2},${y2}`} fill="none" stroke={BLACK} strokeWidth={1.3} />
+                    {isRowVisible(rowFor(piece)) && <Path d={`M${x1},${y1} Q${(x1 + edgeOut) / 2},${y1 + 9} ${edgeOut},${y1 + 3}`} fill="none" stroke={BLACK} strokeWidth={1.3} />}
+                    {isRowVisible(rowFor(next)) && <Path d={`M${edgeIn},${y2 + 3} Q${(edgeIn + x2) / 2},${y2 + 9} ${x2},${y2}`} fill="none" stroke={BLACK} strokeWidth={1.3} />}
                   </G>;
                 });
           })}
@@ -517,10 +526,10 @@ export function RhythmStaff({ events, meter, selected, symbols, onSelect, onMove
         <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>
           {visibleEvents.map((event) => {
             const point = targetPoint(event);
-            return <EventTarget key={`target-${event.id}`} event={event} x={(point.x - windowLeft) * NOTATION_SCALE} y={point.y * NOTATION_SCALE} measureWidth={measureWidthFor(event) * NOTATION_SCALE} spanQ={spanQ} draggable={event.kind === "note"} onSelect={onSelect} onPreview={onMovePreview} onCommit={onMoveCommit} onCancel={onMoveCancel} />;
+            return <EventTarget key={`target-${event.id}`} event={event} x={(point.x - windowLeft) * NOTATION_SCALE} y={(point.y - windowTop) * NOTATION_SCALE} measureWidth={measureWidthFor(event) * NOTATION_SCALE} spanQ={spanQ} draggable={event.kind === "note"} onSelect={onSelect} onPreview={onMovePreview} onCommit={onMoveCommit} onCancel={onMoveCancel} />;
           })}
         </View>
-        </View>
+        </View>}
       </View>
     </ScrollView>
   </View>;

@@ -41,6 +41,97 @@ async function disableCountIn(page: Page, flow: "input" | "practice" = "input") 
   await expect(page.getByTestId("rhythm-settings-modal")).toHaveCount(0);
 }
 
+for (const count of [300, 1000]) {
+  test(`wrapped ${count}-hit review and practice mount visible rows and revisit historical notes`, async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    const doc = { ...createRhythmDocument({ title: `Wrapped ${count}`, bpm: 120 }),
+      hits: Array.from({ length: count }, (_, i) => ({ id: `rows-${i}`, onsetMs: i * 250, releaseMs: i * 250 + 30, drum: "snare" as const })) };
+    await page.addInitScript((document) => localStorage.setItem("rhythm_lab_documents_v1", JSON.stringify([document])), doc);
+    await enterLab(page, "rhythm");
+    await openSavedTake(page);
+    const staff = page.getByTestId("rhythm-staff");
+    const scroll = page.getByTestId("rhythm-workspace-scroll");
+    const first = staff.getByTestId("rhythm-note-target-note-rows-0");
+    const last = staff.getByTestId(`rhythm-note-target-note-rows-${count - 1}`);
+    const baseline = !!process.env.RHYTHM_ROW_BASELINE;
+    const counts = async (label: string) => {
+      await expect(first).toBeVisible();
+      const result = await staff.evaluate((node) => ({
+        total: node.querySelectorAll("*").length,
+        svg: node.querySelectorAll("svg *").length,
+        targets: node.querySelectorAll('[data-testid^="rhythm-note-target-"]').length,
+        rows: node.querySelectorAll('[data-testid^="rhythm-staff-row-"]').length,
+        height: node.getBoundingClientRect().height,
+      }));
+      console.log(JSON.stringify({ count, flow: label, baseline, ...result }));
+      if (!baseline) {
+        expect(result.targets).toBeLessThan(160);
+        expect(result.rows).toBeLessThan(10);
+        await expect(last).toHaveCount(0);
+      }
+      return result;
+    };
+    const goToFraction = async (fraction: number) => {
+      await scroll.evaluate((node, fraction) => {
+        const staff = node.querySelector('[data-testid="rhythm-staff"]')!;
+        const bounds = staff.getBoundingClientRect(), viewport = node.getBoundingClientRect();
+        node.scrollTop += bounds.y - viewport.y + bounds.height * fraction - node.clientHeight / 3;
+      }, fraction);
+    };
+    const aligned = async (id: string) => {
+      const target = staff.getByTestId(`rhythm-note-target-${id}`);
+      await expect(target).toBeVisible();
+      const headBox = await staff.getByTestId(`rhythm-notehead-${id}-0`).boundingBox();
+      const targetBox = await target.boundingBox();
+      expect(Math.abs(targetBox!.x + 18 - (headBox!.x + headBox!.width / 2))).toBeLessThan(0.6);
+      expect(Math.abs(targetBox!.y + 18 - (headBox!.y + headBox!.height / 2))).toBeLessThan(0.6);
+      return target;
+    };
+    const review = await counts("review");
+    expect(review.height).toBeGreaterThan(count / 8 * 90);
+    await goToFraction(0.5);
+    const middleIndex = Math.floor(count / 16) * 8;
+    const middle = await aligned(`note-rows-${middleIndex}`);
+    // Dense note/rest targets overlap; use the exposed leading edge rather
+    // than forcing an event through the later rest's hit target.
+    await middle.click({ position: { x: 2, y: 18 }, timeout: 5000 });
+    await expect(staff.getByTestId(`rhythm-glyph-note-note-rows-${middleIndex}`).locator("circle")).toHaveCount(1);
+    await goToFraction(1);
+    await aligned(`note-rows-${count - 1}`);
+    if (!baseline) await expect(first).toHaveCount(0);
+    await scroll.evaluate((node) => { node.scrollTop = 0; });
+    await expect(first).toBeVisible();
+    await goToFraction(0.5);
+    await expect(staff.getByTestId(`rhythm-glyph-note-note-rows-${middleIndex}`).locator("circle")).toHaveCount(1);
+    await page.screenshot({ path: `/tmp/rhythm-wrapped-review-${count}-${baseline ? "before" : "after"}.png` });
+    await scroll.evaluate((node) => { node.scrollTop = 0; });
+    await page.getByTestId("rhythm-flow-practice").click();
+    const practice = await counts("practice");
+    expect(practice.height).toBe(review.height);
+    await goToFraction(1);
+    await aligned(`note-rows-${count - 1}`);
+    await goToFraction(0.5);
+    await aligned(`note-rows-${middleIndex}`);
+    // Rotation at a historical position changes column count and viewport height.
+    await page.setViewportSize({ width: 900, height: 500 });
+    await expect.poll(() => staff.evaluate((node) => node.getBoundingClientRect().height)).toBeLessThan(practice.height * 0.6);
+    await page.waitForTimeout(300); // allow RNW layout/scroll events to settle
+    await goToFraction(0.5);
+    await aligned(`note-rows-${middleIndex}`);
+    if (!baseline) {
+      expect(await staff.locator('[data-testid^="rhythm-note-target-"]').count()).toBeLessThan(200);
+      expect(await staff.locator("svg").evaluate((node) => node.getBoundingClientRect().height)).toBeLessThan(800);
+    }
+    await page.screenshot({ path: `/tmp/rhythm-wrapped-${count}-${baseline ? "before" : "after"}.png` });
+    // In landscape the compact dock leaves a very short viewport and the staff
+    // can start below the fold; navigate to the staff, not the page's zero.
+    await goToFraction(0);
+    await expect(first).toBeVisible();
+    expect(await page.evaluate((id) => JSON.parse(localStorage.getItem("practice_book") ?? "[]")
+      .find((entry: any) => entry.rhythmDocument?.id === id)?.rhythmDocument.hits, doc.id)).toEqual(doc.hits);
+  });
+}
+
 test("long single-line capture culls offscreen notation and keeps scrolled targets aligned", async ({ page }) => {
   const doc = { ...createRhythmDocument({ title: "Windowed long take", bpm: 120 }),
     hits: Array.from({ length: 1000 }, (_, i) => ({ id: `window-${i}`, onsetMs: i * 250, releaseMs: i * 250 + 30, drum: "snare" as const })) };

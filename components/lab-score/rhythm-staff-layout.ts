@@ -3,6 +3,19 @@ import { toNumber } from "@/lib/rhythm-lab/engine";
 
 export const NOTATION_SCALE = 0.8;
 export const STAFF_LEFT = 28;
+export const STAFF_ROW_HEIGHT = 118;
+
+// top/height are the parent's actual viewport, relative to the staff, in
+// rendered pixels. Do not clamp negative top before testing intersection:
+// a staff below the fold must not mount its entire first screen.
+export function staffRowWindow(count: number, top: number, height: number) {
+  const rowPixels = STAFF_ROW_HEIGHT * NOTATION_SCALE;
+  if (height <= 0 || top + height <= 0 || top >= count * rowPixels) return { first: 0, last: -1 };
+  return {
+    first: Math.max(0, Math.floor(top / rowPixels + 1e-9) - 1),
+    last: Math.min(count - 1, Math.ceil((top + height) / rowPixels - 1e-9)),
+  };
+}
 
 // One pass over the document, rather than one full scan for every measure.
 export function indexStaffEvents(events: NotationEvent[]) {

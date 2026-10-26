@@ -1,6 +1,6 @@
 ---
 name: Rhythm viewport benchmark clocks
-description: Independent display clocks must follow synthetic capture time when measuring a virtualized recording staff.
+description: Keep benchmark clocks and asynchronous viewport reflow aligned when measuring virtualized notation.
 ---
 
 긴 녹음의 구간 렌더링을 비교할 때 입력 시각뿐 아니라 독립적인 표시 시계도 같은 녹음 위치로 맞춘다. 반영 검사는 전체 음표 개수 증가가 아니라 새 입력의 실제 화면 표시를 확인한다.
@@ -8,3 +8,9 @@ description: Independent display clocks must follow synthetic capture time when 
 **Why:** 입력용 시각만 긴 기록의 끝으로 이동하고 표시 ticker를 멈추면, 실제로는 정상적인 화면 구간 제한이 새 음표를 표시하지 않는 오류처럼 보인다. 전체 음표를 그리던 테스트에서는 이 시계 불일치가 드러나지 않았다.
 
 **How to apply:** 입력→화면 성능 하네스에서 각 독립 시계의 진행을 명시하고 측정 구간에 ticker 처리·대기 시간이 포함되는지 기록한다. 가상화 변경 전후는 같은 하네스로 비교하며 전체 노드 수가 증가해야 한다는 가정을 두지 않는다.
+
+회전 직후의 탐색 검사는 새 레이아웃이 확정된 뒤 악보 기준 위치로 이동한다. 부모 스크롤의 0이 첫 악보 행의 표시를 보장한다고 가정하지 않는다.
+
+**Why:** 브라우저 viewport 변경은 RN Web의 열 수·콘텐츠 높이·스크롤 이벤트 갱신보다 먼저 끝날 수 있다. 특히 가로 모드의 작은 표시 영역에서는 악보가 상단 도구 아래 화면 밖에 있을 수 있어, 조기 이동이나 스크롤 0을 렌더링 누락으로 잘못 판단하게 된다.
+
+**How to apply:** 실제 악보 높이가 새 열 배치로 바뀐 것을 기다린 후 콘텐츠 내 악보 사각형을 기준으로 이동한다. 생성된 타깃을 강제로 클릭하지 말고 실제 노출 영역과 음표 정렬도 확인한다.

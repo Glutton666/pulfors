@@ -80,7 +80,7 @@ iPhone/Android 터치→표시 지연, 오디오 지연으로 해석하면 안 �
 
 #### 렌더링과 의미의 분리
 
-- 가로 한 줄 녹음 악보만 제한한다. 전체 길이의 빈 스크롤 영역은 유지하고,
+- 이 단계에서는 가로 한 줄 녹음 악보를 제한했다. 전체 길이의 빈 스크롤 영역은 유지하고,
   이진 탐색으로 찾은 보이는 마디 전체와 좌우 한 마디씩을 SVG·터치 타깃으로
   만든다. SVG 자체의 너비도 구간 너비로 제한한다.
 - 전체 문서의 마디별 이벤트·너비·시작 위치와 붙임줄/연음 관계를 색인한다.
@@ -92,8 +92,53 @@ iPhone/Android 터치→표시 지연, 오디오 지연으로 해석하면 안 �
 - 스크롤 위치·터치 좌표·드래그 이동량은 전체 악보 좌표와 구간 SVG 좌표 사이를
   변환한다. 이전 마디는 스크롤하면 다시 생성된다. 따라가기가 멈추면 현재 위치를
   유지하고, 탐색 중 다음 녹음 위치 갱신 때 따라가기를 재개한다.
-- 문서·기보 의미·저장·편집 데이터는 잘라내지 않는다. 여러 줄의 검토/연습
-  악보는 기존처럼 전체 표시한다. 화면 회전, 빈 기록, 삭제 후 길이 감소도 검사한다.
+- 문서·기보 의미·저장·편집 데이터는 잘라내지 않는다. 화면 회전, 빈 기록,
+  삭제 후 길이 감소도 검사한다. 이후 여러 줄 악보에도 아래 제한을 적용했다.
+
+### 여러 줄 검토·연습 악보의 행 단위 렌더링
+
+2026-10-26, Chromium 151 실제 Expo 웹 앱에서 390×844 화면, 120 BPM,
+250ms 간격의 타격과 30ms 게이트로 저장 기록을 열었다. 이전 구현의
+`RhythmStaff`만 별도 Metro 설정으로 연결한 경우와 현재 구현을 같은
+시나리오로 비교했다. 상위 화면·해석·입력 데이터는 동일하다. 앱 소스나
+저장 기록을 되돌리지 않고 비교했으며, 아래 숫자는 **악보 안의** 노드 수다.
+SVG 자식과 음표/쉼표 터치 타깃도 포함한다.
+
+| 타격 수 | 화면 진입 | 전체 DOM 노드 이전 → 이후 | SVG 자식 이전 → 이후 | 터치 타깃 이전 → 이후 |
+|---|---|---:|---:|---:|
+| 300 | 검토 | 3093 → 581 | 2485 → 463 | 602 → 112 |
+| 1000 | 검토 | 10257 → 581 | 8251 → 463 | 2000 → 112 |
+| 300 | 연습 | 3093 → 334 | 2485 → 264 | 602 → 64 |
+| 1000 | 연습 | 10257 → 334 | 8251 → 264 | 2000 → 64 |
+
+- 검토 진입 시 7행, 연습 진입 시 4행을 생성했다. 연습은 고정 입력 도크가
+  차지하는 만큼 실제 세로 표시 영역이 작다. 같은 화면에서는 기록 길이가
+  늘어도 생성하는 행 수가 늘지 않는다.
+- 전체 악보 높이는 이전/이후 모두 300타격 약 3587.19px,
+  1000타격 11800px다. 빈 전체 높이를 유지하므로 스크롤 위치·범위가 보존된다.
+  실제 SVG 높이는 보이는 행과 앞뒤 한 행의 높이만 사용한다.
+- 부모 ScrollView의 실제 `contentOffset.y`와 표시 높이에, 콘텐츠 안의
+  단계 영역과 악보 영역의 `onLayout.y`를 합산해 **악보 기준** 표시 범위를
+  구한다. 회전·도크 높이·상단 도구/안내의 배치 변화도 다시 반영한다.
+  악보가 완전히 화면 밖이면 SVG와 타깃은 생성하지 않는다.
+- SVG viewBox의 세로 원점과 타깃의 세로 원점을 함께 이동한다. 이벤트 ID,
+  박 위치, 드래그의 가로 시간 배율은 전체 문서 기준으로 유지한다.
+- 경계 붙임줄은 화면 밖 끝점의 다성부 좌표도 계산하지만, 실제 경로는
+  생성된 행의 절반만 만든다. 연음의 전체 그룹과 앞/뒤 계속 표시는 유지한다.
+  화면 밖에서 선택한 붙임줄 조각도 보이는 연결 음표의 강조에 반영된다.
+- 브라우저에서 300/1000타격 각각 검토·연습 진입, 중간·마지막·과거 행
+  왕복, 과거 음표의 실제 클릭과 선택 강조의 재생성, 음표 머리/터치 타깃
+  정렬, 중간 위치에서 900×500 회전과 첫 행 복귀를 확인했다.
+  저장된 원본 타격도 바뀌지 않았다. 변경 전 구현에서도 같은 탐색 시나리오가
+  통과했다. 회전 후에는 레이아웃이 확정된 뒤 악보 기준으로 이동한다.
+- 단위 테스트는 화면 밖/경계 표시 범위, 1→2열 전환, 삭제·빈 기록,
+  과거 음표 드래그의 이벤트 ID/박 위치, 재생선의 전체 좌표,
+  행 경계 붙임줄의 양쪽/한쪽 경로, 연음 계속 표시와 화면 밖 선택을 검사한다.
+
+이는 **행 생성 제한** 검증이지 불필요한 상위 리렌더 제거가 아니다. 전체 문서
+해석·검증·도구 패널의 계산과 렌더링은 여전히 별도 비용이다. 진입 시간이나
+휴대폰 프레임률/메모리/오디오 지연을 이 노드 수만으로 추정하지 않는다.
+실제 iPhone/Android의 네이티브 세로 탐색 성능은 미측정이다.
 
 ## 재현
 
@@ -101,7 +146,33 @@ iPhone/Android 터치→표시 지연, 오디오 지연으로 해석하면 안 �
 npx tsx scripts/benchmark-rhythm.ts
 RHYTHM_BENCHMARK=1 npx jest --runInBand --runTestsByPath tests/rhythm-input-benchmark.test.tsx
 npx jest --runInBand --runTestsByPath tests/rhythm-staff-window.test.tsx
+PLAYWRIGHT_BROWSERS_PATH="$PWD/.cache/ms-playwright" \
+  npx playwright test e2e/rhythm-lab.spec.ts --grep 'wrapped .*hit review'
 ```
+
+여러 줄의 변경 전 비교는 `STAFF_BASE_REF`에 행 제한 전 버전을 지정하고,
+프런트엔드 워크플로의 명령을 아래 명령으로 **임시 교체**해 실행한다.
+별도 앱 서버를 중복으로 띄우지 않는다. 설정 파일은 기본 워크플로에서는
+읽지 않는 개발용 비교 도구다.
+
+```sh
+mkdir -p generated-artifacts/rhythm-row-baseline
+for name in RhythmStaff.tsx rhythm-staff-layout.ts; do
+  git show "$STAFF_BASE_REF:components/lab-score/$name" \
+    > "generated-artifacts/rhythm-row-baseline/$name"
+done
+# 임시 프런트엔드 워크플로 명령:
+RHYTHM_STAFF_BASELINE="$PWD/generated-artifacts/rhythm-row-baseline/RhythmStaff.tsx" \
+EXPO_OVERRIDE_METRO_CONFIG="$PWD/scripts/rhythm-row-baseline.config.cjs" \
+  npx expo start --web --port 8081
+# 위 서버가 준비된 뒤 테스트 실행:
+RHYTHM_ROW_BASELINE=1 PLAYWRIGHT_BROWSERS_PATH="$PWD/.cache/ms-playwright" \
+  npx playwright test e2e/rhythm-lab.spec.ts --grep 'wrapped .*hit review'
+```
+
+비교 후에는 프런트엔드 워크플로를 원래의
+`expo start --web --port 8081`로 복구하고, `RHYTHM_ROW_BASELINE` 없이 실행한다.
+현재 결과도 같은 테스트의 JSON 로그로 출력된다. 스크린샷은 `/tmp`에 저장한다.
 
 가로 구간 렌더링만 비교하려면 `STAFF_BASE_REF`에 구간 제한 전 버전을 지정한다.
 엔진은 현재 코드를 그대로 쓰므로 `RHYTHM_BASELINE_DIR`는 지정하지 않는다.
@@ -139,7 +210,7 @@ RHYTHM_BENCHMARK=1 RHYTHM_BASELINE_DIR="$PWD/generated-artifacts/rhythm-baseline
 ## 확인 결과
 
 - TypeScript 전체 검사 통과.
-- Jest 전체: 217개 스위트, 2776개 테스트 통과. 선택 실행 성능 테스트 2개는
+- Jest 전체: 217개 스위트, 2780개 테스트 통과. 선택 실행 성능 테스트 2개는
   별도 실행하여 구간 렌더링 변경 전/후 모두 통과.
 - `rhythm-live-timing.test.ts`: Node 테스트 실행도 10개 통과.
 - Chromium 실제 화면: 1000타격의 처음/끝 탐색·화면 회전·SVG와 터치 타깃
