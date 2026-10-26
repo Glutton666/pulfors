@@ -99,7 +99,7 @@ test("steady taps against a 92 BPM click do not become scattered tuplets", async
   await page.screenshot({ path: "generated-artifacts/rhythm-steady-pulse.jpg" });
 });
 
-test("calibration completes from actual reference dispatch and keeps the applied value", async ({ page }) => {
+for (const input of ["mouse", "touch"] as const) test(`calibration completes from actual reference dispatch with ${input} and keeps a nonzero applied value`, async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await enter(page);
   await page.getByTestId("rhythm-settings").click();
@@ -111,15 +111,30 @@ test("calibration completes from actual reference dispatch and keeps the applied
       return original.apply(this, args);
     };
   });
-  await page.getByTestId("rhythm-calibration-reference").click();
+  if (input === "touch") await page.getByTestId("rhythm-calibration-tap").tap();
+  else await page.getByTestId("rhythm-calibration-reference").click();
+  // Mobile keyboard/focus changes must not cancel a pass when the value did
+  // not change. This used to run the manual-offset editor and reset the pass.
+  const offset = page.getByTestId("rhythm-offset-input");
+  await offset.focus();
+  await offset.evaluate((node) => (node as HTMLInputElement).blur());
+  await expect(page.getByTestId("rhythm-calibration-status")).not.toHaveText(/기준음 시작 →|Start reference →/);
   const tap = page.getByTestId("rhythm-calibration-tap");
   await tap.scrollIntoViewIfNeeded();
   for (let i = 0; i < 20; i++) {
     await page.waitForFunction((i) => (window as any).__calibrationStarts.length > i, i);
-    if (i >= 4) await tap.click();
+    if (i >= 4) {
+      await page.waitForTimeout(70);
+      if (input === "touch") {
+        const box = (await tap.boundingBox())!;
+        await page.touchscreen.tap(box.x + box.width / 2, box.y + box.height / 2);
+      } else await tap.click();
+      if (i < 19) await expect(tap).toHaveText(new RegExp(`${i - 3}/16`));
+      else await expect(page.getByTestId("rhythm-calibration-status")).toHaveText(/16\/16|보정 적용:|Applied:/);
+    }
   }
   await expect(page.getByTestId("rhythm-calibration-status")).toHaveText(/보정 적용:|Applied:/);
-  expect(Number(await page.getByTestId("rhythm-offset-input").inputValue())).toBeGreaterThanOrEqual(0);
+  expect(Number(await page.getByTestId("rhythm-offset-input").inputValue())).toBeGreaterThan(40);
   await page.screenshot({ path: "generated-artifacts/rhythm-calibration-complete.jpg" });
 });
 

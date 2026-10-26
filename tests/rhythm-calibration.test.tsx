@@ -1,7 +1,23 @@
 /** @jest-environment jsdom */
-import { act, renderHook } from "@testing-library/react";
+import React from "react";
+import { act, fireEvent, render, renderHook } from "@testing-library/react";
 import { useRhythmCalibration } from "../hooks/useRhythmCalibration";
 import { calibrationResult } from "../lib/rhythm-lab/calibration";
+import { RhythmCalibrationPanel } from "../components/lab-score/RhythmCalibrationPanel";
+
+jest.mock("react-native", () => ({
+  View: ({ children }: any) => <div>{children}</div>,
+  Text: ({ children, testID }: any) => <span data-testid={testID}>{children}</span>,
+  TextInput: ({ value, onChangeText, onBlur, testID }: any) =>
+    <input data-testid={testID} value={value} onChange={(e) => onChangeText(e.target.value)} onBlur={onBlur} />,
+  Pressable: ({ children, onPress, disabled, testID }: any) =>
+    <button data-testid={testID} onClick={onPress} disabled={disabled}>{children}</button>,
+}));
+jest.mock("../contexts/ThemeContext", () => ({ useTheme: () => ({ colors: {} }) }));
+jest.mock("../components/lab-score/RhythmInputSurface", () => ({
+  RhythmInputSurface: ({ children, onDown, disabled, testID }: any) =>
+    <button data-testid={testID} onPointerDown={onDown} disabled={disabled}>{children}</button>,
+}));
 
 const mockPasses: { end: () => void; beat: (index: number) => void }[] = [];
 const mockStop = jest.fn();
@@ -30,6 +46,38 @@ test("missing, duplicate, one-beat shifted and unstable inputs never become vali
   expect(() => calibrationResult(reference.map((time, i) => time + (i % 2 ? 150 : -150)), reference, 500)).toThrow();
   const jittered = reference.map((time, i) => time + (i % 2 ? 60 : -60));
   expect(() => calibrationResult(jittered, jittered.map((time) => time + 30), 500)).toThrow();
+});
+
+describe("calibration controls", () => {
+  const mount = (phase: "idle" | "playing" = "idle", offset = "0") => {
+    const props = { ko: true, calibration: { phase, count: 0, message: "", start: jest.fn(), tap: jest.fn(), cancel: jest.fn() },
+      offset, onOffset: jest.fn(), onStart: jest.fn(), onTap: jest.fn(), onReset: jest.fn(), disabled: false };
+    return { ...render(<RhythmCalibrationPanel {...props} />), props };
+  };
+  test("leaving an unchanged offset field does not edit or cancel calibration", () => {
+    const screen = mount("playing");
+    fireEvent.blur(screen.getByTestId("rhythm-offset-input"));
+    expect(screen.props.onOffset).not.toHaveBeenCalled();
+  });
+  test("blur still normalizes a noncanonical manual value", () => {
+    const screen = mount("idle", "001");
+    fireEvent.blur(screen.getByTestId("rhythm-offset-input"));
+    expect(screen.props.onOffset).toHaveBeenCalledWith("1");
+  });
+  test("the idle pad starts reference playback instead of silently ignoring taps", () => {
+    const screen = mount();
+    const pad = screen.getByTestId("rhythm-calibration-tap");
+    expect(pad.hasAttribute("disabled")).toBe(false);
+    fireEvent.pointerDown(pad);
+    expect(screen.props.onStart).toHaveBeenCalledTimes(1);
+    expect(screen.props.onTap).not.toHaveBeenCalled();
+  });
+  test("the active pad records input rather than restarting reference playback", () => {
+    const screen = mount("playing");
+    fireEvent.pointerDown(screen.getByTestId("rhythm-calibration-tap"));
+    expect(screen.props.onTap).toHaveBeenCalledTimes(1);
+    expect(screen.props.onStart).not.toHaveBeenCalled();
+  });
 });
 
 describe("reference session lifecycle", () => {

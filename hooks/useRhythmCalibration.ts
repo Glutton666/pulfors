@@ -46,7 +46,7 @@ export function useRhythmCalibration(onApply: (offset: number) => void) {
     }).catch(() => {
       if (epoch.current !== owner) return;
       pass.current = null;
-      setState({ phase: "error", count: 0, message: "retry" });
+      setState({ phase: "error", count: current.taps.length, message: "reference-failed" });
     });
   };
   const tap = () => {
