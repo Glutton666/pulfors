@@ -607,6 +607,8 @@ export function RhythmWorkspace({ active = true, initialDocument }: { active?: b
     : entryMode === "notation" ? (ko ? "누른 타이밍은 기록되지 않음" : "Tap timing is not recorded")
     : (ko ? "패드를 길게 눌러 시작 · 예비박 설정 적용" : "Hold the pad to start · count-in setting applies");
 
+  const settingsCalibration = <RhythmCalibrationPanel ko={ko} calibration={calibration} offset={offsetText} onOffset={editOffset}
+    onReset={startCalibration} onStart={playCalibrationReference} onTap={calibrationTap} disabled={interactionLocked} />;
   return (
     <View style={s.workspace}>
     <ScrollView ref={workspaceScroll} testID="rhythm-workspace-scroll" style={[s.scroll, flow === "input" && { backgroundColor: "#fff" }]} contentContainerStyle={s.container} keyboardShouldPersistTaps="handled"
@@ -819,7 +821,7 @@ export function RhythmWorkspace({ active = true, initialDocument }: { active?: b
     </RhythmInputDock>}
     <Modal transparent visible={settingsOpen} animationType="slide" onRequestClose={closeSettings}>
       <View style={s.modalBackdrop}>
-        <View testID="rhythm-settings-modal" accessibilityViewIsModal style={[s.modalCard, { backgroundColor: C.surface, borderColor: C.border }]}>
+        <View testID="rhythm-settings-modal" accessibilityViewIsModal style={[s.modalCard, { height: "88%", minHeight: 0, backgroundColor: C.surface, borderColor: C.border }]}>
           <View style={s.modalHeader}>
             <View style={{ flex: 1 }}>
               <Text style={[s.modalEyebrow, { color: C.accent }]}>{ko ? "연주 준비" : "TAKE SETUP"}</Text>
@@ -829,7 +831,10 @@ export function RhythmWorkspace({ active = true, initialDocument }: { active?: b
               <Ionicons name="close" size={20} color={C.text} />
             </Pressable>
           </View>
-          <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator>
+          {windowHeight >= 540 && <View testID="rhythm-calibration-fixed" style={{ flexShrink: 0, marginBottom: 10 }}>{settingsCalibration}</View>}
+          <ScrollView testID="rhythm-settings-scroll" keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator
+            style={{ flex: 1, minHeight: 0 }} contentContainerStyle={{ paddingBottom: 12 }}>
+            {windowHeight < 540 && settingsCalibration}
             <Text style={[s.modalLabel, { color: C.textSecondary }]}>{text.title}</Text>
             <TextInput testID="rhythm-title-input" value={doc.title} onChangeText={(title) => setDoc((prev) => ({ ...prev, title }))} accessibilityLabel={text.title} returnKeyType="done" style={[s.modalTextInput, { color: C.text, borderColor: C.border, backgroundColor: C.background }]} />
             <View style={s.modalSettingRow}>
@@ -862,8 +867,6 @@ export function RhythmWorkspace({ active = true, initialDocument }: { active?: b
               </View>
             </View>
             <Text style={{ color: C.textSecondary, fontSize: 10, marginVertical: 6 }}>{ko ? "기본값을 바꾸면 개별 줄 설정도 초기화됩니다. 악보의 줄 번호로 특정 줄만 조정할 수 있습니다." : "Changing the default resets individual rows. Select a row number on the score to adjust only that row."}</Text>
-            <RhythmCalibrationPanel ko={ko} calibration={calibration} offset={offsetText} onOffset={editOffset}
-              onReset={startCalibration} onStart={playCalibrationReference} onTap={calibrationTap} disabled={interactionLocked} />
           </ScrollView>
         </View>
       </View>

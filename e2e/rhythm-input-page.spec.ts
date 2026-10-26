@@ -27,6 +27,31 @@ async function hold(page: Page, x: number, y: number, ms = 700) {
   await page.mouse.move(x, y); await page.mouse.down(); await page.waitForTimeout(ms); await page.mouse.up();
 }
 
+test("calibration pad is visible when settings open and the remaining settings still scroll", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await enter(page);
+  await page.getByTestId("rhythm-settings").click();
+  const tap = page.getByTestId("rhythm-calibration-tap");
+  const modal = page.getByTestId("rhythm-settings-modal");
+  await expect(tap).toBeInViewport({ ratio: 0.95 });
+  const first = await tap.boundingBox(), card = await modal.boundingBox();
+  expect(first!.y + first!.height).toBeLessThan(card!.y + card!.height);
+  expect(await page.getByTestId("rhythm-settings-scroll")
+    .evaluate((node) => node.scrollHeight > node.clientHeight)).toBe(true);
+  await page.getByTestId("rhythm-bars-per-row-more").click();
+  await expect(page.getByTestId("rhythm-bars-per-row")).toHaveText("3");
+  // In short landscape, put calibration first in the bounded scroll area.
+  await page.setViewportSize({ width: 844, height: 430 });
+  await modal.waitFor();
+  await page.getByTestId("rhythm-settings-scroll").evaluate((node) => { node.scrollTop = 0; });
+  await expect(tap).toBeInViewport({ ratio: 0.9 });
+  expect(await page.getByTestId("rhythm-settings-scroll")
+    .evaluate((node) => node.scrollHeight > node.clientHeight)).toBe(true);
+  await page.getByTestId("rhythm-bpm-input").fill("110");
+  await expect(page.getByTestId("rhythm-bpm-input")).toHaveValue("110");
+  await page.screenshot({ path: "generated-artifacts/rhythm-calibration-short-landscape.jpg" });
+});
+
 test("bounded reinterpretation is explicit, reversible and preserved on save/reopen", async ({ page }) => {
   const doc = { ...createRhythmDocument({ title: "Timing correction", bpm: 120 }), automaticCorrection: undefined,
     hits: [18, 268, 518, 768].map((onsetMs, i) => ({ id: `jitter-${i}`, onsetMs, releaseMs: onsetMs + 30, drum: "snare" as const })) };
