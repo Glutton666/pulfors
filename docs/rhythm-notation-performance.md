@@ -39,7 +39,7 @@
 `RhythmWorkspace`, 실제 `RhythmStaff`/`RhythmLiveFeedback` 계산을 사용했다.
 오디오·저장소·입력 표면은 테스트 대역이며, RN/SVG는 DOM 어댑터이다.
 녹음 시작 때 긴 기록을 주입한 뒤 입력 콜백을 호출해 `act`의 DOM 반영까지
-측정하고 실제 새 음표의 ellipse 개수가 증가했는지 확인한다.
+측정하고 실제 새 음표의 ellipse 개수가 증가했는지 확인했다.
 릴리스도 별도로 실행한다. 9타격 중 앞 두 번을 제외한 7회:
 
 | 기존 타격 수 | 중앙값 이전 → 이후 | 최댓값 이전 → 이후 |
@@ -50,13 +50,69 @@
 이 수치는 **개발용 React/jsdom DOM 반영 시간**이다. 브라우저 페인트, 실제
 iPhone/Android 터치→표시 지연, 오디오 지연으로 해석하면 안 된다. 단위 계산과
 화면 반영의 개선은 확인했지만 모든 길이/기기에서 무지연이라는 보장은 아니다.
-특히 악보 전체의 SVG/입력 타깃 생성·렌더링 비용은 남아 있어 화면 밖 마디의
-렌더링 제한은 별도 개선 대상으로 남긴다.
+이 단계에는 악보 전체의 SVG/입력 타깃 생성·렌더링 비용이 남아 있었다.
+아래 측정은 그 뒤 추가한 화면 구간 렌더링의 비교이다.
+
+### 가로 한 줄 악보의 화면 구간 렌더링
+
+2026-10-26, 기존 계산 최적화가 적용된 동일한 엔진·검증 코드에서
+`RhythmStaff`만 교체하여 비교했다. 360px 화면 너비, 위와 같은 120 BPM
+입력과 지터, 두 번 예열 후 7회 중앙값이다.
+
+| 기존 타격 수 | 입력→DOM 중앙값 이전 → 이후 | 최댓값 이전 → 이후 |
+|---|---:|---:|
+| 300 | 212.87 → 70.54ms | 347.50 → 223.65ms |
+| 1000 | 712.31 → 216.79ms | 836.19 → 287.21ms |
+
+| 기존 타격 수 | 악보 내 전체 DOM 노드 | SVG 자식 노드 | 터치 타깃 |
+|---|---:|---:|---:|
+| 300 | 3019 → 245 | 2387 → 204 | 628 → 36 |
+| 1000 | 9574 → 275 | 7544 → 228 | 2026 → 42 |
+
+노드 수는 9번째 추가 입력의 DOM 반영 직후이며, 음표뿐 아니라 쉼표 타깃도
+포함한다. 이전 표와 실행 조건이 완전히 같지는 않으므로 이전 표의 숫자를
+이번 변경의 기준으로 삼지 않는다. 독립적인 녹음 ticker(80ms)를 각 측정 직전에
+진행시켜 자동 따라가기 위치를 입력 시각에 맞췄다. 측정 구간은 그 다음
+`onDown` 호출부터 React DOM commit까지이며 ticker 자체나 80ms 대기는 포함하지
+않는다. 전체 음표 개수 증가 대신 **화면의 음표 ID가 실제 새 음표로 갱신되는지**
+검사한다. 구간 렌더링 후에도 전체 해석·검증·상위 UI 갱신 비용은 남아 있으며,
+실제 기기의 터치→페인트 또는 오디오 지연 측정은 아니다.
+
+#### 렌더링과 의미의 분리
+
+- 가로 한 줄 녹음 악보만 제한한다. 전체 길이의 빈 스크롤 영역은 유지하고,
+  이진 탐색으로 찾은 보이는 마디 전체와 좌우 한 마디씩을 SVG·터치 타깃으로
+  만든다. SVG 자체의 너비도 구간 너비로 제한한다.
+- 전체 문서의 마디별 이벤트·너비·시작 위치와 붙임줄/연음 관계를 색인한다.
+  너비·시작점 계산에 마디마다 전체 이벤트를 검색하거나 누적 너비를 재합산하지
+  않는다. 같은 마디의 다성부 간섭과 빔은 마디 단위로 계산한다.
+- 붙임줄은 경계를 가로지르는 쌍과 화면 밖 끝점의 음표 좌표도 유지한다.
+  연음은 전체 그룹의 첫/끝 정보를 유지해 경계의 계속 표시를 보존한다.
+  화면 밖에서 선택한 연결 음표도 보이는 조각을 강조한다.
+- 스크롤 위치·터치 좌표·드래그 이동량은 전체 악보 좌표와 구간 SVG 좌표 사이를
+  변환한다. 이전 마디는 스크롤하면 다시 생성된다. 따라가기가 멈추면 현재 위치를
+  유지하고, 탐색 중 다음 녹음 위치 갱신 때 따라가기를 재개한다.
+- 문서·기보 의미·저장·편집 데이터는 잘라내지 않는다. 여러 줄의 검토/연습
+  악보는 기존처럼 전체 표시한다. 화면 회전, 빈 기록, 삭제 후 길이 감소도 검사한다.
 
 ## 재현
 
 ```sh
 npx tsx scripts/benchmark-rhythm.ts
+RHYTHM_BENCHMARK=1 npx jest --runInBand --runTestsByPath tests/rhythm-input-benchmark.test.tsx
+npx jest --runInBand --runTestsByPath tests/rhythm-staff-window.test.tsx
+```
+
+가로 구간 렌더링만 비교하려면 `STAFF_BASE_REF`에 구간 제한 전 버전을 지정한다.
+엔진은 현재 코드를 그대로 쓰므로 `RHYTHM_BASELINE_DIR`는 지정하지 않는다.
+
+```sh
+mkdir -p generated-artifacts/rhythm-staff-baseline
+git show "$STAFF_BASE_REF:components/lab-score/RhythmStaff.tsx" \
+  > generated-artifacts/rhythm-staff-baseline/RhythmStaff.tsx
+RHYTHM_BENCHMARK=1 \
+  RHYTHM_STAFF_BASELINE="$PWD/generated-artifacts/rhythm-staff-baseline/RhythmStaff.tsx" \
+  npx jest --runInBand --runTestsByPath tests/rhythm-input-benchmark.test.tsx
 RHYTHM_BENCHMARK=1 npx jest --runInBand --runTestsByPath tests/rhythm-input-benchmark.test.tsx
 ```
 
@@ -83,9 +139,10 @@ RHYTHM_BENCHMARK=1 RHYTHM_BASELINE_DIR="$PWD/generated-artifacts/rhythm-baseline
 ## 확인 결과
 
 - TypeScript 전체 검사 통과.
-- Jest 전체: 216개 스위트 통과. 선택 실행 성능 테스트 2개는
-  별도 실행하여 변경 전/후 모두 통과.
+- Jest 전체: 217개 스위트, 2776개 테스트 통과. 선택 실행 성능 테스트 2개는
+  별도 실행하여 구간 렌더링 변경 전/후 모두 통과.
 - `rhythm-live-timing.test.ts`: Node 테스트 실행도 10개 통과.
-- Chromium 실제 화면: 혼합 binary/triplet 표기와 독립 지속음·붙임줄 편집
-  시나리오 2개 통과. 실제 악보 스크린샷 확인.
+- Chromium 실제 화면: 1000타격의 처음/끝 탐색·화면 회전·SVG와 터치 타깃
+  정렬, 혼합 binary/triplet 표기, 독립 지속음·붙임줄 편집 시나리오 3개 통과.
+  가로 구간 악보의 실제 스크린샷도 확인했다.
 - 실제 휴대폰의 300/1000타격 입력 지연·프레임 누락·메모리는 미측정.

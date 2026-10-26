@@ -4,6 +4,7 @@ import Svg, { Circle, Ellipse, G, Line, Path, Rect, Text as SvgText } from "reac
 import type { Meter, NotationEvent, UserSymbol } from "@/lib/rhythm-lab/types";
 import { toNumber } from "@/lib/rhythm-lab/engine";
 import { notationSpelling } from "@/lib/rhythm-lab/notation";
+import { indexStaffEvents, layoutStaffMeasures, staffWindow, NOTATION_SCALE, STAFF_LEFT } from "./rhythm-staff-layout";
 
 type TargetProps = {
   event: NotationEvent;
@@ -78,7 +79,6 @@ type TupletGroup = {
 const BLACK = "#111111";
 const GOLD = "#C39A2E";
 // Scale the whole engraving together, but keep editing targets in screen pixels.
-const NOTATION_SCALE = 0.8;
 const EPSILON = 0.025;
 
 function beamLevel(event: NotationEvent) {
@@ -105,7 +105,9 @@ function buildBeamPairs(events: NotationEvent[], spanQ: number, meter: Meter): B
   events.forEach((event) => {
     if (event.kind !== "note" || !beamLevel(event)) return;
     const voice = event.voiceId ?? `legacy-${event.midi?.join(",") ?? "unpitched"}`;
-    voices.set(voice, [...(voices.get(voice) ?? []), event]);
+    const bucket = voices.get(voice) ?? [];
+    bucket.push(event);
+    voices.set(voice, bucket);
   });
   for (const voiceEvents of voices.values()) {
     const ordered = [...voiceEvents].sort((a, b) => a.measureIndex - b.measureIndex || toNumber(a.startQ) - toNumber(b.startQ));
@@ -145,7 +147,9 @@ function buildTupletGroups(events: NotationEvent[], spanQ: number, meter: Meter,
     .sort((a, b) => a.measureIndex - b.measureIndex || toNumber(a.startQ) - toNumber(b.startQ));
   events.filter((event) => event.tuplet?.groupId).forEach((event) => {
     const id = event.tuplet!.groupId!;
-    explicit.set(id, [...(explicit.get(id) ?? []), event]);
+    const bucket = explicit.get(id) ?? [];
+    bucket.push(event);
+    explicit.set(id, bucket);
   });
   const groups: TupletGroup[] = [...explicit.entries()].map(([id, members]) => {
     const ordered = members.sort((a, b) => toNumber(a.startQ) - toNumber(b.startQ));
@@ -182,7 +186,9 @@ function buildTupletGroups(events: NotationEvent[], spanQ: number, meter: Meter,
     const segments = new Map<string, NotationEvent[]>();
     group.events.forEach((event) => {
       const key = `${event.measureIndex}:${Math.floor(event.measureIndex / measuresPerRow)}`;
-      segments.set(key, [...(segments.get(key) ?? []), event]);
+      const bucket = segments.get(key) ?? [];
+      bucket.push(event);
+      segments.set(key, bucket);
     });
     return [...segments.values()].map((segment) => ({ ...group, events: segment.sort((a, b) => toNumber(a.startQ) - toNumber(b.startQ)) }));
   });
@@ -201,31 +207,20 @@ function eventPitches(event: NotationEvent) {
 
 export function RhythmStaff({ events, meter, selected, symbols, onSelect, onMovePreview, onMoveCommit, onMoveCancel, playheadQ, singleLine = false, followPlayhead = false }: Props) {
   const [viewportWidth, setViewportWidth] = useState(0);
+  const [scrollX, setScrollX] = useState(0);
   const scrollRef = useRef<ScrollView>(null);
-  const left = 28;
+  const appliedFollowX = useRef<number | null>(null);
+  const left = STAFF_LEFT;
   const rightInset = 22;
   const spanQ = meter.numerator * (4 / meter.denominator);
-  const measures = Math.max(1, Math.floor(playheadQ / spanQ) + 1, ...events.map((event) => event.measureIndex + 1));
+  const index = useMemo(() => indexStaffEvents(events), [events]);
+  const measures = Math.max(index.measureCount, Math.floor(playheadQ / spanQ) + 1);
   const measuresPerRow = singleLine ? measures : viewportWidth >= 620 ? 2 : 1;
-  const measureWidths = Array.from({ length: measures }, (_, measureIndex) => {
-    const measureEvents = events.filter((event) => event.measureIndex === measureIndex);
-    const onsets = [...new Set(measureEvents.map((event) => toNumber(event.startQ)))].sort((a, b) => a - b);
-    const gaps = onsets.slice(1).map((value, index) => value - onsets[index]).filter((gap) => gap > 0.001);
-    const minimumGap = gaps.length ? Math.min(...gaps) : spanQ;
-    return Math.max(260, spanQ * 58, (spanQ / minimumGap) * 23);
-  });
-  const measureStarts: number[] = [];
+  const { widths: measureWidths, starts: measureStarts, rowEnds } = useMemo(
+    () => layoutStaffMeasures(index.byMeasure, measures, spanQ, measuresPerRow),
+    [index, measures, spanQ, measuresPerRow],
+  );
   const rowCount = Math.ceil(measures / measuresPerRow);
-  const rowEnds = Array.from({ length: rowCount }, (_, row) => {
-    const rowStart = row * measuresPerRow;
-    const rowEnd = Math.min(measures, rowStart + measuresPerRow);
-    return left + measureWidths.slice(rowStart, rowEnd).reduce((sum, value) => sum + value, 0);
-  });
-  for (let i = 0; i < measures; i++) {
-    const rowStart = Math.floor(i / measuresPerRow) * measuresPerRow;
-    const precedingWidths = measureWidths.slice(rowStart, i).reduce((sum, value) => sum + value, 0);
-    measureStarts.push(left + precedingWidths);
-  }
   const contentWidth = Math.max(viewportWidth / NOTATION_SCALE, ...rowEnds.map((end) => end + rightInset));
   const width = Math.max(260, contentWidth);
   const rowHeight = 118;
@@ -246,14 +241,65 @@ export function RhythmStaff({ events, meter, selected, symbols, onSelect, onMove
   const playheadMeasure = Math.floor(playheadQ / spanQ);
   const playheadLocalQ = ((playheadQ % spanQ) + spanQ) % spanQ;
   const playheadX = (measureStarts[playheadMeasure] ?? left) + edgePadding + playheadLocalQ / spanQ * measureWidthAt(playheadMeasure);
-  const beamPairs = buildBeamPairs(events, spanQ, meter);
+  const followX = Math.max(0, Math.min(renderedWidth - viewportWidth, playheadX * NOTATION_SCALE - viewportWidth * 0.65));
+  const pendingFollow = singleLine && followPlayhead && appliedFollowX.current !== followX;
+  const effectiveScrollX = Math.max(0, Math.min(renderedWidth - viewportWidth, pendingFollow ? followX : scrollX));
+  const range = singleLine ? staffWindow(measureStarts, measureWidths, effectiveScrollX, viewportWidth || 320)
+    : { first: 0, last: measures - 1 };
+  const visibleMeasures = Array.from({ length: range.last - range.first + 1 }, (_, i) => range.first + i);
+  const visibleEvents = visibleMeasures.flatMap((i) => index.byMeasure.get(i) ?? []);
+  const windowLeft = singleLine ? Math.max(0, measureStarts[range.first] - left) : 0;
+  const windowRight = singleLine ? Math.min(width, measureStarts[range.last] + measureWidths[range.last] + rightInset) : width;
+  const windowWidth = windowRight - windowLeft;
+  const beamPairs = buildBeamPairs(visibleEvents, spanQ, meter);
   const beamed = new Set(beamPairs.flatMap(({ a, b }) => [a.id, b.id]));
-  const tupletGroups = buildTupletGroups(events, spanQ, meter, measuresPerRow);
+  // Retain full tuplet membership so continuation labels survive window edges.
+  // Group segmentation is per measure, independent of the number of columns.
+  const tupletsByMeasure = useMemo(() => {
+    const buckets = new Map<number, TupletGroup[]>();
+    for (const group of buildTupletGroups(events, spanQ, meter, 1)) {
+      const i = group.events[0].measureIndex;
+      const bucket = buckets.get(i) ?? [];
+      bucket.push(group);
+      buckets.set(i, bucket);
+    }
+    return buckets;
+  }, [events, spanQ, meter]);
+  const tupletGroups = visibleMeasures.flatMap((i) => tupletsByMeasure.get(i) ?? []);
+  const selectedTies = new Set<string>();
+  for (const [id, chain] of index.ties) {
+    if (chain.some((piece) => selected.includes(piece.id))) selectedTies.add(id);
+  }
+  const tiePairsByMeasure = useMemo(() => {
+    const buckets = new Map<number, { tieId: string; piece: NotationEvent; next: NotationEvent; index: number }[]>();
+    for (const [tieId, chain] of index.ties) {
+      const ordered = [...chain].sort((a, b) => a.tie!.part - b.tie!.part);
+      for (let j = 0; j < ordered.length - 1; j++) {
+        const piece = ordered[j], next = ordered[j + 1];
+        const pair = { tieId, piece, next, index: j };
+        for (let m = Math.min(piece.measureIndex, next.measureIndex); m <= Math.max(piece.measureIndex, next.measureIndex); m++) {
+          const bucket = buckets.get(m) ?? [];
+          bucket.push(pair);
+          buckets.set(m, bucket);
+        }
+      }
+    }
+    return buckets;
+  }, [index]);
+  const tiePairs = [...new Set(visibleMeasures.flatMap((i) => tiePairsByMeasure.get(i) ?? []))];
+  // Offscreen tie endpoints still affect the visible curve. Resolve their
+  // polyphonic head offsets using their complete measures without drawing them.
+  const geometryMeasures = new Set(visibleMeasures);
+  for (const { piece, next } of tiePairs) {
+    geometryMeasures.add(piece.measureIndex);
+    geometryMeasures.add(next.measureIndex);
+  }
+  const geometryEvents = [...geometryMeasures].flatMap((i) => index.byMeasure.get(i) ?? []);
   const glyphXOffsets = new Map<string, number>();
-  events.filter((event) => event.kind === "note" && event.voiceId).forEach((event) => {
+  geometryEvents.filter((event) => event.kind === "note" && event.voiceId).forEach((event) => {
     const pitches = eventPitches(event);
     const start = toNumber(event.startQ);
-    const peers = events.filter((other) => other.kind === "note" && other.voiceId && other.voiceId !== event.voiceId
+    const peers = (index.byMeasure.get(event.measureIndex) ?? []).filter((other) => other.kind === "note" && other.voiceId && other.voiceId !== event.voiceId
       && other.measureIndex === event.measureIndex && Math.abs(toNumber(other.startQ) - start) < EPSILON
       && eventPitches(other).some((midi) => pitches.includes(midi)))
       .sort((a, b) => a.id.localeCompare(b.id));
@@ -281,17 +327,17 @@ export function RhythmStaff({ events, meter, selected, symbols, onSelect, onMove
       : { x: xFor(event), y: yFor(event) };
   };
   const stemDirections = new Map<string, boolean>();
-  events.filter((event) => event.kind === "note").forEach((event) => {
+  visibleEvents.filter((event) => event.kind === "note").forEach((event) => {
     const pitches = eventPitches(event);
     const headYs = pitches.length
       ? pitches.map((midi) => yFor(event) + 25 - (pitchStep(midi) - pitchStep(60)) * 4.5)
       : [yFor(event)];
     stemDirections.set(event.id, headYs.reduce((sum, value) => sum + value, 0) / headYs.length >= 52);
   });
-  events.filter((event) => event.kind === "note" && event.voiceId).forEach((event) => {
+  visibleEvents.filter((event) => event.kind === "note" && event.voiceId).forEach((event) => {
     const start = toNumber(event.startQ);
     const end = start + toNumber(event.durationQ);
-    const simultaneous = events.filter((other) => other.kind === "note" && other.voiceId && other.voiceId !== event.voiceId
+    const simultaneous = (index.byMeasure.get(event.measureIndex) ?? []).filter((other) => other.kind === "note" && other.voiceId && other.voiceId !== event.voiceId
       && other.measureIndex === event.measureIndex && toNumber(other.startQ) < end - EPSILON
       && toNumber(other.startQ) + toNumber(other.durationQ) > start + EPSILON)
       .sort((a, b) => toNumber(a.startQ) - toNumber(b.startQ) || a.id.localeCompare(b.id));
@@ -301,20 +347,26 @@ export function RhythmStaff({ events, meter, selected, symbols, onSelect, onMove
     cluster.forEach((item, index) => stemDirections.set(item.id, index % 2 === 0));
   });
   const flagsFor = (event: NotationEvent) => beamLevel(event);
-  const followX = Math.max(0, playheadX * NOTATION_SCALE - viewportWidth * 0.65);
   useEffect(() => {
-    if (followPlayhead && singleLine) scrollRef.current?.scrollTo({ x: followX, animated: false });
+    if (followPlayhead && singleLine) {
+      appliedFollowX.current = followX;
+      setScrollX(followX);
+      scrollRef.current?.scrollTo({ x: followX, animated: false });
+    } else appliedFollowX.current = null;
   }, [followPlayhead, singleLine, followX]);
 
   return <View testID="rhythm-staff" onLayout={(event) => setViewportWidth(event.nativeEvent.layout.width)} style={styles.frame}>
-    <ScrollView ref={scrollRef} horizontal showsHorizontalScrollIndicator contentContainerStyle={{ minWidth: renderedWidth }}>
+    <ScrollView ref={scrollRef} testID="rhythm-staff-scroll" horizontal showsHorizontalScrollIndicator
+      scrollEventThrottle={16} onScroll={(event) => setScrollX(event.nativeEvent.contentOffset.x)}
+      contentContainerStyle={{ minWidth: renderedWidth }}>
       <View style={{ width: renderedWidth, height: renderedHeight, position: "relative" }}>
-        <Svg width={renderedWidth} height={renderedHeight} viewBox={`0 0 ${width} ${height}`} style={{ backgroundColor: "#FFFFFF" }}>
+        <View style={{ position: "absolute", left: windowLeft * NOTATION_SCALE, width: windowWidth * NOTATION_SCALE, height: renderedHeight }}>
+        <Svg width={windowWidth * NOTATION_SCALE} height={renderedHeight} viewBox={`${windowLeft} 0 ${windowWidth} ${height}`} style={{ backgroundColor: "#FFFFFF" }}>
           {Array.from({ length: rowCount }, (_, row) => <G key={`staff-${row}`}>
             {Array.from({ length: 5 }, (_, i) => <Line key={`staff-line-${i}`} x1={left} x2={rowEnds[row]} y1={34 + row * rowHeight + i * 9} y2={34 + row * rowHeight + i * 9} stroke={BLACK} strokeWidth={1} />)}
             <SvgText x={left + 5} y={24 + row * rowHeight} fontSize="11" fill={BLACK}>{meter.numerator}/{meter.denominator}</SvgText>
           </G>)}
-          {measureWidths.map((_, i) => {
+          {visibleMeasures.map((i) => {
             const x = measureStarts[i];
             const row = Math.floor(i / measuresPerRow);
             return <G key={`bar-${i}`}>
@@ -350,8 +402,8 @@ export function RhythmStaff({ events, meter, selected, symbols, onSelect, onMove
             const y = yFor(first) - 52;
             const middle = (x1 + x2) / 2;
             const all = group.fullEvents;
-            const hasEarlier = all.some((event) => toNumber(event.startQ) < toNumber(first.startQ) - EPSILON);
-            const hasLater = all.some((event) => toNumber(event.startQ) > toNumber(last.startQ) + EPSILON);
+            const hasEarlier = toNumber(all[0].startQ) < toNumber(first.startQ) - EPSILON;
+            const hasLater = toNumber(all[all.length - 1].startQ) > toNumber(last.startQ) + EPSILON;
             const standard = group.layers.length === 1 && group.normal === 2 ** Math.floor(Math.log2(group.actual));
             const ratio = standard && !hasEarlier && !hasLater
               ? String(group.actual)
@@ -365,16 +417,7 @@ export function RhythmStaff({ events, meter, selected, symbols, onSelect, onMove
             </G>;
           })}
 
-          {(() => {
-            const chains = new Map<string, NotationEvent[]>();
-            events.filter((event) => event.tie).forEach((event) => {
-              chains.set(event.tie!.id, [...(chains.get(event.tie!.id) ?? []), event]);
-            });
-            return [...chains.entries()].flatMap(([tieId, pieces]) => {
-              const ordered = pieces.sort((a, b) => a.tie!.part - b.tie!.part);
-              return ordered.slice(0, -1).flatMap((piece, index) => {
-                const next = ordered[index + 1];
-                if (!next) return [];
+          {tiePairs.flatMap(({ tieId, piece, next, index }) => {
                 const sharedPitches = eventPitches(piece).filter((midi) => eventPitches(next).includes(midi));
                 const tiePitches: (number | undefined)[] = sharedPitches.length ? sharedPitches : [undefined];
                 return tiePitches.map((midi, pitchIndex) => {
@@ -397,15 +440,13 @@ export function RhythmStaff({ events, meter, selected, symbols, onSelect, onMove
                     <Path d={`M${edgeIn},${y2 + 3} Q${(edgeIn + x2) / 2},${y2 + 9} ${x2},${y2}`} fill="none" stroke={BLACK} strokeWidth={1.3} />
                   </G>;
                 });
-              });
-            });
-          })()}
+          })}
 
-          {events.map((event) => {
+          {visibleEvents.map((event) => {
             const x = event.kind === "note" ? glyphXFor(event) : xFor(event);
             const y = yFor(event);
             const isSelected = selected.includes(event.id) || event.hitIds.some((id) => selected.includes(id)) ||
-              !!event.tie && events.some((piece) => piece.tie?.id === event.tie!.id && selected.includes(piece.id));
+              !!event.tie && selectedTies.has(event.tie.id);
             const value = displayValue(event);
             const dotted = notationSpelling(event).dotted;
             const open = value <= 2;
@@ -474,10 +515,11 @@ export function RhythmStaff({ events, meter, selected, symbols, onSelect, onMove
           })}
         </Svg>
         <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>
-          {events.map((event) => {
+          {visibleEvents.map((event) => {
             const point = targetPoint(event);
-            return <EventTarget key={`target-${event.id}`} event={event} x={point.x * NOTATION_SCALE} y={point.y * NOTATION_SCALE} measureWidth={measureWidthFor(event) * NOTATION_SCALE} spanQ={spanQ} draggable={event.kind === "note"} onSelect={onSelect} onPreview={onMovePreview} onCommit={onMoveCommit} onCancel={onMoveCancel} />;
+            return <EventTarget key={`target-${event.id}`} event={event} x={(point.x - windowLeft) * NOTATION_SCALE} y={point.y * NOTATION_SCALE} measureWidth={measureWidthFor(event) * NOTATION_SCALE} spanQ={spanQ} draggable={event.kind === "note"} onSelect={onSelect} onPreview={onMovePreview} onCommit={onMoveCommit} onCancel={onMoveCancel} />;
           })}
+        </View>
         </View>
       </View>
     </ScrollView>

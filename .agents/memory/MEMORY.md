@@ -97,3 +97,4 @@
 - [악보 입력 해석의 전제](score-input-interpretation.md) — 직접 연주 입력은 즉시 기보 확정이 아니라 이후 문맥으로 임시 해석을 갱신하는 방식으로 검토한다.
 - [리듬 입력 검증](rhythm-input-verification.md) — 저장된 down/up과 건반별 release를 확인하고, 메트로놈 클릭이 화음을 끊지 않게 출력 소유권을 분리한다.
 - [리듬 악보 화면 맞춤](rhythm-score-width-preference.md) — 좌우 스크롤 없이 지정 마디 수를 유지해 축소하고, 특정 줄 조정 뒤에는 기본 마디 수로 재배치한다.
+- [Rhythm viewport benchmark clocks](rhythm-viewport-benchmark.md) — synthetic capture time and the independent display ticker must advance together in viewport benchmarks.

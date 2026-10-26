@@ -10,6 +10,9 @@ import * as engine from "../lib/rhythm-lab/engine";
 import { RhythmWorkspace } from "../components/lab-score/RhythmWorkspace";
 import { createRhythmRecovery, rhythmRecovery } from "../lib/rhythm-lab/recovery";
 
+// Export the old component, not a feature flag in production code.
+jest.mock("../components/lab-score/RhythmStaff", () => jest.requireActual(
+  process.env.RHYTHM_STAFF_BASELINE ? process.env.RHYTHM_STAFF_BASELINE : "../components/lab-score/RhythmStaff"));
 jest.mock("../lib/rhythm-lab/engine", () => jest.requireActual(
   process.env.RHYTHM_BASELINE_DIR ? `${process.env.RHYTHM_BASELINE_DIR}/engine.ts` : "../lib/rhythm-lab/engine"));
 jest.mock("../lib/rhythm-lab/verification", () => jest.requireActual(
@@ -70,21 +73,37 @@ benchmark.each([300, 1000])("input to DOM commit with %i existing hits", async (
     await act(async () => { jest.advanceTimersByTime(2700); });
     create.mockRestore();
     expect(screen.getByTestId("rhythm-record-status").textContent).toBe("Recording");
+    const staff = screen.getByTestId("rhythm-staff");
+    act(() => (staff as any).__onLayout({ nativeEvent: { layout: { width: 360 } } }));
     const clock = jest.spyOn(performance, "now");
     const samples: number[] = [];
+    let previousIds = [...staff.querySelectorAll('[data-testid^="rhythm-notehead-note-"]')].map((node) => node.getAttribute("data-testid"));
     for (let i = 0; i < 9; i++) {
       clock.mockReturnValue(2000 + (size + i + 1) * 250);
+      // Keep the independent 80ms recording ticker near the next attack, as
+      // during real capture, rather than freezing the viewport at time zero.
+      act(() => jest.advanceTimersByTime(80));
       const start = process.hrtime.bigint();
       act(() => mockPad.onDown());
       const elapsed = Number(process.hrtime.bigint() - start) / 1e6;
-      // Real staff generated a new notehead, not merely updated test state.
-      expect(screen.getByTestId("rhythm-staff").querySelectorAll("ellipse").length).toBe(size + i + 1);
+      // The newest attack must be engraved, not just committed to hidden state.
+      const noteheads = [...staff.querySelectorAll('[data-testid^="rhythm-notehead-note-"]')];
+      expect(noteheads.length).toBeGreaterThan(0);
+      const ids = noteheads.map((node) => node.getAttribute("data-testid"));
+      expect(ids).not.toEqual(previousIds);
+      previousIds = ids;
       if (i >= 2) samples.push(elapsed);
       act(() => mockPad.onUp());
     }
     samples.sort((a, b) => a - b);
+    if (!process.env.RHYTHM_STAFF_BASELINE) {
+      expect(staff.querySelectorAll('[data-testid^="rhythm-note-target-"]').length).toBeLessThan(100);
+      expect(staff.querySelectorAll("*").length).toBeLessThan(600);
+    }
     console.log(JSON.stringify({ size, callbackToDOMCommitMedianMs: +samples[3].toFixed(2),
-      callbackToDOMCommitMaxMs: +samples.at(-1)!.toFixed(2), baseline: !!process.env.RHYTHM_BASELINE_DIR }));
+      callbackToDOMCommitMaxMs: +samples.at(-1)!.toFixed(2), baseline: !!process.env.RHYTHM_BASELINE_DIR,
+      staffBaseline: !!process.env.RHYTHM_STAFF_BASELINE, staffDOMNodes: staff.querySelectorAll("*").length,
+      svgNodes: staff.querySelectorAll("svg *").length, targets: staff.querySelectorAll('[data-testid^="rhythm-note-target-"]').length }));
     clock.mockRestore();
   } finally {
     screen.unmount();

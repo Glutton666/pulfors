@@ -41,6 +41,37 @@ async function disableCountIn(page: Page, flow: "input" | "practice" = "input") 
   await expect(page.getByTestId("rhythm-settings-modal")).toHaveCount(0);
 }
 
+test("long single-line capture culls offscreen notation and keeps scrolled targets aligned", async ({ page }) => {
+  const doc = { ...createRhythmDocument({ title: "Windowed long take", bpm: 120 }),
+    hits: Array.from({ length: 1000 }, (_, i) => ({ id: `window-${i}`, onsetMs: i * 250, releaseMs: i * 250 + 30, drum: "snare" as const })) };
+  await page.addInitScript((document) => localStorage.setItem("rhythm_lab_documents_v1", JSON.stringify([document])), doc);
+  await enterLab(page, "rhythm");
+  await openSavedTake(page);
+  await page.getByTestId("rhythm-flow-input").click();
+  const staff = page.getByTestId("rhythm-staff");
+  const scroll = page.getByTestId("rhythm-staff-scroll");
+  await expect(staff.getByTestId("rhythm-note-target-note-window-0")).toBeVisible();
+  expect(await staff.locator('[data-testid^="rhythm-note-target-"]').count()).toBeLessThan(100);
+  const contentWidth = await scroll.evaluate((node) => node.scrollWidth);
+  expect(contentWidth).toBeGreaterThan(10000);
+  await scroll.evaluate((node) => { node.scrollLeft = node.scrollWidth - node.clientWidth; });
+  const target = staff.getByTestId("rhythm-note-target-note-window-999");
+  await expect(target).toBeVisible();
+  await expect(staff.getByTestId("rhythm-note-target-note-window-0")).toHaveCount(0);
+  expect(await staff.locator('[data-testid^="rhythm-note-target-"]').count()).toBeLessThan(100);
+  const head = staff.locator('[data-testid="rhythm-notehead-note-window-999-0"]');
+  const headBox = await head.boundingBox(), targetBox = await target.boundingBox();
+  expect(Math.abs(targetBox!.x + 18 - (headBox!.x + headBox!.width / 2))).toBeLessThan(0.5);
+  expect(Math.abs(targetBox!.y + 18 - (headBox!.y + headBox!.height / 2))).toBeLessThan(0.5);
+  expect(await staff.locator("svg").evaluate((svg) => svg.getBoundingClientRect().width)).toBeLessThan(1800);
+  await page.screenshot({ path: "/tmp/rhythm-windowed-long-take.png" });
+  await scroll.evaluate((node) => { node.scrollLeft = 0; });
+  await expect(staff.getByTestId("rhythm-note-target-note-window-0")).toBeVisible();
+  // A viewport change must keep the engraving and hit targets aligned.
+  await page.setViewportSize({ width: 900, height: 500 });
+  await expect(staff.getByTestId("rhythm-note-target-note-window-0")).toBeVisible();
+});
+
 test("mixed binary and triplet notes retain local brackets on the visible staff", async ({ page }) => {
   const doc = { ...createRhythmDocument({ title: "Mixed local groups", bpm: 120 }),
     hits: [0, 125, 250, 1000 / 3, 1250 / 3].map((onsetMs, i) =>
