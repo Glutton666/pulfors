@@ -29,7 +29,7 @@ const scaleFraction = (a: Fraction, n: number, d: number) => fraction(a.n * n, a
 export function createRhythmDocument(options: { title?: string; bpm?: number; meter?: Meter } = {}): RhythmDocument {
   const now = Date.now();
   return {
-    version: 1, notationVersion: 2, id: newRhythmId(), title: options.title ?? "",
+    version: 1, notationVersion: 2, automaticCorrection: "bounded", id: newRhythmId(), title: options.title ?? "",
     bpm: clamp(options.bpm ?? 120, 20, 300),
     meter: options.meter ?? { numerator: 4, denominator: 4 },
     createdAt: now, updatedAt: now, hits: [], overrides: [], tuplets: [], symbols: [],
@@ -463,6 +463,11 @@ export function validateRhythmDocument(value: unknown): RhythmDocument {
   if (d.notationVersion !== undefined) {
     if (d.notationVersion !== 1 && d.notationVersion !== 2) throw new Error("Unsupported notation version");
     doc.notationVersion = d.notationVersion;
+  }
+  delete doc.automaticCorrection;
+  if (d.automaticCorrection !== undefined) {
+    if (d.automaticCorrection !== "bounded") throw new Error("Unsupported automatic correction");
+    doc.automaticCorrection = "bounded";
   }
   if (d.staffLayout !== undefined) {
     const layout = object(d.staffLayout);

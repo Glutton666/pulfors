@@ -15,7 +15,9 @@ const expected = [
   ["1c1930da1d1bf5c2c1d27b0c980d142faecb135882628d7e4a7d60a84b2b728a", "45bf7923430c064bb2907b3751d8dd57d5dd270dfb97eaf1ea3c34cd9adfb813"],
   ["7e00985a091c3aae51ec79a324add7bebd25ff047e476db23489407bea6fba0e", "40812329ed6736bbc4565218da0ee8b11a1cd67b6c342710baa863d6082ff152"],
 ];
-test.each(rhythmPerformanceCases().map((doc, i) => [i, doc] as const))(
+// These fixed hashes describe the historical reader. Keep them as a saved-take
+// compatibility check; bounded correction has independent semantic fixtures.
+test.each(rhythmPerformanceCases().map((doc, i) => [i, { ...doc, automaticCorrection: undefined }] as const))(
   "local/lazy candidates and reports preserve the eager reference %i", (index, doc) => {
     const raw = JSON.stringify(doc.hits);
     const result = interpretRhythm(doc);

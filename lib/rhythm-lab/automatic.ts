@@ -1,5 +1,6 @@
 import type { Hit, InterpretationCandidate, NotationEvent, RhythmDocument } from "./types";
 import { attachTuplet, EPS, fillRests, gridRatio, musicalTime, num, spellLength, splitNote } from "./spans";
+import { rankBoundedRhythm } from "./bounded-correction";
 
 const GRIDS = [4, 8, 16, 32, 64, 128, 12, 24, 48, 96, 20, 40, 80, 28, 56, 112];
 type Choice = { grid: number; score: number };
@@ -36,7 +37,23 @@ export function automaticRhythm(doc: RhythmDocument): { notes: NotationEvent[]; 
     const key = bucket(hit), local = regions.get(key) ?? [];
     local.push(hit); regions.set(key, local);
   }
-  const choices = new Map([...regions].map(([key, local]) => [key, rank(local.map((h) => qOf(doc, h)), ms, doc.simplification)]));
+  const contextKey = (key: number) => {
+    const at = key * regionSize + EPS;
+    return `${Math.floor(at / capacity)}:${Math.floor(at)}`;
+  };
+  const beatContext = new Map<string, number[]>();
+  for (const [key, local] of regions) {
+    const beat = contextKey(key);
+    const context = beatContext.get(beat) ?? [];
+    context.push(...local.map((h) => qOf(doc, h)));
+    beatContext.set(beat, context);
+  }
+  const choices = new Map([...regions].map(([key, local]) => {
+    const times = local.map((h) => qOf(doc, h));
+    return [key, doc.automaticCorrection === "bounded"
+      ? rankBoundedRhythm(times, beatContext.get(contextKey(key))!, ms, doc.simplification)
+      : rank(times, ms, doc.simplification)] as const;
+  }));
   // Rank held gates once, not once per competing onset hypothesis.
   const gates = new Map(hits.filter((h) => h.midi !== undefined && h.releaseMs !== undefined && h.releaseMs > h.onsetMs)
     .map((h) => {

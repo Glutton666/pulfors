@@ -27,6 +27,36 @@ async function hold(page: Page, x: number, y: number, ms = 700) {
   await page.mouse.move(x, y); await page.mouse.down(); await page.waitForTimeout(ms); await page.mouse.up();
 }
 
+test("bounded reinterpretation is explicit, reversible and preserved on save/reopen", async ({ page }) => {
+  const doc = { ...createRhythmDocument({ title: "Timing correction", bpm: 120 }), automaticCorrection: undefined,
+    hits: [18, 268, 518, 768].map((onsetMs, i) => ({ id: `jitter-${i}`, onsetMs, releaseMs: onsetMs + 30, drum: "snare" as const })) };
+  await page.addInitScript((doc) => localStorage.setItem("rhythm_lab_documents_v1", JSON.stringify([doc])), doc);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await enter(page);
+  await page.getByTestId("rhythm-load").click();
+  await page.getByTestId(`rhythm-saved-open-${doc.id}`).click();
+  const upgrade = page.getByTestId("rhythm-upgrade-notation");
+  await expect(upgrade).toBeVisible();
+  const rests = page.locator('[data-testid^="rhythm-rest-glyph-"]');
+  const oldCount = await rests.count();
+  await upgrade.click();
+  await expect.poll(() => rests.count()).toBeLessThan(oldCount);
+  await page.getByTestId("rhythm-restore-notation").click();
+  await expect(upgrade).toBeVisible();
+  await expect(rests).toHaveCount(oldCount);
+  await upgrade.click();
+  await page.getByTestId("rhythm-save").click();
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("practice_book") ?? "[]")
+    .find((entry: any) => entry.mode === "rhythm")?.rhythmDocument);
+  expect(saved.automaticCorrection).toBe("bounded");
+  expect(saved.hits).toEqual(doc.hits);
+  await page.getByTestId("web-alert-action-0").click();
+  await page.getByTestId("rhythm-library-open-review").click();
+  await page.getByTestId(`rhythm-saved-open-${doc.id}`).click();
+  await expect(upgrade).toHaveCount(0);
+  await page.screenshot({ path: "generated-artifacts/rhythm-bounded-correction.jpg" });
+});
+
 test("calibration completes from actual reference dispatch and keeps the applied value", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await enter(page);

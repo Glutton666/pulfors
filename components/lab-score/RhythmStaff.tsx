@@ -457,12 +457,14 @@ export function RhythmStaff({ events, meter, selected, symbols, onSelect, onMove
             const ratio = standard && !hasEarlier && !hasLater
               ? String(group.actual)
               : group.layers.map((layer) => `${layer.actual}:${layer.normal}`).join(" × ");
+            const label = `${ratio}${hasEarlier ? " ‹" : ""}${hasLater ? " ›" : ""}`;
+            const labelGap = label.length * 2.7 + 3;
             return <G key={`tuplet-${first.id}-${index}`} testID={`rhythm-tuplet-bracket-${first.id}`}>
-              <Line x1={x1} y1={y + 5} x2={middle - 18} y2={y + 5} stroke={BLACK} strokeWidth={1} />
-              <Line x1={middle + 18} y1={y + 5} x2={x2} y2={y + 5} stroke={BLACK} strokeWidth={1} />
+              {x1 < middle - labelGap && <Line x1={x1} y1={y + 5} x2={middle - labelGap} y2={y + 5} stroke={BLACK} strokeWidth={1} />}
+              {middle + labelGap < x2 && <Line x1={middle + labelGap} y1={y + 5} x2={x2} y2={y + 5} stroke={BLACK} strokeWidth={1} />}
               {!hasEarlier && <Line x1={x1} y1={y + 5} x2={x1} y2={y + 10} stroke={BLACK} strokeWidth={1} />}
               {!hasLater && <Line x1={x2} y1={y + 5} x2={x2} y2={y + 10} stroke={BLACK} strokeWidth={1} />}
-              <SvgText x={middle} y={y + 8} fill={BLACK} fontSize="9" textAnchor="middle">{ratio}{hasEarlier ? " ‹" : ""}{hasLater ? " ›" : ""}</SvgText>
+              <SvgText x={middle} y={y + 8} fill={BLACK} fontSize="9" textAnchor="middle">{label}</SvgText>
             </G>;
           })}
 

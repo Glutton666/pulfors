@@ -133,7 +133,22 @@ export function fillRests(doc: RhythmDocument, notes: NotationEvent[], measures 
       let at = cursor;
       while (at < a - EPS) {
         const hint = hintsByMeasure.get(m)?.find((e) => at >= num(e.tuplet!.startQ!) - EPS && at < num(e.tuplet!.endQ!) - EPS)?.tuplet;
-        const boundary = Math.min(a, Math.floor(at + EPS) + 1, hint?.endQ ? num(hint.endQ) : Infinity);
+        let ordinaryEnd = Math.floor(at + EPS) + 1;
+        if (doc.automaticCorrection === "bounded" && !hint) {
+          // Consolidate complete metrical units, never erase a short silence
+          // or stretch a percussion note to occupy it.
+          const from = m * capacity;
+          const wholeBar = Math.abs(at - from) < EPS && a >= end - EPS;
+          const wholeSpelling = wholeBar ? spellLength(capacity) : undefined;
+          const unit = doc.meter.denominator === 8 && doc.meter.numerator > 3 &&
+            doc.meter.numerator % 3 === 0 ? 1.5 : 1;
+          const aligned = [unit * 4, unit * 2, unit].find((size) =>
+            Math.abs((at - from) / size - Math.round((at - from) / size)) < EPS &&
+            at + size <= Math.min(a, end) + EPS);
+          if (wholeSpelling && Math.abs(wholeSpelling.duration - capacity) < EPS) ordinaryEnd = end;
+          else if (aligned) ordinaryEnd = at + aligned;
+        }
+        const boundary = Math.min(a, ordinaryEnd, hint?.endQ ? num(hint.endQ) : Infinity);
         const length = boundary - at;
         let spelling = spellLength(length, hint);
         if (!spelling) {

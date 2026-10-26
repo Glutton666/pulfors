@@ -101,6 +101,7 @@ export function RhythmWorkspace({ active = true, initialDocument }: { active?: b
   const [calibrationOpen, setCalibrationOpen] = useState(false);
   const [offsetText, setOffsetText] = useState(() => String(initialDocument?.offsetMs ?? 0));
   const [rowSelection, setRowSelection] = useState<{ start: number; count: number } | null>(null);
+  const [previousReader, setPreviousReader] = useState<Pick<RhythmDocument, "id" | "notationVersion" | "automaticCorrection"> | null>(null);
   const calibration = useRhythmCalibration((offset) => {
     setOffsetText(String(offset)); setDoc((prev) => ({ ...prev, offsetMs: offset }));
   });
@@ -649,15 +650,25 @@ export function RhythmWorkspace({ active = true, initialDocument }: { active?: b
         </View>
       </View>}
       {flow === "review" && <View testID="rhythm-review-stage" onLayout={(event) => { const y = event.nativeEvent.layout.y; setStageY((prev) => prev.review === y ? prev : { ...prev, review: y }); }}>
-        {doc.notationVersion !== 2 && <View style={{ gap: 4, marginVertical: 4 }}>
+        {(doc.notationVersion !== 2 || doc.automaticCorrection !== "bounded") && <View style={{ gap: 4, marginVertical: 4 }}>
           <Text style={{ color: C.textSecondary, fontSize: 11 }}>{ko ? "기존 기보 규칙으로 열었습니다. 원본과 수동 수정은 유지됩니다." : "Opened with legacy notation. Original input and manual edits are retained."}</Text>
           <Pressable testID="rhythm-upgrade-notation" accessibilityRole="button" disabled={interactionLocked}
             onPress={() => { rhythmRecovery.remember(docRef.current, true, true);
-              setDoc((current) => ({ ...current, notationVersion: 2, updatedAt: Date.now() })); }}
+              setPreviousReader({ id: doc.id, notationVersion: doc.notationVersion, automaticCorrection: doc.automaticCorrection });
+              setDoc((current) => ({ ...current, notationVersion: 2, automaticCorrection: "bounded", updatedAt: Date.now() })); }}
             style={[s.chip, { borderColor: C.border }]}>
-            <Text style={{ color: C.text }}>{ko ? "새 기보 규칙으로 검토" : "Review with new notation rules"}</Text>
+            <Text style={{ color: C.text }}>{ko ? "작은 타이밍 흔들림을 정리해 재해석" : "Reinterpret with bounded timing correction"}</Text>
           </Pressable>
         </View>}
+        {previousReader?.id === doc.id && doc.automaticCorrection === "bounded" && <Pressable
+          testID="rhythm-restore-notation" accessibilityRole="button" disabled={interactionLocked}
+          onPress={() => {
+            setDoc((current) => ({ ...current, notationVersion: previousReader.notationVersion,
+              automaticCorrection: previousReader.automaticCorrection, updatedAt: Date.now() }));
+            setPreviousReader(null);
+          }} style={[s.chip, { borderColor: C.border }]}>
+          <Text style={{ color: C.text }}>{ko ? "이전 자동 해석으로 돌아가기 · 수동 수정 유지" : "Restore previous reader · keep manual edits"}</Text>
+        </Pressable>}
         <View style={s.sectionHeader}>
           <View><Text style={[s.cardTitle, { color: C.text }]}>{text.provisional}</Text><Text style={[s.muted, { color: C.textSecondary }]}>{events.length} events · {doc.hits.length} raw hits</Text></View>
           <View style={{ flexDirection: "row", flexWrap: "wrap", maxWidth: "100%", gap: 7 }}>

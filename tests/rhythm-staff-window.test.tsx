@@ -140,6 +140,16 @@ test("empty notation still has a staff and the playhead can extend a single line
   expect(Number(screen.container.querySelector("svg")!.getAttribute("width"))).toBeLessThan(1500);
 });
 
+test("short tuplet brackets never draw reversed horizontal strokes across their labels", () => {
+  const event = note(0, { tuplet: { actual: 5, normal: 4, groupId: "short" } });
+  const screen = render(<RhythmStaff {...props([event])} />);
+  layout(screen, 360);
+  const bracket = screen.getByTestId("rhythm-tuplet-bracket-n0");
+  expect(bracket.textContent).toContain("5");
+  bracket.querySelectorAll("line").forEach((line) =>
+    expect(Number(line.getAttribute("x2"))).toBeGreaterThanOrEqual(Number(line.getAttribute("x1"))));
+});
+
 const rowPixels = STAFF_ROW_HEIGHT * NOTATION_SCALE;
 
 test("a tiny gap never shrinks the whole page, and display ratios retain virtual row alignment", () => {
