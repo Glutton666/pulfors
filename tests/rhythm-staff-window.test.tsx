@@ -2,7 +2,7 @@
 import React from "react";
 import { act, render } from "@testing-library/react";
 import { RhythmStaff } from "../components/lab-score/RhythmStaff";
-import { indexStaffEvents, layoutStaffMeasures, staffWindow, staffRowWindow, STAFF_ROW_HEIGHT, NOTATION_SCALE } from "../components/lab-score/rhythm-staff-layout";
+import { indexStaffEvents, layoutStaffMeasures, staffWindow, staffRowWindow, staffRowPixels, STAFF_ROW_HEIGHT, NOTATION_SCALE } from "../components/lab-score/rhythm-staff-layout";
 import type { NotationEvent } from "../lib/rhythm-lab/types";
 
 jest.mock("react-native-svg", () => {
@@ -141,6 +141,22 @@ test("empty notation still has a staff and the playhead can extend a single line
 });
 
 const rowPixels = STAFF_ROW_HEIGHT * NOTATION_SCALE;
+
+test("a tiny gap never shrinks the whole page, and display ratios retain virtual row alignment", () => {
+  const events = [note(0), note(0, { id: "tiny", startQ: { n: 1, d: 256 } }), ...Array.from({ length: 40 }, (_, i) => note(i + 1))];
+  const p = { ...props(events), singleLine: false };
+  const screen = render(<RhythmStaff {...p} verticalViewport={{ top: 0, height: 300 }} />);
+  layout(screen, 360);
+  expect(screen.container.querySelector("svg")!.getAttribute("viewBox")!.split(" ")[2]).toBe("450");
+  const bigger = { barsPerRow: 2, rowOverrides: [], notationZoom: 1.5, rowSpacing: 1.8 };
+  expect(staffRowPixels({ ...bigger, rowSpacing: 1.1 })).toBeGreaterThan(staffRowPixels({ ...bigger, rowSpacing: 1 }));
+  expect(staffRowPixels({ ...bigger, rowSpacing: 0.9 })).toBeLessThan(staffRowPixels({ ...bigger, rowSpacing: 1 }));
+  screen.rerender(<RhythmStaff {...p} layout={bigger} verticalViewport={{ top: 10 * staffRowPixels(bigger), height: 200 }} />);
+  expect(screen.container.querySelector("svg")!.getAttribute("width")).toBe("360");
+  expect(screen.getByTestId("rhythm-note-target-n20")).toBeTruthy();
+  expect(screen.queryByTestId("rhythm-note-target-n0")).toBeNull();
+  expect(staffRowWindow(30, 10 * staffRowPixels(bigger), 200, staffRowPixels(bigger)).first).toBe(9);
+});
 
 test("fixed columns and row exceptions fit narrow screens and keep glyph/target alignment", () => {
   const p = { ...props(), singleLine: false, layout: { barsPerRow: 4, rowOverrides: [{ startMeasure: 4, count: 2 }] } };

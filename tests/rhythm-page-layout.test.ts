@@ -14,7 +14,7 @@ test("fixed default count and one-row exceptions reflow all following rows", () 
 test("layout survives validated JSON roundtrip and never modifies musical input", () => {
   const doc = createRhythmDocument();
   doc.hits = [{ id: "h", onsetMs: 100, releaseMs: 160, drum: "snare" }];
-  const next = { ...doc, staffLayout: { barsPerRow: 3, rowOverrides: [{ startMeasure: 3, count: 2 }] } };
+  const next = { ...doc, staffLayout: { barsPerRow: 3, rowOverrides: [{ startMeasure: 3, count: 2 }], notationZoom: 1.4, rowSpacing: 0.9 } };
   expect(validateRhythmDocument(JSON.parse(JSON.stringify(next)))).toEqual(next);
   expect(next.hits).toBe(doc.hits);
   expect(validateRhythmDocument(doc).staffLayout).toBeUndefined();
@@ -22,4 +22,8 @@ test("layout survives validated JSON roundtrip and never modifies musical input"
     expect(() => validateRhythmDocument({ ...next, staffLayout: { barsPerRow: count, rowOverrides: [] } })).toThrow();
   }
   expect(() => validateRhythmDocument({ ...next, staffLayout: { barsPerRow: 4, rowOverrides: [{ startMeasure: 4096, count: 2 }] } })).toThrow();
+  for (const invalid of [NaN, Infinity, 0, 3]) {
+    expect(() => validateRhythmDocument({ ...next, staffLayout: { ...next.staffLayout, notationZoom: invalid } })).toThrow();
+    expect(() => validateRhythmDocument({ ...next, staffLayout: { ...next.staffLayout, rowSpacing: invalid } })).toThrow();
+  }
 });

@@ -18,7 +18,8 @@ import { RhythmValidationPanel } from "./RhythmValidationPanel";
 import { RhythmInputDock } from "./RhythmInputDock";
 import { RhythmHoldToStop } from "./RhythmHoldToStop";
 import { RhythmCalibrationPanel } from "./RhythmCalibrationPanel";
-import { changeStaffRow, NOTATION_SCALE, STAFF_ROW_HEIGHT } from "./rhythm-staff-layout";
+import { changeStaffRow, staffRowPixels } from "./rhythm-staff-layout";
+import { RhythmStaffControls } from "./RhythmStaffControls";
 import { useRhythmCalibration } from "@/hooks/useRhythmCalibration";
 import { RhythmEntryGuidance } from "./RhythmEntryGuidance";
 import { applyDraftCandidate, confirmDraftRegion, prepareValidatedDraft, reconstructNotation, reopenDraftRegion, verifyDraft } from "@/lib/rhythm-lab/verification";
@@ -628,6 +629,7 @@ export function RhythmWorkspace({ active = true, initialDocument }: { active?: b
         </Pressable>}
       </View>}
       {flow !== "input" && <View style={s.flowRow}>{([["input", text.inputFlow], ["review", text.reviewFlow], ["practice", text.practiceFlow]] as const).map(([key, label]) => <Pressable key={key} testID={`rhythm-flow-${key}`} accessibilityRole="button" accessibilityState={{ selected: flow === key }} disabled={recording || recordPending || practiceOn || practicePending} onPress={() => changeFlow(key)} style={[s.flowChip, { borderColor: flow === key ? C.accent : C.border, backgroundColor: flow === key ? C.surfaceLight : "transparent", opacity: recording || recordPending || practiceOn || practicePending ? 0.45 : 1 }]}><Text style={{ color: flow === key ? C.accent : C.textSecondary, fontSize: 11 }}>{label}</Text></Pressable>)}</View>}
+      <RhythmStaffControls layout={doc.staffLayout} ko={ko} onChange={(staffLayout) => setDoc((prev) => ({ ...prev, staffLayout }))} />
       {flow === "input" && <View testID="rhythm-input-stage" onLayout={(e) => { const y = e.nativeEvent.layout.y; setStageY((prev) => prev.input === y ? prev : { ...prev, input: y }); }}>
         <Text style={{ color: C.textSecondary, fontSize: 11, marginBottom: 5 }}>
           {recording || recordPending ? (ko ? "악보를 길게 눌러 입력 중지" : "Hold the score to finish") : (ko ? "악보 · 줄 번호를 눌러 마디 수 조정" : "Score · select a row number to adjust bars")}
@@ -639,7 +641,7 @@ export function RhythmWorkspace({ active = true, initialDocument }: { active?: b
             readOnly={recording || recordPending} verticalViewport={staffViewport("input")}
             followPlayhead={recording} onFollowRow={(top) => {
               const y = stageY.input + staffY.input + top;
-              if (y < scrollViewport.top || y + STAFF_ROW_HEIGHT * NOTATION_SCALE > scrollViewport.top + scrollViewport.height) {
+              if (y < scrollViewport.top || y + staffRowPixels(doc.staffLayout) > scrollViewport.top + scrollViewport.height) {
                 workspaceScroll.current?.scrollTo({ y: Math.max(0, y - scrollViewport.height * 0.3), animated: false });
               }
             }} />
@@ -842,9 +844,9 @@ export function RhythmWorkspace({ active = true, initialDocument }: { active?: b
             <View style={s.modalSettingRow}>
               <Text style={{ color: C.text }}>{ko ? "기본 줄당 마디 수" : "Default bars per row"}</Text>
               <View style={s.meterControl}>
-                <Pressable testID="rhythm-bars-per-row-less" accessibilityRole="button" accessibilityLabel={ko ? "줄당 마디 수 줄이기" : "Fewer bars per row"} onPress={() => setDoc((prev) => ({ ...prev, staffLayout: { barsPerRow: Math.max(1, (prev.staffLayout?.barsPerRow ?? 2) - 1), rowOverrides: [] } }))} style={s.step}><Text style={{ color: C.text }}>−</Text></Pressable>
+                <Pressable testID="rhythm-bars-per-row-less" accessibilityRole="button" accessibilityLabel={ko ? "줄당 마디 수 줄이기" : "Fewer bars per row"} onPress={() => setDoc((prev) => ({ ...prev, staffLayout: { ...prev.staffLayout, barsPerRow: Math.max(1, (prev.staffLayout?.barsPerRow ?? 2) - 1), rowOverrides: [] } }))} style={s.step}><Text style={{ color: C.text }}>−</Text></Pressable>
                 <Text testID="rhythm-bars-per-row" style={{ color: C.text }}>{doc.staffLayout?.barsPerRow ?? 2}</Text>
-                <Pressable testID="rhythm-bars-per-row-more" accessibilityRole="button" accessibilityLabel={ko ? "줄당 마디 수 늘리기" : "More bars per row"} onPress={() => setDoc((prev) => ({ ...prev, staffLayout: { barsPerRow: Math.min(16, (prev.staffLayout?.barsPerRow ?? 2) + 1), rowOverrides: [] } }))} style={s.step}><Text style={{ color: C.text }}>+</Text></Pressable>
+                <Pressable testID="rhythm-bars-per-row-more" accessibilityRole="button" accessibilityLabel={ko ? "줄당 마디 수 늘리기" : "More bars per row"} onPress={() => setDoc((prev) => ({ ...prev, staffLayout: { ...prev.staffLayout, barsPerRow: Math.min(16, (prev.staffLayout?.barsPerRow ?? 2) + 1), rowOverrides: [] } }))} style={s.step}><Text style={{ color: C.text }}>+</Text></Pressable>
               </View>
             </View>
             <Text style={{ color: C.textSecondary, fontSize: 10, marginVertical: 6 }}>{ko ? "기본값을 바꾸면 개별 줄 설정도 초기화됩니다. 악보의 줄 번호로 특정 줄만 조정할 수 있습니다." : "Changing the default resets individual rows. Select a row number on the score to adjust only that row."}</Text>

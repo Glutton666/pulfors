@@ -43,7 +43,7 @@ test("hold starts without recording the activation gesture; score drag cancels s
   await page.getByTestId("rhythm-pad").click();
   await page.waitForTimeout(250);
   await page.getByTestId("rhythm-pad").click();
-  const score = await page.getByTestId("rhythm-workspace-scroll").boundingBox();
+  const score = await page.getByTestId("rhythm-stop-area").boundingBox();
   const x = score!.x + score!.width / 2, y = score!.y + 65;
   await page.mouse.move(x, y); await page.mouse.down();
   await page.mouse.move(x, y + 25); await page.waitForTimeout(700); await page.mouse.up();
@@ -69,6 +69,15 @@ test("fixed row count, per-row override and reset survive save/reopen and portra
   await enter(page);
   await page.getByTestId("rhythm-load").click();
   await page.getByTestId(`rhythm-saved-open-${doc.id}`).click();
+  await page.getByTestId("rhythm-notationZoom-more").click();
+  await page.getByTestId("rhythm-notationZoom-more").click();
+  await page.getByTestId("rhythm-notationZoom-more").click();
+  await page.getByTestId("rhythm-rowSpacing-more").click();
+  await page.getByTestId("rhythm-rowSpacing-more").click();
+  await expect(page.getByTestId("rhythm-notationZoom-value")).toHaveText("130%");
+  await expect(page.getByTestId("rhythm-rowSpacing-value")).toHaveText("120%");
+  await expect.poll(() => page.locator('[data-testid^="rhythm-notehead-note-"]').first()
+    .evaluate((node) => node.getBoundingClientRect().height)).toBeGreaterThan(5);
   await page.getByTestId("rhythm-row-0").click();
   await page.getByTestId("rhythm-row-count-1").click();
   await expect(page.getByTestId("rhythm-row-1")).toBeVisible();
@@ -96,6 +105,8 @@ test("fixed row count, per-row override and reset survive save/reopen and portra
   await page.getByTestId("web-alert-action-0").click();
   await page.getByTestId("rhythm-library-open-review").click();
   await page.getByTestId(`rhythm-saved-open-${doc.id}`).click();
+  await expect(page.getByTestId("rhythm-notationZoom-value")).toHaveText("130%");
+  await expect(page.getByTestId("rhythm-rowSpacing-value")).toHaveText("120%");
   await page.getByTestId("rhythm-row-0").click();
   await page.getByTestId("rhythm-row-reset").click();
   await expect(page.getByTestId("rhythm-row-2")).toBeVisible();

@@ -33,8 +33,11 @@ export function changeStaffRow(layout: RhythmDocument["staffLayout"], startMeasu
 // top/height are the parent's actual viewport, relative to the staff, in
 // rendered pixels. Do not clamp negative top before testing intersection:
 // a staff below the fold must not mount its entire first screen.
-export function staffRowWindow(count: number, top: number, height: number) {
-  const rowPixels = STAFF_ROW_HEIGHT * NOTATION_SCALE;
+export function staffRowPixels(layout?: RhythmDocument["staffLayout"]) {
+  return STAFF_ROW_HEIGHT * NOTATION_SCALE * (layout?.rowSpacing ?? 1) * Math.max(1, layout?.notationZoom ?? 1);
+}
+
+export function staffRowWindow(count: number, top: number, height: number, rowPixels = STAFF_ROW_HEIGHT * NOTATION_SCALE) {
   if (height <= 0 || top + height <= 0 || top >= count * rowPixels) return { first: 0, last: -1 };
   return {
     first: Math.max(0, Math.floor(top / rowPixels + 1e-9) - 1),

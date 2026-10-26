@@ -477,6 +477,13 @@ export function validateRhythmDocument(value: unknown): RhythmDocument {
     });
     if (new Set(overrides.map((row) => row.startMeasure)).size !== overrides.length) throw new Error("Duplicate staff row");
     doc.staffLayout = { barsPerRow: integer(layout.barsPerRow, 1, 16), rowOverrides: overrides };
+    for (const key of ["notationZoom", "rowSpacing"] as const) {
+      if (layout[key] !== undefined) {
+        const value = layout[key];
+        if (typeof value !== "number" || !Number.isFinite(value) || value < (key === "notationZoom" ? 0.5 : 0.9) || value > 2) throw new Error("Invalid staff display ratio");
+        doc.staffLayout[key] = value;
+      }
+    }
   }
   doc.hits = array(d.hits, 20000).map((value) => {
     const h = object(value);

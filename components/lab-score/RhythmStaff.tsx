@@ -4,7 +4,7 @@ import Svg, { Circle, Ellipse, G, Line, Path, Rect, Text as SvgText } from "reac
 import type { Meter, NotationEvent, UserSymbol, RhythmDocument } from "@/lib/rhythm-lab/types";
 import { toNumber } from "@/lib/rhythm-lab/engine";
 import { notationSpelling } from "@/lib/rhythm-lab/notation";
-import { indexStaffEvents, layoutStaffMeasures, staffWindow, staffRowWindow, staffRows, NOTATION_SCALE, STAFF_LEFT, STAFF_ROW_HEIGHT } from "./rhythm-staff-layout";
+import { indexStaffEvents, layoutStaffMeasures, staffWindow, staffRowWindow, staffRows, staffRowPixels, NOTATION_SCALE, STAFF_LEFT } from "./rhythm-staff-layout";
 
 type TargetProps = {
   event: NotationEvent;
@@ -227,14 +227,20 @@ export function RhythmStaff({ events, meter, selected, symbols, onSelect, onMove
   const rowAt = (measure: number) => rowLayout.rowByMeasure[measure] ?? 0;
   const engraving = useMemo(() => {
     const natural = layoutStaffMeasures(index.byMeasure, measures, spanQ, measures);
-    const widths = [...natural.widths], starts: number[] = [], rowEnds: number[] = [];
+    // A tiny timing gap must not shrink every staff in the document.
+    // Page widths depend on symbol count, not the smallest performed interval.
+    const widths = natural.widths.map((w, m) => singleLine ? w :
+      Math.max(260, new Set((index.byMeasure.get(m) ?? []).map((event) => toNumber(event.startQ))).size * 24));
+    const starts: number[] = [], rowEnds: number[] = [];
     rowLayout.rows.forEach((row, r) => {
       let x = left;
       for (let m = row.start; m < Math.min(measures, row.start + row.count); m++) { starts[m] = x; x += widths[m]; }
       rowEnds[r] = x;
     });
     const maxWidth = Math.max(260, ...rowEnds.map((end) => end + rightInset));
-    const scale = singleLine ? NOTATION_SCALE : Math.min(NOTATION_SCALE, (viewportWidth || 320) / maxWidth);
+    const requestedZoom = layout?.notationZoom ?? 1;
+    const maxColumns = Math.max(1, ...rowLayout.rows.map((row) => row.count));
+    const scale = singleLine ? NOTATION_SCALE : Math.min(NOTATION_SCALE, (viewportWidth || 320) / (50 + maxColumns * 100)) * requestedZoom;
     const width = singleLine ? Math.max(maxWidth, viewportWidth / scale) : (viewportWidth || 320) / scale;
     // Stretch sparse rows to the same page width without enlarging glyphs.
     if (!singleLine) rowLayout.rows.forEach((row, r) => {
@@ -246,11 +252,12 @@ export function RhythmStaff({ events, meter, selected, symbols, onSelect, onMove
       rowEnds[r] = x;
     });
     return { widths, starts, rowEnds, scale, width };
-  }, [index, measures, spanQ, rowLayout, singleLine, viewportWidth, left]);
+  }, [index, measures, spanQ, rowLayout, singleLine, viewportWidth, left, layout?.notationZoom]);
   const { widths: measureWidths, starts: measureStarts, rowEnds, scale, width } = engraving;
   const rowCount = rowLayout.rows.length;
   // Fixed screen-space row pitch keeps sparse/dense documents navigable.
-  const rowHeight = STAFF_ROW_HEIGHT * NOTATION_SCALE / scale;
+  const rowPixels = singleLine ? staffRowPixels() : staffRowPixels(layout);
+  const rowHeight = rowPixels / scale;
   const height = Math.max(rowHeight, rowCount * rowHeight);
   const renderedWidth = width * scale;
   const renderedHeight = height * scale;
@@ -272,7 +279,7 @@ export function RhythmStaff({ events, meter, selected, symbols, onSelect, onMove
   const pendingFollow = singleLine && followPlayhead && appliedFollowX.current !== followX;
   const effectiveScrollX = Math.max(0, Math.min(renderedWidth - viewportWidth, pendingFollow ? followX : scrollX));
   const rows = !singleLine && verticalViewport
-    ? staffRowWindow(rowCount, verticalViewport.top, verticalViewport.height)
+    ? staffRowWindow(rowCount, verticalViewport.top, verticalViewport.height, rowPixels)
     : { first: 0, last: rowCount - 1 };
   const range = singleLine ? staffWindow(measureStarts, measureWidths, effectiveScrollX, viewportWidth || 320)
     : { first: rowLayout.rows[rows.first]?.start ?? 0,
@@ -393,8 +400,8 @@ export function RhythmStaff({ events, meter, selected, symbols, onSelect, onMove
   const followRowRef = useRef(onFollowRow);
   followRowRef.current = onFollowRow;
   useEffect(() => {
-    if (followPlayhead && !singleLine) followRowRef.current?.(playheadRow * STAFF_ROW_HEIGHT * NOTATION_SCALE);
-  }, [followPlayhead, singleLine, playheadRow]);
+    if (followPlayhead && !singleLine) followRowRef.current?.(playheadRow * rowPixels);
+  }, [followPlayhead, singleLine, playheadRow, rowPixels]);
 
   return <View testID="rhythm-staff" onLayout={(event) => setViewportWidth(event.nativeEvent.layout.width)} style={styles.frame}>
     <ScrollView ref={scrollRef} testID="rhythm-staff-scroll" horizontal showsHorizontalScrollIndicator
@@ -568,7 +575,7 @@ export function RhythmStaff({ events, meter, selected, symbols, onSelect, onMove
           return <Pressable key={`row-control-${row.start}`} testID={`rhythm-row-${row.start}`} accessibilityRole="button"
             accessibilityLabel={`Row ${r + 1}: bars ${row.start + 1}–${Math.min(measures, row.start + row.count)}`}
             onPress={() => onSelectRow(row.start, row.count)}
-            style={{ position: "absolute", left: 2, top: r * rowHeight * scale + 68, padding: 4 }}>
+            style={{ position: "absolute", left: 2, top: r * rowPixels + Math.min(rowPixels - 20, Math.max(46, 86 * scale)), padding: 4 }}>
             <Text style={{ fontSize: 10, color: "#806015" }}>{r + 1} · {row.start + 1}–{Math.min(measures, row.start + row.count)} ⋯</Text>
           </Pressable>;
         })}
