@@ -1,6 +1,7 @@
 import { createRhythmDocument, interpretRhythm, toNumber, validateRhythmDocument } from "../lib/rhythm-lab/engine";
 import { reconstructNotation, verifyDraft, confirmDraftRegion, prepareValidatedDraft } from "../lib/rhythm-lab/verification";
 import type { RhythmDocument } from "../lib/rhythm-lab/types";
+import { contextualPulseGrid } from "../lib/rhythm-lab/pulse-correction";
 
 const take = (times: number[], extra: Partial<RhythmDocument> = {}): RhythmDocument => ({
   ...createRhythmDocument({ bpm: 120 }), ...extra,
@@ -73,6 +74,41 @@ test("all prefixes of irregular input remain independently decodable", () => {
     expect(verifyDraft(doc).valid).toBe(true);
     expect(new Set(notes(doc).flatMap((e) => e.hitIds)).size).toBe(end);
   }
+});
+
+test("repeated metronome taps with realistic uneven latency become ordinary quarter notes", () => {
+  const times = [48, 553, 1041, 1549, 2037, 2558, 3043, 3544];
+  const doc = take(times);
+  expect(doc.hits.map((hit) => hit.onsetMs)).toEqual(times);
+  expect(reconstructNotation(doc).map((e) => e.timeMs)).toEqual(times.map((_, i) => i * 500));
+  expect(notes(doc).every((e) => !e.tuplet)).toBe(true);
+  expect(verifyDraft(doc).valid).toBe(true);
+  for (let length = 1; length <= times.length; length++) {
+    expect(verifyDraft(take(times.slice(0, length))).valid).toBe(true);
+  }
+});
+
+test("an intentional offbeat, repeated triplets and close double attacks are not swallowed", () => {
+  const offbeat = take([45, 295, 545, 795, 1040, 1295]);
+  expect(reconstructNotation(offbeat).map((hit) => hit.timeMs)).toEqual([0, 250, 500, 750, 1000, 1250]);
+  const triplet = take([0, 500 / 3, 1000 / 3, 500, 2000 / 3, 2500 / 3]);
+  expect(notes(triplet).some((event) => event.tuplet?.actual === 3)).toBe(true);
+  expect(reconstructNotation(triplet).map((hit) => hit.timeMs))
+    .toEqual(triplet.hits.map((hit) => hit.onsetMs));
+  const rapid = take([45, 85, 545, 585, 1045, 1085]);
+  expect(contextualPulseGrid(rapid.hits.map((hit) => hit.onsetMs / 500), 500, 0.35)).toBeUndefined();
+  expect(new Set(notes(rapid).flatMap((event) => event.hitIds)).size).toBe(6);
+});
+
+test("92 BPM steady beat stays ordinary after opening and automatic draft preparation", () => {
+  const beat = 60000 / 92;
+  const doc = take(Array.from({ length: 12 }, (_, i) => i * beat + 63 + (i % 3 - 1) * 8),
+    { bpm: 92 });
+  const prepared = prepareValidatedDraft(doc);
+  expect(notes(doc).filter((event) => event.tuplet).map((event) => [event.id, toNumber(event.startQ)]))
+    .toEqual([]);
+  expect(notes(prepared).filter((event) => event.tuplet).map((event) => [event.id, toNumber(event.startQ)]))
+    .toEqual([]);
 });
 
 test("bounded onset correction leaves independent keyboard gates and chords intact", () => {

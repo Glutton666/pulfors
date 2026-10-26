@@ -1,6 +1,7 @@
 import type { Hit, InterpretationCandidate, NotationEvent, RhythmDocument } from "./types";
 import { attachTuplet, EPS, fillRests, gridRatio, musicalTime, num, spellLength, splitNote } from "./spans";
 import { rankBoundedRhythm } from "./bounded-correction";
+import { contextualPulseGrid } from "./pulse-correction";
 
 const GRIDS = [4, 8, 16, 32, 64, 128, 12, 24, 48, 96, 20, 40, 80, 28, 56, 112];
 type Choice = { grid: number; score: number };
@@ -50,10 +51,25 @@ export function automaticRhythm(doc: RhythmDocument): { notes: NotationEvent[]; 
   }
   const choices = new Map([...regions].map(([key, local]) => {
     const times = local.map((h) => qOf(doc, h));
-    return [key, doc.automaticCorrection === "bounded"
+    return [key, doc.automaticCorrection
       ? rankBoundedRhythm(times, beatContext.get(contextKey(key))!, ms, doc.simplification)
       : rank(times, ms, doc.simplification)] as const;
   }));
+  const pulseGrids = new Map<number, number>();
+  if (doc.automaticCorrection === "pulse") {
+    const byBar = new Map<number, Hit[]>();
+    for (const hit of hits) {
+      const bar = Math.floor(qOf(doc, hit) / capacity);
+      const local = byBar.get(bar) ?? [];
+      local.push(hit); byBar.set(bar, local);
+    }
+    for (const [bar, local] of byBar) {
+      // Keyboard gates/chords retain their independent interpretation.
+      if (local.some((hit) => hit.midi !== undefined)) continue;
+      const grid = contextualPulseGrid(local.map((hit) => qOf(doc, hit)), ms, doc.simplification);
+      if (grid) pulseGrids.set(bar, grid);
+    }
+  }
   // Rank held gates once, not once per competing onset hypothesis.
   const gates = new Map(hits.filter((h) => h.midi !== undefined && h.releaseMs !== undefined && h.releaseMs > h.onsetMs)
     .map((h) => {
@@ -63,7 +79,8 @@ export function automaticRhythm(doc: RhythmDocument): { notes: NotationEvent[]; 
     }));
   const build = (alternative?: { key: number; grid: number }, source = hits) => {
     const placed = source.map((hit) => {
-      const key = bucket(hit), grid = alternative?.key === key ? alternative.grid : choices.get(key)![0].grid;
+      const key = bucket(hit), grid = alternative?.key === key ? alternative.grid :
+        pulseGrids.get(Math.floor(qOf(doc, hit) / capacity)) ?? choices.get(key)![0].grid;
       return { hit, grid, q: quantize(qOf(doc, hit), grid) };
     });
     const logical: NotationEvent[] = placed.map(({ hit, grid, q }, index) => {

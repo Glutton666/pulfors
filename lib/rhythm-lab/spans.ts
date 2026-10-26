@@ -134,7 +134,7 @@ export function fillRests(doc: RhythmDocument, notes: NotationEvent[], measures 
       while (at < a - EPS) {
         const hint = hintsByMeasure.get(m)?.find((e) => at >= num(e.tuplet!.startQ!) - EPS && at < num(e.tuplet!.endQ!) - EPS)?.tuplet;
         let ordinaryEnd = Math.floor(at + EPS) + 1;
-        if (doc.automaticCorrection === "bounded" && !hint) {
+        if (doc.automaticCorrection && !hint) {
           // Consolidate complete metrical units, never erase a short silence
           // or stretch a percussion note to occupy it.
           const from = m * capacity;

@@ -21,6 +21,7 @@ import { RhythmCalibrationPanel } from "./RhythmCalibrationPanel";
 import { changeStaffRow, staffRowPixels } from "./rhythm-staff-layout";
 import { RhythmStaffControls } from "./RhythmStaffControls";
 import { useRhythmCalibration } from "@/hooks/useRhythmCalibration";
+import { startRhythmPulseClock } from "@/lib/rhythm-lab/pulse-clock";
 import { RhythmEntryGuidance } from "./RhythmEntryGuidance";
 import { applyDraftCandidate, confirmDraftRegion, prepareValidatedDraft, reconstructNotation, reopenDraftRegion, verifyDraft } from "@/lib/rhythm-lab/verification";
 import { useRhythmEntryMode } from "@/hooks/useRhythmEntryMode";
@@ -118,7 +119,7 @@ export function RhythmWorkspace({ active = true, initialDocument }: { active?: b
   const releaseRef = useRef<Record<string, string>>({});
   const recordTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const practiceTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
-  const recordMetro = useRef<ReturnType<typeof setInterval> | null>(null);
+  const recordMetro = useRef<(() => void) | null>(null);
   const recordTicker = useRef<ReturnType<typeof setInterval> | null>(null);
   const audioSession = useRef<ReturnType<typeof createRhythmAudioSession> | null>(null);
   const clickSession = useRef<ReturnType<typeof createScoreClickSession> | null>(null);
@@ -156,7 +157,7 @@ export function RhythmWorkspace({ active = true, initialDocument }: { active?: b
   const clearHeldInput = () => { activeMidi.current = []; stopPreviewNote(); setInputEpoch((value) => value + 1); };
   const setPlaybackActive = (value: boolean) => { playingRef.current = value; setPlaying(value); };
   const cleanupPlayback = () => { playbackEpoch.current++; audioSession.current?.stop(); clearHeldInput(); setPlaybackActive(false); };
-  const cleanupRecording = () => { recordingPhase.current = "idle"; recordTimers.current.forEach(clearTimeout); recordTimers.current = []; if (recordMetro.current) clearInterval(recordMetro.current); recordMetro.current = null; if (recordTicker.current) clearInterval(recordTicker.current); recordTicker.current = null; clickSession.current?.stop(); };
+  const cleanupRecording = () => { recordingPhase.current = "idle"; recordTimers.current.forEach(clearTimeout); recordTimers.current = []; recordMetro.current?.(); recordMetro.current = null; if (recordTicker.current) clearInterval(recordTicker.current); recordTicker.current = null; clickSession.current?.stop(); };
   const cleanupPractice = () => { practiceTimers.current.forEach(clearTimeout); practiceTimers.current = []; audioSession.current?.stop(); clickSession.current?.stop(); setPracticeOn(false); setPracticePending(false); clearHeldInput(); };
   const cleanupAll = () => { calibration.cancel(); cleanupPlayback(); cleanupRecording(); cleanupPractice(); recordRequestRef.current = false; setRecordRequest(false); };
   const cleanupAllRef = useRef(cleanupAll);
@@ -203,7 +204,7 @@ export function RhythmWorkspace({ active = true, initialDocument }: { active?: b
     const activate = () => {
       startRef.current = clockNow(); recordingPhase.current = "recording";
       setLiveElapsedMs(0); setRecordPending(false); setRecording(true); clickSession.current?.play();
-      recordMetro.current = setInterval(() => clickSession.current?.play(), beatMs);
+      recordMetro.current = startRhythmPulseClock(beatMs, () => clickSession.current?.play(), clockNow);
       recordTicker.current = setInterval(() => setLiveElapsedMs(Math.max(0, clockNow() - startRef.current)), 80);
       const limit = Number(barLimit);
       if (limit > 0) recordTimers.current.push(setTimeout(finishRecord, limit * doc.meter.numerator * beatMs));
@@ -650,17 +651,17 @@ export function RhythmWorkspace({ active = true, initialDocument }: { active?: b
         </View>
       </View>}
       {flow === "review" && <View testID="rhythm-review-stage" onLayout={(event) => { const y = event.nativeEvent.layout.y; setStageY((prev) => prev.review === y ? prev : { ...prev, review: y }); }}>
-        {(doc.notationVersion !== 2 || doc.automaticCorrection !== "bounded") && <View style={{ gap: 4, marginVertical: 4 }}>
+        {(doc.notationVersion !== 2 || doc.automaticCorrection !== "pulse") && <View style={{ gap: 4, marginVertical: 4 }}>
           <Text style={{ color: C.textSecondary, fontSize: 11 }}>{ko ? "기존 기보 규칙으로 열었습니다. 원본과 수동 수정은 유지됩니다." : "Opened with legacy notation. Original input and manual edits are retained."}</Text>
           <Pressable testID="rhythm-upgrade-notation" accessibilityRole="button" disabled={interactionLocked}
             onPress={() => { rhythmRecovery.remember(docRef.current, true, true);
               setPreviousReader({ id: doc.id, notationVersion: doc.notationVersion, automaticCorrection: doc.automaticCorrection });
-              setDoc((current) => ({ ...current, notationVersion: 2, automaticCorrection: "bounded", updatedAt: Date.now() })); }}
+              setDoc((current) => ({ ...current, notationVersion: 2, automaticCorrection: "pulse", updatedAt: Date.now() })); }}
             style={[s.chip, { borderColor: C.border }]}>
             <Text style={{ color: C.text }}>{ko ? "작은 타이밍 흔들림을 정리해 재해석" : "Reinterpret with bounded timing correction"}</Text>
           </Pressable>
         </View>}
-        {previousReader?.id === doc.id && doc.automaticCorrection === "bounded" && <Pressable
+        {previousReader?.id === doc.id && doc.automaticCorrection === "pulse" && <Pressable
           testID="rhythm-restore-notation" accessibilityRole="button" disabled={interactionLocked}
           onPress={() => {
             setDoc((current) => ({ ...current, notationVersion: previousReader.notationVersion,

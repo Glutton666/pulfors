@@ -1,3 +1,4 @@
+import { contextualPulseGrid, pulseTolerance } from "./pulse-correction";
 import { interpretRhythm, measureQuarters, toNumber } from "./engine";
 import { notationSpelling } from "./notation";
 import { scoreTimeline } from "./score-timeline";
@@ -246,6 +247,21 @@ export function verifyDraft(doc: RhythmDocument, interpretation: Interpretation 
     const weight = Math.max(hits.length, localTimeline.length);
     const similarity = weight ? Math.round(100 * similaritySum / weight) : null;
     const invalid = invalidMeasures.has(index);
+    const grid = doc.automaticCorrection === "pulse" && hits.every((hit) => hit.midi === undefined)
+      ? contextualPulseGrid(hits.map((hit) => Math.max(0, hit.onsetMs - doc.offsetMs) / ms),
+        ms, doc.simplification) : undefined;
+    const shortest = Math.min(Infinity, ...times.slice(1).map((time, i) => time - times[i]));
+    const pulseBound = grid === undefined ? 0 : pulseTolerance(grid, ms, shortest, doc.simplification);
+    // A coherent pulse is a deliberate, bounded simplification. Do not
+    // automatically replace it with a finer grid merely to boost similarity.
+    // Still report the real raw-vs-score timing error and reject lost attacks.
+    const pulseReliable = grid !== undefined && !invalid && !missing && !extra &&
+      hits.every((hit) => {
+        const raw = Math.max(0, hit.onsetMs - doc.offsetMs);
+        const expected = Math.round(raw / ms * grid / 4) * 4 / grid * ms;
+        return Math.abs((byId.get(hit.id)?.timeMs ?? Infinity) - expected) < 0.1 &&
+          Math.abs(expected - raw) <= pulseBound + 1e-7;
+      });
     const choices = candidatesByMeasure.get(index) ?? [];
     const localHitsById = new Map(hits.map((hit) => [hit.id, hit]));
     const signatures = new Set(choices.filter((candidate) => {
@@ -272,11 +288,12 @@ export function verifyDraft(doc: RhythmDocument, interpretation: Interpretation 
     if (conflict) reasons.push("protected-boundary");
     if (signatures.size > 1) reasons.push("ambiguous");
     const status = conflict ? "unresolved" : invalid ? "invalid" : confirmed ? "confirmed" :
-      conflict || heldMismatch || similarity !== null && (similarity < 65 || missing || extra || severeTiming) ? "unresolved" :
+      conflict || heldMismatch || similarity !== null && (missing || extra || severeTiming ||
+        similarity < 65 && !pulseReliable) ? "unresolved" :
       reasons.length ? "ambiguous" : "ready";
     regions.push({ measureIndex: index, similarity: invalid ? null : similarity,
       meanErrorMs: matched ? errors / matched : 0, maxErrorMs, missing, extra, status, reasons,
-      candidateCount: choices.length, onsetMatches: onsetMatches && !missing && !extra,
+      candidateCount: choices.length, onsetMatches: (onsetMatches || pulseReliable) && !missing && !extra,
       durationMatches: comparedDurations ? !heldMismatch : null,
       maxDurationErrorMs: comparedDurations ? maxDurationErrorMs : null, comparedDurations });
     aggregate += similaritySum; totalWeight += weight; comparedCount += matched;

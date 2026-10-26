@@ -48,13 +48,30 @@ test("bounded reinterpretation is explicit, reversible and preserved on save/reo
   await page.getByTestId("rhythm-save").click();
   const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("practice_book") ?? "[]")
     .find((entry: any) => entry.mode === "rhythm")?.rhythmDocument);
-  expect(saved.automaticCorrection).toBe("bounded");
+  expect(saved.automaticCorrection).toBe("pulse");
   expect(saved.hits).toEqual(doc.hits);
   await page.getByTestId("web-alert-action-0").click();
   await page.getByTestId("rhythm-library-open-review").click();
   await page.getByTestId(`rhythm-saved-open-${doc.id}`).click();
   await expect(upgrade).toHaveCount(0);
   await page.screenshot({ path: "generated-artifacts/rhythm-bounded-correction.jpg" });
+});
+
+test("steady taps against a 92 BPM click do not become scattered tuplets", async ({ page }) => {
+  const beat = 60000 / 92;
+  const doc = { ...createRhythmDocument({ title: "Click rehearsal", bpm: 92 }),
+    hits: Array.from({ length: 12 }, (_, i) => ({
+      id: `click-${i}`, onsetMs: i * beat + 63 + (i % 3 - 1) * 8,
+      releaseMs: i * beat + 102 + (i % 3 - 1) * 8, drum: "snare" as const,
+    })) };
+  await page.addInitScript((doc) => localStorage.setItem("rhythm_lab_documents_v1", JSON.stringify([doc])), doc);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await enter(page);
+  await page.getByTestId("rhythm-load").click();
+  await page.getByTestId(`rhythm-saved-open-${doc.id}`).click();
+  await expect(page.locator('[data-testid^="rhythm-notehead-note-"]')).toHaveCount(12);
+  await expect(page.locator('[data-testid^="rhythm-tuplet-bracket-"]')).toHaveCount(0);
+  await page.screenshot({ path: "generated-artifacts/rhythm-steady-pulse.jpg" });
 });
 
 test("calibration completes from actual reference dispatch and keeps the applied value", async ({ page }) => {

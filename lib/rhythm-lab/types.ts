@@ -70,7 +70,7 @@ export interface RhythmDocument {
   /** Missing/1 is the legacy interval-based reader; 2 uses short percussion. */
   notationVersion?: 1 | 2;
   /** Absent on saved legacy takes; opt in explicitly before reinterpreting. */
-  automaticCorrection?: "bounded";
+  automaticCorrection?: "bounded" | "pulse";
   id: string;
   title: string;
   bpm: number;
