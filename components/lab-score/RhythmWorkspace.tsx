@@ -21,7 +21,7 @@ import { RhythmCalibrationPanel } from "./RhythmCalibrationPanel";
 import { changeStaffRow, staffRowPixels } from "./rhythm-staff-layout";
 import { RhythmStaffControls } from "./RhythmStaffControls";
 import { useRhythmCalibration } from "@/hooks/useRhythmCalibration";
-import { startRhythmPulseClock } from "@/lib/rhythm-lab/pulse-clock";
+import { createRhythmReferenceTrack } from "@/lib/rhythm-lab/reference-track";
 import { RhythmEntryGuidance } from "./RhythmEntryGuidance";
 import { applyDraftCandidate, confirmDraftRegion, prepareValidatedDraft, reconstructNotation, reopenDraftRegion, verifyDraft } from "@/lib/rhythm-lab/verification";
 import { useRhythmEntryMode } from "@/hooks/useRhythmEntryMode";
@@ -117,9 +117,14 @@ export function RhythmWorkspace({ active = true, initialDocument }: { active?: b
   const [liveJudgment, setLiveJudgment] = useState("");
   const startRef = useRef(0);
   const releaseRef = useRef<Record<string, string>>({});
-  const recordTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
-  const practiceTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
-  const recordMetro = useRef<(() => void) | null>(null);
+  const practiceGeneration = useRef(0);
+  const practiceReference = useRef<ReturnType<typeof createRhythmReferenceTrack> | null>(null);
+  if (!practiceReference.current) practiceReference.current = createRhythmReferenceTrack();
+  const recordOriginReady = useRef(false);
+  const recordBoundaryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const recordReference = useRef<ReturnType<typeof createRhythmReferenceTrack> | null>(null);
+  if (!recordReference.current) recordReference.current = createRhythmReferenceTrack();
+  const recordGeneration = useRef(0);
   const recordTicker = useRef<ReturnType<typeof setInterval> | null>(null);
   const audioSession = useRef<ReturnType<typeof createRhythmAudioSession> | null>(null);
   const clickSession = useRef<ReturnType<typeof createScoreClickSession> | null>(null);
@@ -157,8 +162,8 @@ export function RhythmWorkspace({ active = true, initialDocument }: { active?: b
   const clearHeldInput = () => { activeMidi.current = []; stopPreviewNote(); setInputEpoch((value) => value + 1); };
   const setPlaybackActive = (value: boolean) => { playingRef.current = value; setPlaying(value); };
   const cleanupPlayback = () => { playbackEpoch.current++; audioSession.current?.stop(); clearHeldInput(); setPlaybackActive(false); };
-  const cleanupRecording = () => { recordingPhase.current = "idle"; recordTimers.current.forEach(clearTimeout); recordTimers.current = []; recordMetro.current?.(); recordMetro.current = null; if (recordTicker.current) clearInterval(recordTicker.current); recordTicker.current = null; clickSession.current?.stop(); };
-  const cleanupPractice = () => { practiceTimers.current.forEach(clearTimeout); practiceTimers.current = []; audioSession.current?.stop(); clickSession.current?.stop(); setPracticeOn(false); setPracticePending(false); clearHeldInput(); };
+  const cleanupRecording = () => { recordGeneration.current++; recordOriginReady.current = false; recordReference.current?.stop(); recordingPhase.current = "idle"; if (recordBoundaryTimer.current) clearTimeout(recordBoundaryTimer.current); recordBoundaryTimer.current = null; if (recordTicker.current) clearInterval(recordTicker.current); recordTicker.current = null; clickSession.current?.stop(); };
+  const cleanupPractice = () => { practiceGeneration.current++; practiceReference.current?.stop(); audioSession.current?.stop(); clickSession.current?.stop(); setPracticeOn(false); setPracticePending(false); clearHeldInput(); };
   const cleanupAll = () => { calibration.cancel(); cleanupPlayback(); cleanupRecording(); cleanupPractice(); recordRequestRef.current = false; setRecordRequest(false); };
   const cleanupAllRef = useRef(cleanupAll);
   cleanupAllRef.current = cleanupAll;
@@ -199,17 +204,41 @@ export function RhythmWorkspace({ active = true, initialDocument }: { active?: b
     setRecordPending(true);
     const beatMs = 60000 / doc.bpm * 4 / doc.meter.denominator;
     const count = countIn ? Math.max(1, doc.meter.numerator) : 0;
-    const delay = count * beatMs;
-    if (countIn) for (let i = 0; i < count; i++) recordTimers.current.push(setTimeout(() => clickSession.current?.play(), i * beatMs));
-    const activate = () => {
-      startRef.current = clockNow(); recordingPhase.current = "recording";
-      setLiveElapsedMs(0); setRecordPending(false); setRecording(true); clickSession.current?.play();
-      recordMetro.current = startRhythmPulseClock(beatMs, () => clickSession.current?.play(), clockNow);
-      recordTicker.current = setInterval(() => setLiveElapsedMs(Math.max(0, clockNow() - startRef.current)), 80);
-      const limit = Number(barLimit);
-      if (limit > 0) recordTimers.current.push(setTimeout(finishRecord, limit * doc.meter.numerator * beatMs));
+    const owner = recordGeneration.current;
+    const failed = (error: unknown) => {
+      if (owner !== recordGeneration.current) return;
+      checkpointRef.current();
+      cleanupRecording(); setRecording(false); setRecordPending(false); clearHeldInput();
+      Alert.alert(text.error, error instanceof Error ? error.message : String(error));
     };
-    recordTimers.current.push(setTimeout(activate, delay));
+    void recordReference.current!.start({
+      intervalMs: beatMs,
+      onStarted: (timing) => {
+        if (owner !== recordGeneration.current) return;
+        startRef.current = timing.originMs + count * timing.intervalMs;
+        recordOriginReady.current = true;
+        const limit = Number(barLimit);
+        const endMs = limit > 0 ? limit * doc.meter.numerator * timing.intervalMs : Infinity;
+        let lastDisplayMs = -Infinity;
+        const tick = () => {
+          if (owner !== recordGeneration.current) return;
+          const elapsed = clockNow() - startRef.current;
+          if (elapsed < 0) return;
+          if (recordingPhase.current !== "recording") {
+            recordingPhase.current = "recording";
+            setRecordPending(false); setRecording(true);
+          }
+          if (elapsed - lastDisplayMs >= 80) { lastDisplayMs = elapsed; setLiveElapsedMs(elapsed); }
+          if (elapsed >= endMs) finishRecord();
+        };
+        tick();
+        if (owner === recordGeneration.current) {
+          recordTicker.current = setInterval(tick, 20);
+          recordBoundaryTimer.current = setTimeout(tick, Math.max(0, Math.ceil(startRef.current - clockNow())));
+        }
+      },
+      onError: failed,
+    }).catch(failed);
   };
   const beginRecord = () => {
     if (!entryModeReady || interactionLocked || recordRequestRef.current) return;
@@ -253,6 +282,10 @@ export function RhythmWorkspace({ active = true, initialDocument }: { active?: b
   const addHit = (id: string, action: "down" | "up", midi?: number) => {
     // Include async playback preparation, not just audible playback.
     if (playingRef.current || inputLocked) return;
+    // A tap can arrive after the audio boundary but before the UI timer.
+    if (recordOriginReady.current && recordingPhase.current === "count-in" && clockNow() >= startRef.current) {
+      recordingPhase.current = "recording"; setRecordPending(false); setRecording(true);
+    }
     if (action === "down") {
       const now = clockNow();
       if (recordingPhase.current === "recording") {
@@ -545,14 +578,22 @@ export function RhythmWorkspace({ active = true, initialDocument }: { active?: b
     cleanupPlayback(); cleanupPractice(); setFlow("practice"); setPracticeResult(null); practiceTapsRef.current = []; setPracticeTaps([]); setPracticePending(true); setLiveJudgment(text.beginPractice);
     const beatMs = 60000 / doc.bpm * 4 / doc.meter.denominator;
     const count = countIn ? Math.max(1, doc.meter.numerator) : 0;
-    if (countIn) for (let i = 0; i < count; i++) practiceTimers.current.push(setTimeout(() => clickSession.current?.play(), i * beatMs));
-    practiceTimers.current.push(setTimeout(() => {
+    const owner = practiceGeneration.current;
+    const failed = (error: unknown) => {
+      if (owner !== practiceGeneration.current) return;
+      cleanupPractice(); Alert.alert(text.error, error instanceof Error ? error.message : String(error));
+    };
+    const begin = () => {
+      if (owner !== practiceGeneration.current) return;
       void audioSession.current?.play(expected, () => {
+        if (owner !== practiceGeneration.current) return;
         setPracticePending(false); setPracticeOn(true); startRef.current = clockNow();
-      }, finishPractice).catch((error) => {
-        cleanupPractice(); Alert.alert(text.error, error instanceof Error ? error.message : String(error));
-      });
-    }, count * beatMs));
+      }, () => { if (owner === practiceGeneration.current) finishPractice(); }).catch(failed);
+    };
+    if (count) void practiceReference.current!.start({
+      intervalMs: beatMs, beats: count, onEnded: begin, onError: failed,
+    }).catch(failed);
+    else begin();
   };
   const finishPractice = () => {
     const expected = practiceExpectedRef.current;

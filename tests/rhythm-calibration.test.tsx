@@ -4,6 +4,7 @@ import { act, fireEvent, render, renderHook } from "@testing-library/react";
 import { useRhythmCalibration } from "../hooks/useRhythmCalibration";
 import { calibrationResult } from "../lib/rhythm-lab/calibration";
 import { RhythmCalibrationPanel } from "../components/lab-score/RhythmCalibrationPanel";
+import type { RhythmReferenceOptions } from "../lib/rhythm-lab/reference-track";
 
 jest.mock("react-native", () => ({
   View: ({ children }: any) => <div>{children}</div>,
@@ -19,13 +20,21 @@ jest.mock("../components/lab-score/RhythmInputSurface", () => ({
     <button data-testid={testID} onPointerDown={onDown} disabled={disabled}>{children}</button>,
 }));
 
-const mockPasses: { end: () => void; beat: (index: number) => void }[] = [];
+const mockPasses: { end: () => void; beat: (index: number) => void; ready: (origin: number) => void; fail: () => void }[] = [];
 const mockStop = jest.fn();
-jest.mock("../lib/rhythm-lab/audio", () => ({
-  createRhythmAudioSession: () => ({
+jest.mock("../lib/rhythm-lab/reference-track", () => ({
+  createRhythmReferenceTrack: () => ({
     stop: mockStop,
-    play: jest.fn(async (_hits: unknown, _start: unknown, end: () => void, beat: (index: number) => void) => {
-      mockPasses.push({ end, beat });
+    start: jest.fn(async (options: RhythmReferenceOptions) => {
+      mockPasses.push({
+        end: () => options.onEnded?.(), beat: (i) => options.onBeat?.(i, 0),
+        ready: (origin) => options.onStarted?.({
+          originMs: origin, intervalMs: options.intervalMs, requestedAtMs: 0, preparedAtMs: origin - 50,
+          playRequestedAtMs: origin - 20, observedAtMs: origin + 10, observedPositionMs: 10,
+          clock: "native-position-observation",
+        }),
+        fail: () => options.onError?.(new Error("Interrupted")),
+      });
     }),
   }),
 }));
@@ -96,6 +105,7 @@ describe("reference session lifecycle", () => {
     time = 750; act(() => hook.result.current.tap());
     expect(hook.result.current.count).toBe(0);
     const pass = mockPasses[0];
+    act(() => pass.ready(1200));
     for (let i = 0; i < 20; i++) {
       time = 1200 + i * 500;
       act(() => pass.beat(i));
@@ -114,6 +124,7 @@ describe("reference session lifecycle", () => {
     const apply = jest.fn(), hook = renderHook(() => useRhythmCalibration(apply));
     act(() => hook.result.current.start(500));
     const old = mockPasses[0];
+    act(() => old.ready(100));
     time = 100; act(() => old.beat(0));
     time = 2150; act(() => hook.result.current.tap());
     expect(hook.result.current.count).toBe(1);
@@ -128,5 +139,26 @@ describe("reference session lifecycle", () => {
     hook.unmount();
     old.beat(5); old.end();
     expect(mockStop).toHaveBeenCalled();
+  });
+  test("late/skipped visual callbacks cannot shift the reference grid", () => {
+    const apply = jest.fn(), hook = renderHook(() => useRhythmCalibration(apply));
+    act(() => hook.result.current.start(500));
+    const pass = mockPasses[0];
+    act(() => pass.ready(1000));
+    // No per-beat callback arrives on time; taps still use the audio grid.
+    for (let i = 0; i < 16; i++) {
+      time = 1000 + (i + 4) * 500 + 55;
+      act(() => hook.result.current.tap());
+      if (i % 3 === 0) { time += 180; act(() => pass.beat(i + 4)); }
+    }
+    act(() => pass.end());
+    expect(apply).toHaveBeenCalledWith(55);
+  });
+  test("interruption rejects partial calibration without applying a value", () => {
+    const apply = jest.fn(), hook = renderHook(() => useRhythmCalibration(apply));
+    act(() => hook.result.current.start(500));
+    act(() => { mockPasses[0].ready(100); mockPasses[0].fail(); });
+    expect(hook.result.current.phase).toBe("error");
+    expect(apply).not.toHaveBeenCalled();
   });
 });

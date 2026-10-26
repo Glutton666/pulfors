@@ -1076,6 +1076,7 @@ export function playWebRenderedLoop(
   channel: SampleChannel = "both",
   volume: number = 1,
   startAtAudioTime?: number,
+  loop: boolean = true,
 ): WebRenderedLoop {
   const unavailable = {
     stop: () => {},
@@ -1107,7 +1108,7 @@ export function playWebRenderedLoop(
 
   const source = ctx.createBufferSource();
   source.buffer = audioBuffer;
-  source.loop = true;
+  source.loop = loop;
   const gain = ctx.createGain();
   gain.gain.value = Math.max(0, Math.min(1, volume));
   let panner: StereoPannerNode | null = null;

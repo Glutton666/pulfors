@@ -33,6 +33,14 @@ jest.mock("../lib/score-audio", () => ({
 jest.mock("../lib/rhythm-lab/audio", () => ({
   createRhythmAudioSession: () => ({ play: jest.fn(), stop: jest.fn() }),
 }));
+jest.mock("../lib/rhythm-lab/reference-track", () => ({
+  createRhythmReferenceTrack: () => ({
+    stop: jest.fn(),
+    start: jest.fn(async (options: any) => options.onStarted?.({
+      originMs: performance.now(), intervalMs: options.intervalMs,
+    })),
+  }),
+}));
 jest.mock("../components/lab-score/RhythmSymbolEditor", () => ({ RhythmSymbolEditor: () => null }));
 jest.mock("../components/lab-score/RhythmValidationPanel", () => ({ RhythmValidationPanel: () => null }));
 jest.mock("../components/lab-score/RhythmKeyboard", () => ({ RhythmKeyboard: () => null }));

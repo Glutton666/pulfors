@@ -11,6 +11,18 @@ import { createRhythmRecovery, rhythmRecovery, RHYTHM_RECOVERY_KEY } from "../li
 
 const mockAudio = { play: jest.fn(async (_hits: unknown, _start?: () => void, _end?: () => void) => { _start?.(); }), stop: jest.fn() };
 const mockClick = { play: jest.fn(), stop: jest.fn() };
+const mockReferences: any[] = [];
+let mockReferenceReady = true;
+jest.mock("../lib/rhythm-lab/reference-track", () => ({
+  createRhythmReferenceTrack: () => ({
+    stop: jest.fn(),
+    start: jest.fn(async (options: any) => {
+      mockReferences.push(options);
+      if (mockReferenceReady) options.onStarted?.({ originMs: performance.now(), intervalMs: options.intervalMs });
+      if (options.beats && options.beats < 20) setTimeout(() => options.onEnded?.(), options.beats * options.intervalMs);
+    }),
+  }),
+}));
 let mockPad: { onDown: () => void; onUp: () => void };
 let mockKey: { onDown: (midi: number) => void; onUp: (midi: number) => void };
 let mockStaff: any;
@@ -73,6 +85,8 @@ const startImmediate = async (screen: ReturnType<typeof render>) => {
 
 describe("RhythmWorkspace state-specific input", () => {
   beforeEach(async () => {
+    mockReferences.length = 0;
+    mockReferenceReady = true;
     jest.clearAllMocks(); await AsyncStorage.clear();
     jest.mocked(listRhythmDocuments).mockResolvedValue([]);
     Object.assign(rhythmRecovery, createRhythmRecovery());
@@ -104,6 +118,32 @@ describe("RhythmWorkspace state-specific input", () => {
     const hits = jest.mocked(saveRhythmDocument).mock.calls[0][0].hits;
     expect(hits.map((hit) => [hit.onsetMs, hit.releaseMs])).toEqual([[0, 10], [100, 120]]);
   });
+  test("stopping preparation rejects a late start and preserves idle input", async () => {
+    const screen = await mount();
+    mockReferenceReady = false;
+    await startImmediate(screen);
+    const stale = mockReferences[0];
+    fireEvent.click(screen.getByTestId("rhythm-record"));
+    act(() => stale.onStarted({ originMs: performance.now(), intervalMs: 500 }));
+    await tick(1000);
+    expect(screen.getByTestId("rhythm-record-status").textContent).not.toBe("Recording");
+    expect(screen.getByTestId("rhythm-pad").hasAttribute("disabled")).toBe(true);
+    expect(notes()).toHaveLength(0);
+    expect(Alert.alert).not.toHaveBeenCalled();
+  });
+  test("the track origin, not a late preparation callback, defines capture zero", async () => {
+    const screen = await mount();
+    mockReferenceReady = false;
+    await startImmediate(screen);
+    const source = mockReferences[0];
+    await tick(150);
+    act(() => source.onStarted({ originMs: performance.now() - 70, intervalMs: 500 }));
+    pressPad();
+    fireEvent.click(screen.getByTestId("rhythm-record"));
+    fireEvent.click(screen.getByTestId("rhythm-save"));
+    await act(async () => {});
+    expect(jest.mocked(saveRhythmDocument).mock.calls[0][0].hits[0].onsetMs).toBe(70);
+  });
 
   test("holding activation starts immediately after count-in; starting hold is excluded and a delayed first tap keeps its silence", async () => {
     const screen = await mount();
@@ -111,7 +151,7 @@ describe("RhythmWorkspace state-specific input", () => {
     fireEvent.contextMenu(screen.getByTestId("rhythm-activate-pad"));
     expect(screen.getByTestId("rhythm-record-status").textContent).toBe("Count-in");
     expect(notes()).toHaveLength(0);
-    await tick(4 * 60000 / 92);
+    await tick(Math.ceil(4 * 60000 / 92));
     expect(screen.getByTestId("rhythm-record-status").textContent).toBe("Recording");
     await tick(150); pressPad();
     fireEvent.click(screen.getByTestId("rhythm-record"));
@@ -243,7 +283,8 @@ describe("RhythmWorkspace state-specific input", () => {
     expect(jest.mocked(playChord).mock.calls.at(-1)![0]).toEqual([64]);
     const stops = jest.mocked(stopPreviewNote).mock.calls.length;
     await tick(700);
-    expect(mockClick.play).toHaveBeenCalled();
+    expect(mockReferences).toHaveLength(1);
+    expect(mockClick.play).not.toHaveBeenCalled();
     expect(stopPreviewNote).toHaveBeenCalledTimes(stops);
     act(() => mockKey.onUp(64));
     fireEvent.click(screen.getByTestId("rhythm-record"));

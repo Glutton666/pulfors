@@ -3,25 +3,28 @@ import { createRhythmDocument } from "../lib/rhythm-lab/engine";
 
 test.use({ baseURL: process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : undefined });
 test.setTimeout(90000);
-async function enter(page: Page) {
+async function enter(page: Page, embedded = false) {
   await page.addInitScript(() => {
     localStorage.setItem("metronome_onboarding_done", "1");
     localStorage.setItem("metronome_onboarding_lang_done", "1");
     localStorage.setItem("metronome_lab_unlocked", "true");
   });
   await page.goto("/", { waitUntil: "domcontentloaded" });
-  await page.getByTestId("mode-cycle-label").waitFor({ timeout: 45000 });
-  const skip = page.getByText(/건너뛰기|Skip/i).first();
+  if (embedded) await page.setContent('<iframe src="/" allow="autoplay" style="position:fixed;inset:0;width:100%;height:100%;border:0"></iframe>');
+  const target = embedded ? (await (await page.locator("iframe").elementHandle())!.contentFrame())! : page;
+  await target.getByTestId("mode-cycle-label").waitFor({ timeout: 45000 });
+  const skip = target.getByText(/건너뛰기|Skip/i).first();
   if (await skip.isVisible()) await skip.click();
   const viewport = page.viewportSize()!;
-  await page.getByTestId("mode-cycle-label").click();
+  await target.getByTestId("mode-cycle-label").click();
   await page.waitForTimeout(350);
   await page.mouse.click(viewport.width / 2 - 58, 86);
   await page.waitForTimeout(300);
   await page.mouse.click(viewport.width / 2, viewport.height * 0.7);
-  await page.getByTestId("menu-lab").click();
-  await page.getByTestId("menu-rhythm-lab").click();
-  await expect(page.getByTestId("rhythm-input-stage")).toBeVisible();
+  await target.getByTestId("menu-lab").click();
+  await target.getByTestId("menu-rhythm-lab").click();
+  await expect(target.getByTestId("rhythm-input-stage")).toBeVisible();
+  return target;
 }
 async function hold(page: Page, x: number, y: number, ms = 700) {
   await page.mouse.move(x, y); await page.mouse.down(); await page.waitForTimeout(ms); await page.mouse.up();
@@ -99,42 +102,62 @@ test("steady taps against a 92 BPM click do not become scattered tuplets", async
   await page.screenshot({ path: "generated-artifacts/rhythm-steady-pulse.jpg" });
 });
 
-for (const input of ["mouse", "touch"] as const) test(`calibration completes from actual reference dispatch with ${input} and keeps a nonzero applied value`, async ({ page }) => {
+for (const input of ["mouse", "touch", "iframe-touch"] as const) test(`calibration completes from rendered reference track with ${input} and keeps a nonzero applied value`, async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await enter(page);
-  await page.getByTestId("rhythm-settings").click();
-  await page.evaluate(() => {
+  const target = await enter(page, input === "iframe-touch");
+  await target.getByTestId("rhythm-settings").click();
+  await target.evaluate(() => {
     const original = AudioBufferSourceNode.prototype.start;
     (window as any).__calibrationStarts = [];
     AudioBufferSourceNode.prototype.start = function (...args: Parameters<typeof original>) {
-      (window as any).__calibrationStarts.push(performance.now());
+      // The source starts ONCE. Observe its reserved audio time, not JS dispatch.
+      (window as any).__calibrationStarts.push({ when: args[0], context: this.context });
       return original.apply(this, args);
     };
   });
-  if (input === "touch") await page.getByTestId("rhythm-calibration-tap").tap();
-  else await page.getByTestId("rhythm-calibration-reference").click();
+  if (input !== "mouse") await target.getByTestId("rhythm-calibration-tap").tap();
+  else await target.getByTestId("rhythm-calibration-reference").click();
   // Mobile keyboard/focus changes must not cancel a pass when the value did
   // not change. This used to run the manual-offset editor and reset the pass.
-  const offset = page.getByTestId("rhythm-offset-input");
+  const offset = target.getByTestId("rhythm-offset-input");
   await offset.focus();
   await offset.evaluate((node) => (node as HTMLInputElement).blur());
-  await expect(page.getByTestId("rhythm-calibration-status")).not.toHaveText(/기준음 시작 →|Start reference →/);
-  const tap = page.getByTestId("rhythm-calibration-tap");
+  await expect(target.getByTestId("rhythm-calibration-status")).not.toHaveText(/기준음 시작 →|Start reference →/);
+  const tap = target.getByTestId("rhythm-calibration-tap");
   await tap.scrollIntoViewIfNeeded();
   for (let i = 0; i < 20; i++) {
-    await page.waitForFunction((i) => (window as any).__calibrationStarts.length > i, i);
+    await target.waitForFunction((i) => {
+      const source = (window as any).__calibrationStarts[0];
+      if (!source) return false;
+      const ctx = source.context, stamp = ctx.getOutputTimestamp?.();
+      const presented = stamp?.contextTime > 0
+        ? stamp.contextTime + (performance.now() - stamp.performanceTime) / 1000
+        : ctx.currentTime - (ctx.baseLatency || 0) - (ctx.outputLatency || 0);
+      return presented >= source.when + i * 60 / 92;
+    }, i);
     if (i >= 4) {
       await page.waitForTimeout(70);
-      if (input === "touch") {
+      if (input !== "mouse") {
         const box = (await tap.boundingBox())!;
         await page.touchscreen.tap(box.x + box.width / 2, box.y + box.height / 2);
       } else await tap.click();
       if (i < 19) await expect(tap).toHaveText(new RegExp(`${i - 3}/16`));
-      else await expect(page.getByTestId("rhythm-calibration-status")).toHaveText(/16\/16|보정 적용:|Applied:/);
+      else await expect(target.getByTestId("rhythm-calibration-status")).toHaveText(/16\/16|보정 적용:|Applied:/);
+      if (input === "iframe-touch" && i === 8) {
+        const advanced = await target.evaluate(() => {
+          const ctx = (window as any).__calibrationStarts[0].context;
+          const audioBefore = ctx.currentTime, until = performance.now() + 220;
+          while (performance.now() < until) { /* deliberate UI-thread stall */ }
+          return ctx.currentTime - audioBefore;
+        });
+        // This proves graph clock progress, not physical speaker output.
+        expect(advanced).toBeGreaterThan(0.15);
+      }
     }
   }
-  await expect(page.getByTestId("rhythm-calibration-status")).toHaveText(/보정 적용:|Applied:/);
-  expect(Number(await page.getByTestId("rhythm-offset-input").inputValue())).toBeGreaterThan(40);
+  expect(await target.evaluate(() => (window as any).__calibrationStarts.length)).toBe(1);
+  await expect(target.getByTestId("rhythm-calibration-status")).toHaveText(/보정 적용:|Applied:/);
+  expect(Number(await target.getByTestId("rhythm-offset-input").inputValue())).toBeGreaterThan(40);
   await page.screenshot({ path: "generated-artifacts/rhythm-calibration-complete.jpg" });
 });
 
