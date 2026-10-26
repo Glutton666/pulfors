@@ -33,11 +33,19 @@ export function automaticRhythm(doc: RhythmDocument): { notes: NotationEvent[]; 
   const regions = new Map<number, Hit[]>();
   for (const hit of hits) {
     if (qOf(doc, hit) / capacity >= 4096) throw new Error("A rhythm take is limited to 4,096 measures");
-    const key = bucket(hit); regions.set(key, [...(regions.get(key) ?? []), hit]);
+    const key = bucket(hit), local = regions.get(key) ?? [];
+    local.push(hit); regions.set(key, local);
   }
   const choices = new Map([...regions].map(([key, local]) => [key, rank(local.map((h) => qOf(doc, h)), ms, doc.simplification)]));
-  const build = (alternative?: { key: number; grid: number }) => {
-    const placed = hits.map((hit) => {
+  // Rank held gates once, not once per competing onset hypothesis.
+  const gates = new Map(hits.filter((h) => h.midi !== undefined && h.releaseMs !== undefined && h.releaseMs > h.onsetMs)
+    .map((h) => {
+      const held = (h.releaseMs! - h.onsetMs) / ms;
+      const grid = rank([0, held], ms, doc.simplification)[0].grid;
+      return [h.id, { grid, duration: Math.max(4 / grid, quantize(held, grid)) }] as const;
+    }));
+  const build = (alternative?: { key: number; grid: number }, source = hits) => {
+    const placed = source.map((hit) => {
       const key = bucket(hit), grid = alternative?.key === key ? alternative.grid : choices.get(key)![0].grid;
       return { hit, grid, q: quantize(qOf(doc, hit), grid) };
     });
@@ -45,14 +53,17 @@ export function automaticRhythm(doc: RhythmDocument): { notes: NotationEvent[]; 
       let ratio = gridRatio(grid);
       let duration: number;
       if (hit.midi !== undefined && hit.releaseMs !== undefined && hit.releaseMs > hit.onsetMs) {
-        const held = (hit.releaseMs - hit.onsetMs) / ms;
-        const heldGrid = rank([0, held], ms, doc.simplification)[0].grid;
-        duration = Math.max(4 / heldGrid, quantize(held, heldGrid));
+        const { grid: heldGrid, duration: heldDuration } = gates.get(hit.id)!;
+        duration = heldDuration;
         ratio = gridRatio(heldGrid) ?? ratio;
       } else {
         const base = 0.25 * (ratio ? ratio.normal / ratio.actual : 1);
-        const next = placed.slice(index + 1).find((item) => item.q > q + EPS &&
-          item.q <= (Math.floor(q / capacity) + 2) * capacity);
+        let next: typeof placed[number] | undefined;
+        for (let j = index + 1; j < placed.length; j++) {
+          if (placed[j].q > q + EPS && placed[j].q <= (Math.floor(q / capacity) + 2) * capacity) {
+            next = placed[j]; break;
+          }
+        }
         const gap = hit.midi === undefined && next ? next.q - q : Infinity;
         duration = spellLength(Math.min(base, gap), ratio)?.duration ?? Math.min(base, gap);
       }
@@ -82,19 +93,65 @@ export function automaticRhythm(doc: RhythmDocument): { notes: NotationEvent[]; 
   };
   const notes = build(), candidates: InterpretationCandidate[] = [];
   const measures = new Set(hits.map((h) => Math.floor(qOf(doc, h) / capacity)));
+  // A candidate needs a bar's attacks, crossing gates/ties and neighbouring
+  // onset context, not the entire take. One quarter is a conservative halo:
+  // onset rounding moves <= 1/2 quarter, short gates <= 1/4. Include a further
+  // bar for the existing next-onset horizon. Distribute sorted sources once.
+  const sourcesByMeasure = new Map<number, Hit[]>();
+  for (const hit of hits) {
+    const q = qOf(doc, hit), end = q + (gates.get(hit.id)?.duration ?? 0.25);
+    const first = Math.max(0, Math.ceil((q - 1) / capacity - 2));
+    const last = Math.min(4095, Math.floor((end + 1) / capacity));
+    for (let m = first; m <= last; m++) if (measures.has(m)) {
+      const list = sourcesByMeasure.get(m) ?? [];
+      list.push(hit); sourcesByMeasure.set(m, list);
+    }
+  }
+  const keysByMeasure = new Map<number, number[]>();
+  for (const key of regions.keys()) {
+    const m = Math.floor((key * regionSize + EPS) / capacity);
+    // Preserve the original interval predicate even for unusual short meters.
+    if (key * regionSize < (m + 1) * capacity - EPS) {
+      const list = keysByMeasure.get(m) ?? [];
+      list.push(key); keysByMeasure.set(m, list);
+    }
+  }
+  const select = (full: NotationEvent[], m: number) => {
+    const sourceIds = new Set(full.filter((e) => e.measureIndex === m).flatMap((e) => e.hitIds));
+    return full.filter((e) => e.hitIds.some((id) => sourceIds.has(id)));
+  };
+  const notesByMeasure = new Map<number, NotationEvent[]>();
+  const noteOrder = new Map(notes.map((note, index) => [note, index]));
+  const piecesByHit = new Map<string, NotationEvent[]>();
+  for (const note of notes) for (const id of note.hitIds) {
+    const list = piecesByHit.get(id) ?? []; list.push(note); piecesByHit.set(id, list);
+  }
+  for (const note of notes) {
+    const list = notesByMeasure.get(note.measureIndex) ?? [];
+    list.push(note); notesByMeasure.set(note.measureIndex, list);
+  }
   for (const m of measures) {
-    const localKeys = [...regions.keys()].filter((key) => key * regionSize >= m * capacity - EPS && key * regionSize < (m + 1) * capacity - EPS);
+    const localKeys = keysByMeasure.get(m) ?? [];
     const baseScore = localKeys.reduce((sum, key) => sum + choices.get(key)![0].score, 0);
     const variants = [{ key: -1, grid: 16, score: baseScore }, ...localKeys.flatMap((key) =>
       choices.get(key)!.slice(1, 3).map((choice) => ({ key, grid: choice.grid,
         score: baseScore - choices.get(key)![0].score + choice.score })))].sort((a, b) => a.score - b.score).slice(0, 4);
     for (const variant of variants) {
-      const full = variant.key === -1 ? notes : build(variant);
-      const sourceIds = new Set(full.filter((e) => e.measureIndex === m).flatMap((e) => e.hitIds));
-      const selected = full.filter((e) => e.hitIds.some((id) => sourceIds.has(id)));
+      let selected: NotationEvent[] | undefined;
       candidates.push({ id: `local-${m}-${variant.key}-${variant.grid}`, measureIndex: m,
         grid: variant.grid, label: variant.key === -1 ? "Local" : `${variant.key * regionSize} · ${variant.grid}`,
-        score: variant.score, events: selected });
+        score: variant.score,
+        get events() {
+          if (!selected) {
+            if (variant.key === -1) {
+              const connected = new Set((notesByMeasure.get(m) ?? []).flatMap((e) =>
+                e.hitIds.flatMap((id) => piecesByHit.get(id) ?? [])));
+              // Logical-note order, including earlier/later tie pieces.
+              selected = [...connected].sort((a, b) => noteOrder.get(a)! - noteOrder.get(b)!);
+            } else selected = select(build(variant, sourcesByMeasure.get(m) ?? []), m);
+          }
+          return selected;
+        } });
     }
   }
   return { notes, candidates };

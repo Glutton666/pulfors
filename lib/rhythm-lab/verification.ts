@@ -73,12 +73,16 @@ export function reconstructNotation(doc: RhythmDocument, events = interpretRhyth
 }
 
 export function regionFingerprint(doc: RhythmDocument, index: number, events = interpretRhythm(doc).events): string {
-  const ids = new Set(events.filter((event) => event.measureIndex === index)
+  const localEvents = events.filter((event) => event.measureIndex === index);
+  const ids = new Set(localEvents
     .flatMap((event) => [...event.hitIds, ...(event.graceHitIds ?? [])]));
+  return fingerprintParts(doc, localEvents, doc.hits.filter((hit) => ids.has(hit.id)));
+}
+
+function fingerprintParts(doc: RhythmDocument, events: NotationEvent[], hits: RhythmDocument["hits"]): string {
   // Store a bounded deterministic hash, not a second copy of the performance.
   const payload = [doc.bpm, doc.meter, doc.offsetMs,
-    events.filter((event) => event.measureIndex === index),
-    doc.hits.filter((hit) => ids.has(hit.id))];
+    events, hits];
   const canonical = (value: unknown): unknown => Array.isArray(value) ? value.map(canonical) :
     value && typeof value === "object" ? Object.fromEntries(Object.entries(value)
       .filter(([, item]) => item !== undefined).sort(([a], [b]) => a.localeCompare(b)).map(([key, item]) => [key, canonical(item)])) : value;
@@ -184,6 +188,32 @@ export function verifyDraft(doc: RhythmDocument, interpretation: Interpretation 
   }
   for (const event of events) if (event.kind === "note" && !buckets.has(event.measureIndex)) buckets.set(event.measureIndex, []);
   for (const issue of issues) if (!buckets.has(issue.measureIndex)) buckets.set(issue.measureIndex, []);
+  const invalidMeasures = new Set(issues.map((issue) => issue.measureIndex));
+  const conflictingMeasures = new Set(interpretation.conflicts?.map((item) => item.measureIndex));
+  const candidatesByMeasure = new Map<number, InterpretationCandidate[]>();
+  for (const candidate of candidates) {
+    const list = candidatesByMeasure.get(candidate.measureIndex) ?? [];
+    list.push(candidate); candidatesByMeasure.set(candidate.measureIndex, list);
+  }
+  const confirmations = new Map<number, NonNullable<RhythmDocument["reviewConfirmations"]>>();
+  for (const entry of doc.reviewConfirmations ?? []) {
+    const list = confirmations.get(entry.measureIndex) ?? [];
+    list.push(entry); confirmations.set(entry.measureIndex, list);
+  }
+  const eventsByMeasure = new Map<number, NotationEvent[]>();
+  const fingerprintHitMeasures = new Map<string, Set<number>>();
+  for (const event of events) if (confirmations.has(event.measureIndex)) {
+    const list = eventsByMeasure.get(event.measureIndex) ?? [];
+    list.push(event); eventsByMeasure.set(event.measureIndex, list);
+    for (const id of [...event.hitIds, ...(event.graceHitIds ?? [])]) {
+      const measures = fingerprintHitMeasures.get(id) ?? new Set<number>();
+      measures.add(event.measureIndex); fingerprintHitMeasures.set(id, measures);
+    }
+  }
+  const fingerprintHits = new Map<number, typeof doc.hits>();
+  for (const hit of doc.hits) for (const index of fingerprintHitMeasures.get(hit.id) ?? []) {
+    const list = fingerprintHits.get(index) ?? []; list.push(hit); fingerprintHits.set(index, list);
+  }
   let aggregate = 0, comparedCount = 0, totalWeight = 0;
   const regions: DraftRegion[] = [];
   for (const [index, hits] of [...buckets].sort(([a], [b]) => a - b)) {
@@ -215,8 +245,9 @@ export function verifyDraft(doc: RhythmDocument, interpretation: Interpretation 
     const extra = localTimeline.filter((hit) => !localSourceIds.has(hit.id)).length;
     const weight = Math.max(hits.length, localTimeline.length);
     const similarity = weight ? Math.round(100 * similaritySum / weight) : null;
-    const invalid = issues.some((issue) => issue.measureIndex === index);
-    const choices = candidates.filter((candidate) => candidate.measureIndex === index);
+    const invalid = invalidMeasures.has(index);
+    const choices = candidatesByMeasure.get(index) ?? [];
+    const localHitsById = new Map(hits.map((hit) => [hit.id, hit]));
     const signatures = new Set(choices.filter((candidate) => {
       // Candidate scoring is for ranking, not a percentage. Only genuinely
       // different timing/spelling hypotheses can count as ambiguous.
@@ -225,18 +256,19 @@ export function verifyDraft(doc: RhythmDocument, interpretation: Interpretation 
     }).map((candidate) => JSON.stringify(candidate.events.filter((event) => event.kind === "note")
       .map((event) => [event.hitIds, event.startQ,
         event.hitIds.some((id) => {
-          const hit = hits.find((source) => source.id === id);
+          const hit = localHitsById.get(id);
            return hit?.midi !== undefined && hit.releaseMs !== undefined && hit.releaseMs - hit.onsetMs >= Math.max(80, ms / 4);
         }) ? event.durationQ : null]))));
-    const confirmed = doc.reviewConfirmations?.some((entry) => entry.measureIndex === index &&
-      entry.fingerprint === regionFingerprint(doc, index, events));
+    const entries = confirmations.get(index);
+    const confirmed = entries?.some((entry) => entry.fingerprint ===
+      fingerprintParts(doc, eventsByMeasure.get(index) ?? [], fingerprintHits.get(index) ?? []));
     const reasons: string[] = [];
     if (invalid) reasons.push("structure");
     if (missing) reasons.push("missing");
     if (extra) reasons.push("extra");
     if (maxErrorMs > Math.min(ms * 0.05, 30)) reasons.push("timing");
     if (heldMismatch) reasons.push("duration");
-    const conflict = interpretation.conflicts?.some((item) => item.measureIndex === index);
+    const conflict = conflictingMeasures.has(index);
     if (conflict) reasons.push("protected-boundary");
     if (signatures.size > 1) reasons.push("ambiguous");
     const status = conflict ? "unresolved" : invalid ? "invalid" : confirmed ? "confirmed" :
@@ -260,8 +292,9 @@ export function verifyDraft(doc: RhythmDocument, interpretation: Interpretation 
  * grids for failed measures automatically, while retaining explicit corrections. */
 export function prepareValidatedDraft(doc: RhythmDocument): RhythmDocument {
   let next = doc;
-  const initial = verifyDraft(next);
-  const candidates = interpretRhythm(doc).candidates;
+  const interpretation = interpretRhythm(doc);
+  const initial = verifyDraft(next, interpretation);
+  const candidates = interpretation.candidates;
   const latestMeasure = Math.max(0, ...doc.hits.map((h) =>
     Math.floor(Math.max(0, h.onsetMs - doc.offsetMs) * doc.bpm / 60000 / measureQuarters(doc.meter))));
   const needsRepair = initial.regions.filter((region) => (region.status === "invalid" || region.status === "unresolved") &&

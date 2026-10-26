@@ -1,4 +1,5 @@
 import { reconstructNotation, verifyDraft } from "./verification";
+import type { DraftReport } from "./verification";
 import type { Interpretation, RhythmDocument } from "./types";
 
 export interface TapTimingComparison {
@@ -13,8 +14,8 @@ export interface TapTimingComparison {
 
 /** Compare successive original attacks with independently reconstructed score
  * attacks. Equal hit counts alone are never treated as a timing match. */
-export function compareTapTiming(document: RhythmDocument, interpretation: Interpretation) {
-  const report = verifyDraft(document, interpretation);
+export function compareTapTiming(document: RhythmDocument, interpretation: Interpretation,
+  report: DraftReport = verifyDraft(document, interpretation)) {
   const recovered = new Map(reconstructNotation(document, interpretation.events).map((hit) => [hit.id, hit]));
   const ordered = [...document.hits].sort((a, b) => a.onsetMs - b.onsetMs);
   const intervals: TapTimingComparison[] = [];

@@ -106,15 +106,33 @@ export function fillRests(doc: RhythmDocument, notes: NotationEvent[], measures 
   if (count > 4096) throw new Error("A rhythm take is limited to 4,096 measures");
   const result = [...notes];
   const hints = notes.filter((e) => e.tuplet?.startQ && e.tuplet.endQ);
+  const intervalsByMeasure = new Map<number, number[][]>();
+  const hintsByMeasure = new Map<number, NotationEvent[]>();
+  for (const event of notes) {
+    const start = num(event.startQ), end = start + num(event.durationQ);
+    for (let m = Math.max(0, Math.floor(start / capacity)); m < count && m * capacity < end - EPS; m++) {
+      const a = Math.max(m * capacity, start), b = Math.min((m + 1) * capacity, end);
+      if (b > a + EPS) {
+        const list = intervalsByMeasure.get(m) ?? [];
+        list.push([a, b]); intervalsByMeasure.set(m, list);
+      }
+    }
+  }
+  for (const hint of hints) {
+    const start = num(hint.tuplet!.startQ!), end = num(hint.tuplet!.endQ!);
+    for (let m = Math.max(0, Math.floor(start / capacity)); m < count && m * capacity < end - EPS; m++) {
+      const list = hintsByMeasure.get(m) ?? [];
+      list.push(hint); hintsByMeasure.set(m, list);
+    }
+  }
   for (let m = 0; m < count; m++) {
     const end = (m + 1) * capacity;
-    const intervals = notes.map((e) => [Math.max(m * capacity, num(e.startQ)), Math.min(end, num(e.startQ) + num(e.durationQ))])
-      .filter(([a, b]) => b > a + EPS).sort((a, b) => a[0] - b[0]);
+    const intervals = (intervalsByMeasure.get(m) ?? []).sort((a, b) => a[0] - b[0]);
     let cursor = m * capacity;
     for (const [a, b] of [...intervals, [end, end]]) {
       let at = cursor;
       while (at < a - EPS) {
-        const hint = hints.find((e) => at >= num(e.tuplet!.startQ!) - EPS && at < num(e.tuplet!.endQ!) - EPS)?.tuplet;
+        const hint = hintsByMeasure.get(m)?.find((e) => at >= num(e.tuplet!.startQ!) - EPS && at < num(e.tuplet!.endQ!) - EPS)?.tuplet;
         const boundary = Math.min(a, Math.floor(at + EPS) + 1, hint?.endQ ? num(hint.endQ) : Infinity);
         const length = boundary - at;
         let spelling = spellLength(length, hint);

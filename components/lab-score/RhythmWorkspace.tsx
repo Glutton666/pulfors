@@ -646,7 +646,7 @@ export function RhythmWorkspace({ active = true, initialDocument }: { active?: b
           </Pressable>
         </View>
         <View style={compactDock ? s.captureLandscape : undefined}>
-        <View style={compactDock ? s.landscapeFeedback : undefined}><RhythmLiveFeedback document={doc} interpretation={interpretation} recording={recording} compact={compactDock} /></View>
+        <View style={compactDock ? s.landscapeFeedback : undefined}><RhythmLiveFeedback document={doc} interpretation={interpretation} report={draftReport} recording={recording} compact={compactDock} /></View>
         <View style={[s.scoreCard, compactDock && s.compactScoreCard, { backgroundColor: C.surface, borderColor: C.border }]}>
           <RhythmStaff events={interpretation.events} meter={doc.meter} selected={selected} symbols={doc.symbols} onSelect={selectEvent} onMovePreview={previewMove} onMoveCommit={commitMove} onMoveCancel={cancelMove} playheadQ={recording ? livePlayheadQ : playheadQ} singleLine followPlayhead={recording} />
         </View>

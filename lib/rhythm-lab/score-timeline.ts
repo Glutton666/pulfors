@@ -7,10 +7,14 @@ import type { NotationEvent, PlaybackHit, RhythmDocument } from "./types";
 export function scoreTimeline(doc: RhythmDocument, events: NotationEvent[]): PlaybackHit[] {
   const ms = 60000 / doc.bpm;
   const sources = new Map(doc.hits.map((hit) => [hit.id, hit]));
+  const ties = new Map<string, NotationEvent[]>();
+  for (const event of events) if (event.kind === "note" && event.tie) {
+    const list = ties.get(event.tie.id) ?? []; list.push(event); ties.set(event.tie.id, list);
+  }
   const result: PlaybackHit[] = [];
   for (const event of events) {
     if (event.kind !== "note" || event.tie && event.tie.part !== 0) continue;
-    const pieces = event.tie ? events.filter((e) => e.kind === "note" && e.tie?.id === event.tie!.id) : [event];
+    const pieces = event.tie ? ties.get(event.tie.id)! : [event];
     const durationMs = pieces.reduce((sum, piece) => sum + notationSpelling(piece).durationQ * ms, 0);
     const timeMs = num(event.startQ) * ms;
     if (event.hitIds.length) {

@@ -4,19 +4,21 @@ import { useTheme } from "@/contexts/ThemeContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { compareTapTiming } from "@/lib/rhythm-lab/timing-feedback";
 import type { Interpretation, RhythmDocument } from "@/lib/rhythm-lab/types";
+import type { DraftReport } from "@/lib/rhythm-lab/verification";
 
 const signed = (value: number) => `${value > 0 ? "+" : ""}${Math.round(value)}`;
 
-export function RhythmLiveFeedback({ document, interpretation, compact = false }: {
+export function RhythmLiveFeedback({ document, interpretation, report, compact = false }: {
   document: RhythmDocument;
   interpretation: Interpretation;
+  report?: DraftReport;
   recording: boolean;
   compact?: boolean;
 }) {
   const { colors: C } = useTheme();
   const { language } = useLanguage();
   const ko = language === "ko";
-  const feedback = useMemo(() => compareTapTiming(document, interpretation), [document, interpretation]);
+  const feedback = useMemo(() => compareTapTiming(document, interpretation, report), [document, interpretation, report]);
   const latest = feedback.intervals.at(-1);
   const status = document.hits.length < 2 ? (ko ? "두 탭부터 간격 비교" : "Compare after two taps")
     : !feedback.report.valid ? (ko ? "기보 구조 오류" : "Invalid notation")
