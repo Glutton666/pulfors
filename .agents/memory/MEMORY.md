@@ -101,3 +101,4 @@
 - [Rhythm viewport benchmarks](rhythm-viewport-benchmark.md) — align capture/display clocks; wait for rotation reflow and navigate relative to the staff, not page zero.
 - [Rhythm calibration reference](rhythm-calibration-reference.md) — personal listening/input correction, not physical DAC latency; match reference and tap time axes.
 - [Expo canvas isolation](expo-canvas-isolation.md) — nested design sandboxes use a separate type-check configuration; provisioning must not silently break the existing Expo app.
+- [Canvas preview host](canvas-preview-host.md) — verify the selected frame's current wrapper after recovery; an old Expo-prefixed hostname may no longer respond.
