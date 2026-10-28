@@ -63,6 +63,17 @@ export function useScale(): ScaleValues {
     const paddingVert = isLandscape ? 16 : 24;
     const availH = safeH - paddingVert;
 
+    let contentMaxWidth: number | undefined;
+    if (isTablet) {
+      if (isWeb) {
+        contentMaxWidth = isWideWebDesktop
+          ? Math.min(Math.max(560, width - 64), 1600)
+          : Math.min(Math.max(560, width - 48), 1400);
+      } else {
+        contentMaxWidth = Math.min(Math.max(560, width - 48), 1400);
+      }
+    }
+
     let dialSize: number;
     if (isWideWebDesktop) {
       // Leave room for the beat controls and rhythm editor beneath the dial,
@@ -73,8 +84,36 @@ export function useScale(): ScaleValues {
         Math.max(240, (availH - 72) * 0.78),
       );
     } else if (isTablet) {
-      const maxDial = isWeb ? Math.min(minDim * 0.65, 1200) : 520;
-      dialSize = Math.min(minDim - 80, maxDial, availH * 0.55);
+      const maxDial = isWeb ? Math.min(minDim * 0.82, 560) : 520;
+      if (isLandscape) {
+        // The tablet workspace is split 5:3 between the practice dial and
+        // secondary tools. Size the dial against its real column, reserving
+        // room for the adjacent mode buttons, as well as safe vertical space.
+        const tabletContentWidth = Math.min(width, contentMaxWidth ?? width);
+        const contentHorizontalPadding = ms(16, 0.3) * 2;
+        const primaryColumnWidth =
+          (tabletContentWidth - contentHorizontalPadding) * 5 / 8;
+        const widthAvailableForDial = primaryColumnWidth - 60;
+        dialSize = Math.min(
+          widthAvailableForDial,
+          maxDial,
+          availH * 0.76,
+        );
+      } else {
+        // Portrait tablets stack the dial above BPM controls. Keep a fixed
+        // width allowance for the screen gutters and grow within the vertical
+        // room left for the lower controls.
+        const tabletContentWidth = Math.min(width, contentMaxWidth ?? width);
+        const portraitControlWidth = tabletContentWidth - 64;
+        const fixedMiddle = 56;
+        const dialAreaH = (availH - fixedMiddle) * 5 / 7;
+        dialSize = Math.min(
+          portraitControlWidth,
+          ms(380),
+          dialAreaH,
+          height * 0.54,
+        );
+      }
     } else if (isLandscape) {
       const padH = ms(16, 0.3) * 2;
       const leftColW = (width - padH) * 5 / 8;
@@ -110,17 +149,6 @@ export function useScale(): ScaleValues {
     const dialRadius = dialSize / 2;
     const dotRadiusFromCenter = dialRadius - ms(30, 0.4);
     const dotSize = isTablet ? Math.max(ms(40, 0.4), dialSize * 0.1) : ms(34, 0.4);
-
-    let contentMaxWidth: number | undefined;
-    if (isTablet) {
-      if (isWeb) {
-        contentMaxWidth = isWideWebDesktop
-          ? Math.min(Math.max(560, width - 64), 1600)
-          : Math.min(Math.max(560, width * 0.85), 1400);
-      } else {
-        contentMaxWidth = 560;
-      }
-    }
 
     return {
       ms,

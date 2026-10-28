@@ -40,6 +40,7 @@
 - [Mode transition async leases](mode-transition-async-leases.md) — acknowledge committed intermediate modes without releasing async work; only latest active transition may apply late results.
 - [Audio watchdog activity signals](audio-watchdog-activity-signals.md) — every audible callback must refresh watchdog activity or healthy layered playback can trigger false recovery.
 - [Subdivision cell sizing](subdivision-cell-sizing.md) — use live dimensions and cap compact subdivision controls; module-load device flags go stale after resizing or rotation.
+- [Tablet practice layout budget](tablet-practice-layout-budget.md) — 4:3 tablet controls use the real available column and height; crossing a breakpoint must not shrink the dial.
 - [Full reset settings races](full-reset-settings-races.md) — cancel pending writes and invalidate the initial async settings load before clearing storage, or stale patterns can return only in the UI.
 - [Bar reset UI-engine sync](bar-reset-ui-engine-sync.md) — bar resets must clear the editor's staging pattern as well as engine subdivisions, or visuals and audio diverge.
 - [Native feature removal audit](native-feature-removal-audit.md) — removing a local native module needs a directory-level residue check after dependency cleanup.

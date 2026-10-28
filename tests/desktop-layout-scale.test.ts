@@ -48,6 +48,45 @@ describe("web desktop scale isolation", () => {
     expect(s.contentMaxWidth).toBeUndefined();
   });
 
+  test.each([
+    [1004, 632, 380],
+    [1024, 768, 470],
+  ])("uses the landscape tablet primary column at %s×%s", (width, height, minExpectedDial) => {
+    const s = layout(width, height);
+    const availableHeight = height - 101 - 16;
+    const contentWidth = Math.min(width, s.contentMaxWidth ?? width);
+    const innerWidth = contentWidth - s.ms(16, 0.3) * 2;
+    const dialColumnWidth = innerWidth * 5 / 8 - 60;
+
+    expect(s.isTablet).toBe(true);
+    expect(s.isLandscape).toBe(true);
+    expect(s.dialSize).toBeGreaterThan(minExpectedDial);
+    expect(s.dialSize).toBeLessThanOrEqual(availableHeight * 0.76);
+    expect(s.dialSize).toBeLessThanOrEqual(dialColumnWidth);
+    expect(s.contentMaxWidth).toBe(width - 48);
+  });
+
+  test("grows the 4:3 portrait tablet dial within vertical and column bounds", () => {
+    const s = layout(768, 1024);
+    const availableHeight = 1024 - 101 - 24;
+    const contentWidth = Math.min(768, s.contentMaxWidth ?? 768);
+
+    expect(s.isTablet).toBe(true);
+    expect(s.isLandscape).toBe(false);
+    expect(s.dialSize).toBeGreaterThan(540);
+    expect(s.dialSize).toBeLessThanOrEqual(1024 * 0.54);
+    expect(s.dialSize).toBeLessThanOrEqual((availableHeight - 56) * 5 / 7);
+    expect(s.dialSize).toBeLessThan(availableHeight);
+    expect(s.dialSize).toBeLessThanOrEqual(contentWidth - 64);
+    expect(s.contentMaxWidth).toBe(720);
+  });
+
+  test("keeps phone landscape geometry unchanged", () => {
+    const s = layout(667, 375);
+    expect(s.dialSize).toBe(248);
+    expect(s.contentMaxWidth).toBeUndefined();
+  });
+
   test("uses more of the available height for the beat dial in roomy landscape", () => {
     const s = layout(1004, 451);
     expect(s.isLandscape).toBe(true);
@@ -63,7 +102,7 @@ describe("web desktop scale isolation", () => {
   test.each(["ios", "android"])("does not adopt desktop geometry on %s tablets", (platform) => {
     const s = layout(1280, 800, platform);
     expect(s.isWideWebDesktop).toBe(false);
-    expect(s.contentMaxWidth).toBe(560);
+    expect(s.contentMaxWidth).toBe(1232);
     expect(s.scale).toBe(800 / 375);
   });
 });
