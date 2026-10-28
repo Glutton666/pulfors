@@ -103,3 +103,4 @@
 - [리듬 연습과 탭 기보 분리](rhythm-practice-vs-transcription.md) — Glisso처럼 악보를 보고 탭하는 연습과 탭을 악보로 기록하는 기능은 각각 유지한다.
 - [Rhythm viewport benchmarks](rhythm-viewport-benchmark.md) — align capture/display clocks; wait for rotation reflow and navigate relative to the staff, not page zero.
 - [Rhythm calibration reference](rhythm-calibration-reference.md) — personal listening/input correction, not physical DAC latency; match reference and tap time axes.
+- [오선노트 작업영역](staff-notebook-workspace.md) — 상단 다이얼 아래는 종이로 채우고, 왼쪽 메트로놈·오른쪽 필기 도구를 펼친다.
