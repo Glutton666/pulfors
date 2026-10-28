@@ -772,6 +772,7 @@ uri = "file://generated-artifacts/korean-count/raw/ko-male-0.mp3"
 type = "audio"
 title = "korean male 0"
 description = "Text-to-speech audio: 공."
+logical_id = "4e4d57f5-d3bc-4930-ba8c-ba85ad60854f"
 
 [[outputs]]
 id = "LmoIID67oTXsL7b27dYJC"
@@ -779,6 +780,7 @@ uri = "file://generated-artifacts/korean-count/raw/ko-female-0.mp3"
 type = "audio"
 title = "korean female 0"
 description = "Text-to-speech audio: 공."
+logical_id = "eb06afdd-ec3a-4918-a0e6-562d282ebfce"
 
 [[outputs]]
 id = "h98003vVtnVOzuFkW5pTJ"
@@ -786,6 +788,7 @@ uri = "file://generated-artifacts/korean-count/raw/ko-female-1.mp3"
 type = "audio"
 title = "korean female 1"
 description = "Text-to-speech audio: 일."
+logical_id = "5d4426e6-0f43-4298-86ad-589e65ce3409"
 
 [[outputs]]
 id = "S5WUeDzxV2OwdbUVHcbSs"
@@ -793,6 +796,7 @@ uri = "file://generated-artifacts/korean-count/raw/ko-male-1.mp3"
 type = "audio"
 title = "korean male 1"
 description = "Text-to-speech audio: 일."
+logical_id = "50354d92-d515-42ea-856a-d88d42f52a5d"
 
 [[outputs]]
 id = "E2r-IVJP3dG0CM40Zgipw"
@@ -800,6 +804,7 @@ uri = "file://generated-artifacts/korean-count/raw/ko-female-2.mp3"
 type = "audio"
 title = "korean female 2"
 description = "Text-to-speech audio: 둘."
+logical_id = "f7530e8a-93c4-48f8-ae42-26acfbf44ae9"
 
 [[outputs]]
 id = "iuYmhomSvG2E3--8ubUi4"
@@ -807,6 +812,7 @@ uri = "file://generated-artifacts/korean-count/raw/ko-male-2.mp3"
 type = "audio"
 title = "korean male 2"
 description = "Text-to-speech audio: 둘."
+logical_id = "e9724a58-03ee-4cc1-81eb-39613980e878"
 
 [[outputs]]
 id = "s_PNGcVOzxQXVGuzECO9Y"
@@ -814,6 +820,7 @@ uri = "file://generated-artifacts/korean-count/raw/ko-male-3.mp3"
 type = "audio"
 title = "korean male 3"
 description = "Text-to-speech audio: 삼."
+logical_id = "af5064c3-db23-442d-a578-44ebc3561b03"
 
 [[outputs]]
 id = "ZwtUsAsWlBmW2-1qqPLwa"
@@ -821,6 +828,7 @@ uri = "file://generated-artifacts/korean-count/raw/ko-female-3.mp3"
 type = "audio"
 title = "korean female 3"
 description = "Text-to-speech audio: 삼."
+logical_id = "2f0ce335-312f-4797-a1e4-87e9d43098bc"
 
 [[outputs]]
 id = "M3CDLOjQKlaObrUthQBW_"
@@ -828,6 +836,7 @@ uri = "file://generated-artifacts/korean-count/raw/ko-female-4.mp3"
 type = "audio"
 title = "korean female 4"
 description = "Text-to-speech audio: 넷."
+logical_id = "cec1fd7a-0121-4f13-8b28-c2456a113518"
 
 [[outputs]]
 id = "L4pUo5bpizCsuG4C9Onwx"
@@ -835,6 +844,7 @@ uri = "file://generated-artifacts/korean-count/raw/ko-male-4.mp3"
 type = "audio"
 title = "korean male 4"
 description = "Text-to-speech audio: 넷."
+logical_id = "d4f4bf6e-cbfd-46e1-8f67-8ea532dc07af"
 
 [[outputs]]
 id = "9zw3R3rJLItp8rg0wdmZw"
@@ -842,6 +852,7 @@ uri = "file://generated-artifacts/korean-count/raw/ko-male-5.mp3"
 type = "audio"
 title = "korean male 5"
 description = "Text-to-speech audio: 오."
+logical_id = "b9ad2ed5-e47b-4526-8988-d7aa402babf6"
 
 [[outputs]]
 id = "afKJ13-TQHdOvWJziFmrD"
@@ -849,6 +860,7 @@ uri = "file://generated-artifacts/korean-count/raw/ko-female-5.mp3"
 type = "audio"
 title = "korean female 5"
 description = "Text-to-speech audio: 오."
+logical_id = "20b439d8-b0fe-4604-a099-7598d38b0a86"
 
 [[outputs]]
 id = "rpgx32VR30wORP9Eg0NSc"
@@ -856,6 +868,7 @@ uri = "file://generated-artifacts/korean-count/raw/ko-female-6.mp3"
 type = "audio"
 title = "korean female 6"
 description = "Text-to-speech audio: 육."
+logical_id = "34616b18-ab71-47e8-aa94-efa2d97778e0"
 
 [[outputs]]
 id = "LKZgj7HawWqNWy3mCGOaY"
@@ -863,6 +876,7 @@ uri = "file://generated-artifacts/korean-count/raw/ko-male-6.mp3"
 type = "audio"
 title = "korean male 6"
 description = "Text-to-speech audio: 육."
+logical_id = "c7683720-de01-42b1-b8df-75b81b7b6bcb"
 
 [[outputs]]
 id = "TniFbaCkeXDzbjiDJvHra"
@@ -870,6 +884,7 @@ uri = "file://generated-artifacts/korean-count/raw/ko-male-7.mp3"
 type = "audio"
 title = "korean male 7"
 description = "Text-to-speech audio: 칠."
+logical_id = "497c3c4d-ba4a-4bc2-895d-ffa32d3ba77e"
 
 [[outputs]]
 id = "qm1dRiuXl6zcm5XuJ6598"
@@ -877,6 +892,7 @@ uri = "file://generated-artifacts/korean-count/raw/ko-female-7.mp3"
 type = "audio"
 title = "korean female 7"
 description = "Text-to-speech audio: 칠."
+logical_id = "007b3254-3afe-49f5-bc52-7b6ba6899b3d"
 
 [[outputs]]
 id = "sd06OazWxNyBCLEjHGunf"
@@ -884,6 +900,7 @@ uri = "file://generated-artifacts/korean-count/raw/ko-male-8.mp3"
 type = "audio"
 title = "korean male 8"
 description = "Text-to-speech audio: 팔."
+logical_id = "88014853-f211-47b2-9f1d-3a812eb9eb67"
 
 [[outputs]]
 id = "a7aUN_1RPg2kyc2Hm36BT"
@@ -891,6 +908,7 @@ uri = "file://generated-artifacts/korean-count/raw/ko-female-8.mp3"
 type = "audio"
 title = "korean female 8"
 description = "Text-to-speech audio: 팔."
+logical_id = "35555084-9fc7-4b15-8197-ec3b98687372"
 
 [[outputs]]
 id = "fyQCgeRMoaNkGPphlOOu_"
@@ -898,6 +916,7 @@ uri = "file://generated-artifacts/korean-count/raw/ko-female-9.mp3"
 type = "audio"
 title = "korean female 9"
 description = "Text-to-speech audio: 구."
+logical_id = "7b046a60-b36b-41c0-ade5-5de8b62c0bf0"
 
 [[outputs]]
 id = "q1k14bkxcyDiK9--z3Hmt"
@@ -905,6 +924,7 @@ uri = "file://generated-artifacts/korean-count/raw/ko-male-9.mp3"
 type = "audio"
 title = "korean male 9"
 description = "Text-to-speech audio: 구."
+logical_id = "7ac60ef8-d825-4c78-866d-73687d23d24b"
 
 [[outputs]]
 id = "7qnBNi8KWPxuX0LVbZdvV"
