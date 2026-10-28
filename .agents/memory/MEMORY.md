@@ -94,7 +94,7 @@
 - [Bar TTS file delivery](bar-tts-file-delivery.md) — 앱 자체 생성 파일을 저장·재생한다; 웹 생성은 미지원 안내 후 추후 진행, 마디마다 합성·외부 계정 요구는 하지 않는다.
 - [Bar TTS file ownership](bar-tts-file-ownership.md) — 수거는 저장 참조·진행 중인 쓰기·생성·재생/내보내기 소유권이 모두 정리된 뒤에만 수행한다.
 - [Catalog speech generation](catalog-speech-generation.md) — 작은 배치와 반환된 파일 경로를 사용하며, 문맥 발화 분리는 정확한 개수와 별도 청취 확인이 필요하다.
-- [악보 입력 해석의 전제](score-input-interpretation.md) — 직접 연주 입력은 즉시 기보 확정이 아니라 이후 문맥으로 임시 해석을 갱신하는 방식으로 검토한다.
+- [악보 입력 해석의 전제](score-input-interpretation.md) — 문맥으로 임시 해석을 갱신한다. 잠긴 실험실 메뉴는 집중하지 않고 넘어가며, 재요청 전까지 개선을 추진하지 않는다.
 - [리듬 입력 검증](rhythm-input-verification.md) — 저장된 down/up과 건반별 release를 확인하고, 메트로놈 클릭이 화음을 끊지 않게 출력 소유권을 분리한다.
 - [리듬 악보 화면 맞춤](rhythm-score-width-preference.md) — 좌우 스크롤 없이 지정 마디 수를 유지해 축소하고, 특정 줄 조정 뒤에는 기본 마디 수로 재배치한다.
 - [리듬 입력 UI](rhythm-input-ui-preference.md) — 위에 악보·아래에 큰 패드, 길게 눌러 활성화·악보 길게 눌러 중지, 상세 탭 기록은 숨긴다.
