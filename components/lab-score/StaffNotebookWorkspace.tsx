@@ -8,7 +8,7 @@ import { useLabScoreNotebook } from "@/hooks/useLabScoreNotebook";
 import { useNotebookPlayback } from "@/hooks/useNotebookPlayback";
 import { DEFAULT_NOTEBOOK_SETTINGS, type NotebookSettings, type StaffNotebook, type StaffPage, type StaffPoint, type StaffStamp, type StaffStroke } from "@/lib/staff-notebook";
 import { loadPracticeBook, type PracticeEntry } from "@/lib/storage";
-import { notebookRows, materializeRows, stampPosition, screenToPaper, rowAt, PAPER_WIDTH, ROW_HEIGHT } from "@/lib/staff-notebook-layout";
+import { fitNotebookPage, notebookRows, materializeRows, stampPosition, screenToPaper, rowAt, PAPER_WIDTH, ROW_HEIGHT } from "@/lib/staff-notebook-layout";
 import { NotebookLeftPanel } from "@/components/lab-score/notebook/NotebookLeftPanel";
 import { NotebookRightPanel } from "@/components/lab-score/notebook/NotebookRightPanel";
 import { NotebookPaper } from "@/components/lab-score/notebook/NotebookPaper";
@@ -89,16 +89,17 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
   const savedSnapshot = useRef(JSON.stringify(note));
   const stampDrag = useRef<{ id: string; x: number; y: number } | null>(null);
   const panStart = useRef<{ point: StaffPoint; offset: StaffPoint } | null>(null);
-  const page = note.pages[pageIndex] ?? note.pages[0];
   useEffect(() => { if (pageIndex >= note.pages.length) setPageIndex(Math.max(0, note.pages.length - 1)); }, [pageIndex, note.pages.length]);
   const settings = note.settings!;
   const paperScale = viewport.width > 0 ? viewport.width / PAPER_WIDTH : 1;
-  const displayRows = useMemo(() => notebookRows(note), [note.pages]);
-  const playback = useNotebookPlayback(note, active);
+  const editingNote = useMemo(() => fitNotebookPage(note, pageIndex,
+    Math.ceil(viewport.height / (ROW_HEIGHT * paperScale * scale))), [note, pageIndex, viewport.height, paperScale, scale]);
+  const page = editingNote.pages[pageIndex] ?? editingNote.pages[0];
+  const displayRows = useMemo(() => notebookRows(editingNote), [editingNote.pages]);
+  const playback = useNotebookPlayback(editingNote, active);
   const metroRunning = playback.running && !settings.source;
-  const playbackPage = useMemo(() => playback.running ? materializeRows(note, playback.rows) : null, [playback.running, playback.rows, note]);
-  const visiblePage = playbackPage ?? { ...page, staffCount: Math.min(200, Math.max(page.staffCount ?? 7,
-    Math.ceil(viewport.height / (ROW_HEIGHT * paperScale * scale)))) };
+  const playbackPage = useMemo(() => playback.running ? materializeRows(editingNote, playback.rows) : null, [playback.running, playback.rows, editingNote]);
+  const visiblePage = playbackPage ?? page;
   const visibleHeight = (visiblePage.staffCount ?? 7) * ROW_HEIGHT;
   const currentSelection = page.stamps?.find((stamp) => stamp.id === selectedStampId);
   const updateSettings = (patch: Partial<NotebookSettings>) => {
@@ -138,14 +139,14 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
       Alert.alert(t.fresh, t.confirm, [
         { text: t.cancel, style: "cancel" },
         { text: t.discard, style: "destructive", onPress: continueExit },
-        { text: t.save, onPress: () => { void save(note).then((ok) => { if (ok) { savedSnapshot.current = JSON.stringify(note); continueExit(); } }); } },
+        { text: t.save, onPress: () => { void save(editingNote).then((ok) => { if (ok) { savedSnapshot.current = JSON.stringify(editingNote); continueExit(); } }); } },
       ]);
   };
   useEffect(() => {
     if (!active || !onRegisterExit) return;
     onRegisterExit(requestExit);
     return () => onRegisterExit(null);
-  }, [onRegisterExit, active, note, playback.stop, save, t]);
+  }, [onRegisterExit, active, note, editingNote, playback.stop, save, t]);
   const closePanel = useCallback(() => {
     setPanel(null);
     if (Platform.OS === "web") requestAnimationFrame(() => (openedFrom.current === "left" ? leftToggleRef.current : rightToggleRef.current)?.focus?.());
@@ -182,15 +183,18 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
     Alert.alert(t.fresh, t.confirm, [
       { text: t.cancel, style: "cancel" },
       { text: t.discard, style: "destructive", onPress: replace },
-      { text: t.save, onPress: () => { void save(note).then((ok) => { if (ok) replace(); }); } },
+      { text: t.save, onPress: () => { void save(editingNote).then((ok) => { if (ok) replace(); }); } },
     ]);
   };
   const fresh = () => confirmReplace(() => { const next = withDefaults(create()); setNote(next); savedSnapshot.current = JSON.stringify(next); setPageIndex(0); undoStack.current = []; redoStack.current = []; });
   const addPage = () => { playback.stop(); checkpoint(); const pages = [...note.pages, { id: id("page"), strokes: [], staffCount: 7, stamps: [] }]; setNote((prev) => ({ ...prev, pages })); setPageIndex(pages.length - 1); setSelectedStampId(null); };
   const addStaff = () => { if ((visiblePage.staffCount ?? 7) >= 200) return; playback.stop(); checkpoint(); replacePage(pageIndex, { ...page, staffCount: (visiblePage.staffCount ?? 7) + 1 }); };
   const saveNow = async () => {
-    const ok = await save(note);
-    if (ok) savedSnapshot.current = JSON.stringify(note);
+    const ok = await save(editingNote);
+    if (ok) {
+      savedSnapshot.current = JSON.stringify(editingNote);
+      setNote((previous) => previous === note ? editingNote : previous);
+    }
     Alert.alert(ok ? t.saved : t.failed);
   };
   const loadPattern = (entry: PracticeEntry) => {
@@ -201,12 +205,12 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
   const togglePlayback = async () => {
     try {
       if (playback.running || playback.preparing) playback.stop();
-      else await playback.start();
+      else await playback.start(editingNote);
     } catch { Alert.alert(t.playbackError); }
   };
   const toggleSimpleMetro = () => {
     if (playback.running || playback.preparing) { playback.stop(); return; }
-    const simple = { ...note, settings: { ...settings, source: undefined } };
+    const simple = { ...editingNote, settings: { ...settings, source: undefined } };
     setNote(simple); void playback.start(simple);
   };
   const onPaperTouch = (screen: StaffPoint, phase: "start" | "move" | "end" | "cancel") => {

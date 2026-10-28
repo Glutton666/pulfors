@@ -5,6 +5,13 @@ export const ROW_HEIGHT = 155;
 export const STAFF_TOP = 78;
 export const STAFF_GAP = 12;
 export type NotebookRow = { pageIndex: number; rowIndex: number; id: string };
+/** Project viewport-filling rows into the editable document, without mutating the original. */
+export function fitNotebookPage(note: StaffNotebook, pageIndex: number, minimumRows: number): StaffNotebook {
+  const page = note.pages[pageIndex];
+  const count = Math.min(200, Math.max(1, Math.ceil(minimumRows)));
+  if (!page || (page.staffCount ?? 7) >= count) return note;
+  return { ...note, pages: note.pages.map((item, index) => index === pageIndex ? { ...item, staffCount: count } : item) };
+}
 export function notebookRows(note: StaffNotebook): NotebookRow[] {
   return note.pages.flatMap((page, pageIndex) =>
     Array.from({ length: page.staffCount ?? 7 }, (_, rowIndex) => ({ pageIndex, rowIndex, id: `${page.id}:${rowIndex}` })));

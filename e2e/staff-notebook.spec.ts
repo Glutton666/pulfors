@@ -118,9 +118,12 @@ test("random playback follows the rendered sheet and leaves the saved original u
     }]));
   });
   await openNotebook(page);
-  const original = await page.evaluate(() => JSON.parse(localStorage.getItem("lab_staff_notebooks_v1")!)[0].pages);
   await page.getByTestId("notebook-left-toggle").click();
   await page.getByLabel(/^Open notebook$|^노트 열기$/).click();
+  // Saving first makes viewport padding explicit; playback must not reorder this document.
+  await page.getByTestId("notebook-save").click();
+  await closeNotice(page);
+  const original = await page.evaluate(() => JSON.parse(localStorage.getItem("lab_staff_notebooks_v1")!)[0].pages);
   await page.getByTestId("notebook-play").click();
   await expect(page.getByTestId("notebook-play")).toContainText(/정지|Stop/, { timeout: 30000 });
   await page.getByTestId("notebook-panel-close").click();
@@ -159,8 +162,9 @@ test("simple metronome continues beyond the last row until Stop or notebook exit
   await page.getByLabel(/^Open notebook$|^노트 열기$/).click();
   await page.getByTestId("notebook-play").click();
   await expect(page.getByTestId("notebook-play")).toContainText(/정지|Stop/, { timeout: 30000 });
-  // This one-row notebook lasts 200ms. Six passes must not stop its click.
-  await page.waitForTimeout(1200);
+  // Viewport-filling rows extend this phone sheet to <4 seconds at BPM300.
+  // The click must continue even after the complete padded sheet.
+  await page.waitForTimeout(4000);
   await expect(page.getByTestId("notebook-play")).toContainText(/정지|Stop/);
   expect(await page.evaluate(() => (window as typeof window & { __notebookSources: Array<{ loop: boolean; ended: boolean }> })
     .__notebookSources.some((source) => source.loop && !source.ended))).toBe(true);
@@ -174,4 +178,27 @@ test("simple metronome continues beyond the last row until Stop or notebook exit
   await expect(page.getByTestId("notebook-drawing")).toHaveCount(0);
   await expect.poll(() => page.evaluate(() => (window as typeof window & { __notebookSources: Array<{ loop: boolean; ended: boolean }> })
     .__notebookSources.filter((source) => source.loop && !source.ended).length)).toBe(0);
+});
+
+test("phone lower visible rows accept symbol-only edits and preserve their saved positions", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await openNotebook(page);
+  await page.getByTestId("notebook-right-toggle").click();
+  await page.getByTestId("notebook-symbol-quarter").click();
+  const box = (await page.getByTestId("notebook-drawing").boundingBox())!;
+  const targetY = 9 * 155 + 102;
+  await page.mouse.click(box.x + 100 * 390 / 900, box.y + targetY * 390 / 900);
+  await page.getByTestId("notebook-stamp-confirm").click();
+  await page.getByTestId("notebook-left-toggle").click();
+  await page.getByTestId("notebook-save").click();
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("lab_staff_notebooks_v1") ?? "[]")[0]?.pages[0]?.stamps?.length)).toBe(1);
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("lab_staff_notebooks_v1")!)[0]);
+  expect(saved.pages[0].staffCount).toBeGreaterThanOrEqual(10);
+  expect(saved.pages[0].strokes).toHaveLength(0);
+  expect(saved.pages[0].stamps[0].y).toBeCloseTo(targetY, 0);
+  await closeNotice(page);
+  await page.getByLabel(/^Open notebook$|^노트 열기$/).click();
+  await page.getByTestId("notebook-save").click();
+  const reopened = await page.evaluate(() => JSON.parse(localStorage.getItem("lab_staff_notebooks_v1")!)[0]);
+  expect(reopened.pages[0]).toEqual(saved.pages[0]);
 });

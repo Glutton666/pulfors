@@ -1,11 +1,28 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { buildNotebookPlan, notebookPosition } from "../lib/notebook-playback-plan";
-import { materializeRows, notebookRows, screenToPaper, stampPosition } from "../lib/staff-notebook-layout";
+import { fitNotebookPage, materializeRows, notebookRows, screenToPaper, stampPosition } from "../lib/staff-notebook-layout";
 import type { NotebookSettings, StaffNotebook } from "../lib/staff-notebook";
 
 const rows = Array.from({ length: 4 }, (_, i) => ({ pageIndex: 0, rowIndex: i, id: String(i) }));
 const settings: NotebookSettings = { follow: true, lineUnit: "measure", playbackZoom: 1, bpm: 60, random: false, offsetX: 0, offsetY: 0, snap: true };
+
+test("viewport rows are writable and included in playback without mutating the original", () => {
+  const original: StaffNotebook = { id: "phone", title: "Phone", updatedAt: 1,
+    pages: [{ id: "page", staffCount: 7, strokes: [] }], settings };
+  const fitted = fitNotebookPage(original, 0, 12);
+  assert.equal(original.pages[0].staffCount, 7);
+  assert.equal(fitted.pages[0].staffCount, 12);
+  const position = stampPosition(fitted.pages[0], settings, { x: 100, y: 1497 });
+  assert.equal(position.y, 1497);
+  fitted.pages[0].stamps = [{ id: "lower", glyph: "quarter", ...position, size: 26 }];
+  const rows = notebookRows(fitted);
+  assert.equal(rows.length, 12);
+  const plan = buildNotebookPlan(rows, [{ source: 0, startMs: 0, endMs: 1000 }], 1);
+  assert.equal(plan.durationMs, 12000);
+  assert.equal(materializeRows(fitted, plan.rows).stamps?.[0].y, 1497);
+  assert.equal(fitNotebookPage(fitted, 0, 7), fitted);
+});
 
 for (const bpm of [60, 120]) {
   for (const unit of [1, 4] as const) test(`4/4 at BPM ${bpm}, ${unit} measure(s) per paper row`, () => {

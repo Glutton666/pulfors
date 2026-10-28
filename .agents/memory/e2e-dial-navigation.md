@@ -12,7 +12,6 @@ Playwright CAN drive the ModeSwitcherDial with plain clicks (no drags needed), c
 - The dial D-tab handle may persist on any wall (`metronome_dial_wall_v2`); the top-center `mode-cycle-label` route is the reliable one for e2e.
 - Onboarding skip: the 건너뛰기 control is a Pressable+Text with NO accessibilityRole — use `getByText(/건너뛰기|Skip/i)`, not `getByRole("button")`.
 - RNW `Switch`: wrapper div has no `aria-checked`; read/assert via the inner `<input type=checkbox>`'s `checked` property.
-- Playwright works locally: `npm i -D @playwright/test` + `npx playwright install chromium` (headless shell runs fine on this Replit). Many old e2e selectors (`menu-button`, `menu-overlay`, `score-list-back`, `score-editor-more-menu`-era flows) referenced UI that no longer exists — always probe live testids with a throwaway spec before trusting spec selectors.
 - Score editor note-input taps only make sound after selecting a duration in the palette (`score-palette-dur-quarter`).
 
 ## Modal keyboard ownership
