@@ -221,6 +221,23 @@ export function MetronomeScreenUI(props: Props) {
     outputOwner,
   } = props;
   const isDesktopWeb = Platform.OS === "web" && S.isWideWebDesktop === true;
+  const showMainModeHeader = activeModal === null
+    && !stageModeActive
+    && scoreMode === null
+    && labScoreTab === null
+    && !showLabMenu
+    && !showMenu
+    && !showPracticeBook
+    && !showPolygon
+    && !showSignalGen
+    && !showWorkUp
+    && !showTuningGuide
+    && !showOnboarding
+    && !showDrumKit
+    && !showAssistant
+    && !showScheduledStart
+    && !showFadeOut
+    && !showReboot;
 
   const { nativeGestureHandlers: easterEggGestureHandlers } = useEasterEggGesture({
     enabled: !easterEggActive && usesSharedEasterEggGesture(currentMode, showPolygon),
@@ -646,7 +663,33 @@ export function MetronomeScreenUI(props: Props) {
       </Animated.View>
 
       {/* 상단 중앙 고정 모드 레이블 — 탭하면 팬 다이얼 열기 (무대·악보·메뉴·연습장 중 숨김, 해당 화면 헤더에 자체 트리거 있음) */}
-      {!stageModeActive && scoreMode === null && labScoreTab === null && !showMenu && !showPracticeBook && !showPolygon && (
+      {showMainModeHeader && !noteMode && !isModeDialOpen && (
+        <Pressable
+          onPress={() => openScopedSettings(barMode ? "bar" : "beat")}
+          style={{
+            position: "absolute",
+            top: Math.max(insets.top, 12) + 4,
+            left: Math.max(insets.left + 8, S.ms(16, 0.3)),
+            zIndex: 99999,
+            width: 44,
+            height: 44,
+            borderRadius: 14,
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: C.surface,
+            borderWidth: 1,
+            borderColor: C.border,
+          }}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel={t("settings", "title")}
+          testID="open-beat-settings"
+        >
+          <Ionicons name="settings-outline" size={S.ms(19, 0.4)} color={C.textSecondary} />
+        </Pressable>
+      )}
+
+      {showMainModeHeader && (
         <Pressable
           ref={modeDialTriggerRef}
           onPress={openModeDial}
@@ -655,11 +698,8 @@ export function MetronomeScreenUI(props: Props) {
             : {})}
           style={{
             position: "absolute",
-            top: (insets.top || webTopInset) + 2,
+            top: Math.max(insets.top, 12) + 4,
             alignSelf: "center" as const,
-            ...(currentMode === "beat" && !beatStaffNotation && !isLandscape && windowHeight <= 600
-              ? { left: 4, alignSelf: "flex-start" as const }
-              : {}),
             zIndex: 99999,
             paddingHorizontal: 16,
             paddingVertical: 8,
@@ -1325,7 +1365,6 @@ export function MetronomeScreenUI(props: Props) {
             isPreparing={isPreparing}
             onBeatsChange={guardedTimeSignatureChange}
             onTogglePlay={tutorialTogglePlay}
-            onOpenSettings={() => openScopedSettings(barMode ? "bar" : "beat")}
             onPlayLongPress={scoreMode === null && !barMode ? handleBeatQuickSaveOpen : undefined}
             beatTypes={beatTypes}
             onBeatTypeChange={(index, type) => {
