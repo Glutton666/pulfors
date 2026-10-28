@@ -9,9 +9,13 @@ import { Alert } from "@/lib/alert";
 import type { RhythmDocument } from "@/lib/rhythm-lab/types";
 
 export type LabScoreTab = "rhythm" | "notebook";
-type Props = { onClose: () => void; initialTab?: LabScoreTab; initialDocument?: RhythmDocument };
+type Props = {
+  onClose: () => void; initialTab?: LabScoreTab; initialDocument?: RhythmDocument;
+  onTabChange?: (tab: LabScoreTab) => void;
+  onRegisterNotebookExit?: (handler: ((next: () => void) => void) | null) => void;
+};
 
-export function LabScoreWorkspace({ onClose, initialTab = "rhythm", initialDocument }: Props) {
+export function LabScoreWorkspace({ onClose, initialTab = "rhythm", initialDocument, onTabChange, onRegisterNotebookExit }: Props) {
   const { colors: C } = useTheme();
   const { language } = useLanguage();
   const ko = language === "ko";
@@ -19,12 +23,13 @@ export function LabScoreWorkspace({ onClose, initialTab = "rhythm", initialDocum
   const compact = height < 500 && width > height;
   const [tab, setTab] = useState<LabScoreTab>(initialTab);
   const [help, setHelp] = useState(false);
+  const changeTab = (next: LabScoreTab) => { setTab(next); onTabChange?.(next); };
   const labels = ko
     ? { title: "리듬 랩", rhythm: "리듬 기록", notebook: "오선 노트", close: "닫기", explain: "두 가지 기록 방식", help: "리듬 기록은 연주를 보존하고 기보를 직접 다듬습니다. 오선 노트는 흰 종이와 검은 펜만 제공합니다. 드로잉은 해석하거나 재생하지 않습니다.", understood: "확인" }
     : { title: "RHYTHM LAB", rhythm: "Capture", notebook: "Staff notebook", close: "Close", explain: "Two ways to keep a rhythm", help: "Capture preserves your performance while you refine its notation. Staff notebook is simply white paper and black ink; drawings are never interpreted or played back.", understood: "Got it" };
   return (
     <View style={[s.root, { backgroundColor: C.background }]}>
-      <View style={[s.header, compact && s.compactHeader, { borderBottomColor: C.border }]}>
+      {tab !== "notebook" && <><View style={[s.header, compact && s.compactHeader, { borderBottomColor: C.border }]}>
         <Pressable onPress={() => Alert.alert(labels.close,
           ko ? "저장하지 않은 내용은 사라집니다. 나가기 전에 각 탭의 저장 버튼으로 보관해 주세요." : "Unsaved work will be lost. Use Save in each tab before leaving.",
           [{ text: ko ? "계속 작업" : "Keep editing", style: "cancel" }, { text: labels.close, style: "destructive", onPress: onClose }])}
@@ -41,16 +46,18 @@ export function LabScoreWorkspace({ onClose, initialTab = "rhythm", initialDocum
       </View>
       <View style={[s.switcher, compact && s.compactSwitcher, { backgroundColor: C.surface }]}>
         {(["rhythm", "notebook"] as const).map((item) => (
-          <Pressable key={item} testID={`lab-score-tab-${item}`} onPress={() => setTab(item)}
+          <Pressable key={item} testID={`lab-score-tab-${item}`} onPress={() => changeTab(item)}
             style={[s.tab, compact && s.compactTab, tab === item && { backgroundColor: C.accent }]}>
             <Text style={{ color: tab === item ? C.background : C.textSecondary, fontFamily: "SpaceGrotesk_700Bold", fontSize: 13 }}>
               {item === "rhythm" ? labels.rhythm : labels.notebook}
             </Text>
           </Pressable>
         ))}
-      </View>
+      </View></>}
       <View style={{ flex: 1, minHeight: 0, display: tab === "rhythm" ? "flex" : "none" }}><RhythmWorkspace active={tab === "rhythm"} initialDocument={initialDocument} /></View>
-      <View style={{ flex: 1, minHeight: 0, display: tab === "notebook" ? "flex" : "none" }}><StaffNotebookWorkspace active={tab === "notebook"} /></View>
+      <View style={{ flex: 1, minHeight: 0, display: tab === "notebook" ? "flex" : "none" }}><StaffNotebookWorkspace
+        active={tab === "notebook"} onRegisterExit={onRegisterNotebookExit}
+        onOpenCapture={() => changeTab("rhythm")} /></View>
       <Modal transparent visible={help} animationType="fade" onRequestClose={() => setHelp(false)}>
         <View style={s.modalBackdrop}>
           <ScrollView style={[s.helpCard, { backgroundColor: C.surface, borderColor: C.border, maxHeight: "82%" }]} contentContainerStyle={{ flexGrow: 1 }}>

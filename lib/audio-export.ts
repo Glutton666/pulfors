@@ -171,11 +171,12 @@ async function loadEntrySamplePCMs(
 async function renderSingleEntryLoopPCM(
   entry: PracticeEntry,
   signal?: AbortSignal,
+  preparedSchedule?: ReturnType<MetronomeEngine["getScheduleInfo"]>,
 ): Promise<Float32Array> {
   throwIfAborted(signal);
   const engine = new MetronomeEngine();
   applyEntryToEngine(engine, entry);
-  const info = engine.getScheduleInfo();
+  const info = preparedSchedule ?? engine.getScheduleInfo();
   if (!info.ticks.length || info.durationMs <= 0) {
     return new Float32Array(0);
   }
@@ -202,6 +203,18 @@ async function renderSingleEntryLoopPCM(
   const measureSamples = Math.ceil((info.durationMs / 1000) * SR);
   const mono = rendered instanceof Float32Array ? rendered : mixStereoToMono(rendered);
   return mono.subarray(0, Math.min(measureSamples, mono.length)).slice();
+}
+
+/** One immutable schedule drives both notebook audio and its paper timeline. */
+export async function renderNotebookPatternPCM(entry: PracticeEntry, signal?: AbortSignal) {
+  const engine = new MetronomeEngine();
+  applyEntryToEngine(engine, entry);
+  const schedule = engine.getScheduleInfo();
+  const releases = Object.values(entry.noteSamples ?? {}).map(retainNoteTtsFile);
+  try {
+    const pcm = await renderSingleEntryLoopPCM(entry, signal, schedule);
+    return { pcm, ticks: schedule.ticks, durationMs: schedule.durationMs };
+  } finally { releases.forEach((release) => release()); }
 }
 
 function mixStereoToMono(s: { left: Float32Array; right: Float32Array }): Float32Array {

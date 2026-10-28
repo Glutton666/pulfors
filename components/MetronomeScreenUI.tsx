@@ -93,6 +93,10 @@ export function MetronomeScreenUI(props: Props) {
   const [isModeDialOpen, setIsModeDialOpen] = useState(false);
   const [showLabMenu, setShowLabMenu] = useState(false);
   const [labScoreTab, setLabScoreTab] = useState<LabScoreTab | null>(null);
+  const notebookExitRef = useRef<((next: () => void) => void) | null>(null);
+  const registerNotebookExit = useCallback((handler: ((next: () => void) => void) | null) => {
+    notebookExitRef.current = handler;
+  }, []);
   const [labRhythmDocument, setLabRhythmDocument] = useState<RhythmDocument>();
   const rhythmReturnToBookRef = useRef(false);
   const [practiceBookFilter, setPracticeBookFilter] = useState<PracticeBookMode | undefined>(undefined);
@@ -283,6 +287,20 @@ export function MetronomeScreenUI(props: Props) {
     recordTutorialAction("note_play");
   }, [handleNoteTogglePlay, recordTutorialAction]);
   const tutorialSwitchToMode = useCallback((mode: ModeSlot, direction: "left" | "right" = "right") => {
+    if (labScoreTab === "notebook") {
+      // Opening/closing the dial without selecting another mode is not an exit.
+      if (mode === currentMode) return;
+      const leave = () => {
+        setLabScoreTab(null);
+        setLabRhythmDocument(undefined);
+        rhythmReturnToBookRef.current = false;
+        clearMenuItemReturn();
+        switchToMode(mode, direction);
+      };
+      if (notebookExitRef.current) notebookExitRef.current(leave);
+      else leave();
+      return;
+    }
     if (showPracticeBook) {
       if (mode === "practice") return;
       practiceBookReturnRef.current = null;
@@ -290,7 +308,7 @@ export function MetronomeScreenUI(props: Props) {
       clearMenuItemReturn();
     }
     return switchToMode(mode, direction);
-  }, [switchToMode, showPracticeBook, clearMenuItemReturn]);
+  }, [switchToMode, showPracticeBook, clearMenuItemReturn, labScoreTab, currentMode]);
 
   const saveFailureBannerKey = getPersistFailureBannerKey(
     combinePersisterStatuses(persistStatus, noteSamplePersistStatus),
@@ -315,7 +333,7 @@ export function MetronomeScreenUI(props: Props) {
   const enterPitchQuiz = useCallback((mode: PitchQuizMode | null) => {
     stopPlaybackForPitchQuiz();
     // SignalGenerator와 게임 오버레이가 겹치지 않도록 단일 모달 상태를 먼저 비운다.
-    clearMenuItemReturn();
+    if (labScoreTab !== "notebook") clearMenuItemReturn();
     setActiveModal(null);
     if (pitchQuizEntryTimerRef.current) clearTimeout(pitchQuizEntryTimerRef.current);
     setPitchQuizVisible(false);
@@ -431,7 +449,7 @@ export function MetronomeScreenUI(props: Props) {
 
   // Native Modals own a separate presentation layer. Host the dial inside the
   // practice book while it is open, rather than closing the book to expose it.
-  const modeSwitcherDial = (showPracticeBook || scoreMode === null && labScoreTab === null) ? (
+  const modeSwitcherDial = (showPracticeBook || scoreMode === null && (labScoreTab === null || labScoreTab === "notebook")) ? (
     <ModeSwitcherDial
       ref={modeSwitcherDialRef}
       currentMode={showPracticeBook ? "practice" : currentMode}
@@ -459,10 +477,11 @@ export function MetronomeScreenUI(props: Props) {
       {labScoreTab !== null && (
         <View style={[StyleSheet.absoluteFillObject, {
           zIndex: 950, backgroundColor: C.background,
-          paddingTop: insets.top,
+          paddingTop: labScoreTab === "notebook" ? Math.max(insets.top, 12) + 56 : insets.top,
           paddingBottom: insets.bottom,
         }]}>
-          <LabScoreWorkspace initialTab={labScoreTab} initialDocument={labRhythmDocument} onClose={() => {
+          <LabScoreWorkspace initialTab={labScoreTab} initialDocument={labRhythmDocument}
+            onTabChange={setLabScoreTab} onRegisterNotebookExit={registerNotebookExit} onClose={() => {
             setLabScoreTab(null);
             setLabRhythmDocument(undefined);
             if (rhythmReturnToBookRef.current) {
@@ -689,7 +708,18 @@ export function MetronomeScreenUI(props: Props) {
         </Pressable>
       )}
 
-      {showMainModeHeader && (
+      {labScoreTab === "notebook" && (
+        <Pressable testID="notebook-close" accessibilityRole="button"
+          accessibilityLabel={language === "ko" ? "오선노트 닫기" : "Close staff notebook"}
+          style={{ position: "absolute", left: 12, top: Math.max(insets.top, 12) + 4, zIndex: 99999, padding: 12 }}
+          onPress={() => {
+            const leave = () => { setLabScoreTab(null); setLabRhythmDocument(undefined); setShowLabMenu(true); setActiveModal("menu"); };
+            if (notebookExitRef.current) notebookExitRef.current(leave); else leave();
+          }}>
+          <Ionicons name="chevron-back" size={22} color={C.text} />
+        </Pressable>
+      )}
+      {(showMainModeHeader || labScoreTab === "notebook") && (
         <Pressable
           ref={modeDialTriggerRef}
           onPress={openModeDial}
@@ -729,7 +759,8 @@ export function MetronomeScreenUI(props: Props) {
               textTransform: "uppercase" as const,
             }}
           >
-            {t("switcher", currentMode as "beat" | "bar" | "score" | "note" | "practice" | "stage")}
+            {labScoreTab === "notebook" ? (language === "ko" ? "오선 노트" : "Staff notebook")
+              : t("switcher", currentMode as "beat" | "bar" | "score" | "note" | "practice" | "stage")}
           </Text>
         </Pressable>
       )}
