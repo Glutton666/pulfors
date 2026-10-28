@@ -19,7 +19,7 @@ type Props = {
 export function NotebookRightPanel(props: Props) {
   const { ko, t } = props;
   const toolDefs: Array<{ id: Props["tool"]; icon: keyof typeof Ionicons.glyphMap; label: string; testID?: string }> = [
-    { id: "pen", icon: "pencil-outline", label: ko ? "펜" : "Pen", testID: "notebook-drawing" },
+    { id: "pen", icon: "pencil-outline", label: ko ? "펜" : "Pen", testID: "notebook-pen" },
     { id: "erase", icon: "backspace-outline", label: ko ? "지우개" : "Erase", testID: "notebook-eraser" },
     { id: "select", icon: "scan-outline", label: ko ? "선택" : "Select" },
     { id: "move", icon: "hand-left-outline", label: ko ? "화면 이동" : "Pan" },

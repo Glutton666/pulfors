@@ -12,6 +12,7 @@ type Props = {
   onSettings: (patch: Partial<NotebookSettings>) => void; onPattern: (entry: PracticeEntry) => void;
   onPlay: () => void; onSimpleMetro: () => void; onRefresh: () => void; onNew: () => void; onSave: () => void;
   onLoad: (note: StaffNotebook) => void; onDelete: (note: StaffNotebook) => void; onTitle: (title: string) => void;
+  onOpenCapture?: () => void;
 };
 
 export function NotebookLeftPanel(props: Props) {
@@ -34,7 +35,7 @@ export function NotebookLeftPanel(props: Props) {
         <View style={styles.sourceIcon}><Ionicons name={settings.source ? "musical-notes" : "pulse"} size={17} color="#795c3e" /></View>
         <View style={{ flex: 1 }}>
           <Text style={styles.sourceName}>{settings.source?.label ?? t.click}</Text>
-          <Text style={styles.meta}>{settings.source ? `${settings.source.bpm} BPM · ${settings.source.beatsPerMeasure}/${settings.source.beatDenominator ?? 4}` : `${settings.bpm} BPM · 1/4`}</Text>
+          <Text style={styles.meta}>{settings.source ? `${settings.source.bpm} BPM · ${settings.source.beatsPerMeasure}/4` : `${settings.bpm} BPM · 1/4`}</Text>
         </View>
         {settings.source ? <Pressable onPress={() => props.onSettings({ source: undefined })} style={styles.clearSource}><Ionicons name="close" size={17} color="#786f62" /></Pressable> : null}
       </View>
@@ -50,7 +51,7 @@ export function NotebookLeftPanel(props: Props) {
               : eligible.length === 0 && unsupported.length === 0 ? <Text style={styles.muted}>{t.noPatterns}</Text>
                 : eligible.map((entry) => (
                   <Pressable key={entry.id} onPress={() => { props.onPattern(entry); setShowPatterns(false); }} style={styles.patternRow}>
-                    <View style={styles.patternMeter}><Text style={styles.patternMeterText}>{entry.beatsPerMeasure}/{entry.beatDenominator ?? 4}</Text></View>
+                    <View style={styles.patternMeter}><Text style={styles.patternMeterText}>{entry.beatsPerMeasure}/4</Text></View>
                     <View style={{ flex: 1 }}>
                       <Text numberOfLines={1} style={styles.rowLabel}>{entry.label}</Text>
                       <Text style={styles.meta}>{entry.mode === "bar" ? (ko ? "마디 패턴" : "Bar pattern") : (ko ? "비트 패턴" : "Beat pattern")} · {entry.bpm} BPM</Text>
@@ -122,6 +123,10 @@ export function NotebookLeftPanel(props: Props) {
           <Pressable onPress={() => props.onDelete(saved)} accessibilityLabel={ko ? "노트 삭제" : "Delete notebook"} style={styles.rowIcon}><Ionicons name="trash-outline" size={17} color="#897e6f" /></Pressable>
         </View>
       ))}
+      {props.onOpenCapture && <Pressable onPress={props.onOpenCapture} style={styles.outlineButton}>
+        <Ionicons name="musical-notes-outline" size={17} color="#5f5346" />
+        <Text style={styles.buttonText}>{ko ? "리듬 기록으로" : "Open rhythm capture"}</Text>
+      </Pressable>}
     </ScrollView>
   );
 }

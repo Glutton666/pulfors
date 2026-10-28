@@ -1,4 +1,4 @@
-import type { NotebookSettings, StaffNotebook, StaffPage, StaffPoint } from "./staff-notebook";
+import type { NotebookSettings, StaffNotebook, StaffPage, StaffPoint, StaffStroke } from "./staff-notebook";
 
 export const PAPER_WIDTH = 900;
 export const ROW_HEIGHT = 155;
@@ -24,7 +24,7 @@ export function rowAt(y: number, count: number): number {
 export function stampPosition(page: StaffPage, settings: NotebookSettings, anchor?: StaffPoint): StaffPoint {
   const last = page.stamps?.at(-1);
   const stroke = page.strokes.at(-1);
-  const previous = anchor ?? (last ? { x: last.x + last.size * 0.8, y: last.y }
+  const previous = anchor ?? page.anchor ?? (last ? { x: last.x + last.size * 0.8, y: last.y }
     : stroke?.points.at(-1));
   let x = previous ? previous.x + 22 : 55;
   let y = previous?.y ?? STAFF_TOP + STAFF_GAP * 2;
@@ -40,6 +40,27 @@ export function stampPosition(page: StaffPage, settings: NotebookSettings, ancho
 export function screenToPaper(point: StaffPoint, offset: StaffPoint, scale: number): StaffPoint {
   return { x: (point.x - offset.x) / scale, y: (point.y - offset.y) / scale };
 }
+function inkInRow(stroke: StaffStroke, row: number): StaffStroke[] {
+  const low = row * ROW_HEIGHT, high = low + ROW_HEIGHT;
+  if (stroke.points.length === 1) return stroke.points[0].y >= low && stroke.points[0].y < high ? [stroke] : [];
+  const pieces: StaffPoint[][] = [];
+  let current: StaffPoint[] = [];
+  for (let i = 1; i < stroke.points.length; i++) {
+    const a = stroke.points[i - 1], b = stroke.points[i], dy = b.y - a.y;
+    let from = 0, to = 1;
+    if (dy === 0) { if (a.y < low || a.y >= high) { current = []; continue; } }
+    else { from = Math.max(0, Math.min((low - a.y) / dy, (high - a.y) / dy)); to = Math.min(1, Math.max((low - a.y) / dy, (high - a.y) / dy)); }
+    if (from > to) { current = []; continue; }
+    const start = { x: a.x + (b.x - a.x) * from, y: a.y + dy * from };
+    const end = { x: a.x + (b.x - a.x) * to, y: a.y + dy * to };
+    if (!current.length || Math.hypot(current[current.length - 1].x - start.x, current[current.length - 1].y - start.y) > 0.001) {
+      current = [start]; pieces.push(current);
+    }
+    current.push(end);
+    if (to < 1) current = [];
+  }
+  return pieces.map((points, index) => ({ ...stroke, id: `${stroke.id}:fragment:${index}`, points }));
+}
 /** A source row is a complete unit. Ink and stamps travel together without changing the original. */
 export function materializeRows(note: StaffNotebook, rows: NotebookRow[]): StaffPage {
   return {
@@ -47,7 +68,7 @@ export function materializeRows(note: StaffNotebook, rows: NotebookRow[]): Staff
     strokes: rows.flatMap((row, index) => {
       const page = note.pages[row.pageIndex];
       const shift = (index - row.rowIndex) * ROW_HEIGHT;
-      return page.strokes.filter((stroke) => stroke.points[0] && rowAt(stroke.points[0].y, page.staffCount ?? 7) === row.rowIndex)
+      return page.strokes.flatMap((stroke) => inkInRow(stroke, row.rowIndex))
         .map((stroke) => ({ ...stroke, id: `${index}:${stroke.id}`, points: stroke.points.map((p) => ({ x: p.x, y: p.y + shift })) }));
     }),
     stamps: rows.flatMap((row, index) => (note.pages[row.pageIndex].stamps ?? [])

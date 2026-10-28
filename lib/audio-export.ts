@@ -145,6 +145,7 @@ async function loadLayerClickPCMsForSchedule(
 async function loadEntrySamplePCMs(
   entry: PracticeEntry,
   signal?: AbortSignal,
+  strict = false,
 ): Promise<Map<string, SamplePCMEntry>> {
   const out = new Map<string, SamplePCMEntry>();
   const samples = entry.noteSamples || {};
@@ -154,10 +155,11 @@ async function loadEntrySamplePCMs(
     try {
       const pcm = await decodeSampleFile(uri);
       throwIfAborted(signal);
-      if (!pcm) continue;
+      if (!pcm) { if (strict) throw new Error(`Could not decode pattern sample: ${key}`); continue; }
       const { trimStartMs, trimDurationMs } = parseTrimInfo(uri);
       out.set(key, { pcm, trimStartMs, trimDurationMs });
     } catch (e) {
+      if (strict || signal?.aborted) throw e;
       logger.warn("[AudioExport] sample decode failed:", key, e);
     }
   }
@@ -172,6 +174,7 @@ async function renderSingleEntryLoopPCM(
   entry: PracticeEntry,
   signal?: AbortSignal,
   preparedSchedule?: ReturnType<MetronomeEngine["getScheduleInfo"]>,
+  strictSamples = false,
 ): Promise<Float32Array> {
   throwIfAborted(signal);
   const engine = new MetronomeEngine();
@@ -184,7 +187,7 @@ async function renderSingleEntryLoopPCM(
   const [clickPCMs, layerClickPCMs, samplePCMs] = await Promise.all([
     loadDefaultClickPCMs(signal),
     loadLayerClickPCMsForSchedule(ticks, signal),
-    loadEntrySamplePCMs(entry, signal),
+    loadEntrySamplePCMs(entry, signal, strictSamples),
   ]);
   await checkpoint(signal);
   const rendered = await renderMeasureAbortable({
@@ -206,13 +209,18 @@ async function renderSingleEntryLoopPCM(
 }
 
 /** One immutable schedule drives both notebook audio and its paper timeline. */
-export async function renderNotebookPatternPCM(entry: PracticeEntry, signal?: AbortSignal) {
+export function getNotebookPatternSchedule(entry: PracticeEntry) {
   const engine = new MetronomeEngine();
   applyEntryToEngine(engine, entry);
-  const schedule = engine.getScheduleInfo();
+  return engine.getScheduleInfo();
+}
+
+export async function renderNotebookPatternPCM(entry: PracticeEntry, signal?: AbortSignal,
+  preparedSchedule?: ReturnType<MetronomeEngine["getScheduleInfo"]>) {
+  const schedule = preparedSchedule ?? getNotebookPatternSchedule(entry);
   const releases = Object.values(entry.noteSamples ?? {}).map(retainNoteTtsFile);
   try {
-    const pcm = await renderSingleEntryLoopPCM(entry, signal, schedule);
+    const pcm = await renderSingleEntryLoopPCM(entry, signal, schedule, true);
     return { pcm, ticks: schedule.ticks, durationMs: schedule.durationMs };
   } finally { releases.forEach((release) => release()); }
 }

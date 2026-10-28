@@ -4,7 +4,7 @@ import type { PracticeEntry } from "./storage";
 export type StaffPoint = { x: number; y: number };
 export type StaffStroke = { id: string; points: StaffPoint[]; width: number };
 export type StaffStamp = { id: string; glyph: string; x: number; y: number; size: number };
-export type StaffPage = { id: string; strokes: StaffStroke[]; staffCount?: number; stamps?: StaffStamp[] };
+export type StaffPage = { id: string; strokes: StaffStroke[]; staffCount?: number; stamps?: StaffStamp[]; anchor?: StaffPoint };
 export type NotebookSettings = {
   follow: boolean;
   lineUnit: "measure" | "phrase";
@@ -35,7 +35,8 @@ function isNotebook(value: unknown): value is StaffNotebook {
     settings.playbackZoom < 0.25 || settings.playbackZoom > 4 || settings.bpm < 20 || settings.bpm > 300 ||
     typeof settings.follow !== "boolean" || typeof settings.random !== "boolean" || typeof settings.snap !== "boolean")) return false;
   return typeof note.id === "string" && typeof note.title === "string" && Number.isFinite(note.updatedAt) &&
-    Array.isArray(note.pages) && note.pages.every((page) => !!page && typeof page === "object" &&
+    Array.isArray(note.pages) && note.pages.length > 0 && note.pages.every((page) => !!page && typeof page === "object" &&
+      (page.anchor === undefined || !!page.anchor && Number.isFinite(page.anchor.x) && Number.isFinite(page.anchor.y)) &&
       (page.staffCount === undefined || Number.isInteger(page.staffCount) && page.staffCount > 0 && page.staffCount <= 200) &&
       (page.stamps === undefined || Array.isArray(page.stamps) && page.stamps.every((stamp) =>
         !!stamp && typeof stamp.id === "string" && typeof stamp.glyph === "string" && stamp.glyph.length <= 40 &&

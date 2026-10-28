@@ -26,7 +26,7 @@ async function enterLab(page: Page, entry: "rhythm" | "notebook") {
   await page.mouse.click(viewport.width / 2, viewport.height * 0.7);
   await page.getByTestId("menu-lab").click();
   await page.getByTestId(entry === "rhythm" ? "menu-rhythm-lab" : "menu-staff-notebook").click();
-  await expect(page.getByTestId(`lab-score-tab-${entry}`)).toBeVisible();
+  await expect(page.getByTestId(entry === "notebook" ? "notebook-drawing" : "lab-score-tab-rhythm")).toBeVisible();
 }
 
 async function openSavedTake(page: Page) {
@@ -336,6 +336,7 @@ test("staff notebook really draws, saves, restores, and does not alter legacy sc
   await page.mouse.move(x + 30, y - 10, { steps: 6 });
   await page.mouse.move(x + 50, y + 15, { steps: 6 });
   await page.mouse.up();
+  await page.getByTestId("notebook-left-toggle").click();
   await page.getByTestId("notebook-save").click();
   await expect.poll(() => page.evaluate(() => {
     const notes = JSON.parse(localStorage.getItem("lab_staff_notebooks_v1") ?? "[]");

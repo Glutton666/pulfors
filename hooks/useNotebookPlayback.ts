@@ -3,8 +3,8 @@ import { AppState, Platform } from "react-native";
 import { DEFAULT_NOTEBOOK_SETTINGS, type StaffNotebook } from "@/lib/staff-notebook";
 import { notebookRows, type NotebookRow } from "@/lib/staff-notebook-layout";
 import { buildNotebookPlan, notebookPosition, type NotebookBar } from "@/lib/notebook-playback-plan";
-import { renderNotebookPatternPCM } from "@/lib/audio-export";
-import { getRenderSampleRate, getWebAudioContext, playWebRenderedLoop, releaseRenderedWav, saveRenderedWav } from "@/lib/audio-renderer";
+import { getNotebookPatternSchedule, renderNotebookPatternPCM } from "@/lib/audio-export";
+import { getWebAudioContext, playWebRenderedLoop, releaseRenderedWav, saveRenderedWav } from "@/lib/audio-renderer";
 import type { PracticeEntry } from "@/lib/storage";
 
 let fileId = 0;
@@ -23,34 +23,40 @@ export function useNotebookPlayback(note: StaffNotebook, active: boolean) {
     dispose.current(); dispose.current = () => {};
     setRunning(false); setPreparing(false);
   }, []);
-  const start = useCallback(async () => {
+  const start = useCallback(async (input?: StaffNotebook) => {
     stop(); setError(""); setPreparing(true);
     const generation = owner.current, controller = new AbortController();
     abort.current = controller;
     const valid = () => owner.current === generation && !controller.signal.aborted;
     const check = () => { if (!valid()) throw new Error("CANCELLED"); };
     let cleanup = () => {};
+    const own = (action: () => void) => {
+      let released = false;
+      cleanup = () => { if (!released) { released = true; action(); } };
+      if (valid()) dispose.current = cleanup;
+    };
     try {
       // Resume in the initiating gesture, before asynchronous preparation.
       const ctx = Platform.OS === "web" ? getWebAudioContext() : null;
       if (ctx?.state === "suspended") await ctx.resume();
       check();
-      const snapshot = latest.current;
+      const snapshot = input ?? latest.current;
       const settings = { ...DEFAULT_NOTEBOOK_SETTINGS, ...snapshot.settings };
+      const continuousClick = !settings.source;
       const simple: PracticeEntry = {
         id: "notebook-click", label: "1/4", createdAt: 0, mode: "beat",
         bpm: settings.bpm, beatsPerMeasure: 1, beatTypes: ["normal"],
         beatSubdivisions: {}, barRepeats: {}, barLoopMode: "once", subdivisionPattern: [],
       };
       const source = settings.source ?? simple;
-      const inputs = source.mode === "note" ? source.noteQueueEntries ?? [] : [source];
+      const inputs = [source];
       if (!inputs.length || inputs.some((entry) => entry.scoreId || entry.rhythmDocument ||
         entry.mode && !["beat", "bar"].includes(entry.mode))) throw new Error("UNSUPPORTED_PATTERN");
-      const rendered: Awaited<ReturnType<typeof renderNotebookPatternPCM>>[] = [];
+      const rendered: ReturnType<typeof getNotebookPatternSchedule>[] = [];
       const bars: NotebookBar[] = [];
       for (const entry of inputs) {
         check();
-        const audio = await renderNotebookPatternPCM(entry, controller.signal);
+        const audio = getNotebookPatternSchedule(entry);
         check();
         const sourceIndex = rendered.length; rendered.push(audio);
         if (entry.mode !== "bar") {
@@ -70,35 +76,38 @@ export function useNotebookPlayback(note: StaffNotebook, active: boolean) {
         }
       }
       const plan = buildNotebookPlan(notebookRows(snapshot), bars, settings.lineUnit === "phrase" ? 4 : 1, settings.random);
-      const sr = getRenderSampleRate();
-      const length = plan.chunks.reduce((sum, chunk) => sum + Math.round((chunk.endMs - chunk.startMs) * sr / 1000), 0);
-      const pcm = new Float32Array(length);
       let cursor = 0;
-      for (const chunk of plan.chunks) {
-        check();
-        const startSample = Math.round(chunk.startMs * sr / 1000);
-        const samples = Math.round((chunk.endMs - chunk.startMs) * sr / 1000);
-        pcm.set(rendered[chunk.source].pcm.subarray(startSample, startSample + samples), cursor);
-        cursor += samples;
-      }
+      const ticks = plan.chunks.flatMap((chunk) => {
+        const scheduled = rendered[chunk.source].ticks
+          .filter((tick) => tick.time >= chunk.startMs - 0.001 && tick.time < chunk.endMs - 0.001)
+          .map((tick) => ({ ...tick, time: cursor + tick.time - chunk.startMs }));
+        cursor += chunk.endMs - chunk.startMs;
+        return scheduled;
+      });
+      // Render the final schedule, not sliced old audio: sample tails must
+      // overlap their NEW neighbours in the shuffled sheet.
+      const { pcm } = await renderNotebookPatternPCM(source, controller.signal, { ticks, durationMs: plan.durationMs });
+      check();
       let getPosition: () => number;
       let ready: () => boolean;
       if (Platform.OS === "web") {
         if (!ctx || ctx.state !== "running") throw new Error("AUDIO_UNAVAILABLE");
-        const player = playWebRenderedLoop(pcm, undefined, "both", 1, undefined, false);
-        cleanup = () => player.stop();
-        getPosition = () => player.getPositionSeconds() * 1000;
+        const player = playWebRenderedLoop(pcm, () => { if (valid() && !continuousClick) stop(); }, "both", 1, undefined, continuousClick);
+        own(() => player.stop());
+        const readPosition = player.getPresentedPositionSeconds ?? player.getPositionSeconds;
+        if (!readPosition) throw new Error("AUDIO_POSITION_UNAVAILABLE");
+        getPosition = () => readPosition() * 1000;
         ready = () => player.isRunning();
       } else {
         const uri = await saveRenderedWav(pcm, `notebook_${Date.now()}_${++fileId}.wav`);
-        cleanup = () => releaseRenderedWav(uri);
+        own(() => releaseRenderedWav(uri));
         check();
         const { createAudioPlayer } = require("expo-audio") as typeof import("expo-audio");
         const player = createAudioPlayer({ uri }, { updateInterval: 25 });
-        cleanup = () => { try { player.pause(); player.remove(); } finally { releaseRenderedWav(uri); } };
+        own(() => { try { player.pause(); player.remove(); } finally { releaseRenderedWav(uri); } });
         const deadline = performance.now() + 5000;
         while (!player.isLoaded) { check(); if (performance.now() > deadline) throw new Error("AUDIO_UNAVAILABLE"); await new Promise((resolve) => setTimeout(resolve, 25)); }
-        check(); player.loop = false; player.play();
+        check(); player.loop = continuousClick; player.play();
         getPosition = () => player.currentTime * 1000;
         ready = () => player.playing;
       }
@@ -107,11 +116,16 @@ export function useNotebookPlayback(note: StaffNotebook, active: boolean) {
       check();
       setRows(plan.rows); setPosition({ row: 0, progress: 0 }); setRunning(true); setPreparing(false);
       const release = cleanup;
+      let furthestPosition = 0;
       const timer = setInterval(() => {
         if (!valid()) return;
         const at = getPosition();
-        setPosition(notebookPosition(plan.rowEnds, at));
-        if (at >= plan.durationMs - 30 || !ready() && at > plan.durationMs - 150) stop();
+        // A simple metronome has no natural end. After the last paper row,
+        // keep its camera there while audio continues; native loop-position
+        // resets must not make the sheet jump back to the beginning.
+        furthestPosition = Math.max(furthestPosition, at);
+        setPosition(notebookPosition(plan.rowEnds, continuousClick ? furthestPosition : at));
+        if (!ready() || !continuousClick && at >= plan.durationMs) stop();
       }, 30);
       dispose.current = () => { clearInterval(timer); release(); };
     } catch (e) {

@@ -333,7 +333,7 @@ export function MetronomeScreenUI(props: Props) {
   const enterPitchQuiz = useCallback((mode: PitchQuizMode | null) => {
     stopPlaybackForPitchQuiz();
     // SignalGenerator와 게임 오버레이가 겹치지 않도록 단일 모달 상태를 먼저 비운다.
-    if (labScoreTab !== "notebook") clearMenuItemReturn();
+    clearMenuItemReturn();
     setActiveModal(null);
     if (pitchQuizEntryTimerRef.current) clearTimeout(pitchQuizEntryTimerRef.current);
     setPitchQuizVisible(false);
@@ -405,7 +405,7 @@ export function MetronomeScreenUI(props: Props) {
 
   const openModeDial = () => {
     // 사용자가 다이얼에서 새 모드를 고르면 메뉴 복귀 흐름을 벗어난다.
-    clearMenuItemReturn();
+    if (labScoreTab !== "notebook") clearMenuItemReturn();
     modeSwitcherDialRef.current?.open();
   };
 

@@ -42,7 +42,7 @@ const DURATIONS: Array<{ value: NoteDuration; symbol: string; labelKey: string }
 
 // ── 아티큘레이션 ──────────────────────────────────────────────
 
-const ARTICULATIONS: Array<{ id: ArticulationType; symbol: string; labelKey: string }> = [
+export const ARTICULATIONS: Array<{ id: ArticulationType; symbol: string; labelKey: string }> = [
   { id: "staccato",           symbol: "·",    labelKey: "articulStaccato" },
   { id: "tenuto",             symbol: "—",    labelKey: "articulTenuto" },
   { id: "accent",             symbol: ">",    labelKey: "articulAccent" },
@@ -56,7 +56,7 @@ const ARTICULATIONS: Array<{ id: ArticulationType; symbol: string; labelKey: str
 
 // ── 임시표 ────────────────────────────────────────────────────
 
-const ACCIDENTALS: Array<{ value: Accidental; symbol: string; labelKey: string }> = [
+export const ACCIDENTALS: Array<{ value: Accidental; symbol: string; labelKey: string }> = [
   { value: "natural",      symbol: "♮", labelKey: "accidentalNatural" },
   { value: "sharp",        symbol: "♯", labelKey: "accidentalSharp" },
   { value: "flat",         symbol: "♭", labelKey: "accidentalFlat" },
@@ -82,7 +82,7 @@ export type RepeatSignId =
 
 export interface RepeatSignItem { id: RepeatSignId; symbol: string; labelKey: string; }
 
-const REPEAT_SIGNS: RepeatSignItem[] = [
+export const REPEAT_SIGNS: RepeatSignItem[] = [
   { id: "repeat_start",    symbol: "||:",   labelKey: "signRepeatStart" },
   { id: "repeat_end",      symbol: ":||",   labelKey: "signRepeatEnd" },
   { id: "repeat_both",     symbol: ":||:",  labelKey: "signRepeatBoth" },

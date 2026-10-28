@@ -1,6 +1,7 @@
 import React from "react";
-import Svg, { G, Line, Text as SvgText } from "react-native-svg";
-import { StaffNoteGlyph } from "@/components/staff/StaffGlyphs";
+import Svg, { Circle, G, Line, Path, Text as SvgText } from "react-native-svg";
+import { StaffNoteGlyph, StaffRestGlyph } from "@/components/staff/StaffGlyphs";
+import { ALL_INSTR_SYMBOLS, ARTICULATIONS } from "@/components/ScorePalette";
 
 const noteDenominator: Record<string, number> = { whole: 1, half: 2, quarter: 4, eighth: 8, sixteenth: 16, "thirty_second": 32 };
 const restDenominator: Record<string, number> = { "rest-whole": 1, "rest-half": 2, "rest-quarter": 4, "rest-eighth": 8, "rest-sixteenth": 16 };
@@ -18,16 +19,23 @@ const typography: Record<string, string> = {
 export function NotebookGlyph({ glyph, x, y, size }: { glyph: string; x: number; y: number; size: number }) {
   const noteValue = noteDenominator[glyph];
   if (noteValue) {
-    return <StaffNoteGlyph type="normal" active index={0} x={x} beamCount={Math.max(0, Math.round(Math.log2(noteValue)) - 2)} grouped={false} noteValueDenominator={noteValue} colors={{ accent: "#111111" }} noteY={y} stemTop={y - 31} beamGap={5} />;
+    return <G transform={`translate(${x} ${y}) scale(${size / 26})`}><StaffNoteGlyph type="normal" active index={0} x={0} beamCount={Math.max(0, Math.round(Math.log2(noteValue)) - 2)} grouped={false} noteValueDenominator={noteValue} colors={{ accent: "#111111" }} noteY={0} stemTop={-31} beamGap={5} /></G>;
   }
   const restValue = restDenominator[glyph];
   if (restValue) {
-    return <StaffNoteGlyph type="mute" active index={0} x={x} beamCount={Math.max(0, Math.round(Math.log2(restValue)) - 2)} grouped={false} noteValueDenominator={restValue} colors={{ accent: "#111111" }} noteY={y} stemTop={y - 31} beamGap={5} />;
+    return <G transform={`translate(${x} ${y}) scale(${size / 26})`}><StaffRestGlyph index={0} x={0} beamCount={Math.max(0, Math.round(Math.log2(restValue)) - 2)} grouped={false} noteValueDenominator={restValue} color="#111111" noteY={0} stemTop={-31} beamGap={5} /></G>;
   }
   if (glyph === "repeat_start" || glyph === "repeat_end" || glyph === "repeat_both") {
-    return <G><Line x1={x - size * 0.48} x2={x - size * 0.48} y1={y - size * 0.6} y2={y + size * 0.6} stroke="#111" strokeWidth={1.4} /><Line x1={x - size * 0.32} x2={x - size * 0.32} y1={y - size * 0.6} y2={y + size * 0.6} stroke="#111" strokeWidth={1.4} /><Line x1={x + size * 0.32} x2={x + size * 0.32} y1={y - size * 0.6} y2={y + size * 0.6} stroke="#111" strokeWidth={1.4} /><Line x1={x + size * 0.48} x2={x + size * 0.48} y1={y - size * 0.6} y2={y + size * 0.6} stroke="#111" strokeWidth={1.4} /></G>;
+    return <G transform={`translate(${x} ${y}) scale(${size / 26})`}>
+      <Line x1={-3} x2={-3} y1={-24} y2={24} stroke="#111" strokeWidth={3} />
+      <Line x1={2} x2={2} y1={-24} y2={24} stroke="#111" strokeWidth={1.4} />
+      {glyph !== "repeat_end" && <><Circle cx={10} cy={-6} r={2} fill="#111" /><Circle cx={10} cy={6} r={2} fill="#111" /></>}
+      {glyph !== "repeat_start" && <><Circle cx={-11} cy={-6} r={2} fill="#111" /><Circle cx={-11} cy={6} r={2} fill="#111" /></>}
+    </G>;
   }
-  return <SvgText x={x} y={y + size * 0.32} textAnchor="middle" fill="#111111" fontSize={Math.max(12, size * 0.85)} fontFamily="serif">{typography[glyph] ?? glyph}</SvgText>;
+  if (glyph === "fermata") return <G transform={`translate(${x} ${y}) scale(${size / 26})`}><Path d="M-12 0 A12 12 0 0 1 12 0" stroke="#111" strokeWidth={2} fill="none" /><Circle cx={0} cy={-1} r={2} fill="#111" /></G>;
+  if (glyph === "coda") return <G><Circle cx={x} cy={y} r={size * 0.32} stroke="#111" strokeWidth={1.8} fill="none" /><Line x1={x - size * 0.5} x2={x + size * 0.5} y1={y} y2={y} stroke="#111" strokeWidth={1.8} /><Line x1={x} x2={x} y1={y - size * 0.5} y2={y + size * 0.5} stroke="#111" strokeWidth={1.8} /></G>;
+  return <SvgText x={x} y={y + size * 0.32} textAnchor="middle" fill="#111111" fontSize={Math.max(8, size * 0.85)} fontFamily="serif">{typography[glyph] ?? [...ALL_INSTR_SYMBOLS, ...ARTICULATIONS].find((item) => item.id === glyph)?.symbol ?? glyph}</SvgText>;
 }
 
 export function NotebookGlyphPreview({ glyph, size = 26 }: { glyph: string; size?: number }) {

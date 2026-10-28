@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useRef } from "react";
 import { PanResponder, StyleSheet, View } from "react-native";
 import Svg, { G, Line, Path } from "react-native-svg";
 import type { StaffPage, StaffPoint } from "@/lib/staff-notebook";
@@ -9,31 +9,30 @@ type Props = {
   page: StaffPage; width: number; height: number; paperScale: number; zoom: number;
   offset: StaffPoint; tool: "pen" | "erase" | "move" | "select"; lineWidth: number;
   drawing: StaffPoint[]; pendingGlyph: string | null; preview: StaffPoint | null;
-  selectedStampId: string | null; onTouch?: (point: StaffPoint, phase: "start" | "move" | "end") => void;
-  onLayoutWidth: (width: number) => void;
+  selectedStampId: string | null; onTouch?: (point: StaffPoint, phase: "start" | "move" | "end" | "cancel") => void;
 };
 
-export function NotebookPaper({ page, width, height, paperScale, zoom, offset, tool, lineWidth, drawing, pendingGlyph, preview, selectedStampId, onTouch, onLayoutWidth }: Props) {
+export function NotebookPaper({ page, width, height, paperScale, zoom, offset, lineWidth, drawing, pendingGlyph, preview, selectedStampId, onTouch }: Props) {
+  const touch = useRef(onTouch); touch.current = onTouch;
   const responder = useMemo(() => PanResponder.create({
-    onStartShouldSetPanResponder: () => !!onTouch,
-    onMoveShouldSetPanResponder: () => !!onTouch,
+    onStartShouldSetPanResponder: (event) => !!touch.current && event.nativeEvent.touches.length < 2,
+    onMoveShouldSetPanResponder: (event) => !!touch.current && event.nativeEvent.touches.length < 2,
     onPanResponderTerminationRequest: () => false,
-    onPanResponderGrant: (event) => onTouch?.({ x: event.nativeEvent.locationX, y: event.nativeEvent.locationY }, "start"),
-    onPanResponderMove: (event) => onTouch?.({ x: event.nativeEvent.locationX, y: event.nativeEvent.locationY }, "move"),
-    onPanResponderRelease: (event) => onTouch?.({ x: event.nativeEvent.locationX, y: event.nativeEvent.locationY }, "end"),
-    onPanResponderTerminate: () => onTouch?.({ x: 0, y: 0 }, "end"),
-  }), [onTouch]);
+    onPanResponderGrant: (event) => touch.current?.({ x: event.nativeEvent.locationX, y: event.nativeEvent.locationY }, "start"),
+    onPanResponderMove: (event) => touch.current?.({ x: event.nativeEvent.locationX, y: event.nativeEvent.locationY }, "move"),
+    onPanResponderRelease: (event) => touch.current?.({ x: event.nativeEvent.locationX, y: event.nativeEvent.locationY }, "end"),
+    onPanResponderTerminate: () => touch.current?.({ x: 0, y: 0 }, "cancel"),
+  }), []);
   const transform = `translate(${offset.x} ${offset.y}) scale(${zoom})`;
   const path = (points: StaffPoint[]) => points.map((point, i) => `${i ? "L" : "M"}${point.x},${point.y}`).join(" ") + (points.length === 1 ? " l0.01,0.01" : "");
   const selected = page.stamps?.find((stamp) => stamp.id === selectedStampId);
   return (
     <View
       testID="notebook-drawing"
-      onLayout={(event) => onLayoutWidth(event.nativeEvent.layout.width)}
       style={[styles.paper, { width, height, transform: [{ scale: 1 }] }]}
       {...(onTouch ? responder.panHandlers : {})}
     >
-      <Svg pointerEvents="none" width={width} height={height} viewBox={`0 0 ${900} ${height / paperScale}`} preserveAspectRatio="none">
+      <Svg pointerEvents="none" width={width} height={height} viewBox={`0 0 ${width / paperScale} ${height / paperScale}`} preserveAspectRatio="none">
         <G transform={transform}>
           {Array.from({ length: page.staffCount ?? 7 }, (_, row) => Array.from({ length: 5 }, (_, line) => (
             <Line key={`${row}-${line}`} x1={38} x2={862} y1={STAFF_TOP + row * ROW_HEIGHT + line * STAFF_GAP} y2={STAFF_TOP + row * ROW_HEIGHT + line * STAFF_GAP} stroke="#141414" strokeWidth={1.1} />
@@ -55,5 +54,5 @@ export function NotebookPaper({ page, width, height, paperScale, zoom, offset, t
 }
 
 const styles = StyleSheet.create({
-  paper: { backgroundColor: "#fffefa", overflow: "hidden", elevation: 3, shadowColor: "#241f18", shadowOpacity: 0.13, shadowRadius: 9, shadowOffset: { width: 0, height: 3 } },
+  paper: { backgroundColor: "#ffffff", overflow: "hidden" },
 });
