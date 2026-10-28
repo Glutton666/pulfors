@@ -2,6 +2,7 @@ import React from "react";
 import {
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   useWindowDimensions,
@@ -9,7 +10,9 @@ import {
 } from "react-native";
 import { Asset } from "expo-asset";
 import { Image as ExpoImage } from "expo-image";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { detectDeviceLanguage } from "@/lib/i18n";
+import { getAppPreparationLayout } from "./app-preparation-layout";
 
 export type PreparationStage =
   | "fonts"
@@ -51,8 +54,6 @@ function resolveWebAssetUrl(src: number): string {
 const APP_ICON_URI = resolveWebAssetUrl(APP_ICON);
 const APP_ICON_SOURCE =
   Platform.OS === "web" && APP_ICON_URI ? { uri: APP_ICON_URI } : APP_ICON;
-const MIN_ICON_SIZE = 120;
-const MAX_ICON_SIZE = 240;
 
 const copy = {
   ko: {
@@ -95,72 +96,92 @@ export function AppPreparationScreen({
   testID = "preparation-screen",
 }: AppPreparationScreenProps) {
   const { width, height } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const labels = copy[language];
   const isError = stage === "error";
-  const iconSize = Math.max(
-    MIN_ICON_SIZE,
-    Math.min(MAX_ICON_SIZE, width * 0.56, height * 0.48),
-  );
+  const layout = getAppPreparationLayout(width, height, insets.top, insets.bottom);
   const currentStatus = isError ? null : labels.stages[stage];
+  const content = (
+    <View style={[styles.content, { maxWidth: layout.contentMaxWidth }]}>
+      <View
+        style={[styles.iconFrame, { width: layout.iconSize, height: layout.iconSize }]}
+        testID={`${testID}-icon`}
+      >
+        <ExpoImage
+          source={APP_ICON_SOURCE}
+          style={styles.icon}
+          contentFit="cover"
+          accessibilityRole="image"
+          accessibilityLabel="PULPOR app icon"
+        />
+      </View>
+
+      {isError ? (
+        <View style={styles.errorContent}>
+          <Text style={styles.errorTitle}>{labels.errorTitle}</Text>
+          <Text style={styles.errorBody}>{labels.errorBody}</Text>
+          {error ? <Text style={styles.errorDetail}>{error}</Text> : null}
+          <View style={styles.actions}>
+            {onRetry && (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={labels.retry}
+                onPress={onRetry}
+                style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed]}
+              >
+                <Text style={styles.primaryButtonText}>{labels.retry}</Text>
+              </Pressable>
+            )}
+            {onContinue && (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={labels.continue}
+                onPress={onContinue}
+                style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]}
+              >
+                <Text style={styles.secondaryButtonText}>{labels.continue}</Text>
+              </Pressable>
+            )}
+          </View>
+        </View>
+      ) : null}
+    </View>
+  );
+
   return (
     <View
-      style={styles.screen}
+      style={[
+        styles.screen,
+        isError && {
+          justifyContent: "flex-start",
+          paddingTop: Math.max(insets.top, 16),
+          paddingBottom: Math.max(insets.bottom, 16),
+        },
+      ]}
       testID={testID}
       accessibilityRole={isError ? undefined : "progressbar"}
       accessibilityLabel={isError ? labels.errorTitle : currentStatus ?? ""}
     >
-      <View style={styles.content}>
-        <View
-          style={[styles.iconFrame, { width: iconSize, height: iconSize }]}
-          testID={`${testID}-icon`}
+      {isError ? (
+        <ScrollView
+          style={styles.errorScroll}
+          contentContainerStyle={styles.errorScrollContent}
+          showsVerticalScrollIndicator
+          keyboardShouldPersistTaps="handled"
         >
-          <ExpoImage
-            source={APP_ICON_SOURCE}
-            style={styles.icon}
-            contentFit="cover"
-            accessibilityRole="image"
-            accessibilityLabel="PULPOR app icon"
-          />
-
-        </View>
-
-        {isError ? (
-          <View style={styles.errorContent}>
-            <Text style={styles.errorTitle}>{labels.errorTitle}</Text>
-            <Text style={styles.errorBody}>{labels.errorBody}</Text>
-            {error ? <Text style={styles.errorDetail}>{error}</Text> : null}
-            <View style={styles.actions}>
-              {onRetry && (
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={labels.retry}
-                  onPress={onRetry}
-                  style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed]}
-                >
-                  <Text style={styles.primaryButtonText}>{labels.retry}</Text>
-                </Pressable>
-              )}
-              {onContinue && (
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={labels.continue}
-                  onPress={onContinue}
-                  style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]}
-                >
-                  <Text style={styles.secondaryButtonText}>{labels.continue}</Text>
-                </Pressable>
-              )}
-            </View>
-          </View>
-        ) : null}
-      </View>
+          {content}
+        </ScrollView>
+      ) : content}
       {!isError ? (
         <View
-          style={styles.statusArea}
+          style={[styles.statusArea, { bottom: layout.statusBottom }]}
           pointerEvents="none"
           accessibilityLiveRegion="polite"
         >
-          <Text style={styles.status} testID={`${testID}-status`}>
+          <Text
+            style={[styles.status, { fontSize: layout.statusFontSize }]}
+            testID={`${testID}-status`}
+          >
             {currentStatus}
           </Text>
         </View>
@@ -176,6 +197,16 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: "#05070B",
     paddingHorizontal: 24,
+  },
+  errorScroll: {
+    width: "100%",
+    flex: 1,
+  },
+  errorScrollContent: {
+    flexGrow: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 12,
   },
   content: {
     alignItems: "center",
@@ -195,13 +226,12 @@ const styles = StyleSheet.create({
     position: "absolute",
     left: 0,
     right: 0,
-    bottom: Platform.OS === "ios" ? 34 : 24,
+    bottom: 24,
     alignItems: "center",
     paddingHorizontal: 24,
   },
   status: {
     color: "#8B949E",
-    fontSize: 13,
     textAlign: "center",
   },
   errorContent: {
