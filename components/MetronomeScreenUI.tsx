@@ -266,8 +266,14 @@ export function MetronomeScreenUI(props: Props) {
     recordTutorialAction("note_play");
   }, [handleNoteTogglePlay, recordTutorialAction]);
   const tutorialSwitchToMode = useCallback((mode: ModeSlot, direction: "left" | "right" = "right") => {
+    if (showPracticeBook) {
+      if (mode === "practice") return;
+      practiceBookReturnRef.current = null;
+      setPracticeBookFilter(undefined);
+      clearMenuItemReturn();
+    }
     return switchToMode(mode, direction);
-  }, [switchToMode]);
+  }, [switchToMode, showPracticeBook, clearMenuItemReturn]);
 
   const saveFailureBannerKey = getPersistFailureBannerKey(
     combinePersisterStatuses(persistStatus, noteSamplePersistStatus),
@@ -405,6 +411,22 @@ export function MetronomeScreenUI(props: Props) {
     onShowOnboarding: () => openExclusive("onboarding"),
     onLabUnlocked: unlockLab,
   };
+
+  // Native Modals own a separate presentation layer. Host the dial inside the
+  // practice book while it is open, rather than closing the book to expose it.
+  const modeSwitcherDial = (showPracticeBook || scoreMode === null && labScoreTab === null) ? (
+    <ModeSwitcherDial
+      ref={modeSwitcherDialRef}
+      currentMode={showPracticeBook ? "practice" : currentMode}
+      onSelectMode={tutorialSwitchToMode}
+      topInset={insets.top || webTopInset}
+      isLandscape={isLandscape}
+      isPlaying={isPlaying}
+      hideHandle
+      onOpenChange={setIsModeDialOpen}
+      returnFocusRef={modeDialTriggerRef}
+    />
+  ) : null;
 
   return (
     <PlaybackVisualContext.Provider value={playbackVisualStore ?? null}>
@@ -673,19 +695,7 @@ export function MetronomeScreenUI(props: Props) {
       )}
 
       {/* 모드 다이얼 — D-탭 없이 텍스트 레이블이 트리거 */}
-      {scoreMode === null && labScoreTab === null && (
-        <ModeSwitcherDial
-          ref={modeSwitcherDialRef}
-          currentMode={currentMode}
-          onSelectMode={tutorialSwitchToMode}
-          topInset={insets.top || webTopInset}
-          isLandscape={isLandscape}
-          isPlaying={isPlaying}
-          hideHandle
-          onOpenChange={setIsModeDialOpen}
-          returnFocusRef={modeDialTriggerRef}
-        />
-      )}
+      {!showPracticeBook && modeSwitcherDial}
 
 
       {showMenu && labScoreTab === null && (
@@ -936,14 +946,13 @@ export function MetronomeScreenUI(props: Props) {
       <PracticeBookModal
         visible={showPracticeBook}
         fixedFilter={practiceBookFilter}
-        onOpenDial={() => {
-          practiceBookReturnRef.current = null;
-          setPracticeBookFilter(undefined);
-          clearMenuItemReturn();
-          setActiveModal(null);
-          setTimeout(() => modeSwitcherDialRef.current?.open(), 100);
-        }}
+        dialOverlay={modeSwitcherDial}
+        onOpenDial={() => modeSwitcherDialRef.current?.open()}
         onClose={() => {
+          if (isModeDialOpen) {
+            modeSwitcherDialRef.current?.close();
+            return;
+          }
           const returnTo = practiceBookReturnRef.current;
           practiceBookReturnRef.current = null;
           setPracticeBookFilter(undefined);

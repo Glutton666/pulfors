@@ -14,3 +14,11 @@ Playwright CAN drive the ModeSwitcherDial with plain clicks (no drags needed), c
 - RNW `Switch`: wrapper div has no `aria-checked`; read/assert via the inner `<input type=checkbox>`'s `checked` property.
 - Playwright works locally: `npm i -D @playwright/test` + `npx playwright install chromium` (headless shell runs fine on this Replit). Many old e2e selectors (`menu-button`, `menu-overlay`, `score-list-back`, `score-editor-more-menu`-era flows) referenced UI that no longer exists — always probe live testids with a throwaway spec before trusting spec selectors.
 - Score editor note-input taps only make sound after selecting a duration in the palette (`score-palette-dur-quarter`).
+
+## Modal keyboard ownership
+
+React Native Web's Modal dismisses on Escape **keyup**, while the app's global shortcuts and dial process **keydown**. Dismissing a nested control on keydown alone can also dismiss its host on the following keyup.
+
+**Why:** A browser regression check caught the practice book disappearing after Escape even though touch navigation already passed.
+
+**How to apply:** Nested navigation must own handled keys before global shortcuts and consume the matching Escape release even after its keydown closes the nested control. Native Modals have a separate presentation layer; render navigation within that layer rather than closing its host just to reveal an app-level overlay. Verify touch and Escape separately.

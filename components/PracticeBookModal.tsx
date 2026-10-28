@@ -41,6 +41,8 @@ interface PracticeBookModalProps {
   visible: boolean;
   onClose: () => void;
   onOpenDial?: () => void;
+  /** Render navigation in this Modal's native presentation layer. */
+  dialOverlay?: React.ReactNode;
   onLoad: (entry: PracticeEntry) => void;
   onSetGoal?: (entry: PracticeEntry, targetMinutes: number) => void;
   currentConfig: Omit<PracticeEntry, "id" | "label" | "createdAt"> | null;
@@ -531,6 +533,7 @@ export function PracticeBookModal({
   visible,
   onClose,
   onOpenDial,
+  dialOverlay,
   onLoad,
   onSetGoal,
   currentConfig,
@@ -755,6 +758,7 @@ export function PracticeBookModal({
         <View style={styles.header}>
           <Pressable
             onPress={onOpenDial}
+            testID="practice-book-mode-dial"
             disabled={!onOpenDial}
             style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: S.ms(8, 0.3) }}
             accessibilityRole={onOpenDial ? "button" : undefined}
@@ -992,6 +996,7 @@ export function PracticeBookModal({
       }}
     >
       {content}
+      {dialOverlay}
     </AnimatedSlideModal>
   );
 }

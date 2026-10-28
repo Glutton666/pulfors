@@ -814,9 +814,27 @@ function ModeSwitcherDial({
     target?.focus?.();
   }, [returnFocusRef]);
 
+  // RN Web's Modal closes on Escape keyup. Consume the matching release even
+  // after keydown has dismissed this dial, so it cannot also close its host.
+  const escapeHandledRef = useRef(false);
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+    const onKeyUp = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || !escapeHandledRef.current) return;
+      escapeHandledRef.current = false;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    };
+    window.addEventListener("keyup", onKeyUp, true);
+    return () => window.removeEventListener("keyup", onKeyUp, true);
+  }, []);
+
   useEffect(() => {
     if (Platform.OS !== "web" || !isOpen) return;
     const onKeyDown = (event: KeyboardEvent) => {
+      if (!["ArrowRight", "ArrowDown", "ArrowLeft", "ArrowUp", "Enter", " ", "Spacebar", "Escape"].includes(event.key)) return;
+      // The open dial owns navigation keys, ahead of app-wide shortcuts.
+      event.stopImmediatePropagation();
       if (event.key === "ArrowRight" || event.key === "ArrowDown") {
         event.preventDefault();
         moveKeyboardSelection(1);
@@ -828,12 +846,13 @@ function ModeSwitcherDial({
         confirmSelection();
       } else if (event.key === "Escape") {
         event.preventDefault();
+        escapeHandledRef.current = true;
         doClose();
         requestAnimationFrame(restoreTriggerFocus);
       }
     };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [confirmSelection, doClose, isOpen, moveKeyboardSelection, restoreTriggerFocus]);
 
   const handleDialAccessibilityAction = useCallback((event: {
