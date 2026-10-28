@@ -414,7 +414,6 @@ export function MetronomeScreenUI(props: Props) {
 
   // Native Modals own a separate presentation layer. Host the dial inside the
   // practice book while it is open, rather than closing the book to expose it.
-  const isLandscapeBeat = isLandscape && currentMode === "beat";
   const modeSwitcherDial = (showPracticeBook || scoreMode === null && labScoreTab === null) ? (
     <ModeSwitcherDial
       ref={modeSwitcherDialRef}
@@ -656,23 +655,19 @@ export function MetronomeScreenUI(props: Props) {
             : {})}
           style={{
             position: "absolute",
-            top: (insets.top || webTopInset) + (isLandscapeBeat ? 4 : 2),
+            top: (insets.top || webTopInset) + 2,
             alignSelf: "center" as const,
             ...(currentMode === "beat" && !beatStaffNotation && !isLandscape && windowHeight <= 600
               ? { left: 4, alignSelf: "flex-start" as const }
               : {}),
             zIndex: 99999,
-            paddingHorizontal: isLandscapeBeat ? S.ms(12, 0.3) : 16,
-            paddingVertical: isLandscapeBeat ? S.ms(5, 0.3) : 8,
+            paddingHorizontal: 16,
+            paddingVertical: 8,
             borderRadius: 28,
-            ...(isLandscapeBeat
-              ? { backgroundColor: C.surface, borderWidth: 1, borderColor: C.border }
-              : {}),
             flexDirection: "row" as const,
             alignItems: "center" as const,
-            gap: isLandscapeBeat ? S.ms(6, 0.3) : 8,
+            gap: 8,
           }}
-          hitSlop={isLandscapeBeat ? 8 : undefined}
           accessibilityRole="button"
           accessibilityLabel={t("switcher", "openDial")}
           accessibilityHint={t("switcher", "triggerHint")}
@@ -682,13 +677,13 @@ export function MetronomeScreenUI(props: Props) {
         >
           <ModeIcon
             mode={currentMode as ModeSlot}
-            size={S.ms(isLandscapeBeat ? 17 : 20, 0.4)}
+            size={S.ms(20, 0.4)}
             color={C.accent}
           />
           <Text
             style={{
               fontFamily: "SpaceGrotesk_700Bold",
-              fontSize: S.ms(isLandscapeBeat ? 15 : 18, 0.4),
+              fontSize: S.ms(18, 0.4),
               color: C.accent,
               letterSpacing: 1.2,
               textTransform: "uppercase" as const,
@@ -1570,7 +1565,7 @@ export function MetronomeScreenUI(props: Props) {
                 minWidth: 0,
                 justifyContent: "center" as const,
                 alignItems: "center" as const,
-                gap: isDesktopWeb ? 14 : S.ms(8, 0.3),
+                gap: isDesktopWeb ? 14 : 6,
               },
               S.isTablet && { maxWidth: isDesktopWeb ? Math.min(windowWidth * 0.42, 460) : Math.min(windowWidth * 0.38, 420) },
             ]}
@@ -1580,12 +1575,7 @@ export function MetronomeScreenUI(props: Props) {
                 {showLandscapeImage && (
                   <View
                     testID={isDesktopWeb ? "metronome-photo-or-stats" : undefined}
-                    style={{
-                      width: "100%" as any,
-                      flex: isDesktopWeb ? 0.72 : 1,
-                      minHeight: S.ms(58, 0.3),
-                      maxHeight: isDesktopWeb ? 260 : undefined,
-                    }}
+                    style={{ width: "100%" as any, flex: isDesktopWeb ? 0.72 : 0.8, minHeight: 48, maxHeight: isDesktopWeb ? 260 : undefined }}
                   >
                     <View
                       style={{
@@ -1594,12 +1584,10 @@ export function MetronomeScreenUI(props: Props) {
                         right: 4,
                         zIndex: 10,
                         flexDirection: "row" as const,
-                        backgroundColor: "rgba(12,14,18,0.82)",
-                        borderWidth: 1,
-                        borderColor: C.overlay10,
+                        backgroundColor: "rgba(0,0,0,0.55)",
                         borderRadius: 999,
                         padding: Spacing.xxs,
-                        gap: Spacing.xs,
+                        gap: Spacing.xxs,
                       }}
                     >
                       <Pressable
@@ -1733,14 +1721,6 @@ export function MetronomeScreenUI(props: Props) {
                 />
               </>
             )}
-            <View
-              style={{
-                width: "100%" as any,
-                alignItems: "stretch" as const,
-                gap: S.ms(4, 0.3),
-                paddingTop: S.ms(2, 0.3),
-              }}
-            >
             <SubdivisionBar
               pattern={subdivisionPattern}
               onPatternChange={handlePatternChange}
@@ -1762,13 +1742,12 @@ export function MetronomeScreenUI(props: Props) {
                 }}
                 hitSlop={{ top: 6, bottom: 6, left: 16, right: 16 }}
               >
-                <Text style={[styles.beatHintText, { color: C.textSecondary, textAlign: "center", opacity: 0.82, letterSpacing: 0.35 }]}>
+                <Text style={[styles.beatHintText, { color: C.textTertiary, textAlign: "center" }]}>
                   {t("main", "subdivisionLongPressHint")}
                 </Text>
               </Pressable>
             )}
-            <Text style={[styles.tempoLabel, { color: C.accentMuted, alignSelf: "center" as const, marginTop: S.ms(2, 0.3), marginBottom: S.ms(2, 0.3) }]}>{tempoLabel}</Text>
-            </View>
+            <Text style={[styles.tempoLabel, { color: C.accentMuted }]}>{tempoLabel}</Text>
             {easterEggActive ? (
               <EasterEggQuiz
                 onGuess={guardedEasterEggGuess}

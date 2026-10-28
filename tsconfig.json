@@ -20,7 +20,6 @@
   ],
   "exclude": [
     "node_modules",
-    "artifacts/mockup-sandbox",
     "e2e",
     "playwright.config.ts"
   ]
