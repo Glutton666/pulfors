@@ -80,11 +80,16 @@ export function useScale(): ScaleValues {
       const leftColW = (width - padH) * 5 / 8;
       const modeBtnSpace = 52;
       const maxByWidth = leftColW - modeBtnSpace;
+      // Mid-size landscape viewports (for example a 1004×451 tablet window)
+      // have enough width for a more substantial dial, but are not classified
+      // as tablets by the short-edge threshold. Grow only once the short edge
+      // can support it; very short phone landscapes retain the compact dial.
+      const roomyLandscape = minDim >= 400;
       dialSize = Math.min(
         availH - 10,
         maxByWidth,
-        ms(280),
-        height * 0.7
+        ms(roomyLandscape ? 320 : 280),
+        height * (roomyLandscape ? 0.78 : 0.7)
       );
     } else {
       // Portrait is the primary interaction surface. Keep only the space that

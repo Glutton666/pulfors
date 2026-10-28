@@ -48,6 +48,18 @@ describe("web desktop scale isolation", () => {
     expect(s.contentMaxWidth).toBeUndefined();
   });
 
+  test("uses more of the available height for the beat dial in roomy landscape", () => {
+    const s = layout(1004, 451);
+    expect(s.isLandscape).toBe(true);
+    expect(s.dialSize).toBe(324);
+    expect(s.dialSize).toBeLessThanOrEqual(451 - 101 - 16 - 10);
+  });
+
+  test("keeps compact phone landscape dial geometry unchanged", () => {
+    const s = layout(667, 375);
+    expect(s.dialSize).toBe(248);
+  });
+
   test.each(["ios", "android"])("does not adopt desktop geometry on %s tablets", (platform) => {
     const s = layout(1280, 800, platform);
     expect(s.isWideWebDesktop).toBe(false);
