@@ -73,6 +73,13 @@ function freezeDeep<T>(value: T): T {
   return value;
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason: Error) => void;
+  const promise = new Promise<T>((done, fail) => { resolve = done; reject = fail; });
+  return { promise, resolve, reject };
+}
+
 // Independent oracle: no calls to buildNotebookPlan or schedule filtering.
 function expectedPlayback(rowOrder: number[], perRow: number) {
   const events: { time: number; type: BeatType; beat: number; subBeat: number }[] = [];
@@ -101,10 +108,10 @@ let render: jest.SpyInstance;
 let random: jest.SpyInstance;
 
 function expectPlaybackMatches(note: StaffNotebook, rows: ReturnType<typeof useNotebookPlayback>["rows"],
-  order: number[], perRow: number) {
+  order: number[], perRow: number, renderCalls = 1) {
   const expected = expectedPlayback(order, perRow);
   expect(rows.map((row) => row.pageIndex)).toEqual(order);
-  expect(render).toHaveBeenCalledTimes(1);
+  expect(render).toHaveBeenCalledTimes(renderCalls);
   expect(mix).toHaveBeenCalledTimes(1);
   expect(renderer.playWebRenderedLoop).toHaveBeenCalledTimes(1);
   const params = mix.mock.calls[0][0] as Parameters<typeof renderer.renderMeasureAbortable>[0];
@@ -328,4 +335,98 @@ test.each(["measure", "phrase"] as const)("%s stops previous output when restart
   expect(clearInterval).toHaveBeenCalledTimes(1);
   expect(JSON.stringify(note)).toBe(before);
   expect(JSON.stringify(incomplete)).toBe(incompleteBefore);
+});
+
+describe.each([
+  { lineUnit: "measure" as const, count: 10, perRow: 1, order: [1, 2, 3, 4, 5, 6, 7, 8, 9, 0] },
+  { lineUnit: "phrase" as const, count: 5, perRow: 4, order: [2, 3, 4, 0, 1] },
+])("$lineUnit restart during PCM preparation", ({ lineUnit, count, perRow, order }) => {
+  test.each(["resolve", "reject"] as const)("ignores an older decode that completes late (%s)", async (completion) => {
+    const previous = freezeDeep(makeNote(lineUnit === "measure" ? "phrase" : "measure",
+      lineUnit === "measure" ? 5 : 10));
+    const latest = freezeDeep(makeNote(lineUnit, count));
+    const previousBefore = JSON.stringify(previous);
+    const latestBefore = JSON.stringify(latest);
+    const delayed = deferred<Float32Array>();
+    // Only the first asset decode is stalled. Both starts still use the real
+    // export/schedule/mixer path; the old decoder deliberately ignores abort.
+    jest.mocked(renderer.loadAssetPCM).mockReset()
+      .mockReturnValueOnce(delayed.promise)
+      .mockResolvedValueOnce(new Float32Array([amplitude.accent]))
+      .mockResolvedValueOnce(new Float32Array([amplitude.normal]))
+      .mockResolvedValueOnce(new Float32Array([amplitude.strong]))
+      .mockResolvedValueOnce(new Float32Array([amplitude.accent]))
+      .mockResolvedValueOnce(new Float32Array([amplitude.normal]));
+    const hook = renderHook(({ document }) => useNotebookPlayback(document, true),
+      { initialProps: { document: previous } });
+    const interval = jest.spyOn(globalThis, "setInterval");
+    const clearInterval = jest.spyOn(globalThis, "clearInterval");
+    const start = hook.result.current.start;
+    let firstStart!: Promise<void>;
+    act(() => { firstStart = start(); });
+    expect(hook.result.current.preparing).toBe(true);
+    expect(hook.result.current.running).toBe(false);
+    expect(hook.result.current.rows).toEqual([]);
+    expect(render).toHaveBeenCalledTimes(1);
+    expect(renderer.loadAssetPCM).toHaveBeenCalledTimes(3);
+    expect(mix).not.toHaveBeenCalled();
+    expect(renderer.playWebRenderedLoop).not.toHaveBeenCalled();
+    expect(interval).not.toHaveBeenCalled();
+    const firstSignal = render.mock.calls[0][1] as AbortSignal;
+    expect(firstSignal.aborted).toBe(false);
+
+    // Same hook AND original callback; start() must read the edited document.
+    hook.rerender({ document: latest });
+    expect(hook.result.current.start).toBe(start);
+    await act(async () => { await start(); });
+    expect(firstSignal.aborted).toBe(true);
+    expect(render).toHaveBeenCalledTimes(2);
+    expect(render.mock.calls[1][0]).toBe(latest.settings?.source);
+    expect((render.mock.calls[1][1] as AbortSignal).aborted).toBe(false);
+    expect(renderer.loadAssetPCM).toHaveBeenCalledTimes(6);
+    // Two exports entered preparation, but only the winner reached the real
+    // mixer. Check its complete PCM and paper against the independent oracle.
+    const expected = expectPlaybackMatches(latest, hook.result.current.rows, order, perRow, 2);
+    expect(hook.result.current.running).toBe(true);
+    expect(hook.result.current.preparing).toBe(false);
+    expect(hook.result.current.error).toBe("");
+    expect(interval).toHaveBeenCalledTimes(1);
+    expect(stopOutput).not.toHaveBeenCalled();
+
+    presentedMs = expected.rowEnds[0] + (expected.rowEnds[1] - expected.rowEnds[0]) / 2;
+    act(() => { jest.advanceTimersByTime(30); });
+    expect(hook.result.current.position).toEqual({ row: 1, progress: 0.5 });
+    const rows = hook.result.current.rows;
+    const position = hook.result.current.position;
+    const randomCalls = random.mock.calls.length;
+    await act(async () => {
+      if (completion === "resolve") delayed.resolve(new Float32Array([amplitude.strong]));
+      else delayed.reject(new Error("Old asset decode failed"));
+      await firstStart;
+    });
+    expect(hook.result.current.rows).toBe(rows);
+    expect(hook.result.current.position).toBe(position);
+    expect(hook.result.current.running).toBe(true);
+    expect(hook.result.current.preparing).toBe(false);
+    expect(hook.result.current.error).toBe("");
+    expect(outputRunning).toBe(true);
+    expect(stopOutput).not.toHaveBeenCalled();
+    expect(clearInterval).not.toHaveBeenCalled();
+    expect(interval).toHaveBeenCalledTimes(1);
+    expect(render).toHaveBeenCalledTimes(2);
+    expect(mix).toHaveBeenCalledTimes(1);
+    expect(renderer.playWebRenderedLoop).toHaveBeenCalledTimes(1);
+    expect(renderer.loadAssetPCM).toHaveBeenCalledTimes(6);
+    expect(random).toHaveBeenCalledTimes(randomCalls);
+
+    presentedMs = expected.rowEnds[1];
+    act(() => { jest.advanceTimersByTime(30); });
+    expect(hook.result.current.position).toEqual({ row: 2, progress: 0 });
+    hook.unmount();
+    expect(stopOutput).toHaveBeenCalledTimes(1);
+    expect(clearInterval).toHaveBeenCalledTimes(1);
+    expect(clearInterval).toHaveBeenCalledWith(interval.mock.results[0].value);
+    expect(JSON.stringify(previous)).toBe(previousBefore);
+    expect(JSON.stringify(latest)).toBe(latestBefore);
+  });
 });

@@ -87,6 +87,8 @@ export function useNotebookPlayback(note: StaffNotebook, active: boolean) {
       // Render the final schedule, not sliced old audio: sample tails must
       // overlap their NEW neighbours in the shuffled sheet.
       const { pcm } = await renderNotebookPatternPCM(source, controller.signal, { ticks, durationMs: plan.durationMs });
+      // A second start can supersede this attempt while assets are decoding.
+      // Recheck ownership before installing any output or publishing paper rows.
       check();
       let getPosition: () => number;
       let ready: () => boolean;
