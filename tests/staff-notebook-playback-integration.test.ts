@@ -108,13 +108,13 @@ let render: jest.SpyInstance;
 let random: jest.SpyInstance;
 
 function expectPlaybackMatches(note: StaffNotebook, rows: ReturnType<typeof useNotebookPlayback>["rows"],
-  order: number[], perRow: number, renderCalls = 1) {
+  order: number[], perRow: number, renderCalls = 1, outputCalls = 1) {
   const expected = expectedPlayback(order, perRow);
   expect(rows.map((row) => row.pageIndex)).toEqual(order);
   expect(render).toHaveBeenCalledTimes(renderCalls);
-  expect(mix).toHaveBeenCalledTimes(1);
-  expect(renderer.playWebRenderedLoop).toHaveBeenCalledTimes(1);
-  const params = mix.mock.calls[0][0] as Parameters<typeof renderer.renderMeasureAbortable>[0];
+  expect(mix).toHaveBeenCalledTimes(outputCalls);
+  expect(renderer.playWebRenderedLoop).toHaveBeenCalledTimes(outputCalls);
+  const params = mix.mock.calls[outputCalls - 1][0] as Parameters<typeof renderer.renderMeasureAbortable>[0];
   expect(params.measureDurationMs).toBe(expected.durationMs);
   expect(params.schedule).toHaveLength(expected.events.length);
   params.schedule.forEach((tick, i) => {
@@ -128,7 +128,7 @@ function expectPlaybackMatches(note: StaffNotebook, rows: ReturnType<typeof useN
     if (beat === 1 && expected.beats[i - 1] !== 2) expect(expected.beats.slice(i, i + 4)).toEqual([1, 2, 1, 2]);
   });
 
-  const pcm = jest.mocked(renderer.playWebRenderedLoop).mock.calls[0][0];
+  const pcm = jest.mocked(renderer.playWebRenderedLoop).mock.calls[outputCalls - 1][0];
   expect(pcm).toBeInstanceOf(Float32Array);
   if (!(pcm instanceof Float32Array)) throw new Error("Expected mono notebook output");
   expect(pcm.length).toBe(Math.ceil(expected.durationMs / 1000 * SR));
@@ -494,5 +494,139 @@ describe.each([
     expect(clearInterval).toHaveBeenCalledWith(interval.mock.results[0].value);
     expect(JSON.stringify(previous)).toBe(previousBefore);
     expect(JSON.stringify(latest)).toBe(latestBefore);
+  });
+});
+
+describe.each([
+  { lineUnit: "measure" as const, count: 10, perRow: 1, order: [1, 2, 3, 4, 5, 6, 7, 8, 9, 0] },
+  { lineUnit: "phrase" as const, count: 5, perRow: 4, order: [2, 3, 4, 0, 1] },
+])("$lineUnit restart while output is starting", ({ lineUnit, count, perRow, order }) => {
+  describe.each(["isRunning", "presented position"] as const)("waiting for %s", (waitingFor) => {
+    test.each(["late readiness", "expired deadline"] as const)("preserves the latest playback after %s", async (completion) => {
+      const previous = freezeDeep(makeNote(lineUnit === "measure" ? "phrase" : "measure",
+        lineUnit === "measure" ? 5 : 10));
+      const latest = freezeDeep(makeNote(lineUnit, count));
+      const previousBefore = JSON.stringify(previous);
+      const latestBefore = JSON.stringify(latest);
+      // Both exports finish real synthesis. Only decoding (the shared fixture)
+      // and output readiness are controlled; neither render nor mixer is mocked.
+      jest.mocked(renderer.loadAssetPCM)
+        .mockResolvedValueOnce(new Float32Array([amplitude.strong]))
+        .mockResolvedValueOnce(new Float32Array([amplitude.accent]))
+        .mockResolvedValueOnce(new Float32Array([amplitude.normal]));
+      let oldRunning = waitingFor !== "isRunning";
+      let oldPresentedMs = waitingFor === "presented position" ? 0 : 1;
+      const oldStop = jest.fn(() => { oldRunning = false; });
+      const oldReady = jest.fn(() => oldRunning);
+      const oldPosition = jest.fn(() => oldPresentedMs / 1000);
+      jest.mocked(renderer.playWebRenderedLoop).mockReturnValueOnce({
+        stop: oldStop, isRunning: oldReady,
+        getPresentedPositionSeconds: oldPosition, getPositionSeconds: () => 999,
+      });
+
+      // Hold just the 20ms output-start poll. The PCM mixer's yielding timeouts
+      // remain real. Wake the stale poll deliberately AFTER the new timer runs,
+      // including a wake past its original deadline, without wall-clock sleeps.
+      const pollInstalled = deferred<void>();
+      const polls: (() => void)[] = [];
+      const realSetTimeout = globalThis.setTimeout;
+      jest.spyOn(globalThis, "setTimeout").mockImplementation((callback, delay, ...args) => {
+        if (delay === 20 && typeof callback === "function") {
+          polls.push(() => callback(...args));
+          pollInstalled.resolve();
+          return 0 as unknown as ReturnType<typeof setTimeout>;
+        }
+        return realSetTimeout(callback, delay, ...args);
+      });
+      let now = 0;
+      jest.spyOn(performance, "now").mockImplementation(() => now);
+      const hook = renderHook(({ document }) => useNotebookPlayback(document, true),
+        { initialProps: { document: previous } });
+      const interval = jest.spyOn(globalThis, "setInterval");
+      const clearInterval = jest.spyOn(globalThis, "clearInterval");
+      const start = hook.result.current.start;
+      let firstStart!: Promise<void>;
+      let firstSettled = false;
+      await act(async () => {
+        firstStart = start().then(() => { firstSettled = true; });
+        await pollInstalled.promise;
+      });
+      expect(firstSettled).toBe(false);
+      expect(polls).toHaveLength(1);
+      expect(render).toHaveBeenCalledTimes(1);
+      expect(mix).toHaveBeenCalledTimes(1);
+      expect(renderer.playWebRenderedLoop).toHaveBeenCalledTimes(1);
+      expect(oldReady).toHaveBeenCalled();
+      if (waitingFor === "presented position") expect(oldPosition).toHaveReturnedWith(0);
+      expect(oldStop).not.toHaveBeenCalled();
+      expect(interval).not.toHaveBeenCalled();
+      expect(hook.result.current).toMatchObject({
+        preparing: true, running: false, error: "", rows: [], position: { row: 0, progress: 0 },
+      });
+      const oldSignal = render.mock.calls[0][1] as AbortSignal;
+      expect(oldSignal.aborted).toBe(false);
+
+      hook.rerender({ document: latest });
+      expect(hook.result.current.start).toBe(start);
+      await act(async () => { await start(); });
+      expect(firstSettled).toBe(false);
+      expect(oldSignal.aborted).toBe(true);
+      expect(oldStop).toHaveBeenCalledTimes(1);
+      expect(stopOutput).not.toHaveBeenCalled();
+      expect(render.mock.calls[1][0]).toBe(latest.settings?.source);
+      const latestSignal = render.mock.calls[1][1] as AbortSignal;
+      expect(latestSignal.aborted).toBe(false);
+      expect(renderer.loadAssetPCM).toHaveBeenCalledTimes(6);
+      const expected = expectPlaybackMatches(latest, hook.result.current.rows, order, perRow, 2, 2);
+      expect(hook.result.current).toMatchObject({ running: true, preparing: false, error: "" });
+      expect(interval).toHaveBeenCalledTimes(1);
+      expect(interval).toHaveBeenCalledWith(expect.any(Function), 30);
+
+      presentedMs = expected.rowEnds[0] + (expected.rowEnds[1] - expected.rowEnds[0]) / 2;
+      act(() => { jest.advanceTimersByTime(30); });
+      expect(hook.result.current.position).toEqual({ row: 1, progress: 0.5 });
+      const rows = hook.result.current.rows;
+      const position = hook.result.current.position;
+      const randomCalls = random.mock.calls.length;
+      if (completion === "late readiness") {
+        // A device can report readiness even after its stop request.
+        oldRunning = true;
+        oldPresentedMs = 9000;
+      } else {
+        oldRunning = waitingFor !== "isRunning";
+        oldPresentedMs = waitingFor === "presented position" ? 0 : 1;
+        now = 6000;
+      }
+      await act(async () => { polls.shift()!(); await firstStart; });
+      expect(firstSettled).toBe(true);
+      expect(polls).toHaveLength(0);
+      expect(hook.result.current.rows).toBe(rows);
+      expect(hook.result.current.position).toBe(position);
+      expect(hook.result.current).toMatchObject({ running: true, preparing: false, error: "" });
+      expect(outputRunning).toBe(true);
+      expect(latestSignal.aborted).toBe(false);
+      expect(oldStop).toHaveBeenCalledTimes(1);
+      expect(stopOutput).not.toHaveBeenCalled();
+      expect(clearInterval).not.toHaveBeenCalled();
+      expect(interval).toHaveBeenCalledTimes(1);
+      expect(render).toHaveBeenCalledTimes(2);
+      expect(mix).toHaveBeenCalledTimes(2);
+      expect(renderer.playWebRenderedLoop).toHaveBeenCalledTimes(2);
+      expect(random).toHaveBeenCalledTimes(randomCalls);
+
+      // The winning timer still follows its own output, not the stale device.
+      presentedMs = expected.rowEnds[1];
+      act(() => { jest.advanceTimersByTime(30); });
+      expect(hook.result.current.position).toEqual({ row: 2, progress: 0 });
+      expect(hook.result.current.error).toBe("");
+      expect(stopOutput).not.toHaveBeenCalled();
+      hook.unmount();
+      expect(oldStop).toHaveBeenCalledTimes(1);
+      expect(stopOutput).toHaveBeenCalledTimes(1);
+      expect(clearInterval).toHaveBeenCalledTimes(1);
+      expect(clearInterval).toHaveBeenCalledWith(interval.mock.results[0].value);
+      expect(JSON.stringify(previous)).toBe(previousBefore);
+      expect(JSON.stringify(latest)).toBe(latestBefore);
+    });
   });
 });
