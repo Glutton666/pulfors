@@ -176,6 +176,72 @@ afterEach(() => {
   jest.useRealTimers();
 });
 
+describe.each(["measure", "phrase"] as const)("%s cancellation during asset decoding", (lineUnit) => {
+  describe.each(["stop", "inactive", "unmount"] as const)("%s", (cancellation) => {
+    test.each(["resolve", "reject"] as const)("ignores late decode %s without output, paper timers or errors", async (completion) => {
+      const note = freezeDeep(makeNote(lineUnit, lineUnit === "measure" ? 10 : 5));
+      const before = JSON.stringify(note);
+      const delayed = deferred<Float32Array>();
+      // The decoder intentionally ignores abort and settles only AFTER leaving
+      // preparation. The export, engine, plan and mixer are not stubbed.
+      jest.mocked(renderer.loadAssetPCM).mockReset()
+        .mockReturnValueOnce(delayed.promise)
+        .mockResolvedValueOnce(new Float32Array([amplitude.accent]))
+        .mockResolvedValueOnce(new Float32Array([amplitude.normal]));
+      const hook = renderHook(({ active }) => useNotebookPlayback(note, active),
+        { initialProps: { active: true } });
+      const interval = jest.spyOn(globalThis, "setInterval");
+      let pendingStart!: Promise<void>;
+      act(() => { pendingStart = hook.result.current.start(); });
+      expect(hook.result.current.preparing).toBe(true);
+      expect(hook.result.current.running).toBe(false);
+      expect(hook.result.current.error).toBe("");
+      expect(render).toHaveBeenCalledTimes(1);
+      expect(render.mock.calls[0][0]).toBe(note.settings?.source);
+      expect(renderer.loadAssetPCM).toHaveBeenCalledTimes(3);
+      const signal = render.mock.calls[0][1] as AbortSignal;
+      expect(signal.aborted).toBe(false);
+      expect(mix).not.toHaveBeenCalled();
+      expect(renderer.playWebRenderedLoop).not.toHaveBeenCalled();
+      expect(interval).not.toHaveBeenCalled();
+
+      if (cancellation === "stop") act(() => { hook.result.current.stop(); });
+      else if (cancellation === "inactive") hook.rerender({ active: false });
+      else hook.unmount();
+      expect(signal.aborted).toBe(true);
+      // renderHook retains the last committed result after unmount; it is not
+      // evidence of live state. Mounted cancellations must clear preparation.
+      if (cancellation !== "unmount") {
+        expect(hook.result.current.preparing).toBe(false);
+        expect(hook.result.current.running).toBe(false);
+      }
+      const cancelled = hook.result.current;
+      expect(cancelled.rows).toEqual([]);
+      expect(cancelled.position).toEqual({ row: 0, progress: 0 });
+      expect(cancelled.error).toBe("");
+
+      await act(async () => {
+        if (completion === "resolve") delayed.resolve(new Float32Array([amplitude.strong]));
+        else delayed.reject(new Error("Cancelled asset decode failed"));
+        await pendingStart;
+      });
+      presentedMs = 5000;
+      act(() => { jest.advanceTimersByTime(300); });
+      // No late paper publication, progress update or user-visible error.
+      expect(hook.result.current).toBe(cancelled);
+      expect(hook.result.current.error).toBe("");
+      expect(render).toHaveBeenCalledTimes(1);
+      expect(renderer.loadAssetPCM).toHaveBeenCalledTimes(3);
+      expect(mix).not.toHaveBeenCalled();
+      expect(renderer.playWebRenderedLoop).not.toHaveBeenCalled();
+      expect(interval).not.toHaveBeenCalled();
+      expect(stopOutput).not.toHaveBeenCalled();
+      expect(JSON.stringify(note)).toBe(before);
+      if (cancellation !== "unmount") hook.unmount();
+    });
+  });
+});
+
 describe.each([
   // The four emitted cells of block [1,2] must stay adjacent, even across
   // paper rows. Phrase rows 0+1 and 2+3 are joined by separate block passes.

@@ -87,7 +87,7 @@ export function useNotebookPlayback(note: StaffNotebook, active: boolean) {
       // Render the final schedule, not sliced old audio: sample tails must
       // overlap their NEW neighbours in the shuffled sheet.
       const { pcm } = await renderNotebookPatternPCM(source, controller.signal, { ticks, durationMs: plan.durationMs });
-      // A second start can supersede this attempt while assets are decoding.
+      // Restart, stop, deactivation or unmount can cancel while assets decode.
       // Recheck ownership before installing any output or publishing paper rows.
       check();
       let getPosition: () => number;
@@ -132,6 +132,7 @@ export function useNotebookPlayback(note: StaffNotebook, active: boolean) {
       dispose.current = () => { clearInterval(timer); release(); };
     } catch (e) {
       cleanup();
+      // A cancelled decoder may reject late; only the current owner reports errors.
       if (valid()) {
         setPreparing(false); setRunning(false);
         const message = e instanceof Error ? e.message : String(e);
