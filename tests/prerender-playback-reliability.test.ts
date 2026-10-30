@@ -279,6 +279,56 @@ function makeEngine() {
 }
 
 describe("pre-rendered playback reliability", () => {
+  it("starts Polygon with its own beat clock after leaving an empty, play-once Bar", async () => {
+    Platform.OS = "android";
+    const engine = makeEngine();
+    const params = makePlaybackParams(engine, null);
+    params.barModeRef.current = true;
+    params.beatsPerMeasure = 0;
+    params.barLoopModeRef.current = "once";
+    params.barConfigRef.current = { beatTypes: [], beatsPerMeasure: 0 } as any;
+    params.getPlaybackContext.mockReturnValue({
+      mode: "polygon", bpm: 120, modeLabel: "Pulse Polygon",
+      activityMode: "polygon", bpmSource: "global",
+    } as any);
+    const { result, unmount } = renderHook(() => usePlaybackControl(params as any));
+    try {
+      await act(async () => { await result.current.startMetronome(); });
+      expect(mockApplyDialConfigToEngine).toHaveBeenLastCalledWith(engine, expect.objectContaining({
+        beatsPerMeasure: 4, beatTypes: ["normal", "normal", "normal", "normal"], beatSubdivisions: {},
+      }));
+      expect(params.prepareRenderedPlayer).not.toHaveBeenCalled();
+      expect(engine.start).toHaveBeenCalled();
+      expect(engine.requestStopAfterMeasure).not.toHaveBeenCalled();
+      expect(params.setIsPlaying).toHaveBeenLastCalledWith(true);
+    } finally {
+      unmount();
+    }
+  });
+
+  it.each(["android", "ios", "web"] as const)("starts Polygon from its own audio producer on %s, not a normal Beat render", async platform => {
+    Platform.OS = platform;
+    const engine = makeEngine();
+    const params = makePlaybackParams(engine, null);
+    params.getPlaybackContext.mockReturnValue({
+      mode: "polygon", bpm: 120, modeLabel: "Pulse Polygon",
+      activityMode: "polygon", bpmSource: "global",
+    } as any);
+    // A superseded ordinary Beat render must never cancel Polygon's producer.
+    params.prepareRenderedPlayer.mockImplementation(async () => ({ status: "superseded" } as any));
+    const { result, unmount } = renderHook(() => usePlaybackControl(params as any));
+    try {
+      await act(async () => { await result.current.startMetronome(); });
+      expect(params.prepareRenderedPlayer).not.toHaveBeenCalled();
+      expect(engine.start).toHaveBeenCalled();
+      expect(params.waitForFirstAudioActivity).toHaveBeenCalled();
+      expect(params.setIsPlaying).toHaveBeenLastCalledWith(true);
+      expect(params.showPlaybackStartFailure).not.toHaveBeenCalled();
+    } finally {
+      unmount();
+    }
+  });
+
   beforeEach(() => {
     resetPCMCacheForTests();
     mockSetPoolsVolume.mockClear();

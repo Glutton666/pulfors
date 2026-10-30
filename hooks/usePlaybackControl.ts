@@ -625,6 +625,10 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
     } = {},
   ): Promise<boolean> => {
     const playbackAtStart = p.getPlaybackContext({ activeBarIndex: startBeat ?? 0 });
+    // Polygon supplies its own realtime producer. The ordinary Beat/Bar plan
+    // below configures only its engine clock, never its rendered audio output.
+    const polygonPlayback = playbackAtStart.mode === "polygon";
+    const polygonClockBeats = Math.max(1, Math.min(16, Math.floor(p.beatsPerMeasure || 4)));
     const toneSnapshot = p.captureAudioToneSnapshot();
     const startTone = readAudioToneSnapshot(toneSnapshot, p.soundSetRef.current);
     if (!Number.isFinite(startTone.intensity)) {
@@ -652,7 +656,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
             audio,
             stopAfterMeasure: options.stopAfterMeasure ?? false,
           }
-        : p.barModeRef.current
+        : p.barModeRef.current && !polygonPlayback
         ? {
             mode: "bar",
             platform: Platform.OS === "web" ? "web" : "native",
@@ -668,11 +672,20 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
             platform: Platform.OS === "web" ? "web" : "native",
             bpm: playbackAtStart.bpm,
             audio,
-            config: p.dialConfigRef.current,
+            config: polygonPlayback ? {
+              beatsPerMeasure: polygonClockBeats,
+              beatTypes: Array.from({ length: polygonClockBeats }, () => "normal" as const),
+              beatSubdivisions: {},
+              noteSamples: {},
+              noteSampleNames: {},
+              noteSampleSources: {},
+              noteSampleChannels: {},
+            } : p.dialConfigRef.current,
           },
     );
     const useSparseAndroid =
       Platform.OS === "android" &&
+      !polygonPlayback &&
       (plan.mode === "beat" || plan.mode === "bar") &&
       !Object.values(plan.audio.tone.overlays ?? {}).some(Boolean) &&
       process.env.EXPO_PUBLIC_ENABLE_ANDROID_SPARSE_AUDIO === "1";
@@ -772,7 +785,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
       // subdivisions those seeks can resolve out of order across normal/accent
       // pools, so native playback always attempts one deterministic rendered loop
       // first. A render failure still falls back to the realtime callbacks below.
-      const useRenderedLoop = plan.output.strategy === "prerender";
+      const useRenderedLoop = !polygonPlayback && plan.output.strategy === "prerender";
 
       if (Platform.OS === "web") {
         const context = getWebAudioContext();
@@ -1041,7 +1054,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
           cancelPlaybackAttempt(false);
           return false;
         } else {
-          if (plan.output.boosted || plan.output.toneShaped) {
+          if (!polygonPlayback && (plan.output.boosted || plan.output.toneShaped)) {
             throw new Error("Boosted or tone-shaped native playback requires rendered audio");
           }
           engine.setPreRenderedAudio(false);
@@ -1078,7 +1091,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
       startOrResumePracticeSession();
       if (
         plan.mode === "note" && plan.unit.stopAfterMeasure ||
-        (p.barModeRef.current && p.barLoopModeRef.current === "once")
+        (!polygonPlayback && p.barModeRef.current && p.barLoopModeRef.current === "once")
       ) {
         engine.requestStopAfterMeasure();
       }
