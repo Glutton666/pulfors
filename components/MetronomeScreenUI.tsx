@@ -682,7 +682,7 @@ export function MetronomeScreenUI(props: Props) {
       </Animated.View>
 
       {/* 상단 중앙 고정 모드 레이블 — 탭하면 팬 다이얼 열기 (무대·악보·메뉴·연습장 중 숨김, 해당 화면 헤더에 자체 트리거 있음) */}
-      {showMainModeHeader && !noteMode && !isModeDialOpen && (
+      {showMainModeHeader && !noteMode && !barMode && !isModeDialOpen && (
         <Pressable
           onPress={() => openScopedSettings(barMode ? "bar" : "beat")}
           style={{
@@ -1409,6 +1409,7 @@ export function MetronomeScreenUI(props: Props) {
             dialRef={dialRef}
             barMode={barMode}
             onBarModeChange={handleBarModeChange}
+            onOpenSettings={barMode ? () => openScopedSettings("bar") : undefined}
             beatSubdivisions={beatSubdivisions}
             onBeatSubdivisionChange={(...args) => {
               if (playbackEditsLocked) return;

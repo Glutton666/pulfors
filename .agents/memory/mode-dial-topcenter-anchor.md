@@ -11,8 +11,8 @@ The ModeSwitcherDial's `anchorPos` applies `safeT`, a camera-safe zone that shov
 
 ## Closed header placement
 
-Keep the mode trigger in the upper-center header band and the main metronome settings action at screen upper-left, separate from the beat controls.
+Keep the mode trigger in the upper-center header band. Beat settings stay at screen upper-left; Bar settings belong in the original lower editor toolbar rather than a floating global button.
 
-**Why:** The user said the lowered mode dial intruded into the controls and explicitly requested settings at upper-left. The web body's reserved top padding is not a physical browser safe-area inset; reusing it for the header lowered the trigger into the practice area.
+**Why:** The user initially requested settings at upper-left, then explicitly asked to restore Bar's old position because blanket repositioning obscured UI. The web body's reserved top padding is not a physical browser safe-area inset; reusing it for the header lowered the trigger into the practice area.
 
-**How to apply:** Respect real native safe-area insets for header controls without inheriting the web body reserve. Keep Note's mode-switch trigger available even when excluding Note from the shared Beat/Bar settings action.
+**How to apply:** Respect real native safe-area insets for header controls without inheriting the web body reserve. Do not extend Beat's settings position to every mode. Keep Note's mode-switch trigger available and its settings action distinct from document actions without covering the practice area.

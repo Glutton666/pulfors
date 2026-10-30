@@ -924,34 +924,49 @@ export function NoteModeView({
             testID="open-note-settings"
             accessibilityRole="button"
             accessibilityLabel={t("settings", "title")}
-            style={styles.playActionBtn}
+            style={({ pressed }) => [
+              styles.noteSettingsButton,
+              pressed && { opacity: 0.72 },
+            ]}
           >
-            <Ionicons name="settings-outline" size={isLandscape ? 13 : 16} color={C.textSecondary} />
-            <Text style={styles.playActionText}>{t("settings", "title")}</Text>
+            <Ionicons name="settings-outline" size={18} color={C.textSecondary} />
           </Pressable>
         )}
-        <Pressable
-          onPress={handleSaveWithFeedback}
-          testID="save-note-mode"
-          accessibilityRole="button"
-          accessibilityLabel={t("noteMode", "save")}
-          style={[styles.playActionBtn, { borderColor: saved ? "#4CAF50" : C.accent, backgroundColor: saved ? "#4CAF5020" : C.surface }]}
-        >
-          <Ionicons name={saved ? "checkmark" : "save-outline"} size={isLandscape ? 13 : 16} color={saved ? "#4CAF50" : C.accent} />
-          <Text style={[styles.playActionText, { color: saved ? "#4CAF50" : C.accent }]}>
-            {saved ? t("noteMode", "saved") : t("noteMode", "save")}
-          </Text>
-        </Pressable>
-        <Pressable
-          onPress={handleReset}
-          testID="reset-note-mode"
-          accessibilityRole="button"
-          accessibilityLabel={t("noteMode", "reset")}
-          style={[styles.playActionBtn, { borderColor: C.danger }]}
-        >
-          <Ionicons name="refresh" size={isLandscape ? 13 : 16} color={C.danger} />
-          <Text style={[styles.playActionText, { color: C.danger }]}>{t("noteMode", "reset")}</Text>
-        </Pressable>
+        {onOpenSettings && <View style={styles.noteSettingsDivider} />}
+        <View style={styles.noteDocumentActions}>
+          <Pressable
+            onPress={handleSaveWithFeedback}
+            testID="save-note-mode"
+            accessibilityRole="button"
+            accessibilityLabel={t("noteMode", "save")}
+            style={({ pressed }) => [
+              styles.playActionBtn,
+              { borderColor: saved ? "#4CAF50" : C.accent, backgroundColor: saved ? "#4CAF5020" : C.surface },
+              pressed && { opacity: 0.72 },
+            ]}
+          >
+            <Ionicons name={saved ? "checkmark" : "save-outline"} size={18} color={saved ? "#4CAF50" : C.accent} />
+            {!isLandscape && <Text style={[styles.playActionText, { color: saved ? "#4CAF50" : C.accent }]} numberOfLines={1}>
+              {saved ? t("noteMode", "saved") : t("noteMode", "save")}
+            </Text>}
+          </Pressable>
+          <Pressable
+            onPress={handleReset}
+            testID="reset-note-mode"
+            accessibilityRole="button"
+            accessibilityLabel={t("noteMode", "reset")}
+            style={({ pressed }) => [
+              styles.playActionBtn,
+              { borderColor: C.danger },
+              pressed && { opacity: 0.72 },
+            ]}
+          >
+            <Ionicons name="refresh" size={18} color={C.danger} />
+            {!isLandscape && <Text style={[styles.playActionText, { color: C.danger }]} numberOfLines={1}>
+              {t("noteMode", "reset")}
+            </Text>}
+          </Pressable>
+        </View>
       </View>
       <View style={{ flexDirection: "row" as const, alignItems: "center" as const, gap: S.ms(6, 0.3) }}>
         <BarPlayButton
@@ -1171,16 +1186,39 @@ const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
   playModeRow: {
     flex: 1,
     flexDirection: "row",
+    alignItems: "center",
+    gap: S.ms(6, 0.3),
+  },
+  noteSettingsButton: {
+    width: S.ms(44, 0.3),
+    height: S.ms(44, 0.3),
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: S.ms(10, 0.3),
+    borderWidth: 1,
+    borderColor: C.border,
+    backgroundColor: C.surface,
+  },
+  noteSettingsDivider: {
+    width: StyleSheet.hairlineWidth,
+    height: S.ms(28, 0.3),
+    backgroundColor: C.border,
+  },
+  noteDocumentActions: {
+    flex: 1,
+    flexDirection: "row",
     gap: S.ms(6, 0.3),
   },
   playActionBtn: {
     flex: 1,
+    minWidth: 0,
+    minHeight: S.ms(44, 0.3),
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: S.ms(4, 0.3),
+    gap: S.ms(5, 0.3),
     paddingHorizontal: S.ms(6, 0.3),
-    paddingVertical: S.ms(6, 0.3),
+    paddingVertical: S.ms(4, 0.3),
     borderRadius: S.ms(8, 0.3),
     borderWidth: 1,
     borderColor: C.border,
