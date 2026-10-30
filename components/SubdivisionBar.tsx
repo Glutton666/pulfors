@@ -451,7 +451,7 @@ export function SubdivisionBar({
   }, [currentBeatType, activeBeatPattern]);
   const displayPattern = isPlaying ? (livePattern ?? pattern) : pattern;
   const isShowingLivePattern = isPlaying && displayPattern !== pattern;
-  const { cellSize, radius: dynamicRadius, fontSize: dynamicFontSize } = getSubdivisionCellLayout({
+  const { cellSize, radius: dynamicRadius } = getSubdivisionCellLayout({
     containerWidth,
     cellCount: displayPattern.length,
     preferredCellSize: S.ms(28, 0.5),
@@ -514,8 +514,8 @@ export function SubdivisionBar({
                       letter="S"
                       width={cellSize}
                       height={cellSize}
-                      fontSize={dynamicFontSize}
-                      lineHeight={dynamicFontSize + 2}
+                      fontSize={cellSize * 0.44}
+                      lineHeight={cellSize * 0.52}
                       colors={[onAccentColor(C.accent), withAlpha(onAccentColor(C.accent), 0.55)]}
                       textShadowColor={onAccentShadow(C.accent)}
                     />
@@ -661,8 +661,8 @@ export function DragGhost({
                 letter="S"
                 width={18}
                 height={18}
-                fontSize={8}
-                lineHeight={10}
+                fontSize={18 * 0.44}
+                lineHeight={18 * 0.52}
                 colors={[onAccentColor(GC.accent), withAlpha(onAccentColor(GC.accent), 0.55)]}
                 textShadowColor={onAccentShadow(GC.accent)}
               />

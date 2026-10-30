@@ -104,3 +104,4 @@
 - [Rhythm viewport benchmarks](rhythm-viewport-benchmark.md) — align capture/display clocks; wait for rotation reflow and navigate relative to the staff, not page zero.
 - [Rhythm calibration reference](rhythm-calibration-reference.md) — personal listening/input correction, not physical DAC latency; match reference and tap time axes.
 - [오선노트 작업영역](staff-notebook-workspace.md) — 상단 다이얼 아래는 종이로 채우고, 왼쪽 메트로놈·오른쪽 필기 도구를 펼친다.
+- [Native strong markers](native-strong-marker.md) — Beat/Bar S markers share rendering; preserve vector glyphs and distinguish browser checks from native release verification.

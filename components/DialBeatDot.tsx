@@ -12,7 +12,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { GradientLetter } from "@/components/GradientLetter";
 import { useTheme } from "@/contexts/ThemeContext";
 import type { BeatType } from "@/lib/metronome-engine";
-import { Radius, FontSize } from "@/constants/tokens";
+import { Radius } from "@/constants/tokens";
 import { accentGradientEdge, onAccentColor, onAccentShadow, withAlpha } from "@/lib/color-contrast";
 import { playbackPulseEnvelope, type PlaybackVisual } from "@/lib/playback-visual";
 
@@ -226,10 +226,10 @@ export function DialBeatDot({
           <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, alignItems: "center", justifyContent: "center" }}>
             <GradientLetter
               letter="S"
-              width={size - 10}
-              height={size - 10}
-              fontSize={FontSize.caption}
-              lineHeight={13}
+              width={size}
+              height={size}
+              fontSize={size * 0.44}
+              lineHeight={size * 0.52}
               colors={[onAccentColor(C.accent), withAlpha(onAccentColor(C.accent), 0.55)]}
               textShadowColor={onAccentShadow(C.accent)}
             />

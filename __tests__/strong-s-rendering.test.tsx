@@ -5,10 +5,21 @@ import { render, screen } from "@testing-library/react";
 import fs from "node:fs";
 import path from "node:path";
 
+jest.mock("react-native-svg", () => {
+  const React = require("react");
+  return {
+    __esModule: true,
+    default: ({ testID, children, ...props }: any) =>
+      React.createElement("svg", { ...props, "data-testid": testID }, children),
+    Path: ({ testID, ...props }: any) =>
+      React.createElement("path", { ...props, "data-testid": testID }),
+  };
+});
+
 import { GradientLetter } from "@/components/GradientLetter";
 
 describe("strong beat S rendering", () => {
-  test("renders a visible S using the release-safe Text path", () => {
+  test("renders the S vector without relying on native Text or a text mask", () => {
     render(
       <GradientLetter
         letter="S"
@@ -21,7 +32,9 @@ describe("strong beat S rendering", () => {
       />,
     );
 
-    expect(screen.getByTestId("gradient-letter-text").textContent).toBe("S");
+    expect(screen.getByTestId("strong-letter-path").getAttribute("d")).toMatch(/^M.+C.+/);
+    expect(screen.getByTestId("strong-letter-path").getAttribute("stroke")).toBe("#ffffff");
+    expect(screen.queryByTestId("gradient-letter-text")).toBeNull();
   });
 
   test("Beat and Bar strong paths both use the shared S renderer", () => {
