@@ -43,6 +43,7 @@ import type { RhythmDocument } from "@/lib/rhythm-lab/types";
 import { rhythmDocumentFromPracticeEntry } from "@/lib/rhythm-lab/storage";
 import { ModeSwitcherDial } from "@/components/ModeSwitcherDial";
 import type { ModeSwitcherDialHandle } from "@/components/ModeSwitcherDial";
+import { SafeAreaView } from "react-native-safe-area-context";
 import type { ModeSlot } from "@/components/ModeSwitcherDial";
 import { ModeIcon } from "@/components/ModeIcon";
 import { MenuScreen } from "@/components/MenuScreen";
@@ -89,6 +90,7 @@ type Props = ReturnType<typeof useMetronomeScreen>;
 
 export function MetronomeScreenUI(props: Props) {
   const modeSwitcherDialRef = useRef<ModeSwitcherDialHandle>(null);
+  const [mainHeaderHeight, setMainHeaderHeight] = useState(0);
   const modeDialTriggerRef = useRef<View>(null);
   const [isModeDialOpen, setIsModeDialOpen] = useState(false);
   const [showLabMenu, setShowLabMenu] = useState(false);
@@ -242,6 +244,7 @@ export function MetronomeScreenUI(props: Props) {
     && !showScheduledStart
     && !showFadeOut
     && !showReboot;
+  const mainHeaderRowHeight = showMainModeHeader && !noteMode && !barMode && !isLandscape ? 52 : 44;
 
   const { nativeGestureHandlers: easterEggGestureHandlers } = useEasterEggGesture({
     enabled: !easterEggActive && usesSharedEasterEggGesture(currentMode, showPolygon),
@@ -454,7 +457,7 @@ export function MetronomeScreenUI(props: Props) {
       ref={modeSwitcherDialRef}
       currentMode={showPracticeBook ? "practice" : currentMode}
       onSelectMode={tutorialSwitchToMode}
-      topInset={insets.top || webTopInset}
+      topInset={Platform.OS === "web" ? webTopInset : Math.max(insets.top, mainHeaderHeight - mainHeaderRowHeight - 12)}
       isLandscape={isLandscape}
       isPlaying={isPlaying}
       hideHandle
@@ -682,13 +685,25 @@ export function MetronomeScreenUI(props: Props) {
       </Animated.View>
 
       {/* 상단 중앙 고정 모드 레이블 — 탭하면 팬 다이얼 열기 (무대·악보·메뉴·연습장 중 숨김, 해당 화면 헤더에 자체 트리거 있음) */}
+      {(showMainModeHeader || labScoreTab === "notebook") && (
+        <SafeAreaView
+          edges={["top", "left", "right"]}
+          pointerEvents="box-none"
+          testID="main-mode-header"
+          onLayout={({ nativeEvent: { layout } }) => setMainHeaderHeight(layout.height)}
+          style={{
+            position: "absolute", top: 0, left: 0, right: 0,
+            paddingTop: 12, paddingHorizontal: 24, zIndex: 99999,
+          }}
+        >
+        <View pointerEvents="box-none" style={{ height: mainHeaderRowHeight }}>
       {showMainModeHeader && !noteMode && !barMode && !isModeDialOpen && (
         <Pressable
           onPress={() => openScopedSettings(barMode ? "bar" : "beat")}
           style={{
             position: "absolute",
-            top: Math.max(insets.top, 12) + 4,
-            left: Math.max(insets.left + 8, S.ms(16, 0.3)),
+            top: isLandscape ? 0 : 8,
+            ...(isLandscape ? { left: 0 } : { right: 0 }),
             zIndex: 99999,
             width: 44,
             height: 44,
@@ -711,7 +726,7 @@ export function MetronomeScreenUI(props: Props) {
       {labScoreTab === "notebook" && (
         <Pressable testID="notebook-close" accessibilityRole="button"
           accessibilityLabel={language === "ko" ? "오선노트 닫기" : "Close staff notebook"}
-          style={{ position: "absolute", left: 12, top: Math.max(insets.top, 12) + 4, zIndex: 99999, padding: 12 }}
+          style={{ position: "absolute", left: 0, top: 0, zIndex: 99999, padding: 12 }}
           onPress={() => {
             const leave = () => { setLabScoreTab(null); setLabRhythmDocument(undefined); setShowLabMenu(true); setActiveModal("menu"); };
             if (notebookExitRef.current) notebookExitRef.current(leave); else leave();
@@ -728,8 +743,9 @@ export function MetronomeScreenUI(props: Props) {
             : {})}
           style={{
             position: "absolute",
-            top: Math.max(insets.top, 12) + 4,
+            top: 0,
             alignSelf: "center" as const,
+            minHeight: 44,
             zIndex: 99999,
             paddingHorizontal: 16,
             paddingVertical: 8,
@@ -763,6 +779,9 @@ export function MetronomeScreenUI(props: Props) {
               : t("switcher", currentMode as "beat" | "bar" | "score" | "note" | "practice" | "stage")}
           </Text>
         </Pressable>
+      )}
+        </View>
+        </SafeAreaView>
       )}
 
       {/* 모드 다이얼 — D-탭 없이 텍스트 레이블이 트리거 */}
@@ -1316,11 +1335,9 @@ export function MetronomeScreenUI(props: Props) {
               ? styles.contentBarMode
               : styles.content,
           {
-            paddingTop: noteMode
-              ? (isLandscape
-                ? (insets.top || 8)
-                : (insets.top || webTopInset) + (noteIsPlaying ? 4 : 48))
-              : (insets.top || webTopInset) + (isLandscape ? 8 : 12),
+            paddingTop: Math.max(showMainModeHeader ? mainHeaderHeight + (noteMode ? 8 : 0) : 0, noteMode
+              ? (insets.top || (isLandscape ? 8 : webTopInset))
+              : (insets.top || webTopInset) + (isLandscape ? 8 : 12)),
             paddingBottom: isDesktopWeb
               ? 24
               : noteMode

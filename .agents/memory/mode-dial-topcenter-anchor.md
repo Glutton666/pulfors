@@ -7,12 +7,12 @@ The ModeSwitcherDial's `anchorPos` applies `safeT`, a camera-safe zone that shov
 
 **Why:** safeT exists so the draggable D-tab avoids the notch/Dynamic Island; a text-label-anchored fan (hideHandle mode) must ignore it.
 
-**How to apply:** In hideHandle mode, bypass the draggable tab's safeT calculation and pin ALL geometry (`wall`, `effectiveArcParams`, `fanBgLayout`, etc.) to the top-center WallPos. The fixed fan currently starts at the physical top edge; keep its anchor separate from the closed trigger's safe-area positioning. Overriding only the anchor while geometry still reads stored wallPos misplaces the fan.
+**How to apply:** In hideHandle mode, bypass the draggable tab's safeT calculation and pin ALL geometry (`wall`, `effectiveArcParams`, `fanBgLayout`, etc.) to the top-center WallPos. Native fans must clear the real camera cutout; web body padding must not be interpreted as a hardware inset. Overriding only the anchor while geometry still reads stored wallPos misplaces the fan.
 
 ## Closed header placement
 
-Keep the mode trigger in the upper-center header band. Beat settings stay at screen upper-left; Bar settings belong in the original lower editor toolbar rather than a floating global button.
+Keep the mode trigger in the upper-center safe header band. Beat settings belong at upper-right in portrait and upper-left only in landscape, with space from the screen edges. Bar settings remain in the original lower editor toolbar.
 
-**Why:** The user initially requested settings at upper-left, then explicitly asked to restore Bar's old position because blanket repositioning obscured UI. The web body's reserved top padding is not a physical browser safe-area inset; reusing it for the header lowered the trigger into the practice area.
+**Why:** The user corrected the earlier upper-left request: settings should be at the right corner except in landscape, and neither the dial nor settings should be obscured or pushed against the edges. They separately requested Bar's old position because blanket repositioning obscured UI. Web body padding is not a physical browser safe-area inset.
 
-**How to apply:** Respect real native safe-area insets for header controls without inheriting the web body reserve. Do not extend Beat's settings position to every mode. Keep Note's mode-switch trigger available and its settings action distinct from document actions without covering the practice area.
+**How to apply:** Respect real native safe areas and reserve the header's occupied height so the body cannot sit behind it. Do not extend Beat's settings position to every mode. Keep Note's mode-switch trigger available and its settings action distinct from document actions without covering the practice area.

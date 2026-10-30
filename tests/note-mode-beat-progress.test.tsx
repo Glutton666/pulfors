@@ -334,6 +334,29 @@ describe("Note mode source header", () => {
     });
     expect(onLoadPracticeSources).toHaveBeenCalledTimes(1);
   });
+
+  it("orders the portrait source, flexible queue workspace, and anchored toolbar without duplicate import actions", () => {
+    const { getByTestId, getAllByTestId } = render(
+      <NoteModeView
+        {...handlers}
+        queue={[]}
+        barEntries={[]}
+        playMode="once"
+        currentIndex={0}
+        isPlaying={false}
+        currentBeat={-1}
+        activeSubNote={-1}
+        onOpenSettings={jest.fn()}
+      />,
+    );
+    const sourceHeader = getByTestId("note-source-section-header");
+    const workspace = getByTestId("note-queue-workspace");
+    const toolbar = getByTestId("note-playback-toolbar");
+
+    expect(sourceHeader.compareDocumentPosition(workspace) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(workspace.compareDocumentPosition(toolbar) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(getAllByTestId("load-note-practice-sources")).toHaveLength(1);
+  });
 });
 
 describe("Note image framing lifecycle", () => {

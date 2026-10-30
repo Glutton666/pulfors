@@ -860,7 +860,7 @@ export const translations = {
   noteMode: {
     title: { ko: "노트 모드", en: "Note Mode" },
     queue: { ko: "재생 큐", en: "Play Queue" },
-    emptyQueue: { ko: "아래에서 항목을 탭하여 큐에 추가하세요", en: "Tap items below to add to queue" },
+    emptyQueue: { ko: "연습장 항목을 탭하여 큐에 추가하세요", en: "Tap a practice item to add it to the queue" },
     source: { ko: "연습장", en: "Practice Note" },
     noBarEntries: { ko: "저장된 바 모드 항목이 없습니다", en: "No saved bar mode entries" },
     playModeOnce: { ko: "1회", en: "Once" },
@@ -878,7 +878,7 @@ export const translations = {
     insertNext: { ko: "다음에 삽입", en: "Insert Next" },
     nextBeat: { ko: "다음", en: "Next" },
     nextBeatHint: { ko: "탭: 현재 마디 끝 후 전환 / 길게: 즉시 전환", en: "Tap: skip at end of measure / Hold: skip immediately" },
-    hintAddToQueue:    { ko: "아래 항목을 탭해서 큐에 추가하고 순서를 조정하세요", en: "Tap items below to add to queue and reorder them" },
+    hintAddToQueue:    { ko: "연습장 항목을 탭해서 큐에 추가하고 순서를 조정하세요", en: "Tap practice items to add to the queue and reorder them" },
     scorePreview:      { ko: "악보 미리보기", en: "Score Preview" },
     scoreLoading:      { ko: "악보 불러오는 중…", en: "Loading score…" },
     previewUnit:       { ko: "미리보기 단위", en: "Preview unit" },

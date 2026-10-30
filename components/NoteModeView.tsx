@@ -803,10 +803,10 @@ export function NoteModeView({
           )}
         </View>
       )}
-      <View style={[styles.queueContainer, !isLandscape && sourceCollapsed && { flex: 2 }, isLandscape && { marginBottom: 0 }]}>
+      <View style={[styles.queueContainer, isLandscape && { marginBottom: 0 }]}>
         {queue.length === 0 ? (
           <View style={styles.emptyQueue}>
-            <Ionicons name="musical-notes-outline" size={isLandscape ? 24 : 32} color={C.textTertiary} />
+            <Ionicons name="musical-notes-outline" size={S.ms(18, 0.4)} color={C.accent} />
             <Text style={[styles.emptyQueueText, { color: C.textTertiary }]}>{t("noteMode", "emptyQueue")}</Text>
           </View>
         ) : (
@@ -840,8 +840,18 @@ export function NoteModeView({
     </>
   );
 
-  const renderSourceSection = () => (
-    <>
+  const renderSourceSection = () => {
+    const sourceHeightLimit = Math.max(
+      S.ms(72, 0.3),
+      Math.min(S.ms(240, 0.3), Math.round(winH * 0.3)),
+    );
+    const sourceListHeight = Math.min(
+      sourceHeightLimit,
+      Math.max(S.ms(68, 0.3), barEntries.length * S.ms(64, 0.3)),
+    );
+
+    return (
+      <>
       <View testID="note-source-section-header" style={styles.sourceSectionTop}>
         <Pressable
           testID="toggle-note-source-section"
@@ -870,20 +880,9 @@ export function NoteModeView({
           <Text style={styles.loadSourcesButtonText}>{t("noteMode", "loadSources")}</Text>
         </Pressable>
       </View>
-      {!sourceCollapsed && (
-        <View style={[styles.sourceContainer, isLandscape && { flex: 1 }]} testID="note-queue-source">
-          {barEntries.length === 0 ? (
-            <Pressable onPress={openSourcePicker} style={[styles.sourceInvite, { borderColor: C.border, backgroundColor: C.surfaceLight }]}>
-              <View style={[styles.sourceInviteIcon, { backgroundColor: C.accent + "18" }]}>
-                <Ionicons name="library-outline" size={S.ms(20, 0.4)} color={C.accent} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={{ color: C.text, fontWeight: "700" }}>{t("noteMode", "loadSources")}</Text>
-                <Text style={{ color: C.textTertiary, fontSize: S.ms(11, 0.3), marginTop: 3 }}>{t("noteMode", "sourceInviteHint")}</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={18} color={C.accent} />
-            </Pressable>
-          ) : (
+      {!sourceCollapsed && barEntries.length > 0 && (
+        <View style={[styles.sourceListFrame, { height: sourceListHeight }]}>
+          <View style={styles.sourceContainer} testID="note-queue-source">
             <FlatList
               data={barEntries}
               keyExtractor={(item) => `source-${item.id}`}
@@ -898,7 +897,7 @@ export function NoteModeView({
               )}
               showsVerticalScrollIndicator={false}
             />
-          )}
+          </View>
         </View>
       )}
       <PracticeSourcePickerModal
@@ -912,11 +911,15 @@ export function NoteModeView({
           onSourceSelectionChange?.(entries);
         }}
       />
-    </>
-  );
+      </>
+    );
+  };
 
   const renderPlayControls = () => (
-    <View style={[styles.playControls, isLandscape && { marginBottom: S.ms(4, 0.3) }]}>
+    <View
+      testID="note-playback-toolbar"
+      style={[styles.playControls, isLandscape && { marginBottom: S.ms(4, 0.3) }]}
+    >
       <View style={styles.playModeRow}>
         {onOpenSettings && (
           <Pressable
@@ -1028,7 +1031,10 @@ export function NoteModeView({
   if (isLandscape) {
     return (
       <View style={[styles.container, { flexDirection: "row" as const, gap: S.ms(8, 0.3) }, S.isTablet && { maxWidth: 900, alignSelf: "center" as const, width: "100%" as const }]}>
-        <View style={{ flex: 2 }}>
+        <View
+          testID="note-queue-workspace"
+          style={[styles.noteQueueWorkspace, { flex: 2, marginTop: 0 }]}
+        >
           {renderQueueSection()}
         </View>
         <View style={[styles.landscapeRightPanel, { justifyContent: "space-between" as const }]}>
@@ -1041,17 +1047,16 @@ export function NoteModeView({
 
   return (
     <View style={[styles.container, S.isTablet && { maxWidth: 720, alignSelf: "center" as const, width: "100%" as const }]}>
-      {renderPlayControls()}
-
-      <HintBanner
-        hintKey="note_mode_intro"
-        message={t("noteMode", "hintAddToQueue")}
-        icon="list-outline"
-      />
-
-      {renderQueueSection()}
-
       {renderSourceSection()}
+      <View testID="note-queue-workspace" style={styles.noteQueueWorkspace}>
+        <HintBanner
+          hintKey="note_mode_intro"
+          message={t("noteMode", "hintAddToQueue")}
+          icon="list-outline"
+        />
+        {renderQueueSection()}
+      </View>
+      {renderPlayControls()}
     </View>
   );
 }
@@ -1181,7 +1186,15 @@ const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: S.ms(12, 0.3),
-    marginBottom: S.ms(12, 0.3),
+    flexShrink: 0,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: C.border,
+    paddingTop: S.ms(8, 0.3),
+  },
+  noteQueueWorkspace: {
+    flex: 1,
+    minHeight: 0,
+    marginTop: S.ms(8, 0.3),
   },
   playModeRow: {
     flex: 1,
@@ -1278,15 +1291,19 @@ const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
   },
   queueContainer: {
     flex: 1,
-    minHeight: S.ms(60, 0.3),
-    marginBottom: S.ms(6, 0.3),
+    minHeight: 0,
+    marginBottom: S.ms(8, 0.3),
   },
   emptyQueue: {
-    flex: 1,
+    minHeight: S.ms(50, 0.3),
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    gap: S.ms(6, 0.3),
-    paddingVertical: S.ms(10, 0.3),
+    gap: S.ms(10, 0.3),
+    paddingHorizontal: S.ms(12, 0.3),
+    borderRadius: S.ms(9, 0.3),
+    borderWidth: 1,
+    borderColor: C.border,
+    backgroundColor: C.surface,
   },
   emptyQueueText: {
     fontFamily: "SpaceGrotesk_400Regular",
@@ -1489,7 +1506,12 @@ const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
   },
   sourceContainer: {
     flex: 1,
-    minHeight: S.ms(80, 0.3),
+    minHeight: 0,
+  },
+  sourceListFrame: {
+    minHeight: 0,
+    flexShrink: 1,
+    overflow: "hidden",
   },
   sourceSectionTop: {
     flexDirection: "row",
@@ -1506,6 +1528,7 @@ const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
     justifyContent: "center",
     flexShrink: 1,
     maxWidth: "100%",
+    minHeight: S.ms(44, 0.3),
     gap: S.ms(5, 0.3),
     borderWidth: 1,
     borderRadius: 10,

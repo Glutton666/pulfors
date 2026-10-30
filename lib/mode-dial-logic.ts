@@ -9,6 +9,11 @@ export type ModeSlot =
 
 export type ModeDialWall = "top" | "right" | "bottom" | "left";
 
+/** Keep fixed fans centered, below native cutouts, without using web body padding. */
+export function fixedModeDialAnchor(width: number, topInset: number, isWeb: boolean) {
+  return { x: width / 2, y: isWeb ? 0 : Math.max(0, topInset) };
+}
+
 export const MODE_DIAL_SLOTS: ModeSlot[] = [
   "beat",
   "bar",

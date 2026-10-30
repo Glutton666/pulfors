@@ -33,6 +33,7 @@ import {
   snapModeDialPosition,
   wrapModeDialPosition,
   modeDialSessionForMode,
+  fixedModeDialAnchor,
 } from "@/lib/mode-dial-logic";
 import type { ModeSlot } from "@/lib/mode-dial-logic";
 
@@ -880,12 +881,10 @@ function ModeSwitcherDial({
   const TOP_CENTER_WP: WallPos = { wall: "top", t: 0.5 };
   const activeWP               = hideHandle ? TOP_CENTER_WP : wallPos;
   // hideHandle: bypass anchorPos — its safeT camera-safe zone shoves t=0.5 to 0.75.
-  // Anchored at y=0 (true screen top) so the fan hugs the physical edge with no
-  // empty band above it; the background continues behind the camera cutout while
-  // the icon arc (ICON_R=104; edge icons sit ≥±90px from centre-x, dy≥52) still
-  // clears the Dynamic Island / notch area.
+  // Native icons must start below the hardware cutout, including the near-edge
+  // arc slots. Web's topInset is a body-layout reserve, not a hardware inset.
   const anchor = hideHandle
-    ? { x: winW / 2, y: 0 }
+    ? fixedModeDialAnchor(winW, topInset, Platform.OS === "web")
     : anchorPos(activeWP, winW, winH, topInset);
   wallRef.current    = activeWP.wall;
   anchorRef.current  = anchor;
