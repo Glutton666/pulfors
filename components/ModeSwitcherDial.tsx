@@ -19,6 +19,7 @@ import Animated, {
 import type { SharedValue } from "react-native-reanimated";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useScale } from "@/lib/scale";
@@ -34,6 +35,8 @@ import {
   wrapModeDialPosition,
   modeDialSessionForMode,
   fixedModeDialAnchor,
+  MODE_DIAL_FAN_RADIUS,
+  MODE_DIAL_ICON_SIZE,
 } from "@/lib/mode-dial-logic";
 import type { ModeSlot } from "@/lib/mode-dial-logic";
 
@@ -52,9 +55,9 @@ const Z_HANDLE  = 100002;
 // ── Geometry ──────────────────────────────────────────────────────────────────
 const HANDLE_R    = 48;   // collapsed D-tab half-circle radius (larger = more room for mini arc)
 const HOLE_R      = HANDLE_R + 20; // donut inner-hole radius (between handle edge and icons)
-const FAN_R       = 280;  // expanded fan diameter; radius = FAN_R/2 = 140
+const FAN_R       = MODE_DIAL_FAN_RADIUS * 2;
 const ICON_R      = 104;  // expanded icon arc radius; outer edge = 104+26=130 ≤ 140 ✓
-const ICON_S      = 52;   // expanded icon slot size
+const ICON_S      = MODE_DIAL_ICON_SIZE;
 const MINI_R        = 24;   // = HANDLE_R/2 → icon sits at D-tab visual centre
 const MINI_DOT      = 6;    // mini arc neighbour dot size
 const MINI_ICON_S   = 28;   // icon size for current-mode slot in mini arc
@@ -403,6 +406,7 @@ function ModeSwitcherDial({
   const S = useScale();
   const reduceMotion = useReducedMotion();
   const { width: winW, height: winH } = useWindowDimensions();
+  const safeInsets = useSafeAreaInsets();
 
   // ── Wall position ────────────────────────────────────────────────────────
   // When hideHandle=true, always anchor to top-center (fan opens downward from text label).
@@ -884,7 +888,7 @@ function ModeSwitcherDial({
   // Native icons must start below the hardware cutout, including the near-edge
   // arc slots. Web's topInset is a body-layout reserve, not a hardware inset.
   const anchor = hideHandle
-    ? fixedModeDialAnchor(winW, topInset, Platform.OS === "web")
+    ? fixedModeDialAnchor(winW, topInset, Platform.OS === "web", safeInsets)
     : anchorPos(activeWP, winW, winH, topInset);
   wallRef.current    = activeWP.wall;
   anchorRef.current  = anchor;
@@ -894,6 +898,11 @@ function ModeSwitcherDial({
   const bgLayout               = fanBgLayout(wall);
   const bgCorner               = fanBgCorners(wall);
   const hLayout                = handleLayout(wall);
+  // Give the fixed fan real native hit-test bounds. Its rotating edge slots
+  // can extend half an icon above the semicircle while between selections.
+  const frameLeft = hideHandle ? bgLayout.left : 0;
+  const frameTop = hideHandle ? -ICON_S / 2 : 0;
+  const holeLayout = holeClipLayout(wall);
 
   // Inner ring corner radii (rim inset by RIM_INSET)
   const innerHCorners  = Object.fromEntries(
@@ -969,6 +978,7 @@ function ModeSwitcherDial({
       {/* Expanded fan — anchor at wall edge, grows inward */}
       {isOpen && (
         <Animated.View
+          testID="mode-dial-touch-frame"
           ref={fanAccessibilityRef}
           {...(Platform.OS === "web"
             ? ({ tabIndex: -1 } as unknown as React.ComponentProps<typeof Animated.View>)
@@ -995,9 +1005,11 @@ function ModeSwitcherDial({
             {
               position: "absolute",
               zIndex: Z_FAN,
-              left: anchor.x, top: anchor.y,
-              width: 0, height: 0,
-              overflow: "visible" as const,
+              left: anchor.x + frameLeft, top: anchor.y + frameTop,
+              width: hideHandle ? bgLayout.w : 0,
+              height: hideHandle ? bgLayout.h - frameTop : 0,
+              transformOrigin: hideHandle ? `${-frameLeft}px ${-frameTop}px` : "center",
+              overflow: hideHandle ? "hidden" as const : "visible" as const,
               pointerEvents: "box-none" as const,
             },
             fanStyle,
@@ -1007,7 +1019,7 @@ function ModeSwitcherDial({
           <View
             style={{
               position: "absolute",
-              left: bgLayout.left, top: bgLayout.top,
+              left: bgLayout.left - frameLeft, top: bgLayout.top - frameTop,
               width: bgLayout.w,   height: bgLayout.h,
               backgroundColor: C.surface,
               ...bgCorner,
@@ -1039,7 +1051,9 @@ function ModeSwitcherDial({
             pointerEvents="none"
             style={{
               position: "absolute",
-              ...holeClipLayout(wall),
+              ...holeLayout,
+              left: holeLayout.left - frameLeft,
+              top: holeLayout.top - frameTop,
               overflow: "hidden" as const,
             }}
           >
@@ -1059,10 +1073,12 @@ function ModeSwitcherDial({
           {/* Swipe-capture wrapper — claims all touches; tap/swipe detected on release */}
           <View
             {...fanSwipePR.panHandlers}
+            testID="mode-dial-swipe-area"
             style={{
               position: "absolute",
-              left: bgLayout.left, top: bgLayout.top,
-              width: bgLayout.w,   height: bgLayout.h,
+              left: hideHandle ? 0 : bgLayout.left,
+              top: hideHandle ? 0 : bgLayout.top,
+              width: bgLayout.w, height: hideHandle ? bgLayout.h - frameTop : bgLayout.h,
               overflow: "visible" as const,
             }}
           >
@@ -1078,7 +1094,7 @@ function ModeSwitcherDial({
                 centAng={centAng}
                 halfSpan={halfSpan}
                 fanLeft={bgLayout.left}
-                fanTop={bgLayout.top}
+                fanTop={hideHandle ? frameTop : bgLayout.top}
                 colors={C}
                 iconSize={S.ms(25, 0.3)}
                 label={t("switcher", mode as "beat"|"bar"|"score"|"note"|"practice"|"stage"|"menu")}

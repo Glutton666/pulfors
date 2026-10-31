@@ -9,9 +9,28 @@ export type ModeSlot =
 
 export type ModeDialWall = "top" | "right" | "bottom" | "left";
 
-/** Keep fixed fans centered, below native cutouts, without using web body padding. */
-export function fixedModeDialAnchor(width: number, topInset: number, isWeb: boolean) {
-  return { x: width / 2, y: isWeb ? 0 : Math.max(0, topInset) };
+export const MODE_DIAL_FAN_RADIUS = 140;
+export const MODE_DIAL_ICON_SIZE = 52;
+
+/** Reserve the entire rotating icon, not just its center, below real cutouts. */
+export function fixedModeDialAnchor(
+  width: number,
+  topInset: number,
+  isWeb: boolean,
+  safeInsets: { top: number; left: number; right: number } = { top: 0, left: 0, right: 0 },
+) {
+  const safeTop = Math.max(0, safeInsets.top, isWeb ? 0 : topInset);
+  const left = Math.max(0, safeInsets.left);
+  const right = Math.max(0, safeInsets.right);
+  const center = (left + width - right) / 2;
+  const margin = MODE_DIAL_FAN_RADIUS + 8;
+  const minX = left + margin;
+  const maxX = width - right - margin;
+  return {
+    x: minX <= maxX ? Math.max(minX, Math.min(maxX, center)) : center,
+    // Web body padding is not a hardware inset. Preserve desktop placement.
+    y: isWeb && safeTop === 0 ? 0 : safeTop + MODE_DIAL_ICON_SIZE / 2 + 8,
+  };
 }
 
 export const MODE_DIAL_SLOTS: ModeSlot[] = [

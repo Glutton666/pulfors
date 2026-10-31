@@ -49,6 +49,34 @@ async function reachable(page: Page, id: string) {
   return box;
 }
 
+test("mode fan has real touch bounds around every icon during a swipe", async ({ page }) => {
+  await boot(page);
+  for (const viewport of sizes) {
+    await page.setViewportSize(viewport);
+    await page.waitForTimeout(250);
+    await page.getByTestId("mode-cycle-label").click();
+    await page.waitForTimeout(350);
+    const frame = (await page.getByTestId("mode-dial-touch-frame").boundingBox())!;
+    expect(frame.width).toBeCloseTo(280, 0);
+    expect(frame.height).toBeCloseTo(166, 0);
+    const swipeArea = (await page.getByTestId("mode-dial-swipe-area").boundingBox())!;
+    expect(swipeArea).toEqual(frame);
+    await page.mouse.move(viewport.width / 2, 100);
+    await page.mouse.down();
+    await page.mouse.move(viewport.width / 2 + 18, 100, { steps: 6 });
+    for (const mode of ["beat", "bar", "note", "practice", "menu"]) {
+      const icon = (await page.getByTestId(`mode-dial-slot-${mode}`).boundingBox())!;
+      expect(icon.x).toBeGreaterThanOrEqual(frame.x - 1);
+      expect(icon.y).toBeGreaterThanOrEqual(frame.y - 1);
+      expect(icon.x + icon.width).toBeLessThanOrEqual(frame.x + frame.width + 1);
+      expect(icon.y + icon.height).toBeLessThanOrEqual(frame.y + frame.height + 1);
+    }
+    await page.mouse.up();
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("mode-dial-fan")).toHaveCount(0);
+  }
+});
+
 test("Beat settings switch sides only for landscape and leave the mode dial clear", async ({ page }) => {
   await boot(page);
   for (const viewport of sizes) {

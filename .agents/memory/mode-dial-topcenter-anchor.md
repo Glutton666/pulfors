@@ -9,6 +9,12 @@ The ModeSwitcherDial's `anchorPos` applies `safeT`, a camera-safe zone that shov
 
 **How to apply:** In hideHandle mode, bypass the draggable tab's safeT calculation and pin ALL geometry (`wall`, `effectiveArcParams`, `fanBgLayout`, etc.) to the top-center WallPos. Native fans must clear the real camera cutout; web body padding must not be interpreted as a hardware inset. Overriding only the anchor while geometry still reads stored wallPos misplaces the fan.
 
+Keep the entire rotating menu and its touch bounds below the cutout, not only the fan center. Use actual safe-area information, including side cutouts after rotation.
+
+**Why:** The user explicitly chose to avoid Dynamic Island overlap rather than rely on partly covered controls. Native hit testing can reject visible children outside a zero-size parent, so visual placement alone is insufficient.
+
+**How to apply:** Maintain a bounded, nonzero touch container around the fixed fan and keep its animation origin and gesture coordinates aligned. Do not claim a browser geometry check establishes physical iPhone touch behavior.
+
 ## Closed header placement
 
 Keep the mode trigger in the upper-center safe header band. Beat settings belong at upper-right in portrait and upper-left only in landscape, with space from the screen edges. Bar settings remain in the original lower editor toolbar.
