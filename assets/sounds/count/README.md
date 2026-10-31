@@ -62,6 +62,8 @@ on-device and uses no external speech service or account.
   the existing primary-slot PCM render, channel routing and linked limiter;
   rhythm layers and additional click links never create extra voice events.
 
-The adjacent Tempo-style clicks are original mathematical synthesis based on
-reference pitch/attack/decay observations. The reference recording is not an
-app audio asset.
+The adjacent Pulse Click sounds (legacy asset ID `tempo`) are original
+mathematical synthesis. A fast rise and short transient emphasize the initial
+strike while preserving the role pitches and decay. Rebuild only these clicks
+with `node scripts/build-metronome-audio.mjs --clicks-only`; this leaves the
+speech catalog untouched. The reference recording is not an app audio asset.

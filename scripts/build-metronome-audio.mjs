@@ -20,12 +20,20 @@ for (const [role, frequency, decay, level] of [
 ]) {
   const pcm = Float32Array.from({ length: Math.round(sr * 0.11) }, (_, i) => {
     const t = i / sr;
-    const onset = 1 - Math.exp(-t / 0.00055);
+    // Faster rise plus a short transient, not a slower/softer attack.
+    // Keep the established pitches and decay after the initial strike.
+    const onset = 1 - Math.exp(-t / 0.00025);
+    const transient = 1 + 0.65 * Math.exp(-t / 0.0025);
     const body = Math.sin(2 * Math.PI * frequency * t)
-      + 0.07 * Math.sin(2 * Math.PI * frequency * 3 * t) * Math.exp(-t / 0.003);
-    return level * onset * Math.exp(-t / decay) * Math.tanh(body * 1.35);
+      + 0.18 * Math.sin(2 * Math.PI * frequency * 3 * t) * Math.exp(-t / 0.003);
+    return level * onset * transient * Math.exp(-t / decay) * Math.tanh(body * 1.35);
   });
   fs.writeFileSync(`assets/sounds/tempo-${role}.wav`, wav(pcm));
+}
+// Rebuild click assets without touching the independent speech catalog.
+if (process.argv.includes("--clicks-only")) {
+  console.log("Built Pulse Click assets (strong/high/low).");
+  process.exit(0);
 }
 const report = {};
 for (const [lang, count] of [["ko", 10], ["en", 17]]) {

@@ -30,3 +30,9 @@ Native one-shot previews must distinguish metadata availability from playback re
 **Why:** Android's Expo Audio/Media3 duration metadata can be available while the player is still buffering; its loaded flag corresponds to the ready state. Native output startup also adds time that is not represented by PCM sample length. A large idle preview-player pool adds native resource pressure without helping the selected one-shot.
 
 **How to apply:** Wait for native readiness, retain output through the completion notification with bounded failure cleanup, and keep preview-only startup accommodation separate from metronome scheduling. Automated mocked status tests and Android bundle exports do not verify physical speaker output.
+
+For the sound formerly labeled “Tempo 스타일”, the user's request to increase attack means a stronger, clearer initial strike, not a longer, softer fade-in.
+
+**Why:** The user explicitly selected “더 강하고 또렷하게” when asked to distinguish these meanings.
+
+**How to apply:** Preserve that transient character in future tuning of this sound; do not interpret the request as increasing envelope rise time.
