@@ -209,6 +209,7 @@ export const translations = {
     webVersionLink: { ko: "웹 버전", en: "Web Version" },
     webVersionLinkHint: { ko: "브라우저에서 메트로놈을 사용할 수 있습니다", en: "Use the metronome in your browser" },
     webVersionOpen: { ko: "브라우저로 열기", en: "Open in Browser" },
+    webVersionOpenFailed: { ko: "브라우저를 열지 못했습니다. 링크를 복사하여 브라우저에서 열어 주세요.", en: "Could not open the browser. Copy the link and open it in your browser." },
     webVersionCopy: { ko: "링크 복사", en: "Copy Link" },
     webVersionCopied: { ko: "복사됨!", en: "Copied!" },
     voiceAssistant: { ko: "음성 어시스턴트", en: "Voice Assistant" },

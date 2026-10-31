@@ -5,8 +5,15 @@ import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react
 import { ModeTutorialModal } from "@/components/ModeTutorialModal";
 import { SettingsModal } from "@/components/SettingsModal";
 import { SettingsProfileTab } from "@/components/settings/SettingsProfileTab";
+import { Linking } from "react-native";
+import { PUBLIC_WEBSITE_URL } from "@/constants/website";
 
 let mockLanguage: "en" | "ko" = "en";
+
+jest.mock("react-native", () => ({
+  ...jest.requireActual("react-native"),
+  Linking: { openURL: jest.fn() },
+}));
 
 const tutorialTranslations = {
   en: {
@@ -383,5 +390,17 @@ describe("tutorial replay and reset settings", () => {
     });
     expect(view.queryByText("Show tutorial again")).toBeNull();
     expect(view.queryByText("Reset tutorials")).toBeNull();
+  });
+
+  test("profile always exposes the public website and opens it externally", async () => {
+    const openURL = jest.spyOn(Linking, "openURL").mockResolvedValue(undefined);
+    try {
+      const view = render(<SettingsProfileTab {...profileProps()} />);
+      expect(view.getByText(PUBLIC_WEBSITE_URL)).toBeTruthy();
+      fireEvent.click(view.getByTestId("settings-open-website"));
+      await waitFor(() => expect(openURL).toHaveBeenCalledWith(PUBLIC_WEBSITE_URL));
+    } finally {
+      openURL.mockRestore();
+    }
   });
 });

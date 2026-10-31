@@ -15,6 +15,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Share } from "react-native";
 import { useScale } from "@/lib/scale";
 import { Spacing } from "@/constants/tokens";
+import { PUBLIC_WEBSITE_URL } from "@/constants/website";
 import { useTheme } from "@/contexts/ThemeContext";
 import { onAccentColor } from "@/lib/color-contrast";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -537,7 +538,7 @@ export function SettingsProfileTab({
 
       <View style={[styles.divider, { backgroundColor: C.border }]} />
 
-      {!!process.env.EXPO_PUBLIC_DOMAIN && (
+      {(
         <>
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
@@ -545,12 +546,21 @@ export function SettingsProfileTab({
               <Text style={[styles.sectionLabel, { color: C.text }]}>{t("settings", "webVersionLink")}</Text>
             </View>
             <Text style={[styles.offsetHint, { color: C.textSecondary, marginBottom: Spacing.sm }]} numberOfLines={1}>
-              {`https://${process.env.EXPO_PUBLIC_DOMAIN}`}
+              {PUBLIC_WEBSITE_URL}
             </Text>
             <View style={{ flexDirection: "row", gap: 10 }}>
               <Pressable
+                testID="settings-open-website"
+                accessibilityRole="link"
+                accessibilityLabel={t("settings", "webVersionOpen")}
                 style={[styles.addRoomBtn, { borderColor: C.accentDim, flex: 1 }]}
-                onPress={() => Linking.openURL(`https://${process.env.EXPO_PUBLIC_DOMAIN}`)}
+                onPress={async () => {
+                  try {
+                    await Linking.openURL(PUBLIC_WEBSITE_URL);
+                  } catch {
+                    alertInfo(t("settings", "error"), t("settings", "webVersionOpenFailed"));
+                  }
+                }}
               >
                 <Ionicons name="open-outline" size={S.ms(15, 0.4)} color={C.accent} />
                 <Text style={[styles.addRoomBtnText, { color: C.accent }]}>{t("settings", "webVersionOpen")}</Text>
@@ -558,7 +568,7 @@ export function SettingsProfileTab({
               <Pressable
                 style={[styles.addRoomBtn, { borderColor: webUrlCopied ? C.accent : C.accentDim, flex: 1 }]}
                 onPress={async () => {
-                  await Clipboard.setStringAsync(`https://${process.env.EXPO_PUBLIC_DOMAIN}`);
+                  await Clipboard.setStringAsync(PUBLIC_WEBSITE_URL);
                   setWebUrlCopied(true);
                   if (webUrlCopiedTimerRef.current) clearTimeout(webUrlCopiedTimerRef.current);
                   webUrlCopiedTimerRef.current = setTimeout(() => setWebUrlCopied(false), 2000);
