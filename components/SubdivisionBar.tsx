@@ -495,7 +495,8 @@ export function SubdivisionBar({
               testID={`subdivision-cell-${i}`}
             >
               {type === "strong" ? (
-                <View style={{ width: cellSize, height: cellSize, borderRadius: dynamicRadius, overflow: "hidden", opacity: isPlaying ? (isActive ? 1 : 0.8) : 1 }}>
+                // 일반↔strong 전환 시 뷰가 재사용되며 S가 안 그려지는 문제 방지: 분기별 key.
+                <View key="strong" style={{ width: cellSize, height: cellSize, borderRadius: dynamicRadius, overflow: "hidden", opacity: isPlaying ? (isActive ? 1 : 0.8) : 1 }}>
                   {/* LinearGradient에 자식(View/Text)을 중첩시키면 이 빌드에서
                       배경은 그려지는데 자식 콘텐츠가 합성되지 않는 문제가
                       있었다 (2026-08-25 실기기 확인 — "S" 표시가 항상 안 보임).
@@ -523,6 +524,7 @@ export function SubdivisionBar({
                 </View>
               ) : (
                 <View
+                  key="plain"
                   style={[
                     {
                       width: cellSize,
@@ -647,7 +649,7 @@ export function DragGhost({
     >
       {pattern.map((type, i) => (
         type === "strong" ? (
-          <View key={i} style={[styles.ghostCell, { overflow: "hidden" }]}>
+          <View key={`${i}-strong`} style={[styles.ghostCell, { overflow: "hidden" }]}>
             <LinearGradient
               key={GC.accent}
               colors={[accentGradientEdge(GC.accent), GC.accent, GC.accent]}
@@ -670,7 +672,7 @@ export function DragGhost({
           </View>
         ) : (
           <View
-            key={i}
+            key={`${i}-plain`}
             style={[
               styles.ghostCell,
               {

@@ -200,6 +200,9 @@ export function DialBeatDot({
     >
       {isStrong ? (
         <Animated.View
+          // 일반↔strong 전환 시 같은 네이티브 뷰가 재사용되면 새로 붙은 자식(S)이
+          // 안 그려지는 경우가 있어(앱 재시작 시에만 보임) 분기별 key로 새로 만든다.
+          key="strong"
           style={[
             {
               width: size,
@@ -237,6 +240,7 @@ export function DialBeatDot({
         </Animated.View>
       ) : (
         <Animated.View
+          key="plain"
           style={[
             {
               width: size,
