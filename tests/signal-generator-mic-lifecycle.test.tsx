@@ -1,6 +1,10 @@
 /** @jest-environment jsdom */
 import React from "react";
 import { act, fireEvent, render } from "@testing-library/react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { CustomTuningSetsPanel } from "@/components/signal-generator/CustomTuningSetsPanel";
+import { loadCustomTuningSets } from "@/lib/custom-tuning-sets";
+import { SIGNAL_SENSITIVITY_KEY } from "@/lib/signal-noise-gate";
 
 type AudioRecordListener = (data: { buffer: { sampleRate: number; getChannelData: () => Float32Array } }) => void;
 
@@ -476,7 +480,13 @@ describe("SignalGeneratorModal native microphone lifecycle", () => {
     const view = await startNativeMic();
     act(() => AudioRecord.__emit(validPcm440(44100, 450)));
     expect(view.getByTestId("signal-tuner-cents").textContent).toMatch(/^\+/);
-    act(() => AudioRecord.__emit(validPcm440(44100, 430)));
+    // Dominant-partial hysteresis rejects one-frame jumps; a sustained new
+    // tone should replace the old one rather than oscillating between them.
+    act(() => {
+      AudioRecord.__emit(validPcm440(44100, 430));
+      jest.advanceTimersByTime(190);
+      AudioRecord.__emit(validPcm440(44100, 430));
+    });
     expect(view.getByTestId("signal-tuner-cents").textContent).toMatch(/^-/);
     fireEvent.click(view.getByTestId("signal-use-detected"));
     expect(view.getByTestId("signal-tuner-cents").textContent).toBe("0¢");
@@ -485,6 +495,54 @@ describe("SignalGeneratorModal native microphone lifecycle", () => {
     expect(view.queryByTestId("signal-mic-frequency")).toBeNull();
     expect(view.getByTestId("signal-tuner-cents").textContent).toBe("—");
     expect(view.getAllByText("signalGenerator.noSignal").length).toBeGreaterThan(0);
+  });
+
+  test("sensitivity numeric input persists tenths and immediately rejects quieter PCM", async () => {
+    await AsyncStorage.removeItem(SIGNAL_SENSITIVITY_KEY);
+    const view = await startNativeMic();
+    act(() => AudioRecord.__emit(validPcm440()));
+    expect(view.getByTestId("signal-mic-frequency")).toBeTruthy();
+    await act(async () => {
+      const input = view.getByTestId("signal-sensitivity-input");
+      fireEvent.change(input, { target: { value: "0.5" } });
+      fireEvent.keyDown(input, { key: "Enter" });
+    });
+    expect(await AsyncStorage.getItem(SIGNAL_SENSITIVITY_KEY)).toBe("0.5");
+    act(() => AudioRecord.__emit(validPcm440().map(value => value * 0.1)));
+    expect(view.queryByTestId("signal-mic-frequency")).toBeNull();
+    await AsyncStorage.removeItem(SIGNAL_SENSITIVITY_KEY);
+  });
+
+  test("capture registration waits for a real frequency and explicitly saves it", async () => {
+    const onCapture = jest.fn(async () => {});
+    const onCancel = jest.fn();
+    const view = render(<SignalGeneratorModal {...makeProps()} captureRequest={{ id: 1, label: "Drums · Tom · Bottom", onCapture, onCancel }} />);
+    expect((view.getByTestId("tuning-capture-save") as HTMLButtonElement).disabled).toBe(true);
+    await act(async () => { jest.advanceTimersByTime(300); await Promise.resolve(); });
+    act(() => AudioRecord.__emit(validPcm440()));
+    await act(async () => { fireEvent.click(view.getByTestId("tuning-capture-save")); });
+    expect(onCapture).toHaveBeenCalledWith(expect.closeTo(440, -1));
+    expect(onCancel).not.toHaveBeenCalled();
+  });
+
+  test("custom guide creates a set, group and head, persists it, and requests capture", async () => {
+    await AsyncStorage.removeItem("metronome_custom_tuning_sets_v1");
+    const request = jest.fn();
+    const view = render(<CustomTuningSetsPanel visible lang="en" onSelectFreq={jest.fn()} onRequestCapture={request} />);
+    await act(async () => { await Promise.resolve(); });
+    fireEvent.click(view.getByTestId("custom-tuning-add-set"));
+    fireEvent.change(view.getByTestId(/^custom-tuning-set-name-/), { target: { value: "Drums" } });
+    fireEvent.click(view.getByTestId(/^custom-tuning-add-group-/));
+    fireEvent.change(view.getByTestId(/^custom-tuning-group-name-/), { target: { value: "Small tom" } });
+    fireEvent.click(view.getByTestId(/^custom-tuning-add-target-/));
+    fireEvent.change(view.getByTestId(/^custom-tuning-target-name-/), { target: { value: "Bottom" } });
+    await act(async () => { fireEvent.click(view.getByTestId("custom-tuning-save")); });
+    expect((await loadCustomTuningSets())[0].groups[0].targets[0].name).toBe("Bottom");
+    await act(async () => { fireEvent.click(view.getByTestId(/^custom-tuning-detect-/)); });
+    const [label, captured] = request.mock.calls[0];
+    expect(label).toBe("Drums · Small tom · Bottom");
+    await act(async () => { await captured(246.94); });
+    expect((await loadCustomTuningSets())[0].groups[0].targets[0].frequency).toBe(246.94);
   });
 
   test("guide selection changes the same visible target used for pitch comparison", async () => {

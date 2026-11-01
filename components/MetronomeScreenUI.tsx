@@ -91,6 +91,12 @@ type Props = ReturnType<typeof useMetronomeScreen>;
 export function MetronomeScreenUI(props: Props) {
   const modeSwitcherDialRef = useRef<ModeSwitcherDialHandle>(null);
   const [mainHeaderHeight, setMainHeaderHeight] = useState(0);
+  const [tuningCaptureRequest, setTuningCaptureRequest] = useState<{
+    id: number; label: string; onCaptured: (frequency: number) => Promise<void>;
+  } | null>(null);
+  const tuningCaptureRequestRef = useRef(tuningCaptureRequest);
+  const tuningCaptureIdRef = useRef(0);
+  tuningCaptureRequestRef.current = tuningCaptureRequest;
   const modeDialTriggerRef = useRef<View>(null);
   const [isModeDialOpen, setIsModeDialOpen] = useState(false);
   const [showLabMenu, setShowLabMenu] = useState(false);
@@ -936,7 +942,31 @@ export function MetronomeScreenUI(props: Props) {
           보존하기 위함이다. */}
       <SignalGeneratorModal
         visible={showSignalGen}
+        captureRequest={tuningCaptureRequest ? {
+          id: tuningCaptureRequest.id,
+          label: tuningCaptureRequest.label,
+          onCapture: async (frequency) => {
+            const request = tuningCaptureRequestRef.current;
+            if (!request || request.id !== tuningCaptureRequest.id) return;
+            await request.onCaptured(frequency);
+            if (tuningCaptureRequestRef.current?.id !== request.id) return;
+            tuningCaptureRequestRef.current = null;
+            setTuningCaptureRequest(null);
+            setActiveModal("tuningGuide");
+          },
+          onCancel: () => {
+            tuningCaptureRequestRef.current = null;
+            setTuningCaptureRequest(null);
+            setActiveModal("tuningGuide");
+          },
+        } : null}
         onClose={() => {
+          if (tuningCaptureRequestRef.current) {
+            tuningCaptureRequestRef.current = null;
+            setTuningCaptureRequest(null);
+            setActiveModal("tuningGuide");
+            return;
+          }
           // 사용자가 명시적으로 SignalGen을 닫으면 TG 재오픈 플래그도 클리어.
           reopenSignalGenAfterTuningGuideRef.current = false;
           tuningGuideOnSelectRef.current = null;
@@ -1004,6 +1034,12 @@ export function MetronomeScreenUI(props: Props) {
           네이티브 Modal 중첩(ghost 입력 차단) 문제를 방지한다. */}
       <TuningGuideModal
         visible={showTuningGuide}
+        onRequestCapture={(label, onCaptured) => {
+          const request = { id: ++tuningCaptureIdRef.current, label, onCaptured };
+          tuningCaptureRequestRef.current = request;
+          setTuningCaptureRequest(request);
+          setActiveModal("signalGen");
+        }}
         onClose={() => {
           tuningGuideOnSelectRef.current = null;
           // closeTuningGuide 가 재오픈 플래그를 보고 다음 activeModal 을 결정한다.

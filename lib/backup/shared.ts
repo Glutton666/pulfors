@@ -12,8 +12,12 @@ import {
 } from "../stereo-channel";
 import { normalizeNoteImageCrop } from "../note-image-crop";
 import { audioDataUri, readWebAudioBase64 } from "../web-audio-asset";
+import { CUSTOM_TUNING_SETS_KEY, validateCustomTuningSets } from "../custom-tuning-sets";
+import { SIGNAL_SENSITIVITY_KEY, parseSignalSensitivity } from "../signal-noise-gate";
 
 export const ALL_KEYS = [
+  CUSTOM_TUNING_SETS_KEY,
+  SIGNAL_SENSITIVITY_KEY,
   "metronome_settings",
   "metronome_fade_out",
   "metronome_control_pad_mapping_v1",
@@ -481,6 +485,16 @@ export function sanitizeBackupData(
   data: Record<string, string | null>,
 ): Record<string, string | null> {
   const result = { ...data };
+  if (result[CUSTOM_TUNING_SETS_KEY]) {
+    result[CUSTOM_TUNING_SETS_KEY] = JSON.stringify(
+      validateCustomTuningSets(JSON.parse(result[CUSTOM_TUNING_SETS_KEY]!)),
+    );
+  }
+  if (result[SIGNAL_SENSITIVITY_KEY]) {
+    const sensitivity = parseSignalSensitivity(result[SIGNAL_SENSITIVITY_KEY]!);
+    if (sensitivity === null) throw new Error("Invalid signal sensitivity");
+    result[SIGNAL_SENSITIVITY_KEY] = sensitivity.toFixed(1);
+  }
 
   if (result["metronome_custom_sound_sets"]) {
     result["metronome_custom_sound_sets"] = sanitizeCustomSoundSetsJson(

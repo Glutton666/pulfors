@@ -3,11 +3,11 @@ name: Signal analysis session boundary
 description: The architectural boundary between live tuner detection and temporary multi-note timeline analysis.
 ---
 
-The live microphone tuner and the held-duration analysis timeline are separate pipelines. Live tuning should continue to use the single representative HPS peak, while timeline capture may collect multiple spectral candidates, time buckets, and temporary replay audio.
+The live microphone tuner and the held-duration analysis timeline are separate pipelines. Live tuning uses a single stable dominant spectral partial, while timeline capture may collect multiple spectral candidates, time buckets, and temporary replay audio.
 
-**Why:** Combining the two flows makes normal tuning more expensive and risks changing its established lifecycle, while timeline replay needs raw-session ownership and cleanup that live tuning does not.
+**Why:** The user clarified that drum tuning should show the loudest actual partial rather than an inferred fundamental, without rapidly switching between drum overtones. Combining live tuning with the multi-note timeline would make normal tuning more expensive and risk its lifecycle.
 
-**How to apply:** Add future timeline features through the analysis session model; do not replace or overload the live `fftPeakDetect` result contract.
+**How to apply:** Keep the live single-frequency result separate from multi-note timeline analysis. Preserve spectral strength and temporal hysteresis instead of forcing a drum result to a fundamental or a harmonic nearest the target.
 
 Analysis collects while the microphone button is held and finishes on release, not after a fixed ten seconds. Results belong below the live tuner, not in another screen or a generator-details section.
 

@@ -14,6 +14,7 @@ import {
 } from "react-native";
 import { AnimatedModal } from "@/components/AnimatedModal";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { logger } from "@/lib/logger";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
@@ -39,12 +40,12 @@ import {
   generateToneBase64,
 } from "@/lib/signal-generator-engine";
 import { TUNING_DATA } from "@/lib/tuning-data";
-import { SIGNAL_GATE_RMS, signalGateFloor } from "@/lib/signal-noise-gate";
+import { SIGNAL_SENSITIVITY_KEY, parseSignalSensitivity, signalGateRms } from "@/lib/signal-noise-gate";
+import { createDominantTuner } from "@/lib/signal-dominant-tuner";
 import {
   NOTE_NAMES,
   realFFT,
   frequencyToNote,
-  fftPeakDetect,
   noteToFreq,
 } from "@/lib/signal-analysis";
 import {
@@ -58,6 +59,8 @@ import {
 } from "@/lib/signal-analysis-session";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { TunerPanel } from "@/components/signal-generator/TunerPanel";
+import { SensitivityControl } from "@/components/signal-generator/SensitivityControl";
+import { CustomTuningSetsPanel } from "@/components/signal-generator/CustomTuningSetsPanel";
 
 const WAVE_CONFIGS: { type: WaveType; key: "sine" | "square" | "triangle" | "saw"; icon: string }[] = [
   { type: "sine", key: "sine", icon: "sine-wave" },
@@ -378,9 +381,10 @@ interface TuningGuideModalProps {
   lang: "ko" | "en";
   accentColor: string;
   accentDim: string;
+  onRequestCapture?: (label: string, onCaptured: (frequency: number) => Promise<void>) => void;
 }
 
-export function TuningGuideModal({ visible, onClose, onSelectFreq, lang, accentColor, accentDim }: TuningGuideModalProps) {
+export function TuningGuideModal({ visible, onClose, onSelectFreq, lang, accentColor, accentDim, onRequestCapture }: TuningGuideModalProps) {
   const { colors: C } = useTheme();
   const insets = useSafeAreaInsets();
   const S = useScale();
@@ -464,6 +468,14 @@ export function TuningGuideModal({ visible, onClose, onSelectFreq, lang, accentC
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="on-drag"
           >
+            {onRequestCapture && (
+              <CustomTuningSetsPanel
+                visible={visible}
+                lang={lang}
+                onSelectFreq={onSelectFreq}
+                onRequestCapture={onRequestCapture}
+              />
+            )}
             {TUNING_DATA.map((cat) => (
               <View key={cat.id}>
                 <Pressable
@@ -754,15 +766,58 @@ interface SignalGeneratorModalProps {
    * 강제한다.
    */
   onOpenTuningGuide: (currentFreq: number, onSelectFreq: (freq: number) => void) => void;
+  captureRequest?: {
+    id: number;
+    label: string;
+    onCapture: (frequency: number) => Promise<void>;
+    onCancel: () => void;
+  } | null;
 }
 
-export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningGuide }: SignalGeneratorModalProps) {
+export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningGuide, captureRequest }: SignalGeneratorModalProps) {
   const { colors: C } = useTheme();
   const insets = useSafeAreaInsets();
   const pickerStyles = make_pickerStyles(C);
   const tgStyles = make_tgStyles(C);
   const styles = make_styles(C);
   const { t, language: lang } = useLanguage();
+  const [sensitivity, setSensitivity] = useState(1);
+  const [sensitivityLoading, setSensitivityLoading] = useState(false);
+  const [sensitivityLoadError, setSensitivityLoadError] = useState(false);
+  const sensitivityRef = useRef(1);
+  const sensitivityWriteEpochRef = useRef(0);
+  const dominantTunerRef = useRef(createDominantTuner());
+  const [captureSaving, setCaptureSaving] = useState(false);
+  const captureSavingRef = useRef(false);
+  const [captureError, setCaptureError] = useState(false);
+  useEffect(() => {
+    if (!visible) return;
+    let active = true;
+    const epoch = sensitivityWriteEpochRef.current;
+    setSensitivityLoading(true);
+    setSensitivityLoadError(false);
+    AsyncStorage.getItem(SIGNAL_SENSITIVITY_KEY).then((raw) => {
+      const value = raw === null ? 1 : parseSignalSensitivity(raw);
+      if (value === null) throw new Error("Invalid saved sensitivity");
+      if (active && epoch === sensitivityWriteEpochRef.current) {
+        sensitivityRef.current = value;
+        setSensitivity(value);
+        dominantTunerRef.current.reset();
+      }
+    }).catch(() => { if (active) setSensitivityLoadError(true); })
+      .finally(() => { if (active) setSensitivityLoading(false); });
+    return () => { active = false; };
+  }, [visible]);
+  const saveSensitivity = useCallback(async (value: number) => {
+    ++sensitivityWriteEpochRef.current;
+    await AsyncStorage.setItem(SIGNAL_SENSITIVITY_KEY, value.toFixed(1));
+    sensitivityRef.current = value;
+    dominantTunerRef.current.reset();
+    setSensitivity(value);
+    setMicDetectedFreq(null);
+    setMicDetectedNote(null);
+    setSensitivityLoadError(false);
+  }, []);
   const { width: winW, height: winH } = useWindowDimensions();
   const isLandscape = winW > winH;
   const S = useScale();
@@ -1025,6 +1080,7 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
   const stopMic = useCallback(() => {
     micStartupEpochRef.current++;
     micActiveRef.current = false;
+    dominantTunerRef.current.reset();
     setMicListening(false);
     setMicError(null);
     setMicNoInput(false);
@@ -1305,29 +1361,6 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
     },
   }), [analysisDurationSec, seekAnalysis]);
 
-  const pickDominantFreq = useCallback((readings: number[]): number | null => {
-    if (readings.length === 0) return null;
-    const noteMap = new Map<string, number[]>();
-    for (const f of readings) {
-      const info = frequencyToNote(f);
-      const key = `${info.name}${info.octave}`;
-      if (!noteMap.has(key)) noteMap.set(key, []);
-      noteMap.get(key)!.push(f);
-    }
-    let bestKey = "";
-    let bestCount = 0;
-    for (const [key, freqs] of noteMap) {
-      if (freqs.length > bestCount) {
-        bestCount = freqs.length;
-        bestKey = key;
-      }
-    }
-    if (!bestKey) return null;
-    const freqs = noteMap.get(bestKey)!;
-    freqs.sort((a, b) => a - b);
-    return freqs[Math.floor(freqs.length / 2)];
-  }, []);
-
   const startMicWeb = useCallback(async () => {
     const epoch = ++micStartupEpochRef.current;
     try {
@@ -1410,13 +1443,8 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
 
       // 연속 감지: 임팩트 전용이 아닌 RMS 게이트 기반 지속 분석
       // 임팩트 전용 모드는 지속음/약한 연주를 놓치는 문제가 있었음
-      const MIC_GATE = SIGNAL_GATE_RMS;
-      const SILENCE_RESET_MS = 600; // 침묵 지속시 readings 초기화
-      const UPDATE_MS = 250;        // UI 업데이트 주기
-      const MAX_READINGS = 60;      // 최대 보관 readings 수 (메모리 제한)
-      let readings: number[] = [];
-      let windowStart = Date.now();
-      let lastSignalTime = Date.now();
+      dominantTunerRef.current.reset();
+      let lastDisplayTime = -Infinity;
       let lastAnalysisFrameTime = -ANALYSIS_BUCKET_MS;
       let spectrumFrameCount = 0;
       let frameCount = 0;
@@ -1429,7 +1457,7 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
         rms = Math.sqrt(rms / timeBuf.length);
         const nowMs = Date.now();
 
-        if (rms >= MIC_GATE) {
+        if (rms >= signalGateRms(sensitivityRef.current)) {
           // 신호가 있을 때마다 스펙트럼 분석 (연속 감지)
           analyser.getFloatFrequencyData(fftBuf);
 
@@ -1442,29 +1470,21 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
             setSpectrumTick(spectrumFrameCount);
           }
 
-          // HPS 기반 기음 탐지
-          const gateFloor = signalGateFloor(fftBuf, audioCtx.sampleRate, analyser.fftSize, rms);
-          const result = gateFloor === null ? null
-            : fftPeakDetect(fftBuf, audioCtx.sampleRate, analyser.fftSize, 27.5, MAX_FREQ, gateFloor - 6);
-          if (result && result.freq > 20 && result.freq <= MAX_FREQ) {
-            lastSignalTime = nowMs;
-            spectrumPeakBinRef.current = result.peakBin;
-            readings.push(result.freq);
-            // 최대 readings 수 초과시 오래된 것 제거
-            if (readings.length > MAX_READINGS) readings.shift();
-          }
         }
-        if (nowMs - lastSignalTime > SILENCE_RESET_MS) {
-          // Silence or unpitched input must not leave an old pitch looking live.
-          readings = [];
-          windowStart = nowMs;
+        const result = dominantTunerRef.current.update(
+          fftBuf, audioCtx.sampleRate, analyser.fftSize, rms, nowMs, sensitivityRef.current,
+        );
+        if (result) spectrumPeakBinRef.current = result.peakBin;
+        if (nowMs - lastDisplayTime >= 100) {
+          lastDisplayTime = nowMs;
           setMicAnalyzed(true);
-          setMicDetectedFreq(null);
-          setMicDetectedNote(null);
+          setMicDetectedFreq(result ? Math.round(result.freq * 10) / 10 : null);
+          const info = result ? frequencyToNote(result.freq) : null;
+          setMicDetectedNote(info ? `${info.name}${info.octave}` : null);
         }
 
         if (analysisActiveRef.current && analysisCaptureRef.current && nowMs - lastAnalysisFrameTime >= ANALYSIS_BUCKET_MS) {
-          if (rms >= MIC_GATE) analyser.getFloatFrequencyData(fftBuf);
+          if (rms >= signalGateRms(sensitivityRef.current)) analyser.getFloatFrequencyData(fftBuf);
           const capture = analysisCaptureRef.current;
           const frameTime = Math.max(0, nowMs - capture.startedAt);
           capture.frames.push(analyzeSpectrumFrame(
@@ -1474,30 +1494,9 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
             frameTime,
             ANALYSIS_BUCKET_MS,
             rms,
+            sensitivityRef.current,
           ));
           lastAnalysisFrameTime = nowMs;
-        }
-
-        // UPDATE_MS마다 readings에서 지배적 주파수 계산 후 UI 갱신
-        if (nowMs - windowStart >= UPDATE_MS) {
-          windowStart = nowMs;
-          if (readings.length >= 3) {
-            const dominant = pickDominantFreq(readings);
-            setMicAnalyzed(true);
-            if (dominant) {
-              setMicDetectedFreq(Math.round(dominant * 10) / 10);
-              const noteInfo = frequencyToNote(dominant);
-              setMicDetectedNote(`${noteInfo.name}${noteInfo.octave}`);
-            } else {
-              setMicDetectedFreq(null);
-              setMicDetectedNote(null);
-            }
-            // readings의 후반부만 유지해 연속 음 변화에 대응
-            readings = readings.slice(-Math.floor(MAX_READINGS / 2));
-          } else if (nowMs - lastSignalTime > SILENCE_RESET_MS) {
-            setMicDetectedFreq(null);
-            setMicDetectedNote(null);
-          }
         }
 
         micRafRef.current = requestAnimationFrame(detect);
@@ -1529,7 +1528,7 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
         : "";
       setMicError(errorName === "NotAllowedError" || errorName === "PermissionDeniedError" ? "permission" : "startFailed");
     }
-  }, [pickDominantFreq]);
+  }, []);
 
   const startNativeMic = useCallback(async () => {
     const epoch = ++micStartupEpochRef.current;
@@ -1550,6 +1549,7 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
       const WINDOW_SIZE = 8192;
       nativeSampleRateRef.current = 44100;
       pcmBufferRef.current = [];
+      dominantTunerRef.current.reset();
       const session = createNativeMicrophone((samples, sampleRate) => {
         if (!micActiveRef.current || epoch !== micStartupEpochRef.current) return;
         if (!samples.length || samples.some((value) => !Number.isFinite(value))) return;
@@ -1588,12 +1588,13 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
           // changes the gate level and skipping silence shifts the timeline.
           if (analysisCapture) {
             const frameTime = Math.max(0, Date.now() - analysisCapture.startedAt);
-            analysisCapture.frames.push(analyzePcmFrame(win, sampleRate, frameTime, ANALYSIS_BUCKET_MS));
+            analysisCapture.frames.push(analyzePcmFrame(win, sampleRate, frameTime, ANALYSIS_BUCKET_MS, sensitivityRef.current));
           }
           let rms = 0;
           for (let i = 0; i < win.length; i++) rms += win[i] * win[i];
           rms = Math.sqrt(rms / win.length);
-          if (rms < SIGNAL_GATE_RMS) {
+          if (rms < signalGateRms(sensitivityRef.current)) {
+            dominantTunerRef.current.reset();
             setMicAnalyzed(true);
             setMicDetectedFreq(null);
             setMicDetectedNote(null);
@@ -1603,9 +1604,9 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
             win[i] *= 0.5 * (1 - Math.cos(2 * Math.PI * i / (WINDOW_SIZE - 1)));
           }
           const mag = realFFT(win);
-          const gateFloor = signalGateFloor(mag, sampleRate, WINDOW_SIZE, rms);
-          const result = gateFloor === null ? null
-            : fftPeakDetect(mag, sampleRate, WINDOW_SIZE, 27.5, 4200, gateFloor - 6);
+          const result = dominantTunerRef.current.update(
+            mag, sampleRate, WINDOW_SIZE, rms, Date.now(), sensitivityRef.current,
+          );
           setMicAnalyzed(true);
           if (result && result.freq > 20 && result.freq <= 4200) {
             const freq = Math.round(result.freq * 10) / 10;
@@ -1663,6 +1664,14 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
     }
   }, [startMicWeb, startNativeMic]);
   startMicRef.current = startMic;
+  useEffect(() => {
+    setCaptureError(false);
+    if (!visible || !captureRequest) return;
+    const timer = setTimeout(() => {
+      if (!micActiveRef.current) startMicRef.current();
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [visible, captureRequest?.id]);
 
   const toggleMic = useCallback(() => {
     hapticFeedback();
@@ -1717,6 +1726,20 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
   const liveFrequency = micListening && !micError && !micNoInput &&
     micDetectedFreq !== null && Number.isFinite(micDetectedFreq) &&
     micDetectedFreq >= MIN_FREQ && micDetectedFreq <= MAX_FREQ ? micDetectedFreq : null;
+  const confirmCapture = async () => {
+    if (!captureRequest || liveFrequency === null || captureSavingRef.current) return;
+    captureSavingRef.current = true;
+    setCaptureSaving(true);
+    setCaptureError(false);
+    try {
+      await captureRequest.onCapture(liveFrequency);
+    } catch {
+      setCaptureError(true);
+    } finally {
+      captureSavingRef.current = false;
+      setCaptureSaving(false);
+    }
+  };
   const centsDifference = liveFrequency === null ? null :
     Math.round(1200 * Math.log2(liveFrequency / frequency));
   const microphoneStatus = micError
@@ -2062,7 +2085,7 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
             onEditTarget={openFreqEdit}
             onUseDetected={useDetectedTarget}
             onToggleReference={toggleReference}
-            onOpenGuide={openTuningGuide}
+            onOpenGuide={captureRequest ? () => captureRequest.onCancel() : openTuningGuide}
             selectedNote={selectedNote}
             selectedOctave={selectedOctave}
             onSelectNote={handleNoteSelect}
@@ -2075,6 +2098,34 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
             analysisBusy={analysisPhase === "processing"}
             analysisElapsedMs={analysisElapsedMs}
           />
+          <SensitivityControl value={sensitivity} onChange={saveSensitivity} disabled={sensitivityLoading} />
+          {sensitivityLoadError && (
+            <Text accessibilityLiveRegion="polite" style={{ color: C.danger }}>
+              {t("signalGenerator", "sensitivityLoadError")}
+            </Text>
+          )}
+          {captureRequest && (
+            <View testID="tuning-capture-registration" style={{ gap: 8, padding: 12, borderWidth: 1, borderColor: C.accentDim, borderRadius: 12 }}>
+              <Text style={{ color: C.text }}>{captureRequest.label}</Text>
+              <Text style={{ color: C.textSecondary }}>{t("signalGenerator", "captureHint")}</Text>
+              <Pressable
+                testID="tuning-capture-save"
+                accessibilityRole="button"
+                disabled={liveFrequency === null || captureSaving}
+                onPress={() => { void confirmCapture(); }}
+                style={{ minHeight: 44, padding: 12, borderRadius: 8, backgroundColor: C.accent, opacity: liveFrequency === null || captureSaving ? 0.4 : 1 }}
+              >
+                <Text style={{ color: onAccentColor(C.accent), textAlign: "center" }}>
+                  {captureSaving ? t("signalGenerator", "captureSaving") : t("signalGenerator", "captureSave")}
+                  {liveFrequency !== null ? ` · ${liveFrequency.toFixed(1)} Hz` : ""}
+                </Text>
+              </Pressable>
+              <Pressable testID="tuning-capture-cancel" disabled={captureSaving} onPress={captureRequest.onCancel} style={{ minHeight: 44, justifyContent: "center" }}>
+                <Text style={{ color: C.textSecondary, textAlign: "center" }}>{t("signalGenerator", "captureCancel")}</Text>
+              </Pressable>
+              {captureError && <Text accessibilityLiveRegion="polite" style={{ color: C.danger }}>{t("signalGenerator", "captureError")}</Text>}
+            </View>
+          )}
           {editingFreq && (
             <View style={styles.freqEditRow}>
               <TextInput

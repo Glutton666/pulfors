@@ -560,6 +560,12 @@ export const translations = {
     clearActivityConfirm: { ko: "연습 세션, 목표, 이 기기의 기록 동의 설정을 모두 삭제합니다. 계속할까요?", en: "This deletes practice sessions, goals, and this device's logging consent. Continue?" },
   },
   signalGenerator: {
+    sensitivityLoadError: { ko: "저장된 감도를 불러오지 못했습니다. 현재 표시된 값을 사용하며, 값을 변경하면 다시 저장합니다.", en: "Could not load saved sensitivity. Using the displayed value; change it to save again." },
+    captureHint: { ko: "악기를 울린 뒤 감지된 주파수를 확인하고 등록하세요.", en: "Play the instrument, check the detected frequency, then save it." },
+    captureSave: { ko: "감지한 주파수 등록", en: "Save detected frequency" },
+    captureSaving: { ko: "등록 중…", en: "Saving…" },
+    captureCancel: { ko: "등록 취소 · 가이드로", en: "Cancel · Back to guide" },
+    captureError: { ko: "등록하지 못했습니다. 다시 시도하거나 가이드에서 항목을 확인하세요.", en: "Could not save. Retry or check the target in the guide." },
     title: { ko: "시그널 제너레이터", en: "Signal Generator" },
     tunerTitle: { ko: "튜너", en: "Tuner" },
     detectedPitch: { ko: "감지 음정", en: "Detected pitch" },

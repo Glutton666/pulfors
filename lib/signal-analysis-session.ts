@@ -4,7 +4,7 @@ import {
   realFFT,
   type MultiPeak,
 } from "./signal-analysis";
-import { SIGNAL_GATE_RMS, signalGateFloor } from "./signal-noise-gate";
+import { signalGateRms, signalGateFloor } from "./signal-noise-gate";
 
 export const ANALYSIS_DURATION_MS = 10_000;
 export const ANALYSIS_BUCKET_MS = 500;
@@ -44,18 +44,19 @@ export function analyzePcmFrame(
   sampleRate: number,
   timeMs: number,
   durationMs: number,
+  sensitivity = 1,
 ): AnalysisFrame {
   let power = 0;
   for (let i = 0; i < samples.length; i++) power += samples[i] * samples[i];
   const rms = Math.sqrt(power / Math.max(1, samples.length));
-  if (!Number.isFinite(rms) || rms < SIGNAL_GATE_RMS) return { timeMs, durationMs, rms: Number.isFinite(rms) ? rms : 0, peaks: [] };
+  if (!Number.isFinite(rms) || rms < signalGateRms(sensitivity)) return { timeMs, durationMs, rms: Number.isFinite(rms) ? rms : 0, peaks: [] };
 
   const windowed = new Float32Array(samples.length);
   for (let i = 0; i < samples.length; i++) {
     windowed[i] = samples[i] * 0.5 * (1 - Math.cos(2 * Math.PI * i / Math.max(1, samples.length - 1)));
   }
   const magnitude = realFFT(windowed);
-  return analyzeSpectrumFrame(magnitude, sampleRate, samples.length, timeMs, durationMs, rms);
+  return analyzeSpectrumFrame(magnitude, sampleRate, samples.length, timeMs, durationMs, rms, sensitivity);
 }
 
 export function analyzeSpectrumFrame(
@@ -65,8 +66,9 @@ export function analyzeSpectrumFrame(
   timeMs: number,
   durationMs: number,
   rms: number,
+  sensitivity = 1,
 ): AnalysisFrame {
-  const floor = signalGateFloor(magnitude, sampleRate, fftSize, rms);
+  const floor = signalGateFloor(magnitude, sampleRate, fftSize, rms, sensitivity);
   const peaks = floor === null ? []
     : fftMultiPeakDetect(magnitude, sampleRate, fftSize, 27.5, 4200, floor - 8);
   return { timeMs, durationMs, rms: Number.isFinite(rms) ? rms : 0, peaks };
