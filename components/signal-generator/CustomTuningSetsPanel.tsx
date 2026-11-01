@@ -4,10 +4,12 @@ import { useTheme } from "@/contexts/ThemeContext";
 import { useScale } from "@/lib/scale";
 import { FontSize, Radius, Spacing } from "@/constants/tokens";
 import { TUNING_DATA } from "@/lib/tuning-data";
+import { NOTE_NAMES, frequencyToNote, noteToFreq } from "@/lib/signal-analysis";
+import { VerticalPitchPicker } from "./TunerPanel";
 import type { CustomTuningSet, CustomTuningGroup, CustomTuningTarget } from "@/lib/custom-tuning-sets";
 import {
   loadCustomTuningSets,
-  saveCustomTuningSets, updateCustomTuningTarget, makeTuningId, parseTuningNote,
+  saveCustomTuningSets, updateCustomTuningTarget, makeTuningId,
   validateTuningFrequency,
 } from "@/lib/custom-tuning-sets";
 
@@ -38,7 +40,8 @@ export function CustomTuningSetsPanel({ visible, lang, onSelectFreq, onRequestCa
   const [copyOpen, setCopyOpen] = useState(false);
   const [editor, setEditor] = useState<{ id: string; mode: "hz" | "note" }>({ id: "", mode: "hz" });
   const [frequencyText, setFrequencyText] = useState("");
-  const [noteText, setNoteText] = useState("");
+  const [selectedNote, setSelectedNote] = useState("A");
+  const [selectedOctave, setSelectedOctave] = useState(4);
   const setsRef = useRef<CustomTuningSet[]>([]);
   const dirtyRef = useRef(false);
   const busyRef = useRef(false);
@@ -152,11 +155,12 @@ export function CustomTuningSetsPanel({ visible, lang, onSelectFreq, onRequestCa
   };
   const resolveTargetFrequency = (target: CustomTuningTarget) => {
     if (target.id !== editor.id) return;
-    const value = editor.mode === "hz" ? validateTuningFrequency(frequencyText) : parseTuningNote(noteText);
+    const value = editor.mode === "hz" ? validateTuningFrequency(frequencyText)
+      : validateTuningFrequency(String(noteToFreq(selectedNote, selectedOctave)));
     if (value !== null) {
       change(setsRef.current.map(s => ({ ...s, groups: s.groups.map(g => ({ ...g, targets: g.targets.map(x => x.id === target.id ? { ...x, frequency: value } : x) })) })));
       setError(""); setEditor({ id: "", mode: "hz" });
-    } else setError(t.invalidFrequency);
+    } else setError(lang === "ko" ? "20~20000Hz 범위의 주파수를 입력하거나 음을 선택하세요." : "Enter a frequency or choose a pitch between 20 and 20000 Hz.");
   };
 
   if (!visible) return null;
@@ -191,11 +195,39 @@ export function CustomTuningSetsPanel({ visible, lang, onSelectFreq, onRequestCa
               <TextInput testID={`custom-tuning-target-name-${target.id}`} accessibilityLabel={t.target} value={target.name} onChangeText={name => updateTarget(set, group, target, { name })} placeholder={t.target} placeholderTextColor={C.textTertiary} style={[styles.input, styles.targetName]} />
               {target.frequency !== null && target.id !== editor.id ? <Pressable testID={`custom-tuning-select-${target.id}`} accessibilityRole="button" accessibilityLabel={`${target.name}, ${target.frequency} Hz`} onPress={() => onSelectFreq(target.frequency!)} style={styles.frequency}><Text style={styles.freqText}>{target.frequency.toFixed(target.frequency < 100 ? 2 : 1)} Hz</Text></Pressable> : target.id !== editor.id ? <Text style={[styles.muted, styles.frequency]}>{t.noFreq}</Text> : null}
               {target.id === editor.id && <View style={styles.editor}>
-                <View style={styles.modeRow}><Pressable onPress={() => setEditor({ id: target.id, mode: "hz" })} style={[styles.mode, editor.mode === "hz" && styles.modeActive]}><Text style={styles.modeText}>{t.hz}</Text></Pressable><Pressable onPress={() => setEditor({ id: target.id, mode: "note" })} style={[styles.mode, editor.mode === "note" && styles.modeActive]}><Text style={styles.modeText}>{t.note}</Text></Pressable></View>
-                <TextInput testID={`custom-tuning-frequency-input-${target.id}`} accessibilityLabel={editor.mode === "hz" ? t.hz : t.note} value={editor.mode === "hz" ? frequencyText : noteText} onChangeText={editor.mode === "hz" ? setFrequencyText : setNoteText} placeholder={editor.mode === "hz" ? t.hzPlaceholder : "C3 / F#2 / Bb3"} placeholderTextColor={C.textTertiary} keyboardType={editor.mode === "hz" ? "decimal-pad" : "default"} style={[styles.input, styles.freqInput]} />
+                <View style={styles.modeRow}>
+                  <Pressable onPress={() => {
+                    if (editor.mode === "note") setFrequencyText(String(noteToFreq(selectedNote, selectedOctave)));
+                    setEditor({ id: target.id, mode: "hz" });
+                  }} style={[styles.mode, editor.mode === "hz" && styles.modeActive]}><Text style={styles.modeText}>{t.hz}</Text></Pressable>
+                  <Pressable onPress={() => {
+                    const inputFrequency = validateTuningFrequency(frequencyText);
+                    if (inputFrequency !== null) {
+                      const pitch = frequencyToNote(inputFrequency);
+                      setSelectedNote(pitch.name);
+                      setSelectedOctave(Math.max(0, Math.min(8, pitch.octave)));
+                    }
+                    setEditor({ id: target.id, mode: "note" });
+                  }} style={[styles.mode, editor.mode === "note" && styles.modeActive]}><Text style={styles.modeText}>{t.note}</Text></Pressable>
+                </View>
+                {editor.mode === "hz" ? (
+                  <TextInput testID={`custom-tuning-frequency-input-${target.id}`} accessibilityLabel={t.hz} value={frequencyText} onChangeText={setFrequencyText} placeholder={t.hzPlaceholder} keyboardType="decimal-pad" placeholderTextColor={C.textTertiary} style={[styles.input, styles.freqInput]} />
+                ) : (
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                    <VerticalPitchPicker testID="custom-tuning-note-picker" items={NOTE_NAMES} selected={selectedNote} onSelect={setSelectedNote} label={lang === "ko" ? "음" : "Note"} />
+                    <VerticalPitchPicker testID="custom-tuning-octave-picker" items={[0, 1, 2, 3, 4, 5, 6, 7, 8]} selected={selectedOctave} onSelect={setSelectedOctave} label={lang === "ko" ? "옥타브" : "Octave"} />
+                    <Text testID="custom-tuning-note-frequency" style={styles.muted}>{noteToFreq(selectedNote, selectedOctave)} Hz</Text>
+                  </View>
+                )}
                 <Pressable testID={`custom-tuning-frequency-apply-${target.id}`} onPress={() => resolveTargetFrequency(target)} style={styles.smallButton}><Text style={styles.actionText}>OK</Text></Pressable>
               </View>}
-              {target.id !== editor.id && <Pressable testID={`custom-tuning-edit-${target.id}`} accessibilityRole="button" accessibilityLabel={lang === "ko" ? "음 설정" : "Edit tone"} onPress={() => { setError(""); setEditor({ id: target.id, mode: "hz" }); setFrequencyText(target.frequency === null ? "" : String(target.frequency)); setNoteText(""); }} style={styles.smallButton}><Text style={styles.actionText}>{lang === "ko" ? "음 설정" : "Edit tone"}</Text></Pressable>}
+              {target.id !== editor.id && <Pressable testID={`custom-tuning-edit-${target.id}`} accessibilityRole="button" accessibilityLabel={lang === "ko" ? "음 설정" : "Edit tone"} onPress={() => {
+                setError(""); setEditor({ id: target.id, mode: "hz" });
+                setFrequencyText(target.frequency === null ? "" : String(target.frequency));
+                const pitch = frequencyToNote(target.frequency ?? 440);
+                setSelectedNote(pitch.name);
+                setSelectedOctave(Math.max(0, Math.min(8, pitch.octave)));
+              }} style={styles.smallButton}><Text style={styles.actionText}>{lang === "ko" ? "음 설정" : "Edit tone"}</Text></Pressable>}
               <Pressable testID={`custom-tuning-detect-${target.id}`} accessibilityRole="button" accessibilityLabel={t.detect} onPress={() => void beginCapture(set, group, target)} style={styles.detectButton}><Text style={styles.detectText}>{t.detect}</Text></Pressable>
               <Pressable testID={`custom-tuning-delete-target-${target.id}`} accessibilityRole="button" accessibilityLabel={`${t.delete} ${target.name}`} onPress={() => updateGroup(set, group, { targets: group.targets.filter(x => x.id !== target.id) })} style={styles.iconAction}><Text style={styles.deleteText}>×</Text></Pressable>
             </View>)}
@@ -251,7 +283,7 @@ const makeStyles = (C: any, controlHeight: number) => StyleSheet.create({
   smallButton: { minHeight: 38, justifyContent: "center", paddingHorizontal: 8, borderRadius: Radius.sm, backgroundColor: C.accentDim },
   detectButton: { minHeight: 38, justifyContent: "center", paddingHorizontal: 8, borderRadius: Radius.sm, backgroundColor: C.backgroundSecondary },
   detectText: { color: C.textSecondary, fontFamily: "SpaceGrotesk_600SemiBold", fontSize: FontSize.caption },
-  editor: { width: "100%", flexDirection: "row", alignItems: "center", gap: 5 },
+  editor: { width: "100%", flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 5 },
   modeRow: { flexDirection: "row", borderRadius: Radius.sm, overflow: "hidden", backgroundColor: C.backgroundSecondary },
   mode: { paddingHorizontal: 8, minHeight: 38, justifyContent: "center" },
   modeActive: { backgroundColor: C.accentDim },

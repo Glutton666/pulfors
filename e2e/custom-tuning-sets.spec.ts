@@ -52,7 +52,11 @@ test("sensitivity and hierarchical tuning sets persist through note input, captu
   await page.getByTestId(/^custom-tuning-target-name-/).fill("Bottom head");
   await page.getByTestId(/^custom-tuning-edit-/).click();
   await page.getByTestId("custom-tuning-sets-panel").getByText(/^(Note|음)$/).click();
-  await page.getByTestId(/^custom-tuning-frequency-input-/).fill("F#2");
+  await expect(page.getByTestId(/^custom-tuning-frequency-input-/)).toHaveCount(0);
+  await page.getByTestId("custom-tuning-note-picker").getByRole("button", { name: /^(Note|음) F#$/ }).click();
+  await page.getByTestId("custom-tuning-octave-picker").getByRole("button", { name: /^(Octave|옥타브) 2$/ }).click();
+  await expect(page.getByTestId("custom-tuning-note-frequency")).toHaveText("92.5 Hz");
+  await page.screenshot({ path: "/tmp/custom-tuning-note-pickers.png" });
   await page.getByTestId(/^custom-tuning-frequency-apply-/).click();
   await page.getByTestId("custom-tuning-save").click();
   const stored = () => page.evaluate(() => JSON.parse(localStorage.getItem("metronome_custom_tuning_sets_v1") || "[]"));

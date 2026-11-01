@@ -1,6 +1,6 @@
 /** @jest-environment jsdom */
 import React from "react";
-import { act, fireEvent, render } from "@testing-library/react";
+import { act, fireEvent, render, within } from "@testing-library/react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { CustomTuningSetsPanel } from "@/components/signal-generator/CustomTuningSetsPanel";
 import { loadCustomTuningSets } from "@/lib/custom-tuning-sets";
@@ -536,8 +536,16 @@ describe("SignalGeneratorModal native microphone lifecycle", () => {
     fireEvent.change(view.getByTestId(/^custom-tuning-group-name-/), { target: { value: "Small tom" } });
     fireEvent.click(view.getByTestId(/^custom-tuning-add-target-/));
     fireEvent.change(view.getByTestId(/^custom-tuning-target-name-/), { target: { value: "Bottom" } });
+    fireEvent.click(view.getByTestId(/^custom-tuning-edit-/));
+    fireEvent.click(view.getByText("Note", { exact: true }));
+    expect(view.queryByTestId(/^custom-tuning-frequency-input-/)).toBeNull();
+    fireEvent.click(within(view.getByTestId("custom-tuning-note-picker")).getByRole("button", { name: "Note F#" }));
+    fireEvent.click(within(view.getByTestId("custom-tuning-octave-picker")).getByRole("button", { name: "Octave 2" }));
+    expect(view.getByTestId("custom-tuning-note-frequency").textContent).toBe("92.5 Hz");
+    fireEvent.click(view.getByTestId(/^custom-tuning-frequency-apply-/));
     await act(async () => { fireEvent.click(view.getByTestId("custom-tuning-save")); });
     expect((await loadCustomTuningSets())[0].groups[0].targets[0].name).toBe("Bottom");
+    expect((await loadCustomTuningSets())[0].groups[0].targets[0].frequency).toBe(92.5);
     await act(async () => { fireEvent.click(view.getByTestId(/^custom-tuning-detect-/)); });
     const [label, captured] = request.mock.calls[0];
     expect(label).toBe("Drums · Small tom · Bottom");

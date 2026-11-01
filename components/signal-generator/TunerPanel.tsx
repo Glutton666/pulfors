@@ -430,7 +430,7 @@ export function TunerPanel({
   );
 }
 
-function VerticalPitchPicker<T extends string | number>({
+export function VerticalPitchPicker<T extends string | number>({
   testID,
   items,
   selected,
