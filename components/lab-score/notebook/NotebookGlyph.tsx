@@ -4,6 +4,7 @@ import { StaffRestGlyph } from "@/components/staff/StaffGlyphs";
 import { ALL_INSTR_SYMBOLS, ARTICULATIONS } from "@/components/ScorePalette";
 import { NotebookNoteGlyph } from "./NotebookNoteGlyph";
 import type { NotebookNoteRole } from "@/lib/staff-notebook";
+import type { NotebookBeamStem } from "@/lib/notebook-beaming";
 
 const noteDenominator: Record<string, number> = { whole: 1, half: 2, quarter: 4, eighth: 8, sixteenth: 16, "thirty_second": 32 };
 const restDenominator: Record<string, number> = { "rest-whole": 1, "rest-half": 2, "rest-quarter": 4, "rest-eighth": 8, "rest-sixteenth": 16, "rest-thirty_second": 32 };
@@ -18,14 +19,16 @@ const typography: Record<string, string> = {
   da_capo: "D.C.", dal_segno: "D.S.", dal_segno_coda: "D.S. al Coda", da_capo_coda: "D.C. al Coda", fine: "Fine", volta1: "1.", volta2: "2.",
 };
 
-export function NotebookGlyph({ glyph, x, y, size, role = "normal", dotted = false }: { glyph: string; x: number; y: number; size: number; role?: NotebookNoteRole; dotted?: boolean }) {
+export function NotebookGlyph({ glyph, x, y, size, role = "normal", dotted = false, beam }: { glyph: string; x: number; y: number; size: number; role?: NotebookNoteRole; dotted?: boolean; beam?: NotebookBeamStem }) {
   const noteValue = noteDenominator[glyph];
   if (noteValue) {
     return <G>
-      <NotebookNoteGlyph duration={glyph as "whole" | "half" | "quarter" | "eighth" | "sixteenth" | "thirty_second"} x={x} y={y} size={size} />
+      <NotebookNoteGlyph duration={glyph as "whole" | "half" | "quarter" | "eighth" | "sixteenth" | "thirty_second"} x={x} y={y} size={size} beam={beam} />
       <G transform={`translate(${x} ${y}) scale(${size / 26})`}>
         {role === "ghost" && <Path testID="notebook-ghost-mark" d="M-12 -9 Q-18 0 -12 9 M12 -9 Q18 0 12 9" fill="none" stroke="#111" strokeWidth={1.4} />}
-        {role === "strong" && <Path testID="notebook-strong-mark" d="M-8 -46 L9 -41 L-8 -36" fill="none" stroke="#111" strokeWidth={1.8} />}
+        {role === "strong" && <Path testID="notebook-strong-mark" d={beam?.direction === "up"
+          ? `M-8 ${((beam.stemY - y) / (size / 26)) - 20} L9 ${((beam.stemY - y) / (size / 26)) - 15} L-8 ${((beam.stemY - y) / (size / 26)) - 10}`
+          : "M-8 -46 L9 -41 L-8 -36"} fill="none" stroke="#111" strokeWidth={1.8} />}
         {dotted && <Circle testID="notebook-dot" cx={role === "ghost" ? 23 : 16} cy={-3} r={2.2} fill="#111" />}
       </G>
     </G>;

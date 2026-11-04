@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import type { NotebookSettings, StaffNotebook } from "@/lib/staff-notebook";
+import { notebookMeter } from "@/lib/notebook-beaming";
 import type { PracticeEntry } from "@/lib/storage";
 
 type Props = {
@@ -35,11 +36,14 @@ export function NotebookSettingsPanel(props: Props) {
   const { ko, t, note, settings, patterns, notebooks } = props;
   const [showPatterns, setShowPatterns] = useState(false);
   const currentRows = settings.rowsPerPage ?? note.pages[props.pageIndex]?.staffCount ?? 7;
+  const meter = notebookMeter(settings);
   const [rowsDraft, setRowsDraft] = useState(String(currentRows));
   const [zoomDraft, setZoomDraft] = useState(String(Math.round(props.scale * 100)));
+  const [beatsDraft, setBeatsDraft] = useState(String(meter.beats));
 
   useEffect(() => setRowsDraft(String(currentRows)), [currentRows, note.id]);
   useEffect(() => setZoomDraft(String(Math.round(props.scale * 100))), [props.scale]);
+  useEffect(() => setBeatsDraft(String(meter.beats)), [meter.beats]);
 
   const eligible = patterns.filter((entry) => !entry.mode || entry.mode === "beat" || entry.mode === "bar");
   const unsupported = patterns.filter((entry) => entry.mode && entry.mode !== "beat" && entry.mode !== "bar");
@@ -67,6 +71,12 @@ export function NotebookSettingsPanel(props: Props) {
     const value = Number.isFinite(parsed) ? Math.max(35, Math.min(250, Math.round(parsed))) : Math.round(props.scale * 100);
     setZoomDraft(String(value));
     props.onZoom(value / 100);
+  };
+  const commitMeterBeats = (text = beatsDraft) => {
+    const parsed = Number(text);
+    const beats = Number.isFinite(parsed) ? Math.max(1, Math.min(12, Math.round(parsed))) : meter.beats;
+    setBeatsDraft(String(beats));
+    if (beats !== meter.beats) props.onSettings({ notationMeter: { beats, unit: meter.unit } });
   };
 
   return (
@@ -122,6 +132,47 @@ export function NotebookSettingsPanel(props: Props) {
       <View style={styles.rule} />
       <Text style={styles.eyebrow}>{ko ? "페이지 · 종이" : "PAGE & PAPER"}</Text>
       <Text style={styles.sectionTitle}>{ko ? "페이지 구성" : "Page layout"}</Text>
+      <View style={styles.meterSection}>
+        <View style={styles.fieldLabelRow}>
+          <Text style={styles.fieldLabel}>{ko ? "기보 박자" : "Notation meter"}</Text>
+          <Text style={styles.value}>{ko ? "빔 표기만" : "Beaming only"}</Text>
+        </View>
+        <View style={styles.meterFraction}>
+          <TextInput
+            testID="notebook-notation-beats"
+            accessibilityLabel={ko ? "기보 박자 분자 (1–12)" : "Notation meter numerator (1–12)"}
+            value={beatsDraft}
+            onChangeText={setBeatsDraft}
+            onBlur={() => commitMeterBeats()}
+            onSubmitEditing={(event) => commitMeterBeats(event.nativeEvent.text)}
+            keyboardType="number-pad"
+            returnKeyType="done"
+            style={styles.beatsInput}
+          />
+          <View style={styles.meterDivider} />
+          <View style={styles.meterUnits}>
+            {([2, 4, 8, 16] as const).map((unit) => (
+              <Pressable
+                key={unit}
+                testID={`notebook-notation-unit-${unit}`}
+                accessibilityRole="button"
+                accessibilityLabel={`${ko ? "기보 박자 분모" : "Notation meter denominator"} ${unit}`}
+                accessibilityState={{ selected: meter.unit === unit }}
+                onPress={() => {
+                  const parsed = Number(beatsDraft);
+                  const beats = Number.isFinite(parsed) ? Math.max(1, Math.min(12, Math.round(parsed))) : meter.beats;
+                  setBeatsDraft(String(beats));
+                  props.onSettings({ notationMeter: { beats, unit } });
+                }}
+                style={[styles.unitChoice, meter.unit === unit && styles.meterChoiceSelected]}
+              >
+                <Text style={[styles.meterChoiceText, meter.unit === unit && styles.meterChoiceTextSelected]}>{unit}</Text>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+        <Text style={styles.meta}>{ko ? "이 설정은 빔 기보에만 적용되며 재생 타이밍은 바꾸지 않습니다." : "Controls beam notation only; playback timing is unchanged."}</Text>
+      </View>
       <View style={styles.pageControls}>
         <Pressable accessibilityRole="button" accessibilityLabel={ko ? "이전 페이지" : "Previous page"} onPress={() => props.onPage(Math.max(0, props.pageIndex - 1))} disabled={props.pageIndex <= 0} style={[styles.pageArrow, props.pageIndex <= 0 && styles.disabled]}><Ionicons name="chevron-back" size={18} color="#665b4d" /></Pressable>
         <Text style={styles.pageCounter}>{t.page} {props.pageIndex + 1} / {Math.max(1, note.pages.length)}</Text>
@@ -240,6 +291,16 @@ const styles = StyleSheet.create({
   disabled: { opacity: 0.38 },
   pageAdd: { minHeight: 37, borderRadius: 8, backgroundColor: "#f4f0e8", alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 6, paddingHorizontal: 9 },
   fieldGroup: { paddingVertical: 11 },
+  meterSection: { paddingVertical: 9, paddingHorizontal: 10, marginBottom: 8, borderRadius: 10, backgroundColor: "#f5f1e9" },
+  meterFraction: { marginTop: 8, flexDirection: "row", alignItems: "center", gap: 8 },
+  beatsInput: { width: 54, height: 31, borderRadius: 7, borderWidth: 1, borderColor: "#dfd5c6", backgroundColor: "#fffdf8", textAlign: "center", padding: 0, color: "#51412e", fontSize: 12, fontWeight: "800" },
+  meterDivider: { width: 1, alignSelf: "stretch", backgroundColor: "#dcd2c2" },
+  meterUnits: { flexDirection: "row", flexWrap: "wrap", width: 80, justifyContent: "center", gap: 4 },
+  meterChoice: { width: 25, height: 25, borderRadius: 7, alignItems: "center", justifyContent: "center", backgroundColor: "#fffdf8" },
+  unitChoice: { width: 32, height: 27, borderRadius: 7, alignItems: "center", justifyContent: "center", backgroundColor: "#fffdf8" },
+  meterChoiceSelected: { backgroundColor: "#e7ddce", borderWidth: 1, borderColor: "#9a805d" },
+  meterChoiceText: { color: "#796d5c", fontSize: 10, fontWeight: "600" },
+  meterChoiceTextSelected: { color: "#51412e", fontWeight: "800" },
   fieldLabelRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   fieldLabel: { color: "#4a4339", fontSize: 11, fontWeight: "700" },
   value: { color: "#79684e", fontSize: 10, fontWeight: "700" },

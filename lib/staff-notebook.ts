@@ -18,6 +18,7 @@ export type NotebookSettings = {
   snap: boolean;
   source?: PracticeEntry;
   beatsPerMeasure?: number;
+  notationMeter?: { beats: number; unit: 2 | 4 | 8 | 16 };
   rowsPerPage?: number;
   followSymbols?: boolean;
 };
@@ -42,6 +43,9 @@ function isNotebook(value: unknown): value is StaffNotebook {
     settings.playbackZoom < 0.25 || settings.playbackZoom > 4 || settings.bpm < 20 || settings.bpm > 300 ||
     typeof settings.follow !== "boolean" || typeof settings.random !== "boolean" || typeof settings.snap !== "boolean" ||
     settings.beatsPerMeasure !== undefined && (!Number.isInteger(settings.beatsPerMeasure) || settings.beatsPerMeasure < 1 || settings.beatsPerMeasure > 12) ||
+    settings.notationMeter !== undefined && (!settings.notationMeter || typeof settings.notationMeter !== "object" ||
+      !Number.isInteger(settings.notationMeter.beats) || settings.notationMeter.beats < 1 || settings.notationMeter.beats > 12 ||
+      ![2, 4, 8, 16].includes(settings.notationMeter.unit)) ||
     settings.rowsPerPage !== undefined && (!Number.isInteger(settings.rowsPerPage) || settings.rowsPerPage < 1 || settings.rowsPerPage > 200) ||
     settings.followSymbols !== undefined && typeof settings.followSymbols !== "boolean")) return false;
   return typeof note.id === "string" && typeof note.title === "string" && Number.isFinite(note.updatedAt) &&

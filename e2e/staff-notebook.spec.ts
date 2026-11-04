@@ -10,6 +10,67 @@ test.use({
 test.setTimeout(100000);
 test.describe.configure({ mode: "parallel" });
 
+for (const viewport of [{ width: 390, height: 844 }, { width: 768, height: 1024 }, { width: 844, height: 390 }]) {
+  test(`automatic beams and notation meter persist at ${viewport.width}x${viewport.height}`, async ({ page }) => {
+    await page.setViewportSize(viewport);
+    await page.addInitScript(() => {
+      if (localStorage.getItem("lab_staff_notebooks_v1")) return;
+      const row = (glyphs: string[], index: number, prefix: string) => glyphs.map((glyph, i) => ({
+        id: `${prefix}${i}`, glyph, x: 90 + i * 50, y: 114 + index * 155, size: 26,
+      }));
+      const dotted = row(["eighth", "sixteenth", "eighth"], 2, "d");
+      const stamps = [
+        ...row(Array(8).fill("eighth"), 0, "a"),
+        ...row(Array(4).fill("sixteenth"), 1, "s"),
+        ...dotted.map((stamp, i) => ({ ...stamp, dotted: i === 0, role: i === 1 ? "strong" : "normal" })),
+        ...row(Array(3).fill("eighth"), 3, "t"),
+        ...row(["eighth", "rest-eighth", "eighth", "eighth"], 4, "r"),
+      ];
+      localStorage.setItem("lab_staff_notebooks_v1", JSON.stringify([{
+        id: "auto-beams", title: "Automatic beams", updatedAt: 1,
+        settings: { follow: false, lineUnit: "measure", playbackZoom: 1, bpm: 84,
+          random: false, offsetX: 0, offsetY: 0, snap: true, beatsPerMeasure: 4 },
+        pages: [{ id: "p", strokes: [], staffCount: 7, stamps,
+          tuplets: [{ id: "triplet", stampIds: ["t0", "t1", "t2"] }] }],
+      }]));
+    });
+    await openNotebook(page);
+    await openSettings(page); await openSaved(page, "Automatic beams");
+    await page.getByTestId("notebook-panel-close").click();
+    const paper = page.getByTestId("notebook-drawing");
+    const firstRowBeams = () => paper.getByTestId("notebook-beam-level-1").evaluateAll((elements) =>
+      elements.filter((element) => Number(element.getAttribute("points")!.split(/[ ,]/)[1]) < 155).length);
+    await expect.poll(firstRowBeams).toBe(4);
+    await expect(paper.getByTestId("notebook-tuplet-number")).toHaveText("3");
+    await expect(paper.getByTestId("notebook-tuplet-left")).toHaveCount(0);
+    await expect(paper.getByTestId("notebook-beam-level-2")).not.toHaveCount(0);
+    await expect(paper.getByTestId("notebook-beam-hook")).not.toHaveCount(0);
+    await expect(paper.getByTestId("notebook-stamp-a0").getByTestId("notebook-note-flag-0")).toHaveCount(0);
+    await expect(paper.getByTestId("notebook-stamp-r0").getByTestId("notebook-note-flag-0")).toHaveCount(1);
+    await page.screenshot({ path: `generated-artifacts/automatic-beams-${viewport.width}.png` });
+
+    await openSettings(page);
+    // Changing the denominator by clicking away must preserve an unsubmitted numerator.
+    await page.getByTestId("notebook-notation-beats").fill("6");
+    await page.getByTestId("notebook-notation-unit-8").click();
+    await expect(page.getByTestId("notebook-notation-beats")).toHaveValue("6");
+    await page.getByTestId("notebook-panel-close").click();
+    await expect.poll(firstRowBeams).toBe(3);
+    await openSettings(page);
+    await page.getByTestId("notebook-save").click(); await closeNotice(page);
+    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("lab_staff_notebooks_v1")!)[0]);
+    expect(saved.settings.notationMeter).toEqual({ beats: 6, unit: 8 });
+    expect(saved.settings.beatsPerMeasure).toBe(4);
+    expect(saved.settings.bpm).toBe(84);
+    await page.reload();
+    await page.getByTestId("mode-cycle-label").waitFor();
+    await enterNotebook(page); await openSettings(page); await openSaved(page, "Automatic beams");
+    await expect(page.getByTestId("notebook-notation-beats")).toHaveValue("6");
+    await page.getByTestId("notebook-panel-close").click();
+    await expect.poll(firstRowBeams).toBe(3);
+  });
+}
+
 async function openNotebook(page: Page) {
   await page.addInitScript(() => {
     localStorage.setItem("metronome_onboarding_done", "1");

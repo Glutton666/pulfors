@@ -3,6 +3,19 @@ import assert from "node:assert/strict";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createStaffNotebook, DEFAULT_NOTEBOOK_SETTINGS, listStaffNotebooks, saveStaffNotebook } from "../lib/staff-notebook";
 
+test("notation meter survives save and restore separately from playback meter", async () => {
+  await AsyncStorage.setItem("lab_staff_notebooks_v1", "[]");
+  const note = createStaffNotebook("6/8 notation");
+  note.settings = { ...DEFAULT_NOTEBOOK_SETTINGS, beatsPerMeasure: 4, notationMeter: { beats: 6, unit: 8 } };
+  await saveStaffNotebook(note);
+  assert.deepEqual((await listStaffNotebooks())[0].settings, note.settings);
+  for (const notationMeter of [{ beats: 0, unit: 8 }, { beats: 13, unit: 8 }, { beats: 6, unit: 3 }, { beats: 1.5, unit: 4 }]) {
+    const before = await AsyncStorage.getItem("lab_staff_notebooks_v1");
+    await assert.rejects(() => saveStaffNotebook({ ...note, settings: { ...note.settings, notationMeter } as any }));
+    assert.equal(await AsyncStorage.getItem("lab_staff_notebooks_v1"), before);
+  }
+});
+
 test("dotted thirty-second rests round-trip inside a tuplet", async () => {
   await AsyncStorage.setItem("lab_staff_notebooks_v1", "[]");
   const note = createStaffNotebook("Rest tuplet");

@@ -396,6 +396,7 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
           contentContainerStyle={[styles.paperContent, { paddingVertical: following ? viewport.height / 2 : 0 }]}
           nestedScrollEnabled showsVerticalScrollIndicator={false}>
           <NotebookPaper
+            settings={settings}
             page={playback.running ? visiblePage : draftPage ?? page} width={PAPER_WIDTH * paperScale * zoom} height={visibleHeight * paperScale * zoom}
             paperScale={paperScale} zoom={playback.running && settings.follow ? settings.playbackZoom : scale}
             offset={offset} tool={playback.running ? "move" : tool} lineWidth={lineWidth}

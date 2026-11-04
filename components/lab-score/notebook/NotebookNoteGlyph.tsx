@@ -1,5 +1,6 @@
 import React from "react";
 import Svg, { Ellipse, G, Path } from "react-native-svg";
+import type { NotebookBeamStem } from "@/lib/notebook-beaming";
 
 export type NotebookNoteDuration =
   | "whole"
@@ -15,6 +16,7 @@ export interface NotebookNoteGlyphProps {
   y: number;
   size: number;
   color?: string;
+  beam?: NotebookBeamStem;
 }
 
 const flagCountByDuration: Record<NotebookNoteDuration, number> = {
@@ -43,10 +45,14 @@ export function NotebookNoteGlyph({
   y,
   size,
   color = "#111111",
+  beam,
 }: NotebookNoteGlyphProps) {
   const isWhole = duration === "whole";
   const isOpen = isWhole || duration === "half";
   const flagCount = flagCountByDuration[duration];
+  const scale = size / 26;
+  const beamedStemX = beam ? (beam.direction === "up" ? 4.8 : -4.8) : 4.8;
+  const beamedStemEnd = beam ? (beam.stemY - y) / scale : -31;
 
   return (
     <G
@@ -56,14 +62,14 @@ export function NotebookNoteGlyph({
       {!isWhole && (
         <Path
           testID="notebook-note-stem"
-          d="M 4.8 0 L 4.8 -31"
+          d={beam ? `M ${beamedStemX} 0 L ${beamedStemX} ${beamedStemEnd}` : "M 4.8 0 L 4.8 -31"}
           fill="none"
           stroke={color}
           strokeWidth={1.55}
           strokeLinecap="round"
         />
       )}
-      {Array.from({ length: flagCount }, (_, index) => (
+      {!beam && Array.from({ length: flagCount }, (_, index) => (
         <Path
           key={index}
           testID={`notebook-note-flag-${index}`}
