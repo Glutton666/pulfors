@@ -17,6 +17,17 @@ jest.mock("react-native-svg", () => {
   };
 });
 
+test.each(["whole", "half", "quarter", "eighth", "sixteenth", "thirty_second"])("rest %s renders a dot in both the page and picker preview", (duration) => {
+  const glyph = `rest-${duration}`;
+  const view = render(<svg><NotebookGlyph glyph={glyph} x={100} y={102} size={26} dotted /></svg>);
+  expect(view.getByTestId("notebook-rest-dot")).toBeTruthy();
+  expect(view.queryByTestId("notebook-strong-mark")).toBeNull();
+  if (duration === "thirty_second") expect(view.container.querySelectorAll('[data-testid^="bar-rest-flag-"]')).toHaveLength(3);
+  view.unmount();
+  const preview = render(<NotebookGlyphPreview glyph={glyph} dotted />);
+  expect(preview.getByTestId("notebook-rest-dot")).toBeTruthy();
+});
+
 test.each([
   ["whole", false, true, 0],
   ["half", true, true, 0],

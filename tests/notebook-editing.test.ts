@@ -94,6 +94,8 @@ test("snap changes only a shared vertical delta, preserves free x and never snap
   expect(selectionDelta(p, chosen, { x: 17, y: 8 }, true)).toEqual({ x: 17, y: 6 });
   expect(selectionDelta(p, chosen, { x: 17, y: 8 }, false)).toEqual({ x: 17, y: 8 });
   expect(selectionDelta(p, { strokeIds: ["ink"], stampIds: [] }, { x: 17, y: 8 }, true)).toEqual({ x: 17, y: 8 });
+  expect(selectionDelta(p, { strokeIds: [], stampIds: ["r"] }, { x: 17, y: 8 }, true)).toEqual({ x: 17, y: 6 });
+  expect(selectionDelta(p, { strokeIds: [], stampIds: ["r"] }, { x: 17, y: 8 }, false)).toEqual({ x: 17, y: 8 });
 });
 test("attached marks start at the last actual note, not a following rest or other mark", () => {
   const p = page();

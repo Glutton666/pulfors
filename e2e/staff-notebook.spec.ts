@@ -57,6 +57,12 @@ async function chooseGlyph(page: Page, glyph: string) {
     await page.getByTestId("notebook-note-role-normal").click();
     await page.getByTestId("notebook-note-plain").click();
     await page.getByTestId(`notebook-note-duration-${glyph}`).click();
+  } else if (category === "rest") {
+    await page.waitForTimeout(260);
+    await page.getByTestId("notebook-rest-origin").focus();
+    await page.getByTestId("notebook-rest-origin").press("Enter");
+    await page.getByTestId("notebook-rest-plain").click();
+    await page.getByTestId(`notebook-rest-duration-${glyph.slice(5)}`).click();
   } else {
     await page.getByTestId(`notebook-category-${category}`).click();
     await page.getByTestId(`notebook-symbol-${glyph}`).click();
@@ -150,7 +156,7 @@ for (const viewport of [{ width: 768, height: 1024 }, { width: 844, height: 390 
     await page.mouse.move(origin.x + origin.width / 2, origin.y + origin.height / 2);
     await page.mouse.down();
     await expect(page.getByTestId("notebook-note-role-normal")).toBeVisible();
-    await expect(page.getByTestId("notebook-category-rest")).toHaveCount(0);
+    await expect(page.getByTestId("notebook-rest-origin")).toHaveCount(0);
     await page.mouse.move(origin.x + origin.width / 2, origin.y - 90, { steps: 10 });
     await expect(page.getByTestId("notebook-note-duration-quarter")).toBeVisible();
     const paper = (await page.getByTestId("notebook-drawing").boundingBox())!;
@@ -177,6 +183,72 @@ for (const viewport of [{ width: 768, height: 1024 }, { width: 844, height: 390 
     await chooseMode(page, "notes"); await chooseGlyph(page, "whole");
     await expect(page.getByTestId("notebook-drawing").locator("ellipse")).toHaveCount(1);
     await expect(page.getByTestId("notebook-stamp-confirm")).toHaveCount(0);
+  });
+}
+
+for (const viewport of [{ width: 390, height: 844 }, { width: 768, height: 1024 }, { width: 844, height: 390 }]) {
+  test(`rest gestures place once, preserve dots and form conventional tuplets at ${viewport.width}x${viewport.height}`, async ({ page }) => {
+    await page.setViewportSize(viewport);
+    await openNotebook(page); await chooseMode(page, "notes");
+    await page.getByTestId("notebook-tuplet").click();
+    await page.getByTestId("notebook-rest-origin").click();
+    const paper = page.getByTestId("notebook-drawing");
+    await expect(paper.locator('[data-testid^="notebook-stamp-"]')).toHaveCount(1);
+    const origin = page.getByTestId("notebook-rest-origin");
+    await origin.evaluate((node) => {
+      for (let parent = node.parentElement; parent; parent = parent.parentElement) {
+        if (parent.scrollWidth > parent.clientWidth && getComputedStyle(parent).overflowX === "auto") {
+          parent.scrollLeft = 24;
+          break;
+        }
+      }
+    });
+    const box = (await origin.boundingBox())!;
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    await expect(page.getByTestId("notebook-note-origin")).toHaveCount(0);
+    const steady = (await origin.boundingBox())!;
+    expect(steady.x).toBeCloseTo(box.x);
+    expect(steady.y).toBeCloseTo(box.y);
+    await page.mouse.move(box.x + box.width / 2, box.y - 85, { steps: 10 });
+    const duration = page.getByTestId("notebook-rest-duration-thirty_second");
+    await expect(duration).toBeVisible();
+    const row = (await duration.boundingBox())!;
+    await page.mouse.move(row.x + row.width / 2 - 18, row.y + row.height / 2, { steps: 8 });
+    await expect(page.getByTestId("notebook-rest-dotted")).toBeInViewport({ ratio: 1 });
+    await page.screenshot({ path: `generated-artifacts/rest-picker-${viewport.width}.png` });
+    await page.mouse.up();
+    await expect(paper.locator('[data-testid^="notebook-stamp-"]')).toHaveCount(2);
+    await expect(paper.getByTestId("notebook-rest-dot")).toHaveCount(1);
+    await chooseGlyph(page, "quarter");
+    await page.getByTestId("notebook-tuplet").click();
+    await expect(paper.getByTestId("notebook-tuplet-number")).toHaveText("3");
+    await expect(paper.getByTestId("notebook-tuplet-left")).toHaveCount(1);
+    await expect(paper.getByTestId("notebook-tuplet-right")).toHaveCount(1);
+    await expect(paper.locator('rect[fill="#fff"]')).toHaveCount(0);
+    await openSettings(page); await page.getByTestId("notebook-save").click();
+    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("lab_staff_notebooks_v1")!)[0]);
+    expect(saved.pages[0].stamps).toHaveLength(3);
+    expect(saved.pages[0].stamps[0]).toMatchObject({ glyph: "rest-quarter", dotted: false, x: 55, y: 102 });
+    expect(saved.pages[0].stamps[1]).toMatchObject({ glyph: "rest-thirty_second", dotted: true });
+    expect(saved.pages[0].tuplets[0].stampIds).toHaveLength(3);
+    await closeNotice(page); await openSaved(page, saved.title);
+    await page.getByTestId("notebook-panel-close").click();
+    await expect(paper.getByTestId("notebook-rest-dot")).toHaveCount(1);
+    await expect(paper.getByTestId("notebook-tuplet-number")).toHaveText("3");
+    if (viewport.width === 844) {
+      const cancelBox = (await origin.boundingBox())!;
+      await page.mouse.move(cancelBox.x + cancelBox.width / 2, cancelBox.y + cancelBox.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(cancelBox.x + cancelBox.width / 2, cancelBox.y - 80, { steps: 8 });
+      await page.getByTestId("notebook-right-toggle").focus();
+      await page.getByTestId("notebook-right-toggle").press("Enter");
+      await page.getByTestId("notebook-mode-ink").focus();
+      await page.getByTestId("notebook-mode-ink").press("Enter");
+      await page.mouse.up();
+      await expect(paper.locator('[data-testid^="notebook-stamp-"]')).toHaveCount(3);
+    }
+    await page.screenshot({ path: `generated-artifacts/tuplet-notation-${viewport.width}.png` });
   });
 }
 

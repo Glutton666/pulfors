@@ -58,7 +58,7 @@ function isNotebook(value: unknown): value is StaffNotebook {
         !!group && typeof group.id === "string" && Array.isArray(group.stampIds) && group.stampIds.length >= 2 &&
         new Set(group.stampIds).size === group.stampIds.length &&
         group.stampIds.every((stampId) => page.stamps?.some((stamp) => stamp.id === stampId &&
-          /^(whole|half|quarter|eighth|sixteenth|thirty_second|rest-(whole|half|quarter|eighth|sixteenth))$/.test(stamp.glyph))))) &&
+          /^(whole|half|quarter|eighth|sixteenth|thirty_second|rest-(whole|half|quarter|eighth|sixteenth|thirty_second))$/.test(stamp.glyph))))) &&
       typeof page.id === "string" && Array.isArray(page.strokes) && page.strokes.every((stroke) => !!stroke && typeof stroke === "object" &&
         typeof stroke.id === "string" && Number.isFinite(stroke.width) && stroke.width > 0 &&
         Array.isArray(stroke.points) && stroke.points.every((point) => !!point && typeof point === "object" && Number.isFinite(point.x) && Number.isFinite(point.y))));

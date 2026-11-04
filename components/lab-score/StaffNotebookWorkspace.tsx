@@ -316,11 +316,11 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
     const index = attached && targetIndex >= 0 ? targetIndex : pageIndex;
     const destination = attached ? targetPage : page;
     if (index !== pageIndex) { setPageIndex(index); setOffset({ x: 0, y: 0 }); setTupletIds(null); }
-    const point = attached?.point ?? stampPosition(destination, { ...settings, snap: isNotebookNote(choice.glyph) && settings.snap });
-    const anchor = constrainStaffPoint(destination, point, isNotebookNote(choice.glyph) && settings.snap);
+    const point = attached?.point ?? stampPosition(destination, { ...settings, snap: isTupletMember(choice.glyph) && settings.snap });
+    const anchor = constrainStaffPoint(destination, point, isTupletMember(choice.glyph) && settings.snap);
     checkpoint();
     const stamp: StaffStamp = { id: id("stamp"), glyph: choice.glyph, ...anchor, size: 26,
-      role: isNotebookNote(choice.glyph) ? choice.role : undefined, dotted: isNotebookNote(choice.glyph) ? choice.dotted : undefined, attachTo: attached?.attachTo };
+      role: isNotebookNote(choice.glyph) ? choice.role : undefined, dotted: isTupletMember(choice.glyph) ? choice.dotted : undefined, attachTo: attached?.attachTo };
     replacePage(index, { ...destination, anchor, stamps: [...(destination.stamps ?? []), stamp] }, isNotebookNote(stamp.glyph) ? stamp.id : undefined);
     if (index === pageIndex && tupletIds !== null && isTupletMember(stamp.glyph)) setTupletIds([...tupletIds, stamp.id]);
     setSelection(includeAttached(destination, { stampIds: [stamp.id], strokeIds: [] })); setTool("select");

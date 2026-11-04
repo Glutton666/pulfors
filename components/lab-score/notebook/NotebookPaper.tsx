@@ -1,9 +1,11 @@
 import React, { useMemo, useRef } from "react";
 import { PanResponder, Platform, StyleSheet, View } from "react-native";
-import Svg, { G, Line, Path, Rect, Text as SvgText } from "react-native-svg";
+import Svg, { G, Line, Path, Rect } from "react-native-svg";
 import type { StaffPage, StaffPoint } from "@/lib/staff-notebook";
 import { ROW_HEIGHT, STAFF_GAP, STAFF_TOP } from "@/lib/staff-notebook-layout";
 import { NotebookGlyph } from "./NotebookGlyph";
+import { NotebookTupletGlyph } from "./NotebookTupletGlyph";
+import { notebookTupletSpans } from "@/lib/notebook-tuplet-layout";
 import type { NotebookBounds, NotebookSelection } from "@/lib/notebook-editing";
 
 type Props = {
@@ -28,7 +30,7 @@ export function NotebookPaper({ page, width, height, paperScale, zoom, offset, l
   }), []);
   const transform = `translate(${offset.x} ${offset.y}) scale(${zoom})`;
   const path = (points: StaffPoint[]) => points.map((point, i) => `${i ? "L" : "M"}${point.x},${point.y}`).join(" ") + (points.length === 1 ? " l0.01,0.01" : "");
-  const groups = [...(page.tuplets ?? []), ...(openTupletIds?.length ? [{ id: "open", stampIds: openTupletIds }] : [])];
+  const tuplets = notebookTupletSpans(page, openTupletIds);
   return (
     <View
       testID="notebook-drawing"
@@ -51,20 +53,7 @@ export function NotebookPaper({ page, width, height, paperScale, zoom, offset, l
               <NotebookGlyph glyph={stamp.glyph} x={stamp.x} y={stamp.y} size={stamp.size} role={stamp.role} dotted={stamp.dotted} />
             </G>
           ))}
-          {groups.flatMap((group) => {
-            const members = (page.stamps ?? []).filter((stamp) => group.stampIds.includes(stamp.id));
-            const rows = [...new Set(members.map((s) => Math.floor(s.y / ROW_HEIGHT)))];
-            return rows.map((row) => {
-              const items = members.filter((s) => Math.floor(s.y / ROW_HEIGHT) === row);
-              const left = Math.min(...items.map((s) => s.x)) - 12, right = Math.max(...items.map((s) => s.x)) + 12;
-              const top = Math.max(row * ROW_HEIGHT + 12, Math.min(...items.map((s) => s.y - s.size * 1.8)));
-              return <G key={`${group.id}:${row}`} testID={group.id === "open" ? "notebook-open-tuplet" : "notebook-tuplet-bracket"} opacity={group.id === "open" ? 0.5 : 1}>
-                <Path d={`M${left} ${top + 7} V${top} H${right} V${top + 7}`} stroke="#111" strokeWidth={1.3} fill="none" />
-                <Rect x={(left + right) / 2 - 10} y={top - 9} width={20} height={17} fill="#fff" />
-                <SvgText testID="notebook-tuplet-number" x={(left + right) / 2} y={top + 4} textAnchor="middle" fontSize={13} fontStyle="italic" fill="#111">{members.length}</SvgText>
-              </G>;
-            });
-          })}
+          {tuplets.map((span) => <NotebookTupletGlyph key={`${span.id}:${span.row}`} {...span} />)}
           {pendingGlyph && preview && <G opacity={0.52}><NotebookGlyph glyph={pendingGlyph} x={preview.x} y={preview.y} size={26} role={pendingRole} dotted={pendingDotted} /></G>}
           {selectionBox && <Rect testID="notebook-selection-box" x={selectionBox.x} y={selectionBox.y} width={selectionBox.width} height={selectionBox.height} fill="#c89c50" fillOpacity={0.12} stroke="#a36f36" strokeDasharray="5 4" strokeWidth={1} />}
         </G>

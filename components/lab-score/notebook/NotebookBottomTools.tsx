@@ -3,6 +3,8 @@ import { PanResponder, Pressable, ScrollView, StyleSheet, Text, View, useWindowD
 import { Ionicons } from "@expo/vector-icons";
 import { ALL_INSTR_SYMBOLS, ACCIDENTALS, ARTICULATIONS, REPEAT_SIGNS } from "@/components/ScorePalette";
 import { NotebookGlyphPreview } from "./NotebookGlyph";
+import { NotebookTupletPreview } from "./NotebookTupletGlyph";
+import { useNotebookRestPicker } from "./NotebookRestPicker";
 import type { NotebookMode } from "./NotebookModeMenu";
 import { useLanguage } from "@/contexts/LanguageContext";
 
@@ -36,9 +38,8 @@ type Props = {
 };
 
 const durations = ["whole", "half", "quarter", "eighth", "sixteenth", "thirty_second"];
-const rests = ["rest-whole", "rest-half", "rest-quarter", "rest-eighth", "rest-sixteenth"];
 const roleValues: Choice["role"][] = ["ghost", "normal", "strong"];
-type NotesCategory = "note" | "rest" | "marks" | null;
+type NotesCategory = "note" | "marks" | null;
 const durationLabels = {
   en: ["Whole", "Half", "Quarter", "Eighth", "16th", "32nd"],
   ko: ["온음표", "2분음표", "4분음표", "8분음표", "16분음표", "32분음표"],
@@ -56,6 +57,7 @@ export function NotebookBottomTools(props: Props) {
   const [gestureDuration, setGestureDuration] = useState("quarter");
   const [dotChoice, setDotChoice] = useState(false);
   const [category, setCategory] = useState<NotesCategory>(null);
+  const [restGestureActive, setRestGestureActive] = useState(false);
   const [selectionTab, setSelectionTab] = useState<"select" | "clipboard">("select");
   const originRef = useRef<View>(null);
   const dockRef = useRef<View>(null);
@@ -76,6 +78,15 @@ export function NotebookBottomTools(props: Props) {
   const pickerTop = props.pickerTop ?? 128;
   const durationRowHeight = Math.max(8, Math.min(34, (dockPosition.y - pickerTop - 12) / 6));
   const durationColumnHeight = durationRowHeight * durations.length + 8;
+  const restPicker = useNotebookRestPicker({
+    ko,
+    topBoundary: pickerTop,
+    modeKey: mode,
+    otherPickerActive: gestureActive,
+    dockRef,
+    onChoose: props.onChoose,
+    onActiveChange: setRestGestureActive,
+  });
 
   const restoreCancelledGesture = () => {
     const previous = gestureSnapshot.current;
@@ -278,26 +289,22 @@ export function NotebookBottomTools(props: Props) {
       })}>
           <View style={styles.notesDockContent}>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryRow}>
-              <View ref={originRef} collapsable={false} onLayout={() => originRef.current?.measureInWindow((x, y, width, height) => setOriginLayout({ x, y, width, height }))} {...noteResponder.panHandlers} style={[styles.categoryButton, styles.noteOrigin]}>
-              <Pressable testID="notebook-note-origin" accessibilityRole="button" accessibilityLabel={ko ? "음표 선택. 좌우로 강도를, 위로 음가를 고르세요." : "Note picker. Swipe sideways for role, up for duration."} accessibilityState={{ expanded: showAccessibleChooser }} accessibilityActions={[{ name: "expand", label: ko ? "음표 선택기 펼치기" : "Expand note chooser" }]} onAccessibilityAction={(event) => { if (event.nativeEvent.actionName === "expand") setShowAccessibleChooser(true); }} onPress={() => { if (responderUsed.current) { responderUsed.current = false; return; } setShowAccessibleChooser(true); }} style={{ flex: 1, alignSelf: "stretch", alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 4 }}>
-                <NotebookGlyphPreview glyph={gestureDuration} size={17} role={gestureRole} dotted={dotChoice} />
-                <Text style={styles.categoryLabel}>{ko ? "음표" : "NOTE"}</Text>
-              </Pressable>
+              <View ref={originRef} collapsable={false} pointerEvents={restGestureActive ? "none" : "auto"} onLayout={() => originRef.current?.measureInWindow((x, y, width, height) => setOriginLayout({ x, y, width, height }))} {...noteResponder.panHandlers} style={[styles.categoryButton, styles.noteOrigin, restGestureActive && { opacity: 0 }]}>
+                {!restGestureActive && <Pressable testID="notebook-note-origin" accessibilityRole="button" accessibilityLabel={ko ? "음표 선택. 좌우로 강도를, 위로 음가를 고르세요." : "Note picker. Swipe sideways for role, up for duration."} accessibilityState={{ expanded: showAccessibleChooser }} accessibilityActions={[{ name: "expand", label: ko ? "음표 선택기 펼치기" : "Expand note chooser" }]} onAccessibilityAction={(event) => { if (event.nativeEvent.actionName === "expand") setShowAccessibleChooser(true); }} onPress={() => { if (responderUsed.current) { responderUsed.current = false; return; } setShowAccessibleChooser(true); }} style={styles.originInner}>
+                  <NotebookGlyphPreview glyph={gestureDuration} size={17} role={gestureRole} dotted={dotChoice} />
+                  <Text style={styles.categoryLabel}>{ko ? "음표" : "NOTE"}</Text>
+                </Pressable>}
               </View>
-              {!gestureActive && <Pressable testID="notebook-category-rest" accessibilityRole="button" accessibilityState={{ expanded: category === "rest", selected: category === "rest" }} onPress={() => setCategory(category === "rest" ? null : "rest")} style={[styles.categoryButton, category === "rest" && styles.categoryActive]}>
-                <NotebookGlyphPreview glyph="rest-quarter" size={17} role="normal" dotted={false} />
-                <Text style={styles.categoryLabel}>{ko ? "쉼표" : "REST"}</Text>
-                <Ionicons name={category === "rest" ? "chevron-up" : "chevron-down"} size={12} color="#8b7a60" />
-              </Pressable>}
-              {!gestureActive && <Pressable testID="notebook-tuplet" accessibilityRole="button" accessibilityState={{ selected: props.tupletCount !== null }} onPress={props.onTuplet} style={[styles.categoryButton, props.tupletCount !== null && styles.tupletOpen]}>
-                <Text style={styles.tupletBracket}>[ {props.tupletCount ?? ""} ]</Text>
+              {restPicker.origin}
+              <Pressable testID="notebook-tuplet" disabled={gestureActive || restGestureActive} accessibilityElementsHidden={gestureActive || restGestureActive} accessibilityRole="button" accessibilityState={{ selected: props.tupletCount !== null }} onPress={props.onTuplet} style={[styles.categoryButton, props.tupletCount !== null && styles.tupletOpen, (gestureActive || restGestureActive) && { opacity: 0 }]}>
+                <NotebookTupletPreview count={props.tupletCount ?? 3} />
                 <Text style={styles.categoryLabel}>{props.tupletCount === null ? (ko ? "잇단음표" : "TUPLET") : `${ko ? "잇단음표" : "TUPLET"} ${props.tupletCount}`}</Text>
-              </Pressable>}
-              {!gestureActive && <Pressable testID="notebook-category-marks" accessibilityRole="button" accessibilityState={{ expanded: category === "marks", selected: category === "marks" }} onPress={() => setCategory(category === "marks" ? null : "marks")} style={[styles.categoryButton, category === "marks" && styles.categoryActive]}>
+              </Pressable>
+              <Pressable testID="notebook-category-marks" disabled={gestureActive || restGestureActive} accessibilityElementsHidden={gestureActive || restGestureActive} accessibilityRole="button" accessibilityState={{ expanded: category === "marks", selected: category === "marks" }} onPress={() => setCategory(category === "marks" ? null : "marks")} style={[styles.categoryButton, category === "marks" && styles.categoryActive, (gestureActive || restGestureActive) && { opacity: 0 }]}>
                 <Ionicons name="musical-notes-outline" size={16} color="#725b3c" />
                 <Text style={styles.categoryLabel}>{ko ? "기호" : "MARKS"}</Text>
                 <Ionicons name={category === "marks" ? "chevron-up" : "chevron-down"} size={12} color="#8b7a60" />
-              </Pressable>}
+              </Pressable>
             </ScrollView>
           </View>
 
@@ -319,29 +326,16 @@ export function NotebookBottomTools(props: Props) {
           </>}
         </View> : null}
 
+        {restPicker.overlay}
+
         {category ? (
           <View testID="notebook-symbol-drawer" style={[styles.categoryDrawer, { maxHeight: 300 }]}>
             <View style={styles.drawerHeader}>
-              <Text style={styles.drawerTitle}>
-                {category === "rest" ? (ko ? "쉼표" : "Rests") : (ko ? "악보 기호" : "Musical marks")}
-              </Text>
+              <Text style={styles.drawerTitle}>{ko ? "악보 기호" : "Musical marks"}</Text>
               <Pressable accessibilityRole="button" accessibilityLabel={ko ? "도구 닫기" : "Close tools"} onPress={() => setCategory(null)} style={styles.drawerClose}><Ionicons name="close" size={17} color="#796b55" /></Pressable>
             </View>
             <ScrollView style={[styles.drawerScroll, { maxHeight: 255 }]} contentContainerStyle={styles.drawerContent} showsVerticalScrollIndicator keyboardShouldPersistTaps="handled">
-              {category === "rest" ? (
-                <>
-                  <Text style={styles.drawerEyebrow}>{ko ? "쉼표 음가" : "REST DURATION"}</Text>
-                  <View style={styles.drawerGlyphGrid}>
-                    {rests.map((rest) => (
-                      <Pressable key={rest} testID={`notebook-symbol-${rest}`} accessibilityRole="button" accessibilityLabel={`${ko ? "쉼표" : "Rest"} ${rest.replace("rest-", "")}`} onPress={() => { props.onChoose({ glyph: rest, role: "normal", dotted: false }); setCategory(null); }} style={styles.drawerGlyphButton}>
-                        <NotebookGlyphPreview glyph={rest} size={24} role="normal" dotted={false} />
-                        <Text style={styles.drawerGlyphLabel}>{rest.replace("rest-", "")}</Text>
-                      </Pressable>
-                    ))}
-                  </View>
-                </>
-              ) : (
-                markGroups.map((group) => (
+              {markGroups.map((group) => (
                   <View key={group.label} style={styles.drawerMarkGroup}>
                     <Text style={styles.drawerEyebrow}>{group.label}</Text>
                     <View style={styles.drawerGlyphGrid}>
@@ -353,8 +347,7 @@ export function NotebookBottomTools(props: Props) {
                       ))}
                     </View>
                   </View>
-                ))
-              )}
+                ))}
             </ScrollView>
           </View>
         ) : null}
@@ -445,7 +438,8 @@ const styles = StyleSheet.create({
   previewGlyph: { height: 42, alignItems: "center", justifyContent: "center", overflow: "hidden" },
   categoryRow: { minHeight: 42, flexDirection: "row", alignItems: "center", gap: 6, paddingLeft: 54, paddingRight: 4 },
   categoryButton: { minHeight: 39, paddingHorizontal: 10, borderRadius: 10, borderWidth: 1, borderColor: "#e7dfd2", backgroundColor: "#fffdf9", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
-  noteOrigin: { minWidth: 86, borderColor: "#bca483", backgroundColor: "#f3ecdf" },
+  noteOrigin: { width: 104, minWidth: 104, height: 70, minHeight: 70, flexShrink: 0, borderColor: "#bca483", backgroundColor: "#f3ecdf" },
+  originInner: { flex: 1, alignSelf: "stretch", alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 4 },
   categoryActive: { backgroundColor: "#f1eadd", borderColor: "#bba27f" },
   categoryLabel: { color: "#62543e", fontSize: 9, fontWeight: "800", letterSpacing: 0.25 },
   tupletBracket: { color: "#725b3c", fontSize: 15, fontWeight: "700", lineHeight: 19 },

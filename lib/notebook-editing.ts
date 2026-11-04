@@ -7,7 +7,8 @@ export type NotebookClipboard = { id: string; label: string; page: StaffPage; co
 export const emptySelection = (): NotebookSelection => ({ strokeIds: [], stampIds: [] });
 export const selectionCount = (s: NotebookSelection) => s.strokeIds.length + s.stampIds.length;
 export const isNotebookNote = (glyph: string) => /^(whole|half|quarter|eighth|sixteenth|thirty_second)$/.test(glyph);
-export const isTupletMember = (glyph: string) => isNotebookNote(glyph) || glyph.startsWith("rest-");
+export const isNotebookRest = (glyph: string) => /^rest-(whole|half|quarter|eighth|sixteenth|thirty_second)$/.test(glyph);
+export const isTupletMember = (glyph: string) => isNotebookNote(glyph) || isNotebookRest(glyph);
 const accidentals = new Set(["sharp", "flat", "natural", "double_sharp", "double_flat"]);
 const articulation = new Set(["staccato", "tenuto", "accent", "fermata", "marcato", "staccatissimo", "portato", "snap_pizzicato", "left_hand_pizzicato"]);
 export const isAttachedMark = (glyph: string) => accidentals.has(glyph) || articulation.has(glyph);
@@ -67,7 +68,8 @@ export function selectionBounds(page: StaffPage, selection: NotebookSelection): 
 export function selectionDelta(page: StaffPage, selection: NotebookSelection, delta: StaffPoint, snap: boolean): StaffPoint {
   const bounds = selectionBounds(page, selection);
   if (!bounds) return delta;
-  const reference = page.stamps?.find((s) => selection.stampIds.includes(s.id) && isNotebookNote(s.glyph));
+  const reference = page.stamps?.find((s) => selection.stampIds.includes(s.id) && isNotebookNote(s.glyph))
+    ?? page.stamps?.find((s) => selection.stampIds.includes(s.id) && isNotebookRest(s.glyph));
   let dy = delta.y;
   if (snap && reference) {
     dy = snapStaffY(reference.y + dy, page.staffCount ?? 7, reference.y - bounds.y,

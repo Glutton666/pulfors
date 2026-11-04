@@ -3,6 +3,18 @@ import assert from "node:assert/strict";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createStaffNotebook, DEFAULT_NOTEBOOK_SETTINGS, listStaffNotebooks, saveStaffNotebook } from "../lib/staff-notebook";
 
+test("dotted thirty-second rests round-trip inside a tuplet", async () => {
+  await AsyncStorage.setItem("lab_staff_notebooks_v1", "[]");
+  const note = createStaffNotebook("Rest tuplet");
+  note.pages[0].stamps = [
+    { id: "r", glyph: "rest-thirty_second", x: 55, y: 102, size: 26, dotted: true },
+    { id: "n", glyph: "quarter", x: 90, y: 102, size: 26 },
+  ];
+  note.pages[0].tuplets = [{ id: "t", stampIds: ["r", "n"] }];
+  await saveStaffNotebook(note);
+  assert.deepEqual((await listStaffNotebooks())[0].pages, note.pages);
+});
+
 test("legacy ink-only notebooks remain readable and keep their exact points", async () => {
   const legacy = { id: "legacy", title: "Ink", updatedAt: 10, pages: [{ id: "page", strokes: [{ id: "s", width: 3, points: [{ x: 60, y: 102 }] }] }] };
   await AsyncStorage.setItem("lab_staff_notebooks_v1", JSON.stringify([legacy]));
