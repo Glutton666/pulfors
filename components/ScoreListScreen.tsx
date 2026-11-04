@@ -215,6 +215,7 @@ export function ScoreListScreen({ defaultBpm, onClose, onOpenEditor, onTitleSubm
         </Pressable>
         {/* 제목 — 화면 전체 기준 가운데 정렬 (우측 버튼과 무관하게 절대 중앙) */}
         <View
+          pointerEvents="none"
           style={{
             position: "absolute", left: 0, right: 0,
             top: topInset + 8, bottom: 12,
