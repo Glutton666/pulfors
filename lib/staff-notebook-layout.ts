@@ -1,20 +1,26 @@
-import type { NotebookSettings, StaffNotebook, StaffPage, StaffPoint, StaffStroke } from "./staff-notebook";
+import type { NotebookSettings, StaffNotebook, StaffPage, StaffPoint, StaffStroke, StaffStamp } from "./staff-notebook";
 
 export const PAPER_WIDTH = 900;
 export const ROW_HEIGHT = 155;
 export const STAFF_TOP = 78;
 export const STAFF_GAP = 12;
-export type NotebookRow = { pageIndex: number; rowIndex: number; id: string };
+export type NotebookRow = { pageIndex: number; rowIndex: number; id: string; keepWithNext?: boolean };
 /** Project viewport-filling rows into the editable document, without mutating the original. */
 export function fitNotebookPage(note: StaffNotebook, pageIndex: number, minimumRows: number): StaffNotebook {
   const page = note.pages[pageIndex];
   const count = Math.min(200, Math.max(1, Math.ceil(minimumRows)));
-  if (!page || (page.staffCount ?? 7) >= count) return note;
+  if (!page || note.settings?.rowsPerPage !== undefined || (page.staffCount ?? 7) >= count) return note;
   return { ...note, pages: note.pages.map((item, index) => index === pageIndex ? { ...item, staffCount: count } : item) };
 }
 export function notebookRows(note: StaffNotebook): NotebookRow[] {
-  return note.pages.flatMap((page, pageIndex) =>
-    Array.from({ length: page.staffCount ?? 7 }, (_, rowIndex) => ({ pageIndex, rowIndex, id: `${page.id}:${rowIndex}` })));
+  return note.pages.flatMap((page, pageIndex) => {
+    const spans = (page.tuplets ?? []).map((group) => group.stampIds.map((id) => page.stamps?.find((s) => s.id === id)?.y ?? 0));
+    (page.stamps ?? []).forEach((stamp) => { const parent = page.stamps?.find((s) => s.id === stamp.attachTo); if (parent) spans.push([parent.y, stamp.y]); });
+    return Array.from({ length: page.staffCount ?? 7 }, (_, rowIndex) => ({
+      pageIndex, rowIndex, id: `${page.id}:${rowIndex}`,
+      ...(spans.some((ys) => rowAt(Math.min(...ys), page.staffCount ?? 7) <= rowIndex && rowAt(Math.max(...ys), page.staffCount ?? 7) > rowIndex) ? { keepWithNext: true } : {}),
+    }));
+  });
 }
 export function shuffledRows(rows: NotebookRow[], random: () => number = Math.random): NotebookRow[] {
   const copy = [...rows];
@@ -36,8 +42,9 @@ export function stampPosition(page: StaffPage, settings: NotebookSettings, ancho
   let x = previous ? previous.x + 22 : 55;
   let y = previous?.y ?? STAFF_TOP + STAFF_GAP * 2;
   if (x > PAPER_WIDTH - 55) { x = 55; y = (rowAt(y, page.staffCount ?? 7) + 1) * ROW_HEIGHT + STAFF_TOP + STAFF_GAP * 2; }
-  x = Math.max(38, Math.min(862, x + settings.offsetX));
-  y = Math.max(12, Math.min((page.staffCount ?? 7) * ROW_HEIGHT - 12, y + settings.offsetY));
+  // Legacy offsets remain readable, but never silently shift new placements.
+  x = Math.max(38, Math.min(862, x));
+  y = Math.max(12, Math.min((page.staffCount ?? 7) * ROW_HEIGHT - 12, y));
   if (settings.snap) {
     const top = rowAt(y, page.staffCount ?? 7) * ROW_HEIGHT + STAFF_TOP;
     y = top + Math.round((y - top) / (STAFF_GAP / 2)) * STAFF_GAP / 2;
@@ -47,8 +54,9 @@ export function stampPosition(page: StaffPage, settings: NotebookSettings, ancho
 export function screenToPaper(point: StaffPoint, offset: StaffPoint, scale: number): StaffPoint {
   return { x: (point.x - offset.x) / scale, y: (point.y - offset.y) / scale };
 }
-function inkInRow(stroke: StaffStroke, row: number): StaffStroke[] {
-  const low = row * ROW_HEIGHT, high = low + ROW_HEIGHT;
+export function inkInRow(stroke: StaffStroke, row: number, height = ROW_HEIGHT): StaffStroke[] {
+  const low = row * height, high = low + height;
+  if (stroke.points.every((point) => point.y >= low && point.y < high)) return [stroke];
   if (stroke.points.length === 1) return stroke.points[0].y >= low && stroke.points[0].y < high ? [stroke] : [];
   const pieces: StaffPoint[][] = [];
   let current: StaffPoint[] = [];
@@ -80,6 +88,19 @@ export function materializeRows(note: StaffNotebook, rows: NotebookRow[]): Staff
     }),
     stamps: rows.flatMap((row, index) => (note.pages[row.pageIndex].stamps ?? [])
       .filter((stamp) => rowAt(stamp.y, note.pages[row.pageIndex].staffCount ?? 7) === row.rowIndex)
-      .map((stamp) => ({ ...stamp, id: `${index}:${stamp.id}`, y: stamp.y + (index - row.rowIndex) * ROW_HEIGHT }))),
+      .map((stamp) => ({ ...stamp, id: `${index}:${stamp.id}`, attachTo: stamp.attachTo ? `${index}:${stamp.attachTo}` : undefined, y: stamp.y + (index - row.rowIndex) * ROW_HEIGHT }))),
+    tuplets: rows.flatMap((row, index) => {
+      const page = note.pages[row.pageIndex];
+      return (page.tuplets ?? []).flatMap((group) => {
+        const members = group.stampIds.map((id) => page.stamps?.find((s) => s.id === id)).filter((s): s is StaffStamp => !!s);
+        const firstRow = Math.min(...members.map((s) => rowAt(s.y, page.staffCount ?? 7)));
+        if (row.rowIndex !== firstRow) return [];
+        const positions = members.map((stamp) => {
+          const sourceRow = rowAt(stamp.y, page.staffCount ?? 7), target = index + sourceRow - firstRow;
+          return rows[target]?.pageIndex === row.pageIndex && rows[target]?.rowIndex === sourceRow ? `${target}:${stamp.id}` : null;
+        });
+        return positions.every(Boolean) ? [{ id: `${index}:${group.id}`, stampIds: positions as string[] }] : [];
+      });
+    }),
   };
 }

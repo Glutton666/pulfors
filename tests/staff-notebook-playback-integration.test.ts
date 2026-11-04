@@ -170,6 +170,43 @@ beforeEach(() => {
   random = jest.spyOn(Math, "random").mockReturnValue(0);
 });
 
+test.each([1, 4] as const)("simple 3/4 meter drives actual PCM and %s-measure row timing", async (perRow) => {
+  const note = makeNote(perRow === 4 ? "phrase" : "measure", 2);
+  note.settings = { ...DEFAULT_NOTEBOOK_SETTINGS, bpm: 120, beatsPerMeasure: 3, lineUnit: perRow === 4 ? "phrase" : "measure" };
+  const { result } = renderHook(() => useNotebookPlayback(note, true));
+  await act(async () => { await result.current.start(note); });
+  const args = mix.mock.calls[0][0];
+  expect(args.measureDurationMs).toBe(1500 * perRow * 2);
+  const pcm = jest.mocked(renderer.playWebRenderedLoop).mock.calls[0][0] as Float32Array;
+  expect(pcm[0]).toBe(amplitude.accent);
+  expect(pcm[Math.round(0.5 * SR)]).toBe(amplitude.normal);
+  expect(pcm[Math.round(1.0 * SR)]).toBe(amplitude.normal);
+  expect(pcm[Math.round(1.5 * SR)]).toBe(amplitude.accent);
+  act(() => { presentedMs = 1500 * perRow + 1; jest.advanceTimersByTime(35); });
+  expect(result.current.position?.row).toBe(1);
+  act(() => result.current.stop());
+});
+test("repeat-follow output repeats actual source PCM while presentation returns to its original row", async () => {
+  const note = makeNote("measure", 3);
+  note.settings = { ...DEFAULT_NOTEBOOK_SETTINGS, followSymbols: true, source: {
+    ...note.settings!.source!, bpm: 120, beatsPerMeasure: 3,
+    beatTypes: ["strong", "normal", "accent"], beatSubdivisions: {}, barRepeats: {}, loopBlocks: [],
+  } };
+  note.pages[1].stamps = [{ id: "repeat", glyph: "repeat_end", x: 800, y: 102, size: 26 }];
+  const { result } = renderHook(() => useNotebookPlayback(note, true));
+  await act(async () => { await result.current.start(note); });
+  expect(result.current.error).toBe("");
+  const pcm = jest.mocked(renderer.playWebRenderedLoop).mock.calls[0][0] as Float32Array;
+  expect(mix.mock.calls[0][0].measureDurationMs).toBe(2500);
+  expect([0, 500, 1000, 1500, 2000].map((ms) => pcm[Math.round(ms / 1000 * SR)]))
+    .toEqual([amplitude.strong, amplitude.normal, amplitude.strong, amplitude.normal, amplitude.accent]);
+  act(() => { presentedMs = 1001; jest.advanceTimersByTime(35); });
+  expect(result.current.position?.row).toBe(0);
+  act(() => { presentedMs = 2001; jest.advanceTimersByTime(35); });
+  expect(result.current.position?.row).toBe(2);
+  act(() => result.current.stop());
+});
+
 afterEach(() => {
   cleanup();
   jest.restoreAllMocks();

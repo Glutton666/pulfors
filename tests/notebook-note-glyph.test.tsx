@@ -61,3 +61,9 @@ test("rest notation and Beat/Bar's intentional normal ghost glyph remain unchang
   expect(view.getByTestId("bar-rest-eighth-0")).toBeTruthy();
   expect(view.getByTestId("bar-note-normal-9").querySelectorAll("path")).toHaveLength(2);
 });
+test.each(["normal", "ghost", "strong"] as const)("%s role and dot remain explicit rather than becoming default ghost notes", (role) => {
+  const view = render(<svg><NotebookGlyph glyph="quarter" x={0} y={50} size={26} role={role} dotted /></svg>);
+  expect(view.queryByTestId("notebook-ghost-mark") !== null).toBe(role === "ghost");
+  expect(view.queryByTestId("notebook-strong-mark") !== null).toBe(role === "strong");
+  expect(view.getByTestId("notebook-dot")).toBeTruthy();
+});

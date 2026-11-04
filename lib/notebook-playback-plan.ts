@@ -2,7 +2,7 @@ import type { NotebookRow } from "./staff-notebook-layout";
 
 export type NotebookBar = { source: number; startMs: number; endMs: number; group?: string };
 export type NotebookChunk = NotebookBar & { row: number };
-export type NotebookPlan = { rows: NotebookRow[]; chunks: NotebookChunk[]; rowEnds: number[]; durationMs: number };
+export type NotebookPlan = { rows: NotebookRow[]; chunks: NotebookChunk[]; rowEnds: number[]; durationMs: number; positionRows?: number[] };
 
 /** Shuffle whole paper units, joining units when a source block crosses their boundary. */
 export function buildNotebookPlan(
@@ -19,7 +19,7 @@ export function buildNotebookPlan(
   rows.forEach((_, i) => {
     const prior = i ? barAt(i * measuresPerRow - 1) : undefined;
     const first = barAt(i * measuresPerRow);
-    if (prior?.group !== undefined && prior.group === first.group) groups[groups.length - 1].push(i);
+    if (rows[i - 1]?.keepWithNext || (prior?.group !== undefined && prior.group === first.group)) groups[groups.length - 1].push(i);
     else groups.push([i]);
   });
   if (random) for (let i = groups.length - 1; i > 0; i--) {
@@ -39,9 +39,9 @@ export function buildNotebookPlan(
   if (durationMs > 600_000) throw new Error("NOTEBOOK_TOO_LONG");
   return { rows: order.map((i) => rows[i]), chunks, rowEnds, durationMs };
 }
-export function notebookPosition(rowEnds: number[], timeMs: number) {
+export function notebookPosition(rowEnds: number[], timeMs: number, positionRows?: number[]) {
   let row = rowEnds.findIndex((end) => timeMs < end);
   if (row < 0) row = Math.max(0, rowEnds.length - 1);
   const start = row ? rowEnds[row - 1] : 0;
-  return { row, progress: Math.max(0, Math.min(1, (timeMs - start) / ((rowEnds[row] ?? 1) - start))) };
+  return { row: positionRows?.[row] ?? row, progress: Math.max(0, Math.min(1, (timeMs - start) / ((rowEnds[row] ?? 1) - start))) };
 }

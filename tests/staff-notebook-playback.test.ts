@@ -85,7 +85,7 @@ test("empty paper starts at first staff; new marks follow the last written part"
   assert.deepEqual(stampPosition({ id: "p", strokes: [] }, settings), { x: 55, y: 102 });
   const p = { id: "p", strokes: [], stamps: [{ id: "old", glyph: "sharp", x: 55, y: 102, size: 26 }], anchor: { x: 400, y: 257 } };
   assert.deepEqual(stampPosition(p, settings), { x: 422, y: 257 });
-  assert.deepEqual(stampPosition(p, { ...settings, snap: false, offsetX: 3, offsetY: 2 }), { x: 425, y: 259 });
+  assert.deepEqual(stampPosition(p, { ...settings, snap: false, offsetX: 3, offsetY: 2 }), { x: 422, y: 257 });
 });
 test("screen transforms invert paper pan and scale without adding scroll a second time", () => {
   assert.deepEqual(screenToPaper({ x: 220, y: 420 }, { x: 20, y: 20 }, 2), { x: 100, y: 200 });

@@ -6,6 +6,7 @@ import { buildNotebookPlan, notebookPosition, type NotebookBar } from "@/lib/not
 import { getNotebookPatternSchedule, renderNotebookPatternPCM } from "@/lib/audio-export";
 import { getWebAudioContext, playWebRenderedLoop, releaseRenderedWav, saveRenderedWav } from "@/lib/audio-renderer";
 import type { PracticeEntry } from "@/lib/storage";
+import { followNotebookSigns } from "@/lib/notebook-navigation";
 
 let fileId = 0;
 export function useNotebookPlayback(note: StaffNotebook, active: boolean) {
@@ -42,10 +43,11 @@ export function useNotebookPlayback(note: StaffNotebook, active: boolean) {
       check();
       const snapshot = input ?? latest.current;
       const settings = { ...DEFAULT_NOTEBOOK_SETTINGS, ...snapshot.settings };
-      const continuousClick = !settings.source;
+      const continuousClick = !settings.source && !settings.followSymbols;
+      const beats = settings.beatsPerMeasure ?? 1;
       const simple: PracticeEntry = {
-        id: "notebook-click", label: "1/4", createdAt: 0, mode: "beat",
-        bpm: settings.bpm, beatsPerMeasure: 1, beatTypes: ["normal"],
+        id: "notebook-click", label: `${beats}/4`, createdAt: 0, mode: "beat",
+        bpm: settings.bpm, beatsPerMeasure: beats, beatTypes: Array.from({ length: beats }, (_, i) => beats > 1 && i === 0 ? "accent" : "normal"),
         beatSubdivisions: {}, barRepeats: {}, barLoopMode: "once", subdivisionPattern: [],
       };
       const source = settings.source ?? simple;
@@ -75,7 +77,9 @@ export function useNotebookPlayback(note: StaffNotebook, active: boolean) {
           });
         }
       }
-      const plan = buildNotebookPlan(notebookRows(snapshot), bars, settings.lineUnit === "phrase" ? 4 : 1, settings.random);
+      const perRow = settings.lineUnit === "phrase" ? 4 : 1;
+      const base = buildNotebookPlan(notebookRows(snapshot), bars, perRow, settings.random && !settings.followSymbols);
+      const plan = settings.followSymbols ? followNotebookSigns(snapshot, base, perRow, settings.random) : base;
       let cursor = 0;
       const ticks = plan.chunks.flatMap((chunk) => {
         const scheduled = rendered[chunk.source].ticks
@@ -126,7 +130,7 @@ export function useNotebookPlayback(note: StaffNotebook, active: boolean) {
         // keep its camera there while audio continues; native loop-position
         // resets must not make the sheet jump back to the beginning.
         furthestPosition = Math.max(furthestPosition, at);
-        setPosition(notebookPosition(plan.rowEnds, continuousClick ? furthestPosition : at));
+        setPosition(notebookPosition(plan.rowEnds, continuousClick ? furthestPosition : at, plan.positionRows));
         if (!ready() || !continuousClick && at >= plan.durationMs) stop();
       }, 30);
       dispose.current = () => { clearInterval(timer); release(); };

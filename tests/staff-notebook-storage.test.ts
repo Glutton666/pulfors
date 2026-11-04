@@ -31,3 +31,25 @@ test("malformed geometry is refused and does not overwrite the previous saved li
   await assert.rejects(() => saveStaffNotebook({ ...note, pages: [{ id: "bad", strokes: [], stamps: [{ id: "bad", glyph: "sharp", x: NaN, y: 5, size: 26 }] }] }));
   assert.equal(await AsyncStorage.getItem("lab_staff_notebooks_v1"), before);
 });
+test("roles, dots, attachments, tuplets, explicit rows and navigation settings survive save/load", async () => {
+  await AsyncStorage.setItem("lab_staff_notebooks_v1", "[]");
+  const note = createStaffNotebook("New notation");
+  note.settings = { ...DEFAULT_NOTEBOOK_SETTINGS, rowsPerPage: 3, beatsPerMeasure: 4, followSymbols: true, snap: false };
+  note.pages[0].staffCount = 3;
+  note.pages[0].stamps = [
+    { id: "n", glyph: "eighth", x: 100, y: 102, size: 26, role: "strong", dotted: true },
+    { id: "r", glyph: "rest-quarter", x: 150, y: 102, size: 26 },
+    { id: "a", glyph: "sharp", x: 90, y: 95, size: 26, attachTo: "n" },
+  ];
+  note.pages[0].tuplets = [{ id: "t", stampIds: ["n", "r"] }];
+  note.lastNote = { pageId: note.pages[0].id, stampId: "n" };
+  await saveStaffNotebook(note);
+  const loaded = (await listStaffNotebooks())[0];
+  assert.deepEqual(loaded.pages, note.pages);
+  assert.deepEqual(loaded.settings, note.settings);
+  assert.deepEqual(loaded.lastNote, note.lastNote);
+  const before = await AsyncStorage.getItem("lab_staff_notebooks_v1");
+  await assert.rejects(() => saveStaffNotebook({ ...note, lastNote: { pageId: "missing", stampId: "n" } }));
+  await assert.rejects(() => saveStaffNotebook({ ...note, pages: [{ ...note.pages[0], tuplets: [{ id: "broken", stampIds: ["n", "absent"] }] }] }));
+  assert.equal(await AsyncStorage.getItem("lab_staff_notebooks_v1"), before);
+});

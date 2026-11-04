@@ -8,17 +8,19 @@ import { useLabScoreNotebook } from "@/hooks/useLabScoreNotebook";
 import { useNotebookPlayback } from "@/hooks/useNotebookPlayback";
 import { DEFAULT_NOTEBOOK_SETTINGS, type NotebookSettings, type StaffNotebook, type StaffPage, type StaffPoint, type StaffStamp, type StaffStroke } from "@/lib/staff-notebook";
 import { loadPracticeBook, type PracticeEntry } from "@/lib/storage";
-import { fitNotebookPage, notebookRows, materializeRows, stampPosition, screenToPaper, rowAt, PAPER_WIDTH, ROW_HEIGHT } from "@/lib/staff-notebook-layout";
-import { NotebookLeftPanel } from "@/components/lab-score/notebook/NotebookLeftPanel";
-import { NotebookRightPanel } from "@/components/lab-score/notebook/NotebookRightPanel";
+import { fitNotebookPage, materializeRows, stampPosition, screenToPaper, rowAt, PAPER_WIDTH, ROW_HEIGHT } from "@/lib/staff-notebook-layout";
+import { NotebookModeMenu, type NotebookMode } from "@/components/lab-score/notebook/NotebookModeMenu";
+import { NotebookBottomTools } from "@/components/lab-score/notebook/NotebookBottomTools";
+import { NotebookPlaybackBar } from "@/components/lab-score/notebook/NotebookPlaybackBar";
+import { NotebookSettingsPanel } from "@/components/lab-score/notebook/NotebookSettingsPanel";
 import { NotebookPaper } from "@/components/lab-score/notebook/NotebookPaper";
-import { ALL_INSTR_SYMBOLS, ARTICULATIONS, ACCIDENTALS, REPEAT_SIGNS } from "@/components/ScorePalette";
+import { attachedPosition, captureSelection, emptySelection, hitObject, includeAttached, isAttachedMark, isNotebookNote, isTupletMember, paginateNotebook, rectangle, removeSelection, selectRectangle, selectionBounds, selectionCount, selectionDelta, transformSelection, type NotebookClipboard, type NotebookSelection, type NotebookBounds } from "@/lib/notebook-editing";
 
 type Tool = "pen" | "erase" | "move" | "select";
 const id = (prefix: string) => `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 const withDefaults = (note: StaffNotebook): StaffNotebook => ({
   ...note,
-  settings: { ...DEFAULT_NOTEBOOK_SETTINGS, ...(note.settings ?? {}) },
+  settings: { ...DEFAULT_NOTEBOOK_SETTINGS, ...(note.settings ?? {}), offsetX: 0, offsetY: 0 },
   pages: note.pages.map((page) => ({ ...page, stamps: page.stamps ?? [] })),
 });
 const distToSegment = (p: StaffPoint, a: StaffPoint, b: StaffPoint) => {
@@ -66,28 +68,34 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
   const [tool, setTool] = useState<Tool>("pen");
   const [lineWidth, setLineWidth] = useState(2.5);
   const [pageIndex, setPageIndex] = useState(0);
-  const [panel, setPanel] = useState<"left" | "right" | null>(null);
+  const [panel, setPanel] = useState<"menu" | "settings" | null>(null);
+  const [mode, setMode] = useState<NotebookMode>("ink");
   const [patterns, setPatterns] = useState<PracticeEntry[]>([]);
   const [patternLoading, setPatternLoading] = useState(false);
   const [patternError, setPatternError] = useState("");
   const [scale, setScale] = useState(1);
   const [offset, setOffset] = useState<StaffPoint>({ x: 0, y: 0 });
-  const [selectedStampId, setSelectedStampId] = useState<string | null>(null);
+  const [selection, setSelection] = useState<NotebookSelection>(emptySelection);
+  const [selectionBox, setSelectionBox] = useState<NotebookBounds | null>(null);
+  const [clipboard, setClipboard] = useState<NotebookClipboard[]>([]);
+  const [tupletIds, setTupletIds] = useState<string[] | null>(null);
+  const [pendingNote, setPendingNote] = useState<{ role: "normal" | "ghost" | "strong"; dotted: boolean; attachTo?: string }>({ role: "normal", dotted: false });
+  const [dragDraft, setDragDraft] = useState<{ selection: NotebookSelection; delta: StaffPoint; base: StaffPage; paste: boolean; awaiting: boolean; point: StaffPoint } | null>(null);
   const [pendingGlyph, setPendingGlyph] = useState<string | null>(null);
   const [previewAnchor, setPreviewAnchor] = useState<StaffPoint | null>(null);
   const [drawing, setDrawing] = useState<StaffPoint[]>([]);
   const [viewport, setViewport] = useState({ width: 0, height: 0 });
+  const [playbackBarHeight, setPlaybackBarHeight] = useState(52);
   const paperScroll = useRef<ScrollView>(null);
   const horizontalScroll = useRef<ScrollView>(null);
+  const paperScrollOffset = useRef({ x: 0, y: 0 });
   const drawingRef = useRef<StaffPoint[]>([]);
   const erasedInGesture = useRef(false);
-  const leftToggleRef = useRef<any>(null);
   const rightToggleRef = useRef<any>(null);
-  const openedFrom = useRef<"left" | "right" | null>(null);
-  const undoStack = useRef<StaffPage[][]>([]);
-  const redoStack = useRef<StaffPage[][]>([]);
+  const undoStack = useRef<StaffNotebook[]>([]);
+  const redoStack = useRef<StaffNotebook[]>([]);
   const savedSnapshot = useRef(JSON.stringify(note));
-  const stampDrag = useRef<{ id: string; x: number; y: number } | null>(null);
+  const selectionGesture = useRef<{ kind: "box" | "drag"; start: StaffPoint; selection: NotebookSelection; base: StaffPage; hitId?: string } | null>(null);
   const panStart = useRef<{ point: StaffPoint; offset: StaffPoint } | null>(null);
   useEffect(() => { if (pageIndex >= note.pages.length) setPageIndex(Math.max(0, note.pages.length - 1)); }, [pageIndex, note.pages.length]);
   const settings = note.settings!;
@@ -95,41 +103,40 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
   const editingNote = useMemo(() => fitNotebookPage(note, pageIndex,
     Math.ceil(viewport.height / (ROW_HEIGHT * paperScale * scale))), [note, pageIndex, viewport.height, paperScale, scale]);
   const page = editingNote.pages[pageIndex] ?? editingNote.pages[0];
-  const displayRows = useMemo(() => notebookRows(editingNote), [editingNote.pages]);
   const playback = useNotebookPlayback(editingNote, active);
-  const metroRunning = playback.running && !settings.source;
   const playbackPage = useMemo(() => playback.running ? materializeRows(editingNote, playback.rows) : null, [playback.running, playback.rows, editingNote]);
   const visiblePage = playbackPage ?? page;
   const visibleHeight = (visiblePage.staffCount ?? 7) * ROW_HEIGHT;
-  const currentSelection = page.stamps?.find((stamp) => stamp.id === selectedStampId);
+  const resetTransient = () => {
+    setSelection(emptySelection()); setSelectionBox(null); setDragDraft(null); selectionGesture.current = null;
+    setPendingGlyph(null); setPreviewAnchor(null); setDrawing([]); drawingRef.current = []; setTupletIds(null); panStart.current = null;
+  };
   const updateSettings = (patch: Partial<NotebookSettings>) => {
-    if ((playback.running || playback.preparing) && ("source" in patch || "bpm" in patch || "random" in patch || "lineUnit" in patch)) playback.stop();
-    if ("offsetX" in patch || "offsetY" in patch) setPreviewAnchor((point) => point ? {
-      x: point.x + (patch.offsetX ?? settings.offsetX) - settings.offsetX,
-      y: point.y + (patch.offsetY ?? settings.offsetY) - settings.offsetY,
-    } : null);
+    if ((playback.running || playback.preparing) && ["source", "bpm", "random", "lineUnit", "beatsPerMeasure", "followSymbols"].some((key) => key in patch)) playback.stop();
     setNote((prev) => ({ ...prev, settings: { ...DEFAULT_NOTEBOOK_SETTINGS, ...(prev.settings ?? {}), ...patch } }));
   };
-  const replacePage = (index: number, next: StaffPage) => setNote((prev) => ({ ...prev, pages: prev.pages.map((item, i) => i === index ? next : item) }));
-  const checkpoint = () => { undoStack.current = [...undoStack.current.slice(-39), note.pages]; redoStack.current = []; };
+  const replacePage = (index: number, next: StaffPage, lastStampId?: string) => setNote((prev) => ({
+    ...prev, pages: prev.pages.map((item, i) => i === index ? next : item),
+    lastNote: lastStampId ? { pageId: next.id, stampId: lastStampId } : prev.lastNote?.pageId === next.id && !next.stamps?.some((stamp) => stamp.id === prev.lastNote!.stampId) ? undefined : prev.lastNote,
+  }));
+  const checkpoint = () => { undoStack.current = [...undoStack.current.slice(-39), editingNote]; redoStack.current = []; };
   const undo = () => {
     playback.stop();
     const previous = undoStack.current.at(-1);
     if (!previous) return;
-    redoStack.current = [...redoStack.current, note.pages];
+    redoStack.current = [...redoStack.current, note];
     undoStack.current = undoStack.current.slice(0, -1);
-    setNote((prev) => ({ ...prev, pages: previous }));
+    resetTransient(); setNote(previous);
   };
   const redo = () => {
     playback.stop();
     const next = redoStack.current.at(-1);
     if (!next) return;
-    undoStack.current = [...undoStack.current, note.pages];
+    undoStack.current = [...undoStack.current, note];
     redoStack.current = redoStack.current.slice(0, -1);
-    setNote((prev) => ({ ...prev, pages: next }));
+    resetTransient(); setNote(next);
   };
-  const openPanel = (next: "left" | "right") => {
-    openedFrom.current = next;
+  const openPanel = (next: "menu" | "settings") => {
     setPanel((old) => old === next ? null : next);
   };
   const requestExit = (next: () => void) => {
@@ -149,7 +156,7 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
   }, [onRegisterExit, active, note, editingNote, playback.stop, save, t]);
   const closePanel = useCallback(() => {
     setPanel(null);
-    if (Platform.OS === "web") requestAnimationFrame(() => (openedFrom.current === "left" ? leftToggleRef.current : rightToggleRef.current)?.focus?.());
+    if (Platform.OS === "web") requestAnimationFrame(() => rightToggleRef.current?.focus?.());
   }, []);
   useEffect(() => {
     if (!panel) return;
@@ -161,7 +168,7 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
     const sub = BackHandler.addEventListener("hardwareBackPress", () => { closePanel(); return true; });
     return () => sub.remove();
   }, [panel, closePanel]);
-  useEffect(() => { if (!active) playback.stop(); }, [active, playback.stop]);
+  useEffect(() => { if (!active) { playback.stop(); resetTransient(); setPanel(null); } }, [active, playback.stop]);
   useEffect(() => {
     let alive = true;
     setPatternLoading(true); setPatternError("");
@@ -174,11 +181,10 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
     if (!playback.running || !settings.follow || !playback.position) return;
     const ratio = paperScale * settings.playbackZoom;
     paperScroll.current?.scrollTo({ y: (playback.position.row * ROW_HEIGHT + 102) * ratio, animated: false });
-    horizontalScroll.current?.scrollTo({ x: (38 + playback.position.progress * 824) * ratio, animated: false });
   }, [playback.running, playback.position, settings.follow, settings.playbackZoom, paperScale, viewport.height]);
   const confirmReplace = (action: () => void) => {
     const changed = savedSnapshot.current !== JSON.stringify(note);
-    const replace = () => { playback.stop(); setDrawing([]); drawingRef.current = []; setPendingGlyph(null); setSelectedStampId(null); setOffset({ x: 0, y: 0 }); action(); };
+    const replace = () => { playback.stop(); resetTransient(); setOffset({ x: 0, y: 0 }); action(); };
     if (!changed) { replace(); return; }
     Alert.alert(t.fresh, t.confirm, [
       { text: t.cancel, style: "cancel" },
@@ -187,8 +193,14 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
     ]);
   };
   const fresh = () => confirmReplace(() => { const next = withDefaults(create()); setNote(next); savedSnapshot.current = JSON.stringify(next); setPageIndex(0); undoStack.current = []; redoStack.current = []; });
-  const addPage = () => { playback.stop(); checkpoint(); const pages = [...note.pages, { id: id("page"), strokes: [], staffCount: 7, stamps: [] }]; setNote((prev) => ({ ...prev, pages })); setPageIndex(pages.length - 1); setSelectedStampId(null); };
-  const addStaff = () => { if ((visiblePage.staffCount ?? 7) >= 200) return; playback.stop(); checkpoint(); replacePage(pageIndex, { ...page, staffCount: (visiblePage.staffCount ?? 7) + 1 }); };
+  const addPage = () => { playback.stop(); checkpoint(); resetTransient(); const pages = [...editingNote.pages, { id: id("page"), strokes: [], staffCount: settings.rowsPerPage ?? 7, stamps: [] }]; setNote((prev) => ({ ...prev, pages })); setPageIndex(pages.length - 1); };
+  const setRows = (count: number) => {
+    if (!Number.isInteger(count) || count < 1 || count > 200) return;
+    try {
+      const next = paginateNotebook(editingNote, count, () => id("page"));
+      playback.stop(); checkpoint(); resetTransient(); setNote(next); setPageIndex(0); setOffset({ x: 0, y: 0 });
+    } catch (e) { Alert.alert(ko ? "줄 수를 변경하지 않았습니다" : "Page layout unchanged", e instanceof Error ? e.message : String(e)); }
+  };
   const saveNow = async () => {
     const ok = await save(editingNote);
     if (ok) {
@@ -205,36 +217,48 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
   const togglePlayback = async () => {
     try {
       if (playback.running || playback.preparing) playback.stop();
-      else await playback.start(editingNote);
+      else if (tupletIds !== null || pendingGlyph || dragDraft) Alert.alert(ko ? "편집을 먼저 마쳐 주세요" : "Finish or cancel the pending edit first");
+      else { resetTransient(); await playback.start(editingNote); }
     } catch { Alert.alert(t.playbackError); }
   };
-  const toggleSimpleMetro = () => {
-    if (playback.running || playback.preparing) { playback.stop(); return; }
-    const simple = { ...editingNote, settings: { ...settings, source: undefined } };
-    setNote(simple); void playback.start(simple);
-  };
   const onPaperTouch = (screen: StaffPoint, phase: "start" | "move" | "end" | "cancel") => {
-    if (phase === "cancel") { drawingRef.current = []; setDrawing([]); stampDrag.current = null; panStart.current = null; return; }
+    if (phase === "cancel") { drawingRef.current = []; setDrawing([]); selectionGesture.current = null; setSelectionBox(null); setDragDraft(null); panStart.current = null; return; }
     const zoom = playback.running && settings.follow ? settings.playbackZoom : scale;
     const doc = screenToPaper({ x: screen.x / paperScale, y: screen.y / paperScale }, offset, zoom);
+    doc.x = Math.max(0, Math.min(PAPER_WIDTH, doc.x));
+    doc.y = Math.max(0, Math.min((page.staffCount ?? 7) * ROW_HEIGHT - 1, doc.y));
+    if (dragDraft?.paste) {
+      const bounds = selectionBounds(dragDraft.base, dragDraft.selection)!;
+      setDragDraft({ ...dragDraft, delta: selectionDelta(dragDraft.base, dragDraft.selection, { x: doc.x - bounds.x - bounds.width / 2, y: doc.y - bounds.y - bounds.height / 2 }, settings.snap),
+        awaiting: phase === "end", point: screen });
+      return;
+    }
+    if (dragDraft?.awaiting) return;
     if (phase === "start") erasedInGesture.current = false;
     if ((phase === "start" || phase === "move") && tool === "erase") {
       const hitStroke = page.strokes.some((stroke) => strokeHit(stroke, doc));
       const hitStamps = (page.stamps ?? []).filter((stamp) => Math.hypot(stamp.x - doc.x, stamp.y - doc.y) < stamp.size * 0.7);
       if (hitStroke || hitStamps.length) {
         if (!erasedInGesture.current) { checkpoint(); erasedInGesture.current = true; }
-        replacePage(pageIndex, { ...page, strokes: page.strokes.filter((stroke) => !strokeHit(stroke, doc)), stamps: (page.stamps ?? []).filter((stamp) => !hitStamps.includes(stamp)) });
+        replacePage(pageIndex, removeSelection(page, { strokeIds: page.strokes.filter((stroke) => strokeHit(stroke, doc)).map((s) => s.id), stampIds: hitStamps.map((s) => s.id) }));
       }
       return;
     }
     if (phase === "start") {
       if (pendingGlyph) { setPreviewAnchor(doc); return; }
       if (tool === "move") { panStart.current = { point: screen, offset }; return; }
-      if (tool === "pen") { drawingRef.current = [doc]; setDrawing([doc]); setSelectedStampId(null); return; }
+      if (tool === "pen") { drawingRef.current = [doc]; setDrawing([doc]); setSelection(emptySelection()); return; }
       if (tool === "select") {
-        const hit = [...(page.stamps ?? [])].reverse().find((stamp) => Math.hypot(stamp.x - doc.x, stamp.y - doc.y) < stamp.size);
-        setSelectedStampId(hit?.id ?? null);
-        if (hit) { checkpoint(); stampDrag.current = { id: hit.id, x: doc.x, y: doc.y }; }
+        const hit = hitObject(page, doc);
+        if (hit) {
+          const key = hit.kind === "stamp" ? "stampIds" : "strokeIds";
+          const next = includeAttached(page, selection[key].includes(hit.id) ? selection : { ...selection, [key]: [...selection[key], hit.id] });
+          setSelection(next);
+          selectionGesture.current = { kind: "drag", start: doc, selection: next, base: page, hitId: hit.id };
+        } else {
+          selectionGesture.current = { kind: "box", start: doc, selection, base: page };
+          setSelectionBox(rectangle(doc, doc));
+        }
       }
       return;
     }
@@ -243,13 +267,16 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
     if (phase === "move" && tool === "move" && panStart.current) {
       setOffset({ x: panStart.current.offset.x + (screen.x - panStart.current.point.x) / paperScale, y: panStart.current.offset.y + (screen.y - panStart.current.point.y) / paperScale });
     }
-    if (phase === "move" && tool === "select" && stampDrag.current) {
-      const drag = stampDrag.current;
-      const deltaX = doc.x - drag.x, deltaY = doc.y - drag.y;
-      const stamp = page.stamps?.find((item) => item.id === drag.id);
-      if (stamp) {
-        replacePage(pageIndex, { ...page, stamps: page.stamps!.map((item) => item.id === drag.id ? { ...item, x: item.x + deltaX, y: item.y + deltaY } : item) });
-        stampDrag.current = { ...drag, x: doc.x, y: doc.y };
+    const gesture = selectionGesture.current;
+    if ((phase === "move" || phase === "end") && tool === "select" && gesture) {
+      const distance = Math.hypot(doc.x - gesture.start.x, doc.y - gesture.start.y);
+      if (gesture.kind === "box") {
+        const box = rectangle(gesture.start, doc);
+        setSelectionBox(phase === "end" ? null : box);
+        setSelection(distance < 4 ? emptySelection() : selectRectangle(gesture.base, box));
+      } else if (distance > 4) {
+        setDragDraft({ base: gesture.base, selection: gesture.selection, delta: selectionDelta(gesture.base, gesture.selection, { x: doc.x - gesture.start.x, y: doc.y - gesture.start.y }, settings.snap),
+          paste: false, awaiting: phase === "end", point: screen });
       }
     }
     if (phase === "end" && tool === "pen" && drawingRef.current.length) {
@@ -259,75 +286,109 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
       replacePage(pageIndex, { ...page, staffCount: count, anchor: doc, strokes: [...page.strokes, { id: id("stroke"), points, width: lineWidth }] });
       drawingRef.current = []; setDrawing([]);
     }
-    if (phase === "end") { stampDrag.current = null; panStart.current = null; }
+    if (phase === "end") { selectionGesture.current = null; panStart.current = null; }
   };
-  const beginStamp = (glyph: string) => {
+  const beginStamp = (choice: { glyph: string; role: "normal" | "ghost" | "strong"; dotted: boolean }) => {
     playback.stop();
-    const anchor = stampPosition(page, settings, currentSelection ? { x: currentSelection.x + currentSelection.size * 0.8, y: currentSelection.y } : undefined);
-    setPendingGlyph(glyph); setPreviewAnchor(anchor); setTool("select");
-    closePanel();
+    setDragDraft(null); setSelection(emptySelection()); setSelectionBox(null);
+    const targetIndex = isAttachedMark(choice.glyph) && note.lastNote ? editingNote.pages.findIndex((p) => p.id === note.lastNote!.pageId) : pageIndex;
+    const attached = attachedPosition(editingNote.pages[targetIndex] ?? page, choice.glyph, note.lastNote?.stampId);
+    if (attached && targetIndex >= 0 && targetIndex !== pageIndex) { setPageIndex(targetIndex); setOffset({ x: 0, y: 0 }); }
+    const anchor = attached?.point ?? stampPosition(page, { ...settings, snap: isNotebookNote(choice.glyph) && settings.snap });
+    setPendingNote({ role: choice.role, dotted: choice.dotted, attachTo: attached?.attachTo });
+    setPendingGlyph(choice.glyph); setPreviewAnchor(anchor); setTool("select");
   };
-  const stampItems = useMemo(() => {
-    const items = [
-    ...["whole", "half", "quarter", "eighth", "sixteenth"].map((glyph) => ({ id: glyph, symbol: glyph === "whole" ? "𝅝" : glyph === "half" ? "𝅗𝅥" : glyph === "quarter" ? "♩" : glyph === "eighth" ? "♪" : "𝅘𝅥𝅯", label: glyph })),
-    ...["rest-whole", "rest-half", "rest-quarter", "rest-eighth", "rest-sixteenth"].map((glyph) => ({ id: glyph, symbol: glyph.replace("rest-", "") === "quarter" ? "𝄽" : glyph.replace("rest-", "") === "half" ? "𝄼" : glyph.replace("rest-", "") === "whole" ? "𝄻" : "𝄾", label: glyph })),
-    ...ALL_INSTR_SYMBOLS.map((symbol) => ({ id: symbol.id, symbol: symbol.symbol, label: symbol.id })),
-    ...ACCIDENTALS.map((item) => ({ id: item.value, symbol: item.symbol, label: item.value })),
-    ...ARTICULATIONS.map((item) => ({ id: item.id, symbol: item.symbol, label: item.id })),
-    ...REPEAT_SIGNS.map((item) => ({ id: item.id, symbol: item.symbol, label: item.id })),
-    ];
-    return items.filter((item, index) => items.findIndex((other) => other.id === item.id) === index);
-  }, []);
   const confirmStamp = () => {
     if (!pendingGlyph || !previewAnchor) return;
     checkpoint();
     const top = 78 + rowAt(previewAnchor.y, page.staffCount ?? 7) * ROW_HEIGHT;
-    const y = settings.snap ? top + Math.round((previewAnchor.y - top) / 6) * 6 : previewAnchor.y;
-    const stamp: StaffStamp = { id: id("stamp"), glyph: pendingGlyph, x: Math.max(38, Math.min(862, previewAnchor.x)), y: Math.max(12, Math.min((page.staffCount ?? 7) * ROW_HEIGHT - 12, y)), size: 26 };
-    replacePage(pageIndex, { ...page, anchor: { x: stamp.x, y: stamp.y }, stamps: [...(page.stamps ?? []), stamp] });
-    setSelectedStampId(stamp.id); setPendingGlyph(null); setPreviewAnchor(null);
+    const y = settings.snap && isNotebookNote(pendingGlyph) ? top + Math.round((previewAnchor.y - top) / 6) * 6 : previewAnchor.y;
+    const stamp: StaffStamp = { id: id("stamp"), glyph: pendingGlyph, x: Math.max(22, Math.min(878, previewAnchor.x)), y: Math.max(12, Math.min((page.staffCount ?? 7) * ROW_HEIGHT - 12, y)), size: 26,
+      role: isNotebookNote(pendingGlyph) ? pendingNote.role : undefined, dotted: isNotebookNote(pendingGlyph) ? pendingNote.dotted : undefined, attachTo: pendingNote.attachTo };
+    replacePage(pageIndex, { ...page, anchor: { x: stamp.x, y: stamp.y }, stamps: [...(page.stamps ?? []), stamp] }, isNotebookNote(stamp.glyph) ? stamp.id : undefined);
+    if (tupletIds !== null && isTupletMember(stamp.glyph)) setTupletIds([...tupletIds, stamp.id]);
+    setSelection(emptySelection()); setPendingGlyph(null); setPreviewAnchor(null);
   };
   const cancelStamp = () => { setPendingGlyph(null); setPreviewAnchor(null); };
-  const updateSelected = (patch: Partial<StaffStamp>) => {
-    if (!currentSelection) return;
+  const changeMode = (next: NotebookMode) => {
+    if (next === "settings") { setPanel("settings"); return; }
+    resetTransient(); setMode(next); setTool(next === "ink" ? "pen" : "select");
+    closePanel();
+  };
+  const closeTuplet = () => {
+    if (tupletIds === null) { setTupletIds([]); return; }
+    if (pendingGlyph) { Alert.alert(ko ? "음표를 먼저 놓거나 취소해 주세요" : "Place or cancel the pending note first"); return; }
+    const ids = tupletIds.filter((id) => page.stamps?.some((s) => s.id === id && isTupletMember(s.glyph)));
+    if (ids.length < 2) { Alert.alert(ko ? "음표·쉼표를 두 개 이상 넣어 주세요" : "Add at least two notes or rests"); return; }
+    checkpoint(); replacePage(pageIndex, { ...page, tuplets: [...(page.tuplets ?? []), { id: id("tuplet"), stampIds: ids }] }); setTupletIds(null);
+  };
+  const commitDrag = (copy: boolean) => {
+    if (!dragDraft) return;
     checkpoint();
-    replacePage(pageIndex, { ...page, stamps: page.stamps!.map((stamp) => stamp.id === currentSelection.id ? { ...stamp, ...patch } : stamp) });
+    const result = transformSelection(dragDraft.base, dragDraft.selection, dragDraft.delta, copy && !dragDraft.paste, () => id("object"));
+    const last = (copy || dragDraft.paste) ? result.page.stamps?.filter((s) => result.selection.stampIds.includes(s.id) && isNotebookNote(s.glyph)).at(-1) : undefined;
+    replacePage(pageIndex, result.page, last?.id); setSelection(result.selection); setDragDraft(null);
   };
-  const copyStamp = () => {
-    if (!currentSelection) return;
-    checkpoint();
-    const copy = { ...currentSelection, id: id("stamp"), x: currentSelection.x + 28 };
-    replacePage(pageIndex, { ...page, stamps: [...(page.stamps ?? []), copy] }); setSelectedStampId(copy.id);
+  const saveClipboard = () => {
+    if (!selectionCount(selection)) return;
+    const entry = { id: id("clipboard"), label: `${ko ? "선택 묶음" : "Selection"} ${clipboard.length + 1}`, count: selectionCount(selection), page: captureSelection(page, selection) };
+    setClipboard((previous) => [...previous, entry]);
   };
-  const deleteStamp = () => {
-    if (!currentSelection) return;
-    checkpoint(); replacePage(pageIndex, { ...page, stamps: page.stamps!.filter((stamp) => stamp.id !== currentSelection.id) }); setSelectedStampId(null);
+  const pasteClipboard = (key: string) => {
+    const entry = clipboard.find((item) => item.id === key);
+    if (!entry) return;
+    cancelStamp(); playback.stop();
+    const copied = transformSelection(entry.page, { strokeIds: entry.page.strokes.map((s) => s.id), stampIds: (entry.page.stamps ?? []).map((s) => s.id) }, { x: 0, y: 0 }, true, () => id("object"));
+    // transformSelection(copy) retains originals; include only the fresh objects.
+    const freshStrokes = copied.page.strokes.filter((s) => copied.selection.strokeIds.includes(s.id));
+    const freshStamps = (copied.page.stamps ?? []).filter((s) => copied.selection.stampIds.includes(s.id));
+    const base = { ...page, strokes: [...page.strokes, ...freshStrokes], stamps: [...(page.stamps ?? []), ...freshStamps],
+      tuplets: [...(page.tuplets ?? []), ...(copied.page.tuplets ?? []).filter((t) => t.stampIds.every((id) => copied.selection.stampIds.includes(id)))] };
+    const anchor = stampPosition(page, settings);
+    setSelection(copied.selection); setDragDraft({ base, selection: copied.selection, delta: selectionDelta(base, copied.selection, anchor, settings.snap), paste: true, awaiting: true, point: { x: 40, y: 70 } });
+    setTool("select");
   };
-  const nudge = (axis: "x" | "y", amount: number) => updateSettings({ [axis === "x" ? "offsetX" : "offsetY"]: settings[axis === "x" ? "offsetX" : "offsetY"] + amount });
+  const deleteSelection = () => {
+    playback.stop(); checkpoint(); replacePage(pageIndex, removeSelection(page, selection)); setSelection(emptySelection()); setDragDraft(null);
+  };
+  const resizeSelection = (factor: number) => {
+    const bounds = selectionBounds(page, selection); if (!bounds) return;
+    const origin = { x: bounds.x, y: bounds.y };
+    const transform = (p: StaffPoint) => ({ x: origin.x + (p.x - origin.x) * factor, y: origin.y + (p.y - origin.y) * factor });
+    const next = { ...page, strokes: page.strokes.map((s) => selection.strokeIds.includes(s.id) ? { ...s, width: s.width * factor, points: s.points.map(transform) } : s),
+      stamps: page.stamps?.map((s) => selection.stampIds.includes(s.id) ? { ...s, ...transform(s), size: Math.max(4, Math.min(120, s.size * factor)) } : s) };
+    const nextBounds = selectionBounds(next, selection)!;
+    if (nextBounds.x + nextBounds.width > 900 || nextBounds.y + nextBounds.height > (page.staffCount ?? 7) * ROW_HEIGHT) return;
+    checkpoint(); replacePage(pageIndex, next);
+  };
   const following = playback.running && settings.follow;
   const zoom = following ? settings.playbackZoom : scale;
+  const draftPage = dragDraft ? transformSelection(dragDraft.base, dragDraft.selection, dragDraft.delta).page : null;
   return (
-    <View style={[styles.root, { backgroundColor: "#ffffff" }]} onLayout={(event) => setViewport({ width: event.nativeEvent.layout.width, height: event.nativeEvent.layout.height })}>
-      <View style={styles.paperStage}>
+    <View testID="notebook-workspace" style={[styles.root, { backgroundColor: "#ffffff" }]}>
+      <View style={{ zIndex: 40 }} onLayout={(event) => setPlaybackBarHeight(event.nativeEvent.layout.height)}>
+        <NotebookPlaybackBar ko={ko} settings={settings} running={playback.running} preparing={playback.preparing} onSettings={updateSettings} onToggle={() => void togglePlayback()} />
+      </View>
+      <View style={styles.paperStage} onLayout={(event) => setViewport({ width: event.nativeEvent.layout.width, height: event.nativeEvent.layout.height })}>
         <ScrollView testID="notebook-horizontal-scroll" ref={horizontalScroll} horizontal style={styles.paperScroll}
-          contentContainerStyle={{ minWidth: "100%", paddingHorizontal: following ? viewport.width / 2 : 0 }}
+          scrollEventThrottle={16} onScroll={(event) => { paperScrollOffset.current.x = event.nativeEvent.contentOffset.x; }}
+          contentContainerStyle={{ minWidth: "100%" }}
           showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled">
         <ScrollView testID="notebook-vertical-scroll" ref={paperScroll} style={{ height: viewport.height, width: Math.max(viewport.width, PAPER_WIDTH * paperScale * zoom) }}
+          scrollEventThrottle={16} onScroll={(event) => { paperScrollOffset.current.y = event.nativeEvent.contentOffset.y; }}
           contentContainerStyle={[styles.paperContent, { paddingVertical: following ? viewport.height / 2 : 0 }]}
           nestedScrollEnabled showsVerticalScrollIndicator={false}>
           <NotebookPaper
-            page={visiblePage} width={PAPER_WIDTH * paperScale * (playback.running && settings.follow ? settings.playbackZoom : scale)} height={visibleHeight * paperScale * (playback.running && settings.follow ? settings.playbackZoom : scale)}
+            page={playback.running ? visiblePage : draftPage ?? page} width={PAPER_WIDTH * paperScale * zoom} height={visibleHeight * paperScale * zoom}
             paperScale={paperScale} zoom={playback.running && settings.follow ? settings.playbackZoom : scale}
             offset={offset} tool={playback.running ? "move" : tool} lineWidth={lineWidth}
             drawing={drawing} pendingGlyph={pendingGlyph} preview={previewAnchor}
-            selectedStampId={playback.running ? null : selectedStampId}
+            selection={playback.running ? undefined : selection} selectionBox={selectionBox}
+            openTupletIds={tupletIds ?? undefined} pendingRole={pendingNote.role} pendingDotted={pendingNote.dotted}
             onTouch={playback.running ? undefined : onPaperTouch}
           />
         </ScrollView></ScrollView>
-        <Pressable ref={leftToggleRef} accessibilityRole="button" accessibilityLabel={t.left} testID="notebook-left-toggle" onPress={() => openPanel("left")} style={[styles.edgeHandle, styles.leftHandle, { backgroundColor: C.surface, borderColor: C.border }]}>
-          <Ionicons name="chevron-forward" size={17} color={C.text} />
-        </Pressable>
-        <Pressable ref={rightToggleRef} accessibilityRole="button" accessibilityLabel={t.right} testID="notebook-right-toggle" onPress={() => openPanel("right")} style={[styles.edgeHandle, styles.rightHandle, { backgroundColor: C.surface, borderColor: C.border }]}>
+        <Pressable ref={rightToggleRef} accessibilityRole="button" accessibilityLabel={ko ? "모드와 설정" : "Modes and settings"} testID="notebook-right-toggle" onPress={() => openPanel("menu")} style={[styles.edgeHandle, styles.rightHandle, { backgroundColor: C.surface, borderColor: C.border }]}>
           <Ionicons name="chevron-back" size={17} color={C.text} />
         </Pressable>
         {playback.error ? <View style={styles.playbackStatus}><Text style={{ color: C.accent }}>{playback.error}</Text></View> : null}
@@ -336,42 +397,43 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
           <Pressable testID="notebook-stamp-cancel" onPress={cancelStamp} style={styles.previewButton}><Text>{t.cancel}</Text></Pressable>
           <Pressable testID="notebook-stamp-confirm" onPress={confirmStamp} style={styles.previewButton}><Text>{ko ? "여기에 놓기" : "Place here"}</Text></Pressable>
         </View>}
+        {dragDraft?.awaiting && !panel && <View testID="notebook-drop-actions" style={[styles.previewActions, { bottom: undefined, left: Math.max(8, Math.min(viewport.width - 315, dragDraft.point.x - paperScrollOffset.current.x)), top: Math.max(8, Math.min(viewport.height - 108, dragDraft.point.y - paperScrollOffset.current.y)), alignSelf: "auto", maxWidth: viewport.width - 16, flexWrap: "wrap" }]}>
+          <Pressable testID="notebook-drop-cancel" onPress={() => { setDragDraft(null); if (dragDraft.paste) setSelection(emptySelection()); }} style={styles.previewButton}><Text>{t.cancel}</Text></Pressable>
+          {!dragDraft.paste && <Pressable testID="notebook-drop-copy" onPress={() => commitDrag(true)} style={styles.previewButton}><Text>{ko ? "여기에 복사" : "Copy here"}</Text></Pressable>}
+          <Pressable testID="notebook-drop-move" onPress={() => commitDrag(false)} style={styles.previewButton}><Text>{dragDraft.paste ? (ko ? "여기에 붙여넣기" : "Paste here") : (ko ? "여기로 이동" : "Move here")}</Text></Pressable>
+        </View>}
       </View>
+      {tupletIds !== null && <View style={styles.tupletStatus}><Text>{ko ? `잇단음표 작성 중 · ${tupletIds.length}개` : `Open tuplet · ${tupletIds.length}`}</Text><Pressable testID="notebook-tuplet-cancel" onPress={() => setTupletIds(null)} style={{ padding: 8 }}><Text>{t.cancel}</Text></Pressable></View>}
+      <NotebookBottomTools ko={ko} mode={mode} tool={tool} lineWidth={lineWidth} scale={scale}
+        canUndo={undoStack.current.length > 0} canRedo={redoStack.current.length > 0}
+        onTool={(next) => { playback.stop(); cancelStamp(); setTool(next); }} onWidth={setLineWidth}
+        onZoom={(value) => { playback.stop(); setScale(Math.max(0.35, Math.min(2.5, value))); }} onUndo={undo} onRedo={redo}
+        onChoose={beginStamp} onTuplet={closeTuplet} tupletCount={tupletIds?.length ?? null}
+        selectionCount={selectionCount(selection)} onClearSelection={() => { setSelection(emptySelection()); setDragDraft(null); }}
+        onSaveClipboard={saveClipboard} onDeleteSelection={deleteSelection} onResizeSelection={resizeSelection}
+        clipboard={clipboard} onPaste={pasteClipboard} />
       {panel ? (
-        <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+        <View style={[StyleSheet.absoluteFill, { top: playbackBarHeight, zIndex: 30 }]} pointerEvents="box-none">
           <Pressable style={styles.backdrop} onPress={closePanel} accessibilityLabel={t.close} />
-          <View style={[styles.drawer, panel === "left" ? styles.drawerLeft : styles.drawerRight, { backgroundColor: "#fffdf8", borderColor: "#ded6c9" }]}>
+          <View style={[styles.drawer, styles.drawerRight, { backgroundColor: "#fffdf8", borderColor: "#ded6c9" }]}>
             <View style={[styles.drawerHead, { borderBottomColor: C.border }]}>
-              <Text style={[styles.drawerTitle, { color: "#302b25" }]}>{panel === "left" ? t.left : t.right}</Text>
+              <Text style={[styles.drawerTitle, { color: "#302b25" }]}>{panel === "settings" ? t.settings : (ko ? "모드" : "Mode")}</Text>
               <Pressable testID="notebook-panel-close" accessibilityLabel={t.close} onPress={closePanel} hitSlop={12} style={styles.closeButton}><Ionicons name="close" size={22} color="#302b25" /></Pressable>
             </View>
-            {panel === "left" ? (
-              <NotebookLeftPanel
+            {panel === "settings" ? (
+              <NotebookSettingsPanel
                 ko={ko} t={t} note={note} settings={settings} patterns={patterns} patternLoading={patternLoading} patternError={patternError}
-                notebooks={notebooks} error={error} playback={playback} metroRunning={metroRunning} selectedRows={displayRows.length}
-                onSettings={updateSettings} onPattern={loadPattern} onPlay={togglePlayback} onSimpleMetro={toggleSimpleMetro}
+                notebooks={notebooks} error={error}
+                onSettings={updateSettings} onPattern={loadPattern}
                 onRefresh={() => void refresh()} onNew={fresh} onSave={() => void saveNow()} onOpenCapture={onOpenCapture ? () => requestExit(onOpenCapture) : undefined}
                 onLoad={(saved) => confirmReplace(() => { const loaded = withDefaults(saved); savedSnapshot.current = JSON.stringify(loaded); setNote(loaded); setPageIndex(0); undoStack.current = []; redoStack.current = []; })}
                 onDelete={(saved) => Alert.alert(t.notes, ko ? "이 노트를 삭제할까요?" : "Delete this notebook?", [{ text: t.cancel, style: "cancel" }, { text: ko ? "삭제" : "Delete", style: "destructive", onPress: () => void remove(saved.id) }])}
                 onTitle={(title) => setNote((prev) => ({ ...prev, title }))}
+                pageIndex={pageIndex} onPage={(index) => { playback.stop(); resetTransient(); setPageIndex(index); setOffset({ x: 0, y: 0 }); }}
+                onAddPage={addPage} onRows={setRows} onZoom={setScale} scale={scale}
               />
             ) : (
-              <NotebookRightPanel
-                ko={ko} t={t} tool={tool} lineWidth={lineWidth} scale={scale} pageIndex={pageIndex} pageCount={note.pages.length}
-                pageNumber={pageIndex + 1} canUndo={undoStack.current.length > 0} canRedo={redoStack.current.length > 0}
-                stamps={stampItems} pendingGlyph={pendingGlyph} selected={currentSelection} settings={settings}
-                onTool={(next) => { playback.stop(); setTool(next); }} onWidth={setLineWidth} onZoom={(value) => setScale(Math.max(0.55, Math.min(2.5, value)))}
-                onUndo={undo} onRedo={redo} onAddPage={addPage} onAddStaff={addStaff}
-                onPage={(index) => { playback.stop(); setPageIndex(index); setSelectedStampId(null); setOffset({ x: 0, y: 0 }); }}
-                onStamp={beginStamp} onConfirm={confirmStamp} onCancel={cancelStamp} onNudge={nudge}
-                onSettings={updateSettings} onSelectAction={(action) => {
-                  if (!currentSelection) return;
-                  if (action === "copy") copyStamp();
-                  else if (action === "delete") deleteStamp();
-                  else if (action === "grow") updateSelected({ size: Math.min(120, currentSelection.size + 4) });
-                  else if (action === "shrink") updateSelected({ size: Math.max(8, currentSelection.size - 4) });
-                }}
-              />
+              <NotebookModeMenu ko={ko} mode={mode} onMode={changeMode} />
             )}
           </View>
         </View>
@@ -399,4 +461,5 @@ const styles = StyleSheet.create({
   playbackStatus: { position: "absolute", top: 10, alignSelf: "center", padding: 8 },
   previewActions: { position: "absolute", bottom: 16, alignSelf: "center", flexDirection: "row", gap: 10, padding: 6, borderRadius: 12, backgroundColor: "#ece7de", elevation: 5 },
   previewButton: { paddingHorizontal: 18, paddingVertical: 12, borderRadius: 8, backgroundColor: "#ffffff" },
+  tupletStatus: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, backgroundColor: "#f8f1df", minHeight: 30 },
 });

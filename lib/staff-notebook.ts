@@ -3,8 +3,10 @@ import type { PracticeEntry } from "./storage";
 
 export type StaffPoint = { x: number; y: number };
 export type StaffStroke = { id: string; points: StaffPoint[]; width: number };
-export type StaffStamp = { id: string; glyph: string; x: number; y: number; size: number };
-export type StaffPage = { id: string; strokes: StaffStroke[]; staffCount?: number; stamps?: StaffStamp[]; anchor?: StaffPoint };
+export type NotebookNoteRole = "normal" | "ghost" | "strong";
+export type StaffStamp = { id: string; glyph: string; x: number; y: number; size: number; role?: NotebookNoteRole; dotted?: boolean; attachTo?: string };
+export type StaffTuplet = { id: string; stampIds: string[] };
+export type StaffPage = { id: string; strokes: StaffStroke[]; staffCount?: number; stamps?: StaffStamp[]; anchor?: StaffPoint; tuplets?: StaffTuplet[] };
 export type NotebookSettings = {
   follow: boolean;
   lineUnit: "measure" | "phrase";
@@ -15,12 +17,15 @@ export type NotebookSettings = {
   offsetY: number;
   snap: boolean;
   source?: PracticeEntry;
+  beatsPerMeasure?: number;
+  rowsPerPage?: number;
+  followSymbols?: boolean;
 };
 export const DEFAULT_NOTEBOOK_SETTINGS: NotebookSettings = {
   follow: false, lineUnit: "measure", playbackZoom: 1, bpm: 84,
-  random: false, offsetX: 0, offsetY: 0, snap: true,
+  random: false, offsetX: 0, offsetY: 0, snap: true, beatsPerMeasure: 1, followSymbols: false,
 };
-export type StaffNotebook = { id: string; title: string; updatedAt: number; pages: StaffPage[]; settings?: NotebookSettings };
+export type StaffNotebook = { id: string; title: string; updatedAt: number; pages: StaffPage[]; settings?: NotebookSettings; lastNote?: { pageId: string; stampId: string } };
 
 const KEY = "lab_staff_notebooks_v1";
 const id = () => `staff_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -29,18 +34,31 @@ function isNotebook(value: unknown): value is StaffNotebook {
   if (!value || typeof value !== "object") return false;
   const note = value as StaffNotebook;
   const settings = note.settings;
+  if (note.lastNote !== undefined && (!note.lastNote || typeof note.lastNote.pageId !== "string" || typeof note.lastNote.stampId !== "string" ||
+    !Array.isArray(note.pages) || !note.pages.some((page) => page?.id === note.lastNote!.pageId && Array.isArray(page.stamps) && page.stamps.some((s) => s?.id === note.lastNote!.stampId && /^(whole|half|quarter|eighth|sixteenth|thirty_second)$/.test(s.glyph))))) return false;
   if (settings && (typeof settings !== "object" ||
     !["measure", "phrase"].includes(settings.lineUnit) ||
     ![settings.playbackZoom, settings.bpm, settings.offsetX, settings.offsetY].every(Number.isFinite) ||
     settings.playbackZoom < 0.25 || settings.playbackZoom > 4 || settings.bpm < 20 || settings.bpm > 300 ||
-    typeof settings.follow !== "boolean" || typeof settings.random !== "boolean" || typeof settings.snap !== "boolean")) return false;
+    typeof settings.follow !== "boolean" || typeof settings.random !== "boolean" || typeof settings.snap !== "boolean" ||
+    settings.beatsPerMeasure !== undefined && (!Number.isInteger(settings.beatsPerMeasure) || settings.beatsPerMeasure < 1 || settings.beatsPerMeasure > 12) ||
+    settings.rowsPerPage !== undefined && (!Number.isInteger(settings.rowsPerPage) || settings.rowsPerPage < 1 || settings.rowsPerPage > 200) ||
+    settings.followSymbols !== undefined && typeof settings.followSymbols !== "boolean")) return false;
   return typeof note.id === "string" && typeof note.title === "string" && Number.isFinite(note.updatedAt) &&
     Array.isArray(note.pages) && note.pages.length > 0 && note.pages.every((page) => !!page && typeof page === "object" &&
       (page.anchor === undefined || !!page.anchor && Number.isFinite(page.anchor.x) && Number.isFinite(page.anchor.y)) &&
       (page.staffCount === undefined || Number.isInteger(page.staffCount) && page.staffCount > 0 && page.staffCount <= 200) &&
       (page.stamps === undefined || Array.isArray(page.stamps) && page.stamps.every((stamp) =>
         !!stamp && typeof stamp.id === "string" && typeof stamp.glyph === "string" && stamp.glyph.length <= 40 &&
-        [stamp.x, stamp.y, stamp.size].every(Number.isFinite) && stamp.size >= 4 && stamp.size <= 200)) &&
+        [stamp.x, stamp.y, stamp.size].every(Number.isFinite) && stamp.size >= 4 && stamp.size <= 200 &&
+        (stamp.role === undefined || ["normal", "ghost", "strong"].includes(stamp.role)) &&
+        (stamp.dotted === undefined || typeof stamp.dotted === "boolean") &&
+        (stamp.attachTo === undefined || typeof stamp.attachTo === "string" && page.stamps?.some((target) => target.id === stamp.attachTo && target.id !== stamp.id)))) &&
+      (page.tuplets === undefined || Array.isArray(page.tuplets) && page.tuplets.every((group) =>
+        !!group && typeof group.id === "string" && Array.isArray(group.stampIds) && group.stampIds.length >= 2 &&
+        new Set(group.stampIds).size === group.stampIds.length &&
+        group.stampIds.every((stampId) => page.stamps?.some((stamp) => stamp.id === stampId &&
+          /^(whole|half|quarter|eighth|sixteenth|thirty_second|rest-(whole|half|quarter|eighth|sixteenth))$/.test(stamp.glyph))))) &&
       typeof page.id === "string" && Array.isArray(page.strokes) && page.strokes.every((stroke) => !!stroke && typeof stroke === "object" &&
         typeof stroke.id === "string" && Number.isFinite(stroke.width) && stroke.width > 0 &&
         Array.isArray(stroke.points) && stroke.points.every((point) => !!point && typeof point === "object" && Number.isFinite(point.x) && Number.isFinite(point.y))));
