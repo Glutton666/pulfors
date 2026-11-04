@@ -8,7 +8,7 @@ import { useLabScoreNotebook } from "@/hooks/useLabScoreNotebook";
 import { useNotebookPlayback } from "@/hooks/useNotebookPlayback";
 import { DEFAULT_NOTEBOOK_SETTINGS, type NotebookSettings, type StaffNotebook, type StaffPage, type StaffPoint, type StaffStamp, type StaffStroke } from "@/lib/staff-notebook";
 import { loadPracticeBook, type PracticeEntry } from "@/lib/storage";
-import { fitNotebookPage, materializeRows, stampPosition, screenToPaper, rowAt, PAPER_WIDTH, ROW_HEIGHT } from "@/lib/staff-notebook-layout";
+import { constrainStaffPoint, fitNotebookPage, materializeRows, stampPosition, screenToPaper, PAPER_WIDTH, ROW_HEIGHT } from "@/lib/staff-notebook-layout";
 import { NotebookModeMenu, type NotebookMode } from "@/components/lab-score/notebook/NotebookModeMenu";
 import { NotebookBottomTools } from "@/components/lab-score/notebook/NotebookBottomTools";
 import { NotebookPlaybackBar } from "@/components/lab-score/notebook/NotebookPlaybackBar";
@@ -79,13 +79,12 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
   const [selectionBox, setSelectionBox] = useState<NotebookBounds | null>(null);
   const [clipboard, setClipboard] = useState<NotebookClipboard[]>([]);
   const [tupletIds, setTupletIds] = useState<string[] | null>(null);
-  const [pendingNote, setPendingNote] = useState<{ role: "normal" | "ghost" | "strong"; dotted: boolean; attachTo?: string }>({ role: "normal", dotted: false });
   const [dragDraft, setDragDraft] = useState<{ selection: NotebookSelection; delta: StaffPoint; base: StaffPage; paste: boolean; awaiting: boolean; point: StaffPoint } | null>(null);
-  const [pendingGlyph, setPendingGlyph] = useState<string | null>(null);
-  const [previewAnchor, setPreviewAnchor] = useState<StaffPoint | null>(null);
   const [drawing, setDrawing] = useState<StaffPoint[]>([]);
   const [viewport, setViewport] = useState({ width: 0, height: 0 });
   const [playbackBarHeight, setPlaybackBarHeight] = useState(52);
+  const [paperTop, setPaperTop] = useState(128);
+  const paperStageRef = useRef<View>(null);
   const paperScroll = useRef<ScrollView>(null);
   const horizontalScroll = useRef<ScrollView>(null);
   const paperScrollOffset = useRef({ x: 0, y: 0 });
@@ -109,7 +108,7 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
   const visibleHeight = (visiblePage.staffCount ?? 7) * ROW_HEIGHT;
   const resetTransient = () => {
     setSelection(emptySelection()); setSelectionBox(null); setDragDraft(null); selectionGesture.current = null;
-    setPendingGlyph(null); setPreviewAnchor(null); setDrawing([]); drawingRef.current = []; setTupletIds(null); panStart.current = null;
+    setDrawing([]); drawingRef.current = []; setTupletIds(null); panStart.current = null;
   };
   const updateSettings = (patch: Partial<NotebookSettings>) => {
     if ((playback.running || playback.preparing) && ["source", "bpm", "random", "lineUnit", "beatsPerMeasure", "followSymbols"].some((key) => key in patch)) playback.stop();
@@ -217,7 +216,7 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
   const togglePlayback = async () => {
     try {
       if (playback.running || playback.preparing) playback.stop();
-      else if (tupletIds !== null || pendingGlyph || dragDraft) Alert.alert(ko ? "편집을 먼저 마쳐 주세요" : "Finish or cancel the pending edit first");
+      else if (tupletIds !== null || dragDraft) Alert.alert(ko ? "편집을 먼저 마쳐 주세요" : "Finish or cancel the pending edit first");
       else { resetTransient(); await playback.start(editingNote); }
     } catch { Alert.alert(t.playbackError); }
   };
@@ -225,8 +224,10 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
     if (phase === "cancel") { drawingRef.current = []; setDrawing([]); selectionGesture.current = null; setSelectionBox(null); setDragDraft(null); panStart.current = null; return; }
     const zoom = playback.running && settings.follow ? settings.playbackZoom : scale;
     const doc = screenToPaper({ x: screen.x / paperScale, y: screen.y / paperScale }, offset, zoom);
-    doc.x = Math.max(0, Math.min(PAPER_WIDTH, doc.x));
-    doc.y = Math.max(0, Math.min((page.staffCount ?? 7) * ROW_HEIGHT - 1, doc.y));
+    if (tool === "pen" || tool === "erase") {
+      doc.x = Math.max(0, Math.min(PAPER_WIDTH, doc.x));
+      doc.y = Math.max(0, Math.min((page.staffCount ?? 7) * ROW_HEIGHT - 1, doc.y));
+    }
     if (dragDraft?.paste) {
       const bounds = selectionBounds(dragDraft.base, dragDraft.selection)!;
       setDragDraft({ ...dragDraft, delta: selectionDelta(dragDraft.base, dragDraft.selection, { x: doc.x - bounds.x - bounds.width / 2, y: doc.y - bounds.y - bounds.height / 2 }, settings.snap),
@@ -245,11 +246,18 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
       return;
     }
     if (phase === "start") {
-      if (pendingGlyph) { setPreviewAnchor(doc); return; }
       if (tool === "move") { panStart.current = { point: screen, offset }; return; }
       if (tool === "pen") { drawingRef.current = [doc]; setDrawing([doc]); setSelection(emptySelection()); return; }
       if (tool === "select") {
         const hit = hitObject(page, doc);
+        if (mode === "notes") {
+          const next = hit?.kind === "stamp" ? includeAttached(page, { stampIds: [hit.id], strokeIds: [] }) : selection;
+          if (next.stampIds.length) {
+            setSelection(next);
+            selectionGesture.current = { kind: "drag", start: doc, selection: next, base: page };
+          }
+          return;
+        }
         if (hit) {
           const key = hit.kind === "stamp" ? "stampIds" : "strokeIds";
           const next = includeAttached(page, selection[key].includes(hit.id) ? selection : { ...selection, [key]: [...selection[key], hit.id] });
@@ -263,7 +271,6 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
       return;
     }
     if (phase === "move" && tool === "pen" && drawingRef.current.length) { drawingRef.current = [...drawingRef.current, doc]; setDrawing(drawingRef.current); }
-    if (phase === "move" && pendingGlyph) setPreviewAnchor(doc);
     if (phase === "move" && tool === "move" && panStart.current) {
       setOffset({ x: panStart.current.offset.x + (screen.x - panStart.current.point.x) / paperScale, y: panStart.current.offset.y + (screen.y - panStart.current.point.y) / paperScale });
     }
@@ -275,8 +282,20 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
         setSelectionBox(phase === "end" ? null : box);
         setSelection(distance < 4 ? emptySelection() : selectRectangle(gesture.base, box));
       } else if (distance > 4) {
-        setDragDraft({ base: gesture.base, selection: gesture.selection, delta: selectionDelta(gesture.base, gesture.selection, { x: doc.x - gesture.start.x, y: doc.y - gesture.start.y }, settings.snap),
-          paste: false, awaiting: phase === "end", point: screen });
+        const delta = selectionDelta(gesture.base, gesture.selection, { x: doc.x - gesture.start.x, y: doc.y - gesture.start.y }, settings.snap);
+        if (phase === "end" && mode === "notes") {
+          const result = transformSelection(gesture.base, gesture.selection, delta);
+          const anchor = result.page.stamps?.find((s) => result.selection.stampIds.includes(s.id) && isNotebookNote(s.glyph))
+            ?? result.page.stamps?.find((s) => result.selection.stampIds.includes(s.id));
+          checkpoint();
+          replacePage(pageIndex, { ...result.page, anchor: anchor ? { x: anchor.x, y: anchor.y } : page.anchor });
+          setSelection(result.selection); setDragDraft(null);
+        } else {
+          setDragDraft({ base: gesture.base, selection: gesture.selection, delta,
+            paste: false, awaiting: phase === "end", point: screen });
+        }
+      } else if (phase === "end") {
+        setDragDraft(null);
       }
     }
     if (phase === "end" && tool === "pen" && drawingRef.current.length) {
@@ -292,24 +311,20 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
     playback.stop();
     setDragDraft(null); setSelection(emptySelection()); setSelectionBox(null);
     const targetIndex = isAttachedMark(choice.glyph) && note.lastNote ? editingNote.pages.findIndex((p) => p.id === note.lastNote!.pageId) : pageIndex;
-    const attached = attachedPosition(editingNote.pages[targetIndex] ?? page, choice.glyph, note.lastNote?.stampId);
-    if (attached && targetIndex >= 0 && targetIndex !== pageIndex) { setPageIndex(targetIndex); setOffset({ x: 0, y: 0 }); }
-    const anchor = attached?.point ?? stampPosition(page, { ...settings, snap: isNotebookNote(choice.glyph) && settings.snap });
-    setPendingNote({ role: choice.role, dotted: choice.dotted, attachTo: attached?.attachTo });
-    setPendingGlyph(choice.glyph); setPreviewAnchor(anchor); setTool("select");
-  };
-  const confirmStamp = () => {
-    if (!pendingGlyph || !previewAnchor) return;
+    const targetPage = editingNote.pages[targetIndex] ?? page;
+    const attached = attachedPosition(targetPage, choice.glyph, note.lastNote?.stampId);
+    const index = attached && targetIndex >= 0 ? targetIndex : pageIndex;
+    const destination = attached ? targetPage : page;
+    if (index !== pageIndex) { setPageIndex(index); setOffset({ x: 0, y: 0 }); setTupletIds(null); }
+    const point = attached?.point ?? stampPosition(destination, { ...settings, snap: isNotebookNote(choice.glyph) && settings.snap });
+    const anchor = constrainStaffPoint(destination, point, isNotebookNote(choice.glyph) && settings.snap);
     checkpoint();
-    const top = 78 + rowAt(previewAnchor.y, page.staffCount ?? 7) * ROW_HEIGHT;
-    const y = settings.snap && isNotebookNote(pendingGlyph) ? top + Math.round((previewAnchor.y - top) / 6) * 6 : previewAnchor.y;
-    const stamp: StaffStamp = { id: id("stamp"), glyph: pendingGlyph, x: Math.max(22, Math.min(878, previewAnchor.x)), y: Math.max(12, Math.min((page.staffCount ?? 7) * ROW_HEIGHT - 12, y)), size: 26,
-      role: isNotebookNote(pendingGlyph) ? pendingNote.role : undefined, dotted: isNotebookNote(pendingGlyph) ? pendingNote.dotted : undefined, attachTo: pendingNote.attachTo };
-    replacePage(pageIndex, { ...page, anchor: { x: stamp.x, y: stamp.y }, stamps: [...(page.stamps ?? []), stamp] }, isNotebookNote(stamp.glyph) ? stamp.id : undefined);
-    if (tupletIds !== null && isTupletMember(stamp.glyph)) setTupletIds([...tupletIds, stamp.id]);
-    setSelection(emptySelection()); setPendingGlyph(null); setPreviewAnchor(null);
+    const stamp: StaffStamp = { id: id("stamp"), glyph: choice.glyph, ...anchor, size: 26,
+      role: isNotebookNote(choice.glyph) ? choice.role : undefined, dotted: isNotebookNote(choice.glyph) ? choice.dotted : undefined, attachTo: attached?.attachTo };
+    replacePage(index, { ...destination, anchor, stamps: [...(destination.stamps ?? []), stamp] }, isNotebookNote(stamp.glyph) ? stamp.id : undefined);
+    if (index === pageIndex && tupletIds !== null && isTupletMember(stamp.glyph)) setTupletIds([...tupletIds, stamp.id]);
+    setSelection(includeAttached(destination, { stampIds: [stamp.id], strokeIds: [] })); setTool("select");
   };
-  const cancelStamp = () => { setPendingGlyph(null); setPreviewAnchor(null); };
   const changeMode = (next: NotebookMode) => {
     if (next === "settings") { setPanel("settings"); return; }
     resetTransient(); setMode(next); setTool(next === "ink" ? "pen" : "select");
@@ -317,7 +332,6 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
   };
   const closeTuplet = () => {
     if (tupletIds === null) { setTupletIds([]); return; }
-    if (pendingGlyph) { Alert.alert(ko ? "음표를 먼저 놓거나 취소해 주세요" : "Place or cancel the pending note first"); return; }
     const ids = tupletIds.filter((id) => page.stamps?.some((s) => s.id === id && isTupletMember(s.glyph)));
     if (ids.length < 2) { Alert.alert(ko ? "음표·쉼표를 두 개 이상 넣어 주세요" : "Add at least two notes or rests"); return; }
     checkpoint(); replacePage(pageIndex, { ...page, tuplets: [...(page.tuplets ?? []), { id: id("tuplet"), stampIds: ids }] }); setTupletIds(null);
@@ -337,7 +351,7 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
   const pasteClipboard = (key: string) => {
     const entry = clipboard.find((item) => item.id === key);
     if (!entry) return;
-    cancelStamp(); playback.stop();
+    playback.stop();
     const copied = transformSelection(entry.page, { strokeIds: entry.page.strokes.map((s) => s.id), stampIds: (entry.page.stamps ?? []).map((s) => s.id) }, { x: 0, y: 0 }, true, () => id("object"));
     // transformSelection(copy) retains originals; include only the fresh objects.
     const freshStrokes = copied.page.strokes.filter((s) => copied.selection.strokeIds.includes(s.id));
@@ -369,7 +383,10 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
       <View style={{ zIndex: 40 }} onLayout={(event) => setPlaybackBarHeight(event.nativeEvent.layout.height)}>
         <NotebookPlaybackBar ko={ko} settings={settings} running={playback.running} preparing={playback.preparing} onSettings={updateSettings} onToggle={() => void togglePlayback()} />
       </View>
-      <View style={styles.paperStage} onLayout={(event) => setViewport({ width: event.nativeEvent.layout.width, height: event.nativeEvent.layout.height })}>
+      <View ref={paperStageRef} style={styles.paperStage} onLayout={(event) => {
+        setViewport({ width: event.nativeEvent.layout.width, height: event.nativeEvent.layout.height });
+        paperStageRef.current?.measureInWindow((_x, y) => setPaperTop(y));
+      }}>
         <ScrollView testID="notebook-horizontal-scroll" ref={horizontalScroll} horizontal style={styles.paperScroll}
           scrollEventThrottle={16} onScroll={(event) => { paperScrollOffset.current.x = event.nativeEvent.contentOffset.x; }}
           contentContainerStyle={{ minWidth: "100%" }}
@@ -382,9 +399,9 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
             page={playback.running ? visiblePage : draftPage ?? page} width={PAPER_WIDTH * paperScale * zoom} height={visibleHeight * paperScale * zoom}
             paperScale={paperScale} zoom={playback.running && settings.follow ? settings.playbackZoom : scale}
             offset={offset} tool={playback.running ? "move" : tool} lineWidth={lineWidth}
-            drawing={drawing} pendingGlyph={pendingGlyph} preview={previewAnchor}
+            drawing={drawing} pendingGlyph={null} preview={null}
             selection={playback.running ? undefined : selection} selectionBox={selectionBox}
-            openTupletIds={tupletIds ?? undefined} pendingRole={pendingNote.role} pendingDotted={pendingNote.dotted}
+            openTupletIds={tupletIds ?? undefined}
             onTouch={playback.running ? undefined : onPaperTouch}
           />
         </ScrollView></ScrollView>
@@ -393,10 +410,6 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
         </Pressable>
         {playback.error ? <View style={styles.playbackStatus}><Text style={{ color: C.accent }}>{playback.error}</Text></View> : null}
         {playback.running ? <View pointerEvents="none" style={[styles.playbackTag, { backgroundColor: C.surface }]}><Text style={{ color: C.text, fontSize: 11 }}>{settings.source?.label ?? t.click}</Text></View> : null}
-        {pendingGlyph && !panel && <View style={styles.previewActions}>
-          <Pressable testID="notebook-stamp-cancel" onPress={cancelStamp} style={styles.previewButton}><Text>{t.cancel}</Text></Pressable>
-          <Pressable testID="notebook-stamp-confirm" onPress={confirmStamp} style={styles.previewButton}><Text>{ko ? "여기에 놓기" : "Place here"}</Text></Pressable>
-        </View>}
         {dragDraft?.awaiting && !panel && <View testID="notebook-drop-actions" style={[styles.previewActions, { bottom: undefined, left: Math.max(8, Math.min(viewport.width - 315, dragDraft.point.x - paperScrollOffset.current.x)), top: Math.max(8, Math.min(viewport.height - 108, dragDraft.point.y - paperScrollOffset.current.y)), alignSelf: "auto", maxWidth: viewport.width - 16, flexWrap: "wrap" }]}>
           <Pressable testID="notebook-drop-cancel" onPress={() => { setDragDraft(null); if (dragDraft.paste) setSelection(emptySelection()); }} style={styles.previewButton}><Text>{t.cancel}</Text></Pressable>
           {!dragDraft.paste && <Pressable testID="notebook-drop-copy" onPress={() => commitDrag(true)} style={styles.previewButton}><Text>{ko ? "여기에 복사" : "Copy here"}</Text></Pressable>}
@@ -404,9 +417,9 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
         </View>}
       </View>
       {tupletIds !== null && <View style={styles.tupletStatus}><Text>{ko ? `잇단음표 작성 중 · ${tupletIds.length}개` : `Open tuplet · ${tupletIds.length}`}</Text><Pressable testID="notebook-tuplet-cancel" onPress={() => setTupletIds(null)} style={{ padding: 8 }}><Text>{t.cancel}</Text></Pressable></View>}
-      <NotebookBottomTools ko={ko} mode={mode} tool={tool} lineWidth={lineWidth} scale={scale}
+      <NotebookBottomTools ko={ko} mode={mode} tool={tool} lineWidth={lineWidth} scale={scale} pickerTop={paperTop}
         canUndo={undoStack.current.length > 0} canRedo={redoStack.current.length > 0}
-        onTool={(next) => { playback.stop(); cancelStamp(); setTool(next); }} onWidth={setLineWidth}
+        onTool={(next) => { playback.stop(); setDragDraft(null); setTool(next); }} onWidth={setLineWidth}
         onZoom={(value) => { playback.stop(); setScale(Math.max(0.35, Math.min(2.5, value))); }} onUndo={undo} onRedo={redo}
         onChoose={beginStamp} onTuplet={closeTuplet} tupletCount={tupletIds?.length ?? null}
         selectionCount={selectionCount(selection)} onClearSelection={() => { setSelection(emptySelection()); setDragDraft(null); }}

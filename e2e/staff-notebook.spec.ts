@@ -50,12 +50,16 @@ async function chooseMode(page: Page, mode: "ink" | "notes" | "select" | "settin
 async function openSettings(page: Page) { await chooseMode(page, "settings"); }
 async function chooseGlyph(page: Page, glyph: string) {
   const category = glyph.startsWith("rest-") ? "rest" : ["whole", "half", "quarter", "eighth", "sixteenth", "thirty_second"].includes(glyph) ? "note" : "marks";
-  await page.getByTestId(`notebook-category-${category}`).click();
-  await page.getByTestId(`notebook-symbol-${glyph}`).click();
   if (category === "note") {
+    await page.waitForTimeout(260);
+    await page.getByTestId("notebook-note-origin").focus();
+    await page.getByTestId("notebook-note-origin").press("Enter");
     await page.getByTestId("notebook-note-role-normal").click();
-    if (await page.getByTestId("notebook-note-dotted").getAttribute("aria-checked") === "true") await page.getByTestId("notebook-note-dotted").click();
-    await page.getByTestId("notebook-note-apply").click();
+    await page.getByTestId("notebook-note-plain").click();
+    await page.getByTestId(`notebook-note-duration-${glyph}`).click();
+  } else {
+    await page.getByTestId(`notebook-category-${category}`).click();
+    await page.getByTestId(`notebook-symbol-${glyph}`).click();
   }
 }
 async function rowsTo(page: Page, value: number) {
@@ -69,6 +73,111 @@ async function paperDrag(page: Page, from: { x: number; y: number }, to: { x: nu
   await page.mouse.down();
   await page.mouse.move(box.x + to.x * ratio, box.y + to.y * ratio, { steps: 12 });
   await page.mouse.up();
+}
+
+test("automatic placement moves relatively from a remote touch and snaps live only vertically", async ({ page }) => {
+  await page.setViewportSize({ width: 768, height: 1024 });
+  await openNotebook(page); await chooseMode(page, "notes");
+  await chooseGlyph(page, "quarter");
+  const paper = page.getByTestId("notebook-drawing");
+  const position = async () => {
+    const transform = await paper.locator("g:has(> ellipse)").first().getAttribute("transform");
+    const match = /translate\(([-.\d]+)[ ,]+([-.\d]+)\)/.exec(transform!)!;
+    return { x: Number(match[1]), y: Number(match[2]) };
+  };
+  expect(await position()).toEqual({ x: 55, y: 102 });
+  await expect(page.getByTestId("notebook-stamp-confirm")).toHaveCount(0);
+  const box = (await paper.boundingBox())!, ratio = box.width / 900;
+  await page.mouse.move(box.x + 500 * ratio, box.y + 250 * ratio);
+  await page.mouse.down();
+  expect(await position()).toEqual({ x: 55, y: 102 });
+  await page.mouse.move(box.x + 560 * ratio, box.y + 278 * ratio, { steps: 8 });
+  await expect.poll(async () => (await position()).y).toBe(132);
+  const live = await position();
+  expect(Math.abs(live.x - 115)).toBeLessThan(1 / ratio);
+  await page.mouse.up();
+  expect(await position()).toEqual(live);
+  await expect(page.getByTestId("notebook-drop-actions")).toHaveCount(0);
+  await openSettings(page); await page.getByTestId("notebook-snap").click();
+  await page.getByTestId("notebook-panel-close").click();
+  await paperDrag(page, { x: 500, y: 250 }, { x: 517, y: 259 });
+  const free = await position();
+  expect(Math.abs(free.y - live.y - 9)).toBeLessThan(1 / ratio);
+  expect(free.y % 6).not.toBe(0);
+  await chooseGlyph(page, "eighth");
+  const transforms = await paper.locator("g:has(> ellipse)").evaluateAll((nodes) => nodes.map((node) => node.getAttribute("transform")));
+  const next = /translate\(([-.\d]+)[ ,]+([-.\d]+)\)/.exec(transforms[1]!)!;
+  expect(Number(next[2])).toBe(free.y);
+  expect(Number(next[1])).toBeCloseTo(free.x + 22);
+  await openSettings(page); await page.getByTestId("notebook-save").click();
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("lab_staff_notebooks_v1")!)[0]);
+  expect(saved.pages[0].stamps[0]).toMatchObject(free);
+  expect(saved.pages[0].stamps).toHaveLength(2);
+  expect(saved.settings.snap).toBe(false);
+});
+
+test("relative note movement converts zoom and scroll before snapping", async ({ page }) => {
+  await page.setViewportSize({ width: 768, height: 1024 });
+  const reference = {
+    ...originalNote, id: "zoom-reference", title: "Zoom reference",
+    pages: [{ id: "zoom-page", staffCount: 12, strokes: [], stamps: [{ id: "zoom-note", glyph: "quarter", x: 200, y: 257, size: 26 }] }],
+  };
+  await page.addInitScript((note) => localStorage.setItem("lab_staff_notebooks_v1", JSON.stringify([note])), reference);
+  await openNotebook(page); await openSettings(page);
+  await openSaved(page, reference.title); await page.getByTestId("notebook-panel-close").click();
+  await chooseMode(page, "ink");
+  for (let i = 0; i < 5; i++) await page.getByLabel(/^Zoom in$|^확대$/).click();
+  await chooseMode(page, "notes");
+  await page.getByTestId("notebook-horizontal-scroll").evaluate((node) => { node.scrollLeft = 90; });
+  await page.getByTestId("notebook-vertical-scroll").evaluate((node) => { node.scrollTop = 150; });
+  const paper = page.getByTestId("notebook-drawing"), bounds = (await paper.boundingBox())!;
+  expect(bounds.width).toBeGreaterThan(1100);
+  const ratio = bounds.width / 900;
+  await page.mouse.click(bounds.x + 200 * ratio, bounds.y + 257 * ratio);
+  await paperDrag(page, { x: 500, y: 350 }, { x: 540, y: 370 });
+  await expect(page.getByTestId("notebook-drop-actions")).toHaveCount(0);
+  await openSettings(page); await page.getByTestId("notebook-save").click();
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("lab_staff_notebooks_v1")!)[0]);
+  expect(saved.pages[0].stamps[0].y).toBe(275);
+  expect(Math.abs(saved.pages[0].stamps[0].x - 240)).toBeLessThan(1 / ratio);
+});
+
+for (const viewport of [{ width: 768, height: 1024 }, { width: 844, height: 390 }]) {
+  test(`direct note column stays above its origin and cancels on mode change at ${viewport.width}x${viewport.height}`, async ({ page }) => {
+    await page.setViewportSize(viewport);
+    await openNotebook(page); await chooseMode(page, "notes");
+    const origin = (await page.getByTestId("notebook-note-origin").boundingBox())!;
+    await page.mouse.move(origin.x + origin.width / 2, origin.y + origin.height / 2);
+    await page.mouse.down();
+    await expect(page.getByTestId("notebook-note-role-normal")).toBeVisible();
+    await expect(page.getByTestId("notebook-category-rest")).toHaveCount(0);
+    await page.mouse.move(origin.x + origin.width / 2, origin.y - 90, { steps: 10 });
+    await expect(page.getByTestId("notebook-note-duration-quarter")).toBeVisible();
+    const paper = (await page.getByTestId("notebook-drawing").boundingBox())!;
+    for (const duration of ["whole", "half", "quarter", "eighth", "sixteenth", "thirty_second"]) {
+      const row = page.getByTestId(`notebook-note-duration-${duration}`);
+      await expect(row).toBeInViewport({ ratio: 1 });
+      const bounds = (await row.boundingBox())!;
+      expect(bounds.y).toBeGreaterThanOrEqual(paper.y - 1);
+      expect(bounds.y + bounds.height).toBeLessThanOrEqual(origin.y + 1);
+    }
+    const quarter = (await page.getByTestId("notebook-note-duration-quarter").boundingBox())!;
+    await page.mouse.move(quarter.x + quarter.width / 2, quarter.y + quarter.height / 2, { steps: 5 });
+    const dotted = (await page.getByTestId("notebook-note-dotted").boundingBox())!;
+    const plain = (await page.getByTestId("notebook-note-plain").boundingBox())!;
+    expect(dotted.x + dotted.width).toBeLessThanOrEqual(quarter.x + 1);
+    expect(plain.x).toBeGreaterThanOrEqual(quarter.x + quarter.width - 1);
+    await page.screenshot({ path: `generated-artifacts/note-picker-${viewport.width}x${viewport.height}.png` });
+    await page.getByTestId("notebook-right-toggle").focus();
+    await page.getByTestId("notebook-right-toggle").press("Enter");
+    await page.getByTestId("notebook-mode-ink").focus();
+    await page.getByTestId("notebook-mode-ink").press("Enter");
+    await page.mouse.up();
+    await expect(page.getByTestId("notebook-drawing").locator("ellipse")).toHaveCount(0);
+    await chooseMode(page, "notes"); await chooseGlyph(page, "whole");
+    await expect(page.getByTestId("notebook-drawing").locator("ellipse")).toHaveCount(1);
+    await expect(page.getByTestId("notebook-stamp-confirm")).toHaveCount(0);
+  });
 }
 
 test("mixed selection previews, cancels, copies and pastes an independent clipboard bundle", async ({ page }) => {
@@ -126,24 +235,22 @@ test("staged note gesture preserves strong and dotted choices; tuplets count not
   await openNotebook(page); await chooseMode(page, "notes");
   await expect(page.getByTestId("notebook-play")).toBeInViewport({ ratio: 1 });
   await page.getByTestId("notebook-tuplet").click();
-  const box = (await page.getByTestId("notebook-note-gesture").boundingBox())!;
+  const box = (await page.getByTestId("notebook-note-origin").boundingBox())!;
   const x = box.x + box.width / 2, y = box.y + box.height / 2;
   await page.mouse.move(x, y); await page.mouse.down();
-  await page.mouse.move(x + 60, y, { steps: 8 });
+  await expect(page.getByTestId("notebook-note-role-strong")).toBeVisible();
+  const strong = (await page.getByTestId("notebook-note-role-strong").boundingBox())!;
+  await page.mouse.move(strong.x + strong.width / 2, y, { steps: 8 });
   await page.mouse.move(x + 60, y - 90, { steps: 8 });
-  const quarter = (await page.getByTestId("notebook-duration-quarter").boundingBox())!;
-  await page.mouse.move(x + 60, quarter.y + quarter.height / 2, { steps: 5 });
-  await page.mouse.move(x + 20, quarter.y + quarter.height / 2, { steps: 5 });
+  const quarter = (await page.getByTestId("notebook-note-duration-quarter").boundingBox())!;
+  await page.mouse.move(quarter.x + quarter.width / 2 - 16, quarter.y + quarter.height / 2, { steps: 5 });
   await page.mouse.up();
-  await page.getByTestId("notebook-stamp-confirm").click();
+  await expect(page.getByTestId("notebook-stamp-confirm")).toHaveCount(0);
   await chooseGlyph(page, "whole");
-  await page.getByTestId("notebook-stamp-confirm").click();
   await chooseGlyph(page, "rest-eighth");
-  await page.getByTestId("notebook-stamp-confirm").click();
   await page.getByTestId("notebook-tuplet").click();
   await expect(page.getByTestId("notebook-drawing").locator("text").filter({ hasText: /^3$/ })).toHaveCount(1);
   await chooseGlyph(page, "sharp");
-  await page.getByTestId("notebook-stamp-confirm").click();
   await openSettings(page); await page.getByTestId("notebook-save").click();
   await expect(page.getByTestId("web-alert")).toContainText(/Notebook saved|저장했습니다/);
   const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("lab_staff_notebooks_v1")!)[0]);
@@ -197,15 +304,14 @@ test("paper fills tablet, dial does not exit, stamps preview and persist with in
   await page.mouse.move(box.x + 240, box.y + 100, { steps: 8 });
   await page.mouse.up();
   await chooseMode(page, "notes");
-  await page.getByTestId("notebook-category-note").click();
+  await page.getByTestId("notebook-note-origin").focus();
+  await page.getByTestId("notebook-note-origin").press("Enter");
   for (const glyph of ["whole", "half", "quarter", "eighth", "sixteenth", "thirty_second"]) {
-    await expect(page.getByTestId(`notebook-symbol-${glyph}`).locator("svg")).toHaveCount(1);
+    await expect(page.getByTestId(`notebook-note-duration-${glyph}`).locator("svg")).toHaveCount(1);
   }
   await page.screenshot({ path: "/tmp/notebook-standard-palette-verified.png" });
-  await page.getByTestId("notebook-symbol-quarter").click();
-  await page.getByTestId("notebook-note-apply").click();
-  await expect(page.getByTestId("notebook-stamp-confirm")).toBeVisible();
-  await page.getByTestId("notebook-stamp-confirm").click();
+  await page.getByTestId("notebook-note-duration-quarter").click();
+  await expect(page.getByTestId("notebook-stamp-confirm")).toHaveCount(0);
   await openSettings(page);
   await page.getByTestId("notebook-line-unit-phrase").click();
   await page.getByTestId("notebook-follow").click();
@@ -225,12 +331,12 @@ test("paper fills tablet, dial does not exit, stamps preview and persist with in
   expect(errors).toEqual([]);
 });
 
-test("phone imports real pattern, starts audio, stops on settings edits, and cancels glyph preview", async ({ page }) => {
+test("phone imports real pattern, starts audio, stops on settings edits, and places symbols immediately", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await openNotebook(page);
   await chooseMode(page, "notes");
   await chooseGlyph(page, "sharp");
-  await page.getByTestId("notebook-stamp-cancel").click();
+  await expect(page.getByTestId("notebook-stamp-cancel")).toHaveCount(0);
   await openSettings(page);
   await page.getByText(/^패턴 불러오기$|^Load pattern$/).click();
   await page.getByText("Notebook 4/4 reference").click();
@@ -244,7 +350,8 @@ test("phone imports real pattern, starts audio, stops on settings edits, and can
     return notes[0]?.settings?.source?.id;
   })).toBe("notebook-test-pattern");
   const notes = await page.evaluate(() => JSON.parse(localStorage.getItem("lab_staff_notebooks_v1")!));
-  expect(notes[0].pages[0].stamps).toHaveLength(0);
+  expect(notes[0].pages[0].stamps).toHaveLength(1);
+  expect(notes[0].pages[0].stamps[0].glyph).toBe("sharp");
   await closeNotice(page);
   await page.getByTestId("notebook-panel-close").click();
   await page.screenshot({ path: "/tmp/notebook-phone-verified.png" });
@@ -337,8 +444,8 @@ test("phone lower visible rows accept symbol-only edits and preserve their saved
   await page.getByTestId("notebook-vertical-scroll").evaluate((node) => { node.scrollTop = 200; });
   const box = (await page.getByTestId("notebook-drawing").boundingBox())!;
   const targetY = 9 * 155 + 102;
-  await page.mouse.click(box.x + 100 * 390 / 900, box.y + targetY * 390 / 900);
-  await page.getByTestId("notebook-stamp-confirm").click();
+  const startY = (300 - box.y) / (box.width / 900);
+  for (let i = 0; i < 3; i++) await paperDrag(page, { x: 500, y: startY }, { x: 500, y: startY + 3 * 155 });
   await openSettings(page);
   await page.getByTestId("notebook-save").click();
   await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("lab_staff_notebooks_v1") ?? "[]")[0]?.pages[0]?.stamps?.length)).toBe(1);
@@ -382,7 +489,7 @@ const storedRaw = (page: Page) => page.evaluate((key) => localStorage.getItem(ke
 const paperContents = (page: Page) => page.getByTestId("notebook-drawing").locator("svg").evaluate((svg) => {
   const document = svg.cloneNode(true) as SVGElement;
   // Selection is editor state, not saved ink. Loading correctly clears it.
-  document.querySelectorAll('path[stroke="#a36f36"]').forEach((outline) => outline.remove());
+  document.querySelectorAll('path[stroke="#a36f36"], rect[stroke="#a36f36"]').forEach((outline) => outline.remove());
   return document.innerHTML;
 });
 
@@ -406,7 +513,6 @@ async function editGuardReference(page: Page) {
   await page.mouse.up();
   await chooseMode(page, "notes");
   await chooseGlyph(page, "quarter");
-  await page.getByTestId("notebook-stamp-confirm").click();
   await openSettings(page);
   await rowsTo(page, 13);
   await page.getByTestId("notebook-panel-close").click();
@@ -576,7 +682,6 @@ for (const change of ["ink", "mark", "rows", "settings"] as const) {
         if (change === "mark") {
           await chooseMode(page, "notes");
           await chooseGlyph(page, "quarter");
-          await page.getByTestId("notebook-stamp-confirm").click();
         } else {
           await openSettings(page);
           await rowsTo(page, 13);

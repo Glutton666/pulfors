@@ -33,6 +33,29 @@ export function shuffledRows(rows: NotebookRow[], random: () => number = Math.ra
 export function rowAt(y: number, count: number): number {
   return Math.max(0, Math.min(count - 1, Math.floor(y / ROW_HEIGHT)));
 }
+/** Quantize notehead centers, not stems, to a line or space of the nearest staff. */
+export function snapStaffY(y: number, count: number, low = 12, high = count * ROW_HEIGHT - 12): number {
+  const clamped = Math.max(low, Math.min(high, y));
+  const row = rowAt(clamped, count);
+  const step = STAFF_GAP / 2;
+  let best = clamped, distance = Infinity;
+  for (let r = Math.max(0, row - 1); r <= Math.min(count - 1, row + 1); r++) {
+    const top = r * ROW_HEIGHT + STAFF_TOP;
+    const first = Math.ceil((Math.max(low, r * ROW_HEIGHT) - top) / step);
+    const last = Math.floor((Math.min(high, (r + 1) * ROW_HEIGHT - 0.001) - top) / step);
+    if (first > last) continue;
+    const candidate = top + Math.max(first, Math.min(last, Math.round((clamped - top) / step))) * step;
+    if (Math.abs(candidate - clamped) < distance) { best = candidate; distance = Math.abs(candidate - clamped); }
+  }
+  return best;
+}
+export function constrainStaffPoint(page: StaffPage, point: StaffPoint, snap: boolean): StaffPoint {
+  const count = page.staffCount ?? 7;
+  return {
+    x: Math.max(22, Math.min(PAPER_WIDTH - 22, point.x)),
+    y: snap ? snapStaffY(point.y, count) : Math.max(12, Math.min(count * ROW_HEIGHT - 12, point.y)),
+  };
+}
 /** Values and anchors are always paper coordinates, never screen pixels. */
 export function stampPosition(page: StaffPage, settings: NotebookSettings, anchor?: StaffPoint): StaffPoint {
   const last = page.stamps?.at(-1);
@@ -45,11 +68,7 @@ export function stampPosition(page: StaffPage, settings: NotebookSettings, ancho
   // Legacy offsets remain readable, but never silently shift new placements.
   x = Math.max(38, Math.min(862, x));
   y = Math.max(12, Math.min((page.staffCount ?? 7) * ROW_HEIGHT - 12, y));
-  if (settings.snap) {
-    const top = rowAt(y, page.staffCount ?? 7) * ROW_HEIGHT + STAFF_TOP;
-    y = top + Math.round((y - top) / (STAFF_GAP / 2)) * STAFF_GAP / 2;
-  }
-  return { x, y };
+  return constrainStaffPoint(page, { x, y }, settings.snap);
 }
 export function screenToPaper(point: StaffPoint, offset: StaffPoint, scale: number): StaffPoint {
   return { x: (point.x - offset.x) / scale, y: (point.y - offset.y) / scale };

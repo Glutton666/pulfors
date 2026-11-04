@@ -1,6 +1,6 @@
 import { attachedPosition, captureSelection, hitObject, paginateNotebook, removeSelection, selectRectangle, selectionDelta, transformSelection } from "../lib/notebook-editing";
 import { DEFAULT_NOTEBOOK_SETTINGS, type StaffNotebook, type StaffPage } from "../lib/staff-notebook";
-import { fitNotebookPage, ROW_HEIGHT, notebookRows, materializeRows } from "../lib/staff-notebook-layout";
+import { constrainStaffPoint, snapStaffY, fitNotebookPage, ROW_HEIGHT, notebookRows, materializeRows } from "../lib/staff-notebook-layout";
 import { buildNotebookPlan } from "../lib/notebook-playback-plan";
 
 function page(): StaffPage {
@@ -15,6 +15,27 @@ function page(): StaffPage {
 let counter = 0;
 const uid = () => `fresh${++counter}`;
 const chosen = { strokeIds: ["ink"], stampIds: ["n", "r"] };
+
+test("notehead vertical snapping preserves x, follows each staff and stays aligned at page edges", () => {
+  const p = page();
+  expect(constrainStaffPoint(p, { x: 123.7, y: 106 }, true)).toEqual({ x: 123.7, y: 108 });
+  expect(constrainStaffPoint(p, { x: 123.7, y: 106 }, false)).toEqual({ x: 123.7, y: 106 });
+  expect(constrainStaffPoint(p, { x: 123.7, y: 155 + 106 }, true)).toEqual({ x: 123.7, y: 155 + 108 });
+  expect(constrainStaffPoint(p, { x: 123.7, y: 619 }, true).y).toBe(603);
+  expect(snapStaffY(106, 4, 103, 107)).toBe(106); // no grid slot fits the allowed bounds
+});
+
+test("bounded mixed-note movement still snaps while preserving every relative offset", () => {
+  const p = page();
+  const delta = selectionDelta(p, chosen, { x: 19.25, y: 10000 }, true);
+  const moved = transformSelection(p, chosen, delta).page;
+  const note = moved.stamps!.find((s) => s.id === "n")!;
+  const top = Math.floor(note.y / ROW_HEIGHT) * ROW_HEIGHT + 78;
+  expect((note.y - top) % 6).toBe(0);
+  expect(note.x).toBe(159.25);
+  expect(moved.stamps!.find((s) => s.id === "a")!.y - note.y).toBe(0);
+  expect(moved.strokes[0].points[0].y - note.y).toBe(-12);
+});
 
 test("rectangle selects crossing ink segments and individual mixed objects, not a whole page", () => {
   const selected = selectRectangle(page(), { x: 100, y: 60, width: 120, height: 80 });

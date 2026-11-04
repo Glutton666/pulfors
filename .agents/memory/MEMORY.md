@@ -105,5 +105,6 @@
 - [Rhythm viewport benchmarks](rhythm-viewport-benchmark.md) — align capture/display clocks; wait for rotation reflow and navigate relative to the staff, not page zero.
 - [Rhythm calibration reference](rhythm-calibration-reference.md) — personal listening/input correction, not physical DAC latency; match reference and tap time axes.
 - [오선노트 작업영역](staff-notebook-workspace.md) — 종이 중심, 오른쪽 모드·설정과 하단 도구, 선택 후 이동·복사 및 표준 음표 표기.
+- [Pressable gesture ownership](pressable-gesture-ownership.md) — keep drag responders on a stable View; Pressable's own responder handlers can override them.
 - [Native strong markers](native-strong-marker.md) — Beat/Bar S markers share rendering; preserve vector glyphs and distinguish browser checks from native release verification.
 - [Polygon startup boundary](polygon-startup-boundary.md) — use Polygon’s own audio producer and beat clock, not ordinary rendered output or the underlying Bar transport.

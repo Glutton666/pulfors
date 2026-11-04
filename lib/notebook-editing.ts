@@ -1,5 +1,5 @@
 import type { StaffNotebook, StaffPage, StaffPoint, StaffStamp, StaffStroke } from "./staff-notebook";
-import { ROW_HEIGHT, STAFF_GAP, STAFF_TOP, rowAt, inkInRow } from "./staff-notebook-layout";
+import { ROW_HEIGHT, snapStaffY, inkInRow } from "./staff-notebook-layout";
 
 export type NotebookSelection = { strokeIds: string[]; stampIds: string[] };
 export type NotebookBounds = { x: number; y: number; width: number; height: number };
@@ -70,8 +70,8 @@ export function selectionDelta(page: StaffPage, selection: NotebookSelection, de
   const reference = page.stamps?.find((s) => selection.stampIds.includes(s.id) && isNotebookNote(s.glyph));
   let dy = delta.y;
   if (snap && reference) {
-    const y = reference.y + dy, top = rowAt(y, page.staffCount ?? 7) * ROW_HEIGHT + STAFF_TOP;
-    dy = top + Math.round((y - top) / (STAFF_GAP / 2)) * STAFF_GAP / 2 - reference.y;
+    dy = snapStaffY(reference.y + dy, page.staffCount ?? 7, reference.y - bounds.y,
+      (page.staffCount ?? 7) * ROW_HEIGHT - bounds.height + reference.y - bounds.y) - reference.y;
   }
   return { x: Math.max(-bounds.x, Math.min(900 - bounds.x - bounds.width, delta.x)),
     y: Math.max(-bounds.y, Math.min((page.staffCount ?? 7) * ROW_HEIGHT - bounds.y - bounds.height, dy)) };
