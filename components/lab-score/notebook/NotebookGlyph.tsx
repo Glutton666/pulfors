@@ -1,7 +1,8 @@
 import React from "react";
 import Svg, { Circle, G, Line, Path, Text as SvgText } from "react-native-svg";
-import { StaffNoteGlyph, StaffRestGlyph } from "@/components/staff/StaffGlyphs";
+import { StaffRestGlyph } from "@/components/staff/StaffGlyphs";
 import { ALL_INSTR_SYMBOLS, ARTICULATIONS } from "@/components/ScorePalette";
+import { NotebookNoteGlyph } from "./NotebookNoteGlyph";
 
 const noteDenominator: Record<string, number> = { whole: 1, half: 2, quarter: 4, eighth: 8, sixteenth: 16, "thirty_second": 32 };
 const restDenominator: Record<string, number> = { "rest-whole": 1, "rest-half": 2, "rest-quarter": 4, "rest-eighth": 8, "rest-sixteenth": 16 };
@@ -19,7 +20,7 @@ const typography: Record<string, string> = {
 export function NotebookGlyph({ glyph, x, y, size }: { glyph: string; x: number; y: number; size: number }) {
   const noteValue = noteDenominator[glyph];
   if (noteValue) {
-    return <G transform={`translate(${x} ${y}) scale(${size / 26})`}><StaffNoteGlyph type="normal" active index={0} x={0} beamCount={Math.max(0, Math.round(Math.log2(noteValue)) - 2)} grouped={false} noteValueDenominator={noteValue} colors={{ accent: "#111111" }} noteY={0} stemTop={-31} beamGap={5} /></G>;
+    return <NotebookNoteGlyph duration={glyph as "whole" | "half" | "quarter" | "eighth" | "sixteenth" | "thirty_second"} x={x} y={y} size={size} />;
   }
   const restValue = restDenominator[glyph];
   if (restValue) {
@@ -39,5 +40,8 @@ export function NotebookGlyph({ glyph, x, y, size }: { glyph: string; x: number;
 }
 
 export function NotebookGlyphPreview({ glyph, size = 26 }: { glyph: string; size?: number }) {
+  if (noteDenominator[glyph]) {
+    return <Svg width={size + 28} height={size + 38} viewBox="0 0 70 78"><NotebookGlyph glyph={glyph} x={35} y={39} size={size} /></Svg>;
+  }
   return <Svg width={size + 28} height={size + 24} viewBox="0 0 70 55"><NotebookGlyph glyph={glyph} x={35} y={28} size={size} /></Svg>;
 }

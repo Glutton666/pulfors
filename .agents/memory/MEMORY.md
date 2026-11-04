@@ -104,6 +104,6 @@
 - [리듬 연습과 탭 기보 분리](rhythm-practice-vs-transcription.md) — Glisso처럼 악보를 보고 탭하는 연습과 탭을 악보로 기록하는 기능은 각각 유지한다.
 - [Rhythm viewport benchmarks](rhythm-viewport-benchmark.md) — align capture/display clocks; wait for rotation reflow and navigate relative to the staff, not page zero.
 - [Rhythm calibration reference](rhythm-calibration-reference.md) — personal listening/input correction, not physical DAC latency; match reference and tap time axes.
-- [오선노트 작업영역](staff-notebook-workspace.md) — 상단 다이얼 아래는 종이로 채우고, 왼쪽 메트로놈·오른쪽 필기 도구를 펼친다.
+- [오선노트 작업영역](staff-notebook-workspace.md) — 종이 중심, 오른쪽 모드·설정과 하단 도구, 선택 후 이동·복사 및 표준 음표 표기.
 - [Native strong markers](native-strong-marker.md) — Beat/Bar S markers share rendering; preserve vector glyphs and distinguish browser checks from native release verification.
 - [Polygon startup boundary](polygon-startup-boundary.md) — use Polygon’s own audio producer and beat clock, not ordinary rendered output or the underlying Bar transport.

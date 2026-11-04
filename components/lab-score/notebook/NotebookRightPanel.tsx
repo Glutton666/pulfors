@@ -63,7 +63,10 @@ export function NotebookRightPanel(props: Props) {
         <Text style={styles.groupTitle}>{group.title}</Text>
         <View style={styles.symbolGrid}>
           {group.items.map((item) => <Pressable key={item.id} testID={`notebook-symbol-${item.id}`} accessibilityLabel={item.label} onPress={() => props.onStamp(item.id)} style={[styles.symbolButton, props.pendingGlyph === item.id && styles.symbolActive]}>
-            <Text numberOfLines={1} style={styles.symbol}>{item.symbol}</Text><Text numberOfLines={1} style={styles.symbolLabel}>{item.label.replace(/_/g, " ")}</Text>
+            {["whole", "half", "quarter", "eighth", "sixteenth", "thirty_second"].includes(item.id) || item.id.startsWith("rest-")
+              ? <NotebookGlyphPreview glyph={item.id} />
+              : <Text numberOfLines={1} style={styles.symbol}>{item.symbol}</Text>}
+            <Text numberOfLines={1} style={styles.symbolLabel}>{item.label.replace(/_/g, " ")}</Text>
           </Pressable>)}
         </View>
       </View>)}

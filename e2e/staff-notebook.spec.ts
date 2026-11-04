@@ -62,6 +62,10 @@ test("paper fills tablet, dial does not exit, stamps preview and persist with in
   await page.mouse.move(box.x + 240, box.y + 100, { steps: 8 });
   await page.mouse.up();
   await page.getByTestId("notebook-right-toggle").click();
+  for (const glyph of ["whole", "half", "quarter", "eighth", "sixteenth", "rest-whole", "rest-eighth"]) {
+    await expect(page.getByTestId(`notebook-symbol-${glyph}`).locator("svg")).toHaveCount(1);
+  }
+  await page.screenshot({ path: "/tmp/notebook-standard-palette-verified.png" });
   await page.getByTestId("notebook-symbol-quarter").click();
   await expect(page.getByTestId("notebook-stamp-confirm")).toBeVisible();
   await page.getByTestId("notebook-stamp-confirm").click();
