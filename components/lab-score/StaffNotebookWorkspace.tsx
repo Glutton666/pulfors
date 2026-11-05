@@ -12,6 +12,7 @@ import { constrainStaffPoint, fitNotebookPage, materializeRows, stampPosition, s
 import { NotebookModeMenu, type NotebookMode } from "@/components/lab-score/notebook/NotebookModeMenu";
 import { NotebookBottomTools } from "@/components/lab-score/notebook/NotebookBottomTools";
 import { NotebookPlaybackBar } from "@/components/lab-score/notebook/NotebookPlaybackBar";
+import { NotebookFloatingDock } from "@/components/lab-score/notebook/NotebookFloatingDock";
 import { NotebookSettingsPanel } from "@/components/lab-score/notebook/NotebookSettingsPanel";
 import { NotebookPaper } from "@/components/lab-score/notebook/NotebookPaper";
 import { attachedPosition, captureSelection, emptySelection, hitObject, includeAttached, isAttachedMark, isNotebookNote, isTupletMember, paginateNotebook, rectangle, removeSelection, selectRectangle, selectionBounds, selectionCount, selectionDelta, transformSelection, type NotebookClipboard, type NotebookSelection, type NotebookBounds } from "@/lib/notebook-editing";
@@ -80,12 +81,18 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
   const [dragDraft, setDragDraft] = useState<{ selection: NotebookSelection; delta: StaffPoint; base: StaffPage; paste: boolean; awaiting: boolean; point: StaffPoint } | null>(null);
   const [drawing, setDrawing] = useState<StaffPoint[]>([]);
   const [viewport, setViewport] = useState({ width: 0, height: 0 });
-  const [playbackBarHeight, setPlaybackBarHeight] = useState(52);
+  const [dockMoving, setDockMoving] = useState(false);
+  const [dockLayoutVersion, setDockLayoutVersion] = useState(0);
+  const [frontDock, setFrontDock] = useState<"playback" | "tools">("tools");
   const [paperTop, setPaperTop] = useState(128);
   const paperStageRef = useRef<View>(null);
   const paperScroll = useRef<ScrollView>(null);
   const horizontalScroll = useRef<ScrollView>(null);
   const paperScrollOffset = useRef({ x: 0, y: 0 });
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => paperStageRef.current?.measureInWindow((_x, y) => setPaperTop(y)));
+    return () => cancelAnimationFrame(frame);
+  }, [viewport.width, viewport.height]);
   const drawingRef = useRef<StaffPoint[]>([]);
   const eraseGesture = useRef<{ base: StaffPage; points: StaffPoint[] } | null>(null);
   const editSnapshot = useRef<{ selection: NotebookSelection; draft: typeof dragDraft } | null>(null);
@@ -397,14 +404,21 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
     checkpoint(); replacePage(pageIndex, next);
   };
   const following = playback.running && settings.follow;
+  const dockLayoutKey = dockLayoutVersion + viewport.width * 10000 + viewport.height;
+  const beginDockMove = () => {
+    onPaperTouch({ x: 0, y: 0 }, "cancel");
+    setToolPopup(null); setDockMoving(true);
+    setDockLayoutVersion((version) => version + 1);
+  };
+  const endDockMove = () => {
+    setDockMoving(false);
+    setDockLayoutVersion((version) => version + 1);
+  };
   const zoom = following ? settings.playbackZoom : scale;
   const draftPage = dragDraft ? transformSelection(dragDraft.base, dragDraft.selection, dragDraft.delta).page : null;
   return (
     <View testID="notebook-workspace" style={[styles.root, { backgroundColor: "#ffffff" }]}>
-      <View style={{ zIndex: 40 }} onLayout={(event) => setPlaybackBarHeight(event.nativeEvent.layout.height)}>
-        <NotebookPlaybackBar ko={ko} settings={settings} running={playback.running} preparing={playback.preparing} onSettings={updateSettings} onToggle={() => void togglePlayback()} />
-      </View>
-      <View ref={paperStageRef} style={styles.paperStage} onLayout={(event) => {
+      <View testID="notebook-paper-stage" ref={paperStageRef} style={styles.paperStage} onLayout={(event) => {
         setViewport({ width: event.nativeEvent.layout.width, height: event.nativeEvent.layout.height });
         paperStageRef.current?.measureInWindow((_x, y) => setPaperTop(y));
       }}>
@@ -416,7 +430,8 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
         <ScrollView testID="notebook-vertical-scroll" ref={paperScroll} style={{ height: viewport.height, width: Math.max(viewport.width, PAPER_WIDTH * paperScale * zoom) }}
           disableScrollViewPanResponder scrollEnabled={Platform.OS === "web" || playback.running}
           scrollEventThrottle={16} onScroll={(event) => { paperScrollOffset.current.y = event.nativeEvent.contentOffset.y; }}
-          contentContainerStyle={[styles.paperContent, { paddingVertical: following ? viewport.height / 2 : 0 }]}
+          contentContainerStyle={[styles.paperContent, { paddingTop: following ? viewport.height / 2 : 72,
+            paddingBottom: following ? viewport.height / 2 : 148 }]}
           nestedScrollEnabled showsVerticalScrollIndicator={false}>
           <NotebookPaper
             settings={settings}
@@ -426,12 +441,12 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
             drawing={drawing} pendingGlyph={null} preview={null}
             selection={playback.running ? undefined : selection} selectionBox={selectionBox}
             openTupletIds={tupletIds ?? undefined}
-            onTouch={playback.running || toolPopup || panel ? undefined : onPaperTouch}
+            onTouch={playback.running || toolPopup || panel || dockMoving ? undefined : onPaperTouch}
             onPan={(delta) => setOffset((old) => ({ x: old.x + delta.x / paperScale, y: old.y + delta.y / paperScale }))}
           />
         </ScrollView></ScrollView>
         {panel === "menu" ? (
-          <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+          <View style={[StyleSheet.absoluteFill, { zIndex: 35 }]} pointerEvents="box-none">
             <Pressable testID="notebook-panel-close" style={styles.dismissSurface} onPress={closePanel} accessibilityLabel={t.close} />
             <View style={[styles.modePopover, { top: Math.max(8, Math.min(viewport.height - 58, viewport.height * 0.45)), right: 40 }]} pointerEvents="box-none">
               <NotebookModeMenu ko={ko} mode={mode} onMode={changeMode} />
@@ -448,13 +463,23 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
           {!dragDraft.paste && <Pressable testID="notebook-drop-copy" onPress={() => commitDrag(true)} style={styles.previewButton}><Text>{ko ? "여기에 복사" : "Copy here"}</Text></Pressable>}
           <Pressable testID="notebook-drop-move" onPress={() => commitDrag(false)} style={styles.previewButton}><Text>{dragDraft.paste ? (ko ? "여기에 붙여넣기" : "Paste here") : (ko ? "여기로 이동" : "Move here")}</Text></Pressable>
         </View>}
-      </View>
+      <NotebookFloatingDock id="playback" ko={ko} bounds={viewport} maxWidth={380} edge="top"
+        active={frontDock === "playback"} onActivate={() => setFrontDock("playback")}
+        onDragStart={beginDockMove} onDragEnd={endDockMove}>
+        <NotebookPlaybackBar ko={ko} settings={settings} running={playback.running} preparing={playback.preparing}
+          layoutKey={dockLayoutKey} pickerTop={paperTop} pickerBottom={paperTop + viewport.height}
+          onSettings={updateSettings} onToggle={() => void togglePlayback()} />
+      </NotebookFloatingDock>
+      <NotebookFloatingDock id="tools" ko={ko} bounds={viewport} maxWidth={mode === "notes" ? 480 : 680} edge="bottom"
+        active={frontDock === "tools"} onActivate={() => setFrontDock("tools")}
+        onDragStart={beginDockMove} onDragEnd={endDockMove}>
       {tupletIds !== null && <View style={styles.tupletStatus}><Text>{ko ? `잇단음표 작성 중 · ${tupletIds.length}개` : `Open tuplet · ${tupletIds.length}`}</Text><Pressable testID="notebook-tuplet-cancel" onPress={() => setTupletIds(null)} style={{ padding: 8 }}><Text>{t.cancel}</Text></Pressable></View>}
       {mode !== "ink" && mode !== "notes" && <View style={{ flexDirection: "row", justifyContent: "flex-end", backgroundColor: "#fffdf8" }}>
         <Pressable accessibilityLabel={t.undo} disabled={!undoStack.current.length} onPress={undo} style={{ padding: 10, opacity: undoStack.current.length ? 1 : 0.35 }}><Ionicons name="arrow-undo" size={18} color="#675d50" /></Pressable>
         <Pressable accessibilityLabel={t.redo} disabled={!redoStack.current.length} onPress={redo} style={{ padding: 10, opacity: redoStack.current.length ? 1 : 0.35 }}><Ionicons name="arrow-redo" size={18} color="#675d50" /></Pressable>
       </View>}
       <NotebookBottomTools ko={ko} mode={mode} tool={tool} lineWidth={lineWidth} scale={scale} pickerTop={paperTop}
+        pickerBottom={paperTop + viewport.height} layoutKey={dockLayoutKey}
         onAutoSpace={autoSpace} autoSpaceDisabled={playback.running || playback.preparing || !!dragDraft}
         lineColor={lineColor} onColor={setLineColor} eraserMode={eraserMode} onEraserMode={setEraserMode}
         toolPopup={toolPopup} onToolPopup={(next) => { resetTransient(); setToolPopup(next); }}
@@ -465,8 +490,10 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
         selectionCount={selectionCount(selection)} onClearSelection={() => { setSelection(emptySelection()); setDragDraft(null); }}
         onSaveClipboard={saveClipboard} onDeleteSelection={deleteSelection} onResizeSelection={resizeSelection}
         clipboard={clipboard} onPaste={pasteClipboard} />
+      </NotebookFloatingDock>
+      </View>
       {panel === "settings" ? (
-        <View style={[StyleSheet.absoluteFill, { top: playbackBarHeight, zIndex: 30 }]} pointerEvents="box-none">
+        <View style={[StyleSheet.absoluteFill, { zIndex: 40 }]} pointerEvents="box-none">
           <Pressable style={styles.backdrop} onPress={closePanel} accessibilityLabel={t.close} />
           <View style={[styles.drawer, styles.drawerRight, { backgroundColor: "#fffdf8", borderColor: "#ded6c9" }]}>
             <View style={[styles.drawerHead, { borderBottomColor: C.border }]}>
@@ -498,7 +525,7 @@ const styles = StyleSheet.create({
   paperContent: { minHeight: "100%", alignItems: "flex-start" },
   edgeHandle: { position: "absolute", top: "45%", width: 32, height: 58, alignItems: "center", justifyContent: "center", borderWidth: 1, elevation: 5, shadowColor: "#181714", shadowOpacity: 0.14, shadowRadius: 6 },
   leftHandle: { left: 0, borderTopRightRadius: 14, borderBottomRightRadius: 14 },
-  rightHandle: { right: 0, borderTopLeftRadius: 14, borderBottomLeftRadius: 14 },
+  rightHandle: { right: 0, borderTopLeftRadius: 14, borderBottomLeftRadius: 14, zIndex: 36 },
   dismissSurface: { ...StyleSheet.absoluteFillObject, backgroundColor: "transparent" },
   modePopover: { position: "absolute", zIndex: 2, maxWidth: "100%" },
   backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(21,20,18,0.25)" },

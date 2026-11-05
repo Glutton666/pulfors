@@ -22,6 +22,15 @@ jest.mock("@/components/lab-score/notebook/NotebookPlaybackBar", () => ({ Notebo
 jest.mock("@/components/lab-score/notebook/NotebookSettingsPanel", () => ({ NotebookSettingsPanel: () => null }));
 jest.mock("@/components/lab-score/notebook/NotebookModeMenu", () => ({ NotebookModeMenu: () => null }));
 afterEach(cleanup);
+const originalMeasure = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "measureInWindow");
+beforeAll(() => Object.defineProperty(HTMLElement.prototype, "measureInWindow", {
+  configurable: true,
+  value(callback: (x: number, y: number, width: number, height: number) => void) { callback(0, 0, 0, 0); },
+}));
+afterAll(() => {
+  if (originalMeasure) Object.defineProperty(HTMLElement.prototype, "measureInWindow", originalMeasure);
+  else delete (HTMLElement.prototype as any).measureInWindow;
+});
 const touch = (x: number, y: number, phase: string) => act(() => mockPaper.onTouch({ x, y }, phase));
 const draw = () => { touch(100, 110, "start"); touch(200, 110, "move"); touch(300, 110, "end"); };
 async function mount() { await act(async () => { render(<StaffNotebookWorkspace />); }); }

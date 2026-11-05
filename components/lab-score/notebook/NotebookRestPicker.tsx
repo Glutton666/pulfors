@@ -8,7 +8,9 @@ type Box = { x: number; y: number; width: number; height: number };
 type PickerProps = {
   ko: boolean;
   topBoundary: number;
+  bottomBoundary?: number;
   modeKey: string;
+  layoutKey?: number;
   otherPickerActive: boolean;
   dockRef: { current: View | null };
   onChoose: (choice: RestChoice) => void;
@@ -23,6 +25,7 @@ const durationLabels = {
 
 export function useNotebookRestPicker(props: PickerProps) {
   const { width, height } = useWindowDimensions();
+  const bottomBoundary = props.bottomBoundary ?? height - 8;
   const [active, setActive] = useState(false);
   const [vertical, setVertical] = useState(false);
   const [showAccessibleChooser, setShowAccessibleChooser] = useState(false);
@@ -67,6 +70,7 @@ export function useNotebookRestPicker(props: PickerProps) {
     setDotted(false);
     snapshot.current = { duration: "quarter", dotted: false };
   }, [props.modeKey, width, height]);
+  useEffect(() => { cancelGesture(); }, [props.layoutKey]);
 
   useEffect(() => {
     if (props.otherPickerActive) setShowAccessibleChooser(false);
@@ -155,16 +159,23 @@ export function useNotebookRestPicker(props: PickerProps) {
     setDotted(nextDotted);
   };
 
+  const spaceAbove = originBox ? Math.max(0, originBox.y - props.topBoundary - 8) : 0;
+  const spaceBelow = originBox ? Math.max(0, bottomBoundary - (originBox.y + originBox.height) - 8) : 0;
+  const columnAbove = spaceAbove >= spaceBelow || spaceAbove >= 190;
+  const availableColumnSpace = Math.max(spaceAbove, spaceBelow);
   const rowHeight = originBox
-    ? Math.max(8, Math.min(34, (originBox.y - props.topBoundary - 16) / durations.length))
+    ? Math.max(8, Math.min(34, (availableColumnSpace - 16) / durations.length))
     : 30;
   const columnHeight = rowHeight * durations.length + 8;
   const columnLeft = originBox && dockBox
     ? Math.max(42, Math.min(Math.max(42, dockBox.width - 138), originBox.x + originBox.width / 2 - dockBox.x - 48))
     : 42;
   const columnTop = originBox && dockBox
-    ? Math.max(props.topBoundary - dockBox.y, originBox.y - dockBox.y - columnHeight - 8)
+    ? columnAbove
+      ? Math.max(props.topBoundary - dockBox.y, originBox.y - dockBox.y - columnHeight - 8)
+      : Math.min(bottomBoundary - dockBox.y - columnHeight, originBox.y - dockBox.y + originBox.height + 8)
     : 0;
+  const accessibleAbove = spaceAbove >= 66 || spaceAbove >= spaceBelow;
 
   const origin = (
     <View
@@ -243,7 +254,12 @@ export function useNotebookRestPicker(props: PickerProps) {
           </Pressable>
         </>}
       </View>}
-      {showAccessibleChooser && !active && !props.otherPickerActive && <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.accessibleChooser} contentContainerStyle={styles.accessibleChooserContent}>
+      {showAccessibleChooser && !active && !props.otherPickerActive && <ScrollView horizontal showsHorizontalScrollIndicator={false}
+        style={[styles.accessibleChooser, accessibleAbove
+          ? { bottom: "100%", top: undefined }
+          : { top: "100%", bottom: undefined },
+        { maxHeight: Math.max(44, Math.min(58, accessibleAbove ? spaceAbove : spaceBelow)) }]}
+        contentContainerStyle={styles.accessibleChooserContent}>
         {durations.map((item) => <Pressable
           key={item}
           testID={`notebook-rest-duration-${item}`}

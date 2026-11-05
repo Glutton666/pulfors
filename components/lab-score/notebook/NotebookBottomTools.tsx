@@ -26,6 +26,8 @@ type Props = {
   onToolPopup: (popup: "pen" | "erase" | null) => void;
   scale: number;
   pickerTop?: number;
+  pickerBottom?: number;
+  layoutKey?: number;
   canUndo: boolean;
   canRedo: boolean;
   onTool: (tool: Tool) => void;
@@ -87,7 +89,8 @@ export function NotebookBottomTools(props: Props) {
   const dockLeft = useRef(0);
   const [dockPosition, setDockPosition] = useState({ x: 0, y: 0 });
   const [dockWidth, setDockWidth] = useState(0);
-  const pickerTop = props.pickerTop ?? 128;
+  const pickerTop = props.pickerTop ?? 8;
+  const pickerBottom = props.pickerBottom ?? windowHeight - 8;
   // RNW can deliver onLayout before this mode's ref is attached. Measure after
   // commit as well, otherwise an untouched marks drawer uses y=0 and collapses.
   useEffect(() => {
@@ -99,13 +102,22 @@ export function NotebookBottomTools(props: Props) {
       setDockPosition({ x, y });
     }));
     return () => cancelAnimationFrame(frame);
-  }, [mode, windowWidth, windowHeight, pickerTop, category]);
-  const durationRowHeight = Math.max(8, Math.min(34, (dockPosition.y - pickerTop - 12) / 6));
+  }, [mode, windowWidth, windowHeight, pickerTop, pickerBottom, category, props.layoutKey]);
+  const roomAbove = Math.max(0, dockPosition.y - pickerTop - 8);
+  const roomBelow = Math.max(0, pickerBottom - (dockPosition.y + (mode === "notes" ? 111 : 66)) - 8);
+  const durationSpace = Math.max(roomAbove, roomBelow);
+  const durationRowHeight = Math.max(8, Math.min(34, (durationSpace - 16) / 6));
   const durationColumnHeight = durationRowHeight * durations.length + 8;
+  const durationAbove = roomAbove >= durationColumnHeight || roomAbove >= roomBelow;
+  const chooserAbove = roomAbove >= 66 || roomAbove >= roomBelow;
+  const drawerAvailable = Math.max(64, Math.min(350, Math.max(roomAbove, roomBelow)));
+  const drawerAbove = roomAbove >= 180 || roomAbove >= roomBelow;
   const restPicker = useNotebookRestPicker({
     ko,
     topBoundary: pickerTop,
+    bottomBoundary: pickerBottom,
     modeKey: mode,
+    layoutKey: props.layoutKey,
     otherPickerActive: gestureActive,
     dockRef,
     onChoose: props.onChoose,
@@ -135,7 +147,7 @@ export function NotebookBottomTools(props: Props) {
   useEffect(() => {
     restoreCancelledGesture();
     setCategory(null);
-  }, [mode, windowWidth, windowHeight]);
+  }, [mode, windowWidth, windowHeight, props.layoutKey]);
   useEffect(() => () => {
     gestureRef.current.active = false;
     responderUsed.current = false;
@@ -271,7 +283,7 @@ export function NotebookBottomTools(props: Props) {
       { id: "move", icon: "hand-left-outline", label: ko ? "화면 이동" : "Pan" },
     ];
     return (
-      <View style={styles.dock}>
+      <View style={[styles.dock, styles.wideDock]}>
         <NotebookInkOptions ko={ko} popup={props.toolPopup} onClose={() => props.onToolPopup(null)}
           color={props.lineColor} width={props.lineWidth} onColor={props.onColor} onWidth={props.onWidth}
           eraserMode={props.eraserMode} onEraserMode={props.onEraserMode} />
@@ -306,7 +318,7 @@ export function NotebookBottomTools(props: Props) {
 
   if (mode === "notes") {
     return (
-      <View ref={dockRef} style={styles.dock} onLayout={() => dockRef.current?.measureInWindow((x, y, width) => {
+      <View ref={dockRef} style={[styles.dock, styles.notesDock]} onLayout={() => dockRef.current?.measureInWindow((x, y, width) => {
         dockLeft.current = x;
         dockTop.current = y;
         setDockWidth(width);
@@ -346,13 +358,15 @@ export function NotebookBottomTools(props: Props) {
             </View>
           </View>
 
-        {gestureActive && originLayout ? <View pointerEvents="box-none" style={[styles.gestureLayer, { bottom: 0 }]}>
+          {gestureActive && originLayout ? <View pointerEvents="box-none" style={[styles.gestureLayer, { bottom: 0 }]}>
           <View pointerEvents="box-none" onLayout={measureRoleChoices} style={[styles.roleChoices, { left: Math.max(0, Math.min(Math.max(0, dockWidth - 184), originLayout.x + originLayout.width / 2 - dockLeft.current - 92)), top: originLayout.y + originLayout.height / 2 - dockTop.current - 21 }]}>
             {roleValues.map((role) => <Pressable key={role} ref={((node: any) => { roleRefs.current[role] = node; }) as any} testID={`notebook-note-role-${role}`} accessibilityRole="button" accessibilityLabel={`${ko ? "음표" : "Note"} ${role}`} onPress={() => { gestureRef.current.role = role; setGestureRole(role); }} style={[styles.roleChoice, gestureRole === role && styles.roleChoiceActive]}><NotebookGlyphPreview glyph="quarter" size={19} role={role} /></Pressable>)}
           </View>
           {gestureVertical && <View pointerEvents="box-none" onLayout={measureDurationRows} style={[
             styles.durationColumn,
-            { left: Math.max(42, Math.min(Math.max(42, dockWidth - 138), originLayout.x + originLayout.width / 2 - dockLeft.current - 48)), top: Math.max(pickerTop - dockTop.current, originLayout.y - dockTop.current - durationColumnHeight - 8) },
+             { left: Math.max(42, Math.min(Math.max(42, dockWidth - 138), originLayout.x + originLayout.width / 2 - dockLeft.current - 48)), top: durationAbove
+               ? Math.max(pickerTop - dockTop.current, originLayout.y - dockTop.current - durationColumnHeight - 8)
+               : Math.min(pickerBottom - dockTop.current - durationColumnHeight, originLayout.y - dockTop.current + originLayout.height + 8) },
           ]}>
             {[...durations].reverse().map((duration) => <Pressable key={duration} ref={((node: any) => { rowRefs.current[duration] = node; }) as any} collapsable={false} testID={`notebook-note-duration-${duration}`} accessibilityRole="button" accessibilityLabel={durationLabels[ko ? "ko" : "en"][durations.indexOf(duration)]} onPress={() => chooseAccessibleNote({ glyph: duration, role: gestureRef.current.role, dotted: gestureRef.current.dotted })} style={[styles.durationChoice, { height: durationRowHeight }, gestureDuration === duration && styles.verticalDurationActive]}>
               <NotebookGlyphPreview glyph={duration} size={20} role={gestureRole} dotted={gestureDuration === duration && dotChoice} />
@@ -366,8 +380,11 @@ export function NotebookBottomTools(props: Props) {
 
         {restPicker.overlay}
 
-        {category ? (
-          <View testID="notebook-symbol-drawer" style={[styles.categoryDrawer, { height: Math.max(64, Math.min(350, dockPosition.y - pickerTop - 8)) }]}>
+         {category ? (
+          <View testID="notebook-symbol-drawer" style={[styles.categoryDrawer, drawerAbove
+            ? { bottom: "100%", top: undefined }
+            : { top: "100%", bottom: undefined },
+          { height: drawerAvailable }]}>
             <View style={styles.drawerHeader}>
               <Text style={styles.drawerTitle}>{ko ? "악보 기호" : "Musical marks"}</Text>
               <Pressable accessibilityRole="button" accessibilityLabel={ko ? "도구 닫기" : "Close tools"} onPress={() => setCategory(null)} style={styles.drawerClose}><Ionicons name="close" size={17} color="#796b55" /></Pressable>
@@ -389,7 +406,9 @@ export function NotebookBottomTools(props: Props) {
             </ScrollView>
           </View>
         ) : null}
-        {showAccessibleChooser && !gestureActive && <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.accessibleChooser} contentContainerStyle={styles.accessibleChooserContent}>
+        {showAccessibleChooser && !gestureActive && <ScrollView horizontal showsHorizontalScrollIndicator={false}
+          style={[styles.accessibleChooser, chooserAbove ? { bottom: "100%", top: undefined } : { top: "100%", bottom: undefined }, { maxHeight: Math.max(44, Math.min(58, chooserAbove ? roomAbove : roomBelow)) }]}
+          contentContainerStyle={styles.accessibleChooserContent}>
           {roleValues.map((role) => <Pressable key={role} testID={`notebook-note-role-${role}`} accessibilityRole="button" accessibilityLabel={`${ko ? "음표" : "Note"} ${role}`} onPress={() => { gestureRef.current.role = role; setGestureRole(role); }} style={styles.accessibleChoice}><NotebookGlyphPreview glyph={gestureDuration} size={19} role={role} dotted={dotChoice} /></Pressable>)}
           {durations.map((duration) => <Pressable key={duration} testID={`notebook-note-duration-${duration}`} accessibilityRole="button" accessibilityLabel={durationLabels[ko ? "ko" : "en"][durations.indexOf(duration)]} onPress={() => chooseAccessibleNote({ glyph: duration, role: gestureRole, dotted: dotChoice })} style={styles.accessibleChoice}><NotebookGlyphPreview glyph={duration} size={18} role={gestureRole} dotted={dotChoice} /></Pressable>)}
           <Pressable testID="notebook-note-plain" accessibilityRole="button" accessibilityLabel={ko ? "일반 음표" : "Plain"} onPress={() => { gestureRef.current.dotted = false; setDotChoice(false); }} style={styles.accessibleChoice}><NotebookGlyphPreview glyph={gestureDuration} size={18} role={gestureRole} /></Pressable>
@@ -401,7 +420,7 @@ export function NotebookBottomTools(props: Props) {
 
   if (mode === "select") {
     return (
-      <View style={styles.dock}>
+      <View style={[styles.dock, styles.wideDock]}>
         <View style={styles.selectionTabs}>
           <Pressable testID="notebook-selection-tab" accessibilityRole="tab" accessibilityState={{ selected: selectionTab === "select" }} onPress={() => setSelectionTab("select")} style={[styles.selectionTab, selectionTab === "select" && styles.selectedTool]}><Text style={styles.toolText}>{ko ? "선택" : "Selection"}</Text></Pressable>
           <Pressable testID="notebook-clipboard-tab" accessibilityRole="tab" accessibilityState={{ selected: selectionTab === "clipboard" }} onPress={() => setSelectionTab("clipboard")} style={[styles.selectionTab, selectionTab === "clipboard" && styles.selectedTool]}><Text style={styles.toolText}>{ko ? "클립보드" : "Clipboard"} · {props.clipboard.length}</Text></Pressable>
@@ -434,7 +453,7 @@ export function NotebookBottomTools(props: Props) {
   }
 
   return (
-    <View style={styles.dock}>
+    <View style={[styles.dock, styles.notesDock]}>
       <View style={styles.settingsDock}>
         <Ionicons name="options-outline" size={17} color="#806a4b" />
         <Text style={styles.settingsDockText}>{ko ? "설정 패널에서 노트와 페이지를 관리합니다." : "Manage notebook and page settings in the settings panel."}</Text>
@@ -446,7 +465,9 @@ export function NotebookBottomTools(props: Props) {
 const styles = StyleSheet.create({
   selectionTabs: { flexDirection: "row", gap: 8, paddingHorizontal: 10, paddingTop: 6 },
   selectionTab: { paddingHorizontal: 15, paddingVertical: 8, borderRadius: 9, borderWidth: 1, borderColor: "#e8e0d4" },
-  dock: { position: "relative", zIndex: 25, elevation: 12, overflow: "visible", width: "100%", minHeight: 66, maxHeight: 216, borderTopWidth: 1, borderTopColor: "#e5ddd0", backgroundColor: "rgba(255,253,248,0.98)" },
+  dock: { position: "relative", alignSelf: "center", zIndex: 25, elevation: 12, overflow: "visible", width: "100%", minHeight: 66, maxHeight: 216, backgroundColor: "transparent" },
+  wideDock: { maxWidth: 636 },
+  notesDock: { maxWidth: 436 },
   inkRow: { minHeight: 66, alignItems: "center", paddingHorizontal: 10, gap: 6 },
   toolButton: { minHeight: 42, paddingHorizontal: 12, borderRadius: 11, borderWidth: 1, borderColor: "#e8e0d4", backgroundColor: "#fffdf9", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7 },
   selectedTool: { borderColor: "#bca483", backgroundColor: "#f2ece2" },

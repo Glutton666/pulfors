@@ -40,8 +40,8 @@ test.each([
   const group = view.getByTestId(`notebook-note-${glyph}`);
   expect(group.getAttribute("transform")).toBe("translate(220 150) scale(1)");
   expect(view.queryByTestId("notebook-note-stem") !== null).toBe(stem);
-  expect(view.getByTestId("notebook-note-head").getAttribute("fill")).toBe(open ? "none" : "#111111");
-  expect(group.querySelectorAll("path")).toHaveLength((stem ? 1 : 0) + (flags > 0 ? 1 : 0));
+  expect(view.getByTestId("notebook-note-head").getAttribute("fill")).toBe(open && glyph !== "whole" ? "none" : "#111111");
+  expect(group.querySelectorAll("path")).toHaveLength((glyph === "whole" ? 1 : 0) + (stem ? 1 : 0) + (flags > 0 ? 1 : 0));
   if (flags > 0) {
     const flag = view.getByTestId("notebook-note-flag-0");
     expect(flag.getAttribute("fill")).toBe("#111111");
@@ -49,6 +49,28 @@ test.each([
     expect(flag.getAttribute("d")).toMatch(/Z$/);
     expect(flag.getAttribute("transform")).toBe(`translate(4.8 ${glyph === "thirty_second" ? -36.625 : -42}) scale(0.025 -0.025)`);
   }
+});
+
+test("whole-note paper and picker use the same engraved hollow outline without hiding staff lines", () => {
+  const view = render(<svg><NotebookGlyph glyph="whole" x={220} y={150} size={39} role="strong" dotted /></svg>);
+  const head = view.getByTestId("notebook-note-head");
+  expect(head.tagName.toLowerCase()).toBe("path");
+  expect(head.getAttribute("fill")).toBe("#111111");
+  expect(head.getAttribute("fill-rule")).toBe("evenodd");
+  expect(head.getAttribute("d")).toMatch(/[CQcq]/);
+  // Distinct outer and inner contours create a transparent counter, not a
+  // uniformly stroked ellipse or a white shape painted over the staff.
+  expect((head.getAttribute("d")!.match(/[Mm]/g) ?? []).length).toBeGreaterThanOrEqual(2);
+  expect(view.queryByTestId("notebook-note-stem")).toBeNull();
+  expect(view.queryByTestId("notebook-note-flag-0")).toBeNull();
+  expect(view.getByTestId("notebook-note-whole").getAttribute("transform")).toBe("translate(220 150) scale(1.5)");
+  expect(view.getByTestId("notebook-strong-mark")).toBeTruthy();
+  expect(view.getByTestId("notebook-dot")).toBeTruthy();
+  expect(view.container.querySelector('[fill="white"], [fill="#fff"], [fill="#ffffff"]')).toBeNull();
+  const outline = head.getAttribute("d");
+  view.unmount();
+  const preview = render(<NotebookGlyphPreview glyph="whole" />);
+  expect(preview.getByTestId("notebook-note-head").getAttribute("d")).toBe(outline);
 });
 
 test("standalone flag levels use distinct compound Bravura outlines rather than stacked copies", () => {

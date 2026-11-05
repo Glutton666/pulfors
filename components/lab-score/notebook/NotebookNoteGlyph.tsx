@@ -2,6 +2,7 @@ import React from "react";
 import Svg, { Ellipse, G, Path } from "react-native-svg";
 import type { NotebookBeamStem } from "@/lib/notebook-beaming";
 import { BRAVURA_FLAG_OUTLINES } from "@/components/lab-score/notebook/BravuraFlagOutlines";
+import { NOTEBOOK_WHOLE_NOTE_OUTLINE } from "@/components/lab-score/notebook/NotebookWholeNoteOutline";
 
 export type NotebookNoteDuration =
   | "whole"
@@ -73,17 +74,26 @@ export function NotebookNoteGlyph({
           strokeLinejoin="round"
         />
       )}
-      <Ellipse
-        testID="notebook-note-head"
-        cx={0}
-        cy={0}
-        rx={isWhole ? 6.5 : 5.8}
-        ry={isWhole ? 4.25 : 3.85}
-        transform={isWhole ? undefined : "rotate(-24 0 0)"}
-        fill={isOpen ? "none" : color}
-        stroke={color}
-        strokeWidth={isOpen ? 1.45 : 0}
-      />
+      {isWhole ? (
+        <Path
+          testID="notebook-note-head"
+          d={NOTEBOOK_WHOLE_NOTE_OUTLINE}
+          fill={color}
+          fillRule="evenodd"
+        />
+      ) : (
+        <Ellipse
+          testID="notebook-note-head"
+          cx={0}
+          cy={0}
+          rx={5.8}
+          ry={3.85}
+          transform="rotate(-24 0 0)"
+          fill={isOpen ? "none" : color}
+          stroke={color}
+          strokeWidth={isOpen ? 1.45 : 0}
+        />
+      )}
     </G>
   );
 }

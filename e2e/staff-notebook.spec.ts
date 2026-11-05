@@ -10,6 +10,98 @@ test.use({
 test.setTimeout(100000);
 test.describe.configure({ mode: "parallel" });
 
+test("whole-note engraved silhouette is shared by paper and the picker", async ({ page }) => {
+  await page.setViewportSize({ width: 768, height: 1024 });
+  await openNotebook(page);
+  await chooseMode(page, "notes");
+  await chooseGlyph(page, "whole");
+  const paper = page.getByTestId("notebook-drawing");
+  const head = paper.getByTestId("notebook-note-head");
+  await expect(head).toHaveAttribute("fill-rule", "evenodd");
+  await expect(head).toHaveAttribute("fill", "#111111");
+  await expect(paper.getByTestId("notebook-note-stem")).toHaveCount(0);
+  await expect(page.getByTestId("notebook-note-origin").getByTestId("notebook-note-head"))
+    .toHaveAttribute("d", (await head.getAttribute("d"))!);
+  await page.screenshot({ path: "generated-artifacts/notebook-whole-note.png" });
+});
+
+for (const viewport of [{ width: 320, height: 740 }, { width: 768, height: 1024 }]) {
+  test(`floating bars move only by their handles and stay usable after resize at ${viewport.width}`, async ({ page, context }) => {
+    await page.setViewportSize(viewport);
+    await openNotebook(page);
+    const stage = page.getByTestId("notebook-paper-stage");
+    const playback = page.getByTestId("notebook-playback-dock");
+    const tools = page.getByTestId("notebook-tools-dock");
+    const paper = page.getByTestId("notebook-drawing");
+    await expect(playback).toBeInViewport({ ratio: 1 });
+    await expect(tools).toBeInViewport({ ratio: 1 });
+    const stageBox = (await stage.boundingBox())!;
+    const top = (await playback.boundingBox())!, bottom = (await tools.boundingBox())!;
+    expect(top.width).toBeLessThanOrEqual(380);
+    expect(bottom.width).toBeLessThanOrEqual(680);
+    expect(Math.abs(top.x + top.width / 2 - (stageBox.x + stageBox.width / 2))).toBeLessThan(1);
+    expect(Math.abs(bottom.x + bottom.width / 2 - (stageBox.x + stageBox.width / 2))).toBeLessThan(1);
+    const blank = await paper.innerHTML();
+    const dragHandle = async (id: "playback" | "tools", dx: number, dy: number) => {
+      const box = (await page.getByTestId(`notebook-${id}-handle`).boundingBox())!;
+      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(box.x + box.width / 2 + dx, box.y + box.height / 2 + dy, { steps: 10 });
+      await page.mouse.up();
+    };
+    await dragHandle("tools", 0, -120);
+    expect((await tools.boundingBox())!.y).toBeCloseTo(bottom.y - 120, 0);
+    expect((await playback.boundingBox())!.y).toBeCloseTo(top.y, 0);
+    await dragHandle("playback", 20, 110);
+    expect((await playback.boundingBox())!.y).toBeCloseTo(top.y + 110, 0);
+    expect(await paper.innerHTML()).toBe(blank);
+    const moved = (await playback.boundingBox())!;
+    await page.getByTestId("notebook-bpm").fill("96");
+    await page.getByTestId("notebook-bpm").press("Enter");
+    await page.getByTestId("notebook-meter").click();
+    await page.getByTestId("notebook-meter-3").click();
+    expect((await playback.boundingBox())!.x).toBeCloseTo(moved.x, 0);
+    expect((await playback.boundingBox())!.y).toBeCloseTo(moved.y, 0);
+    await expect(page.getByTestId("notebook-bpm")).toHaveValue("96");
+    await page.getByTestId("notebook-tools-handle").focus();
+    const oldY = (await tools.boundingBox())!.y;
+    await page.getByTestId("notebook-tools-handle").press("ArrowUp");
+    expect((await tools.boundingBox())!.y).toBeCloseTo(oldY - 16, 0);
+    if (viewport.width === 768) {
+      const handle = (await page.getByTestId("notebook-tools-handle").boundingBox())!;
+      const prior = (await tools.boundingBox())!;
+      const cdp = await context.newCDPSession(page);
+      const point = (dx: number, dy: number) => ({ id: 1, x: handle.x + handle.width / 2 + dx,
+        y: handle.y + handle.height / 2 + dy, radiusX: 3, radiusY: 3, force: 1 });
+      await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [point(0, 0)] });
+      await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [point(24, -40)] });
+      await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+      expect((await tools.boundingBox())!.y).toBeCloseTo(prior.y - 40, 0);
+      expect(await paper.innerHTML()).toBe(blank);
+      await cdp.detach();
+    }
+    await chooseMode(page, "notes");
+    await chooseGlyph(page, "quarter");
+    await chooseGlyph(page, "rest-eighth");
+    await expect(paper.locator('[data-testid^="notebook-stamp-"]')).toHaveCount(2);
+    await page.setViewportSize({ width: 844, height: 390 });
+    await expect(playback).toBeInViewport({ ratio: 1 });
+    await expect(tools).toBeInViewport({ ratio: 1 });
+    await page.getByTestId("notebook-category-marks").click();
+    await expect(page.getByTestId("notebook-symbol-sharp")).toBeInViewport({ ratio: 0.5 });
+    await page.getByLabel(/^Close tools$|^도구 닫기$/).click();
+    await dragHandle("playback", 0, 10000);
+    await expect(playback).toBeInViewport({ ratio: 1 });
+    await page.getByTestId("notebook-meter").click();
+    await expect(page.getByTestId("notebook-meter-1")).toBeInViewport({ ratio: 1 });
+    await page.getByTestId("notebook-meter-1").click();
+    await page.screenshot({ path: `generated-artifacts/notebook-floating-resized-${viewport.width}.png` });
+    await page.getByTestId("notebook-playback-handle").focus();
+    await page.getByTestId("notebook-playback-handle").press("Home");
+    expect((await playback.boundingBox())!.y).toBeCloseTo((await stage.boundingBox())!.y + 8, 0);
+  });
+}
+
 for (const [width, height, language] of [
   [320, 740, "ko"], [390, 844, "en"], [768, 1024, "ko"], [844, 390, "en"],
 ] as const) {
@@ -422,7 +514,7 @@ for (const viewport of [{ width: 768, height: 1024 }, { width: 844, height: 390 
     await expect(page.getByTestId("notebook-rest-origin")).toHaveCount(0);
     await page.mouse.move(origin.x + origin.width / 2, origin.y - 90, { steps: 10 });
     await expect(page.getByTestId("notebook-note-duration-quarter")).toBeVisible();
-    const paper = (await page.getByTestId("notebook-drawing").boundingBox())!;
+    const paper = (await page.getByTestId("notebook-paper-stage").boundingBox())!;
     for (const duration of ["whole", "half", "quarter", "eighth", "sixteenth", "thirty_second"]) {
       const row = page.getByTestId(`notebook-note-duration-${duration}`);
       await expect(row).toBeInViewport({ ratio: 1 });
