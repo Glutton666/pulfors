@@ -1,7 +1,7 @@
 import type { StaffPage, StaffStamp } from "./staff-notebook";
 import { PAPER_WIDTH, ROW_HEIGHT, STAFF_TOP, STAFF_GAP, rowAt } from "./staff-notebook-layout";
 import { isNotebookNote } from "./notebook-editing";
-import type { NotebookBeaming, NotebookBeamStem } from "./notebook-beaming";
+import type { NotebookBeaming, NotebookBeamGroup, NotebookBeamStem } from "./notebook-beaming";
 
 export type NotebookTupletSpan = {
   id: string; row: number; left: number; right: number; y: number;
@@ -27,6 +27,8 @@ export function notebookTupletSpans(page: StaffPage, openIds?: string[], beaming
   const staffCount = page.staffCount ?? 7;
   const stamps = page.stamps ?? [];
   const groups = [...(page.tuplets ?? []), ...(openIds?.length ? [{ id: "open", stampIds: openIds }] : [])];
+  const beamByMember = new Map<string, NotebookBeamGroup>();
+  for (const beam of beaming?.groups ?? []) for (const id of beam.memberIds) beamByMember.set(id, beam);
   const depthCache = new Map<typeof groups[number], number>();
   const nestedDepth = (group: typeof groups[number]): number => {
     if (depthCache.has(group)) return depthCache.get(group)!;
@@ -55,13 +57,23 @@ export function notebookTupletSpans(page: StaffPage, openIds?: string[], beaming
       const center = Math.max(6 + half, Math.min(PAPER_WIDTH - 6 - half, (rawRight + rawLeft) / 2));
       const top = Math.min(...items.map((stamp) => inkTop(stamp, beaming?.stems.get(stamp.id))),
         ...attachments.map((stamp) => stamp.y - stamp.size * 0.8));
-      const aboveY = Math.min(top - 9, row * ROW_HEIGHT + STAFF_TOP - 14);
+      // Rest-spanning and partial beams still need clearance even though they
+      // retain a bracket instead of qualifying for number-only notation.
+      const relatedBeams = [...new Set(items.flatMap((stamp) => {
+        const associated = beamByMember.get(stamp.id);
+        return associated ? [associated] : [];
+      }))];
+      const beamTop = Math.min(Infinity, ...relatedBeams.flatMap((candidate) =>
+        candidate.segments.map((segment) => Math.min(segment.y1, segment.y2) - segment.thickness / 2)));
+      const beamBottom = Math.max(0, ...relatedBeams.flatMap((candidate) =>
+        candidate.segments.map((segment) => Math.max(segment.y1, segment.y2) + segment.thickness / 2)));
+      const labelClearance = fontSize * 0.6 + 4;
+      const aboveY = Math.min(top - 9, beamTop - labelClearance, row * ROW_HEIGHT + STAFF_TOP - 14);
       const below = numberOnly ? beam!.direction === "down" : aboveY < row * ROW_HEIGHT + fontSize * 0.7 + 4;
       const belowY = Math.max(row * ROW_HEIGHT + STAFF_TOP + STAFF_GAP * 4 + 15,
         ...items.map((stamp) => stamp.y + stamp.size * 0.4 + 10));
-      const beamBottom = beam ? Math.max(...beam.stems.map((stem) => stem.stemY)) : 0;
       let y = below ? Math.min(staffCount * ROW_HEIGHT - fontSize * 0.5 - 3,
-        Math.max(belowY, numberOnly ? beamBottom + fontSize * 0.6 + 4 : 0)) : aboveY;
+        Math.max(belowY, relatedBeams.length ? beamBottom + labelClearance : 0)) : aboveY;
       // Properly contained nested groups occupy separate notation levels.
       const innerDepth = nestedDepth(group);
       if (innerDepth) y += (below ? 1 : -1) * (fontSize + 8) * innerDepth;

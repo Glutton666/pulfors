@@ -1,5 +1,6 @@
 import { notebookBeaming, notebookMeter, notebookStampDuration } from "@/lib/notebook-beaming";
 import { notebookTupletSpans } from "@/lib/notebook-tuplet-layout";
+import { removeSelection, transformSelection } from "@/lib/notebook-editing";
 import type { StaffPage, StaffStamp } from "@/lib/staff-notebook";
 
 const note = (glyph: string, index: number, patch: Partial<StaffStamp> = {}): StaffStamp =>
@@ -199,6 +200,50 @@ test("down-beamed tuplets put the number below the beam, not on top of heads", (
   const span = notebookTupletSpans(p, undefined, b)[0];
   expect(span).toMatchObject({ below: true, numberOnly: true });
   expect(span.y).toBeGreaterThan(Math.max(...b.groups[0].stems.map((s) => s.stemY)));
+});
+
+test("a rest that forces a bracket below the staff also clears the group's down beam", () => {
+  const p = grouped(["eighth", "rest-eighth", "eighth"]);
+  p.stamps![0].y = p.stamps![2].y = 102;
+  p.stamps![1].y = 12;
+  const b = notebookBeaming(p);
+  expect(b.groups[0].direction).toBe("down");
+  const span = notebookTupletSpans(p, undefined, b)[0];
+  expect(span).toMatchObject({ below: true, numberOnly: false, count: 3 });
+  const bottom = Math.max(...b.groups.flatMap((group) => group.segments.flatMap((segment) => [segment.y1, segment.y2])));
+  expect(span.y - span.fontSize * 0.6).toBeGreaterThan(bottom);
+});
+
+test("a bracket numeral clears the full sloped beam across widely spaced end rests", () => {
+  const p = grouped(["rest-eighth", "eighth", "eighth", "rest-eighth"]);
+  p.stamps!.forEach((stamp, i) => { stamp.x = [50, 450, 550, 750][i]; stamp.y = [114, 126, 138, 114][i]; });
+  const b = notebookBeaming(p);
+  const span = notebookTupletSpans(p, undefined, b)[0];
+  expect(b.groups[0].direction).toBe("up");
+  expect(span).toMatchObject({ below: false, numberOnly: false, count: 4 });
+  const top = Math.min(...b.groups.flatMap((group) => group.segments.map((segment) => Math.min(segment.y1, segment.y2) - segment.thickness / 2)));
+  expect(span.y + span.fontSize * 0.34).toBeLessThan(top);
+});
+
+test("moving, copying, deleting and JSON round-tripping retain explicit rest-spanning membership", () => {
+  const p = grouped(["eighth", "rest-eighth", "sixteenth", "rest-sixteenth", "thirty_second"]);
+  const selection = { stampIds: p.stamps!.map((stamp) => stamp.id), strokeIds: [] };
+  p.stamps!.push(note("eighth", 8));
+  const before = JSON.stringify(p);
+  const moved = transformSelection(p, selection, { x: 20, y: 155 }).page;
+  expect(notebookBeaming(moved).groups.map((group) => [group.row, group.memberIds])).toEqual([[1, selection.stampIds]]);
+  let next = 0;
+  const copied = transformSelection(p, selection, { x: 20, y: 155 }, true, () => `fresh-${next++}`);
+  expect(notebookBeaming(copied.page).groups.map((group) => group.memberIds)).toEqual([selection.stampIds, copied.selection.stampIds]);
+  expect(notebookBeaming(copied.page).stems.has("n8")).toBe(false);
+  const restored = JSON.parse(JSON.stringify(copied.page)) as StaffPage;
+  expect(notebookBeaming(restored)).toEqual(notebookBeaming(copied.page));
+  const rest = restored.stamps!.find((stamp) => copied.selection.stampIds.includes(stamp.id) && stamp.glyph === "rest-eighth")!;
+  const removed = removeSelection(restored, { stampIds: [rest.id], strokeIds: [] });
+  const remaining = copied.selection.stampIds.filter((id) => id !== rest.id);
+  expect(notebookBeaming(removed).groups.map((group) => group.memberIds)).toEqual([selection.stampIds, remaining]);
+  expect(notebookTupletSpans(removed, undefined, notebookBeaming(removed)).map((span) => span.count)).toEqual([5, 4]);
+  expect(JSON.stringify(p)).toBe(before);
 });
 
 test("closing triplets/quintuplets never connects the ordinary notes placed afterwards", () => {
