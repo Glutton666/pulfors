@@ -41,14 +41,29 @@ test.each([
   expect(group.getAttribute("transform")).toBe("translate(220 150) scale(1)");
   expect(view.queryByTestId("notebook-note-stem") !== null).toBe(stem);
   expect(view.getByTestId("notebook-note-head").getAttribute("fill")).toBe(open ? "none" : "#111111");
-  expect(group.querySelectorAll("path")).toHaveLength((stem ? 1 : 0) + flags);
-  for (let index = 0; index < flags; index++) {
-    const flag = view.getByTestId(`notebook-note-flag-${index}`);
+  expect(group.querySelectorAll("path")).toHaveLength((stem ? 1 : 0) + (flags > 0 ? 1 : 0));
+  if (flags > 0) {
+    const flag = view.getByTestId("notebook-note-flag-0");
     expect(flag.getAttribute("fill")).toBe("#111111");
     expect(flag.getAttribute("d")).toMatch(/C/);
     expect(flag.getAttribute("d")).toMatch(/Z$/);
-    expect(flag.getAttribute("d")).toContain("M 4.8 ");
+    expect(flag.getAttribute("transform")).toBe(`translate(4.8 ${glyph === "thirty_second" ? -36.625 : -42}) scale(0.025 -0.025)`);
   }
+});
+
+test("standalone flag levels use distinct compound Bravura outlines rather than stacked copies", () => {
+  const view = render(<svg>
+    <NotebookGlyph glyph="eighth" x={0} y={40} size={26} />
+    <NotebookGlyph glyph="sixteenth" x={30} y={40} size={26} />
+    <NotebookGlyph glyph="thirty_second" x={60} y={40} size={26} />
+  </svg>);
+  const outline = (duration: string) => view.getByTestId(`notebook-note-${duration}`).querySelector('[data-testid="notebook-note-flag-0"]')!.getAttribute("d")!;
+  const path8 = outline("eighth");
+  const path16 = outline("sixteenth");
+  const path32 = outline("thirty_second");
+  expect(new Set([path8, path16, path32]).size).toBe(3);
+  expect((path16.match(/M /g) ?? []).length).toBe(2);
+  expect((path32.match(/M /g) ?? []).length).toBe(3);
 });
 
 test("the palette uses the same full note shapes as paper, without clipping flag tops", () => {
@@ -58,7 +73,7 @@ test("the palette uses the same full note shapes as paper, without clipping flag
   const [left, top, width, height] = preview.getAttribute("viewBox")!.split(" ").map(Number);
   const transform = view.getByTestId("notebook-note-sixteenth").getAttribute("transform")!;
   const [, x, y, scale] = transform.match(/translate\(([\d.]+) ([\d.]+)\) scale\(([\d.]+)\)/)!;
-  expect(Number(y) - 31 * Number(scale)).toBeGreaterThan(top);
+  expect(Number(y) - 42 * Number(scale)).toBeGreaterThan(top);
   expect(Number(y) + 6 * Number(scale)).toBeLessThan(top + height);
   expect(Number(x) + 13 * Number(scale)).toBeLessThan(left + width);
 });

@@ -81,7 +81,7 @@ function engrave(events: Event[], compound: boolean, quantum: number): NotebookB
   const slope = Math.max(-maxSlope, Math.min(maxSlope,
     (events[events.length - 1].stamp.y - events[0].stamp.y) / dx));
   const starts = events.map((item, index) => {
-    const minStem = Math.max(31 * item.stamp.size / 26, (item.level - 1) * gap + thickness + 14 * item.stamp.size / 26);
+    const minStem = Math.max(3.5 * STAFF_GAP * item.stamp.size / 26, (item.level - 1) * gap + thickness + 14 * item.stamp.size / 26);
     return item.stamp.y - sign * minStem - slope * (stemXs[index] - stemXs[0]);
   });
   const anchorY = direction === "up" ? Math.min(...starts) : Math.max(...starts);

@@ -1,5 +1,5 @@
 import React from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
 export type NotebookMode = "ink" | "notes" | "select" | "settings";
@@ -19,32 +19,44 @@ const options: Array<{ id: NotebookMode; icon: keyof typeof Ionicons.glyphMap; k
 
 export function NotebookModeMenu({ ko, mode, onMode }: Props) {
   return (
-    <ScrollView style={styles.wrap} contentContainerStyle={{ padding: 12 }}>
-        <View style={styles.menu} accessibilityRole="menu">
-          {options.map((option) => (
-            <Pressable
-              key={option.id}
-              testID={`notebook-mode-${option.id}`}
-              accessibilityRole="menuitem"
-              accessibilityState={{ selected: mode === option.id }}
-              onPress={() => onMode(option.id)}
-              style={[styles.option, mode === option.id && styles.optionActive]}
-            >
-              <Ionicons name={option.icon} size={17} color={mode === option.id ? "#745b3a" : "#857a69"} />
-              <Text style={[styles.optionText, mode === option.id && styles.optionTextActive]}>{ko ? option.ko : option.en}</Text>
-              {mode === option.id ? <Ionicons name="checkmark" size={16} color="#8c7049" /> : null}
-            </Pressable>
-          ))}
-        </View>
-    </ScrollView>
+    <View style={styles.menu} accessibilityRole="menu">
+      {options.map((option) => {
+        const selected = mode === option.id && option.id !== "settings";
+        return (
+          <Pressable
+            key={option.id}
+            testID={`notebook-mode-${option.id}`}
+            accessibilityRole="menuitem"
+            accessibilityLabel={ko ? option.ko : option.en}
+            accessibilityState={{ selected }}
+            onPress={() => onMode(option.id)}
+            style={[styles.option, selected && styles.optionActive]}
+          >
+            <Ionicons name={option.icon} size={20} color={selected ? "#745b3a" : "#746a5b"} />
+            {selected ? <View style={styles.selectedMark} /> : null}
+          </Pressable>
+        );
+      })}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: { flex: 1, minHeight: 0 },
-  menu: { gap: 6 },
-  option: { minHeight: 46, borderRadius: 9, paddingHorizontal: 12, flexDirection: "row", alignItems: "center", gap: 9 },
-  optionActive: { backgroundColor: "#f3ede3" },
-  optionText: { flex: 1, color: "#62594d", fontSize: 12, fontWeight: "600" },
-  optionTextActive: { color: "#59462e" },
+  menu: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 2,
+    padding: 4,
+    borderRadius: 15,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "#ded6c9",
+    backgroundColor: "#fffdf8",
+    elevation: 8,
+    shadowColor: "#201e1a",
+    shadowOpacity: 0.17,
+    shadowRadius: 12,
+  },
+  option: { width: 46, height: 46, borderRadius: 11, alignItems: "center", justifyContent: "center", position: "relative" },
+  optionActive: { backgroundColor: "#eee5d7" },
+  selectedMark: { position: "absolute", bottom: 5, width: 4, height: 4, borderRadius: 2, backgroundColor: "#8c7049" },
 });

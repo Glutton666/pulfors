@@ -1,6 +1,7 @@
 import React from "react";
 import Svg, { Ellipse, G, Path } from "react-native-svg";
 import type { NotebookBeamStem } from "@/lib/notebook-beaming";
+import { BRAVURA_FLAG_OUTLINES } from "@/components/lab-score/notebook/BravuraFlagOutlines";
 
 export type NotebookNoteDuration =
   | "whole"
@@ -28,17 +29,6 @@ const flagCountByDuration: Record<NotebookNoteDuration, number> = {
   thirty_second: 3,
 };
 
-function flagPath(top: number): string {
-  return [
-    `M 4.8 ${top}`,
-    `C 8.2 ${top + 0.4} 12.8 ${top + 4.6} 12.8 ${top + 8.1}`,
-    `C 12.8 ${top + 11.3} 10.2 ${top + 13.5} 6.8 ${top + 15.2}`,
-    `C 8.4 ${top + 11.8} 9.1 ${top + 9.7} 7.7 ${top + 7.2}`,
-    `C 6.8 ${top + 5.6} 5.6 ${top + 4.6} 4.8 ${top + 4.2}`,
-    "Z",
-  ].join(" ");
-}
-
 export function NotebookNoteGlyph({
   duration,
   x,
@@ -52,7 +42,10 @@ export function NotebookNoteGlyph({
   const flagCount = flagCountByDuration[duration];
   const scale = size / 26;
   const beamedStemX = beam ? (beam.direction === "up" ? 4.8 : -4.8) : 4.8;
-  const beamedStemEnd = beam ? (beam.stemY - y) / scale : -31;
+  // A normal stem spans 3.5 staff spaces (12 units each).
+  const beamedStemEnd = beam ? (beam.stemY - y) / scale : -42;
+  // Bravura's 32nd flag origin is below its top; align that top to the stem.
+  const flagTop = -42 + (duration === "thirty_second" ? 215 * 0.025 : 0);
 
   return (
     <G
@@ -62,24 +55,24 @@ export function NotebookNoteGlyph({
       {!isWhole && (
         <Path
           testID="notebook-note-stem"
-          d={beam ? `M ${beamedStemX} 0 L ${beamedStemX} ${beamedStemEnd}` : "M 4.8 0 L 4.8 -31"}
+          d={`M ${beamedStemX} 0 L ${beamedStemX} ${beamedStemEnd}`}
           fill="none"
           stroke={color}
           strokeWidth={1.55}
           strokeLinecap="round"
         />
       )}
-      {!beam && Array.from({ length: flagCount }, (_, index) => (
+      {!beam && flagCount > 0 && (
         <Path
-          key={index}
-          testID={`notebook-note-flag-${index}`}
-          d={flagPath(-31 + index * 5.3)}
+          testID="notebook-note-flag-0"
+          d={BRAVURA_FLAG_OUTLINES[duration === "eighth" ? "eighth" : duration === "sixteenth" ? "sixteenth" : "thirtySecond"]}
+          transform={`translate(4.8 ${flagTop}) scale(0.025 -0.025)`}
           fill={color}
           stroke={color}
           strokeWidth={0.35}
           strokeLinejoin="round"
         />
-      ))}
+      )}
       <Ellipse
         testID="notebook-note-head"
         cx={0}
@@ -113,7 +106,7 @@ export function NotebookNoteGlyphPreview({
       <NotebookNoteGlyph
         duration={duration}
         x={35}
-        y={39}
+        y={48}
         size={size}
         color={color}
       />

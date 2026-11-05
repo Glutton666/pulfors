@@ -406,7 +406,15 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
             onTouch={playback.running ? undefined : onPaperTouch}
           />
         </ScrollView></ScrollView>
-        <Pressable ref={rightToggleRef} accessibilityRole="button" accessibilityLabel={ko ? "모드와 설정" : "Modes and settings"} testID="notebook-right-toggle" onPress={() => openPanel("menu")} style={[styles.edgeHandle, styles.rightHandle, { backgroundColor: C.surface, borderColor: C.border }]}>
+        {panel === "menu" ? (
+          <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+            <Pressable testID="notebook-panel-close" style={styles.dismissSurface} onPress={closePanel} accessibilityLabel={t.close} />
+            <View style={[styles.modePopover, { top: Math.max(8, Math.min(viewport.height - 58, viewport.height * 0.45)), right: 40 }]} pointerEvents="box-none">
+              <NotebookModeMenu ko={ko} mode={mode} onMode={changeMode} />
+            </View>
+          </View>
+        ) : null}
+        <Pressable ref={rightToggleRef} accessibilityRole="button" accessibilityLabel={panel === "menu" ? t.close : (ko ? "모드와 설정" : "Modes and settings")} accessibilityState={{ expanded: panel === "menu" }} testID="notebook-right-toggle" onPress={() => panel === "menu" ? closePanel() : openPanel("menu")} style={[styles.edgeHandle, styles.rightHandle, { backgroundColor: C.surface, borderColor: C.border }]}>
           <Ionicons name="chevron-back" size={17} color={C.text} />
         </Pressable>
         {playback.error ? <View style={styles.playbackStatus}><Text style={{ color: C.accent }}>{playback.error}</Text></View> : null}
@@ -426,29 +434,25 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
         selectionCount={selectionCount(selection)} onClearSelection={() => { setSelection(emptySelection()); setDragDraft(null); }}
         onSaveClipboard={saveClipboard} onDeleteSelection={deleteSelection} onResizeSelection={resizeSelection}
         clipboard={clipboard} onPaste={pasteClipboard} />
-      {panel ? (
+      {panel === "settings" ? (
         <View style={[StyleSheet.absoluteFill, { top: playbackBarHeight, zIndex: 30 }]} pointerEvents="box-none">
           <Pressable style={styles.backdrop} onPress={closePanel} accessibilityLabel={t.close} />
           <View style={[styles.drawer, styles.drawerRight, { backgroundColor: "#fffdf8", borderColor: "#ded6c9" }]}>
             <View style={[styles.drawerHead, { borderBottomColor: C.border }]}>
-              <Text style={[styles.drawerTitle, { color: "#302b25" }]}>{panel === "settings" ? t.settings : (ko ? "모드" : "Mode")}</Text>
+              <Text style={[styles.drawerTitle, { color: "#302b25" }]}>{t.settings}</Text>
               <Pressable testID="notebook-panel-close" accessibilityLabel={t.close} onPress={closePanel} hitSlop={12} style={styles.closeButton}><Ionicons name="close" size={22} color="#302b25" /></Pressable>
             </View>
-            {panel === "settings" ? (
-              <NotebookSettingsPanel
-                ko={ko} t={t} note={note} settings={settings} patterns={patterns} patternLoading={patternLoading} patternError={patternError}
-                notebooks={notebooks} error={error}
-                onSettings={updateSettings} onPattern={loadPattern}
-                onRefresh={() => void refresh()} onNew={fresh} onSave={() => void saveNow()} onOpenCapture={onOpenCapture ? () => requestExit(onOpenCapture) : undefined}
-                onLoad={(saved) => confirmReplace(() => { const loaded = withDefaults(saved); savedSnapshot.current = JSON.stringify(loaded); setNote(loaded); setPageIndex(0); undoStack.current = []; redoStack.current = []; })}
-                onDelete={(saved) => Alert.alert(t.notes, ko ? "이 노트를 삭제할까요?" : "Delete this notebook?", [{ text: t.cancel, style: "cancel" }, { text: ko ? "삭제" : "Delete", style: "destructive", onPress: () => void remove(saved.id) }])}
-                onTitle={(title) => setNote((prev) => ({ ...prev, title }))}
-                pageIndex={pageIndex} onPage={(index) => { playback.stop(); resetTransient(); setPageIndex(index); setOffset({ x: 0, y: 0 }); }}
-                onAddPage={addPage} onRows={setRows} onZoom={setScale} scale={scale}
-              />
-            ) : (
-              <NotebookModeMenu ko={ko} mode={mode} onMode={changeMode} />
-            )}
+            <NotebookSettingsPanel
+              ko={ko} t={t} note={note} settings={settings} patterns={patterns} patternLoading={patternLoading} patternError={patternError}
+              notebooks={notebooks} error={error}
+              onSettings={updateSettings} onPattern={loadPattern}
+              onRefresh={() => void refresh()} onNew={fresh} onSave={() => void saveNow()} onOpenCapture={onOpenCapture ? () => requestExit(onOpenCapture) : undefined}
+              onLoad={(saved) => confirmReplace(() => { const loaded = withDefaults(saved); savedSnapshot.current = JSON.stringify(loaded); setNote(loaded); setPageIndex(0); undoStack.current = []; redoStack.current = []; })}
+              onDelete={(saved) => Alert.alert(t.notes, ko ? "이 노트를 삭제할까요?" : "Delete this notebook?", [{ text: t.cancel, style: "cancel" }, { text: ko ? "삭제" : "Delete", style: "destructive", onPress: () => void remove(saved.id) }])}
+              onTitle={(title) => setNote((prev) => ({ ...prev, title }))}
+              pageIndex={pageIndex} onPage={(index) => { playback.stop(); resetTransient(); setPageIndex(index); setOffset({ x: 0, y: 0 }); }}
+              onAddPage={addPage} onRows={setRows} onZoom={setScale} scale={scale}
+            />
           </View>
         </View>
       ) : null}
@@ -464,6 +468,8 @@ const styles = StyleSheet.create({
   edgeHandle: { position: "absolute", top: "45%", width: 32, height: 58, alignItems: "center", justifyContent: "center", borderWidth: 1, elevation: 5, shadowColor: "#181714", shadowOpacity: 0.14, shadowRadius: 6 },
   leftHandle: { left: 0, borderTopRightRadius: 14, borderBottomRightRadius: 14 },
   rightHandle: { right: 0, borderTopLeftRadius: 14, borderBottomLeftRadius: 14 },
+  dismissSurface: { ...StyleSheet.absoluteFillObject, backgroundColor: "transparent" },
+  modePopover: { position: "absolute", zIndex: 2, maxWidth: "100%" },
   backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(21,20,18,0.25)" },
   drawer: { position: "absolute", top: 0, bottom: 0, width: 344, maxWidth: "88%", borderWidth: 1, elevation: 12, shadowColor: "#201e1a", shadowOpacity: 0.2, shadowRadius: 18 },
   drawerLeft: { left: 0, borderTopRightRadius: 15, borderBottomRightRadius: 15 },

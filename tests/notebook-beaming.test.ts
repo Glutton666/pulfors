@@ -113,7 +113,7 @@ test("beam direction and slope follow pitch without shortening any stem", () => 
     expect(group.direction).toBe(down ? "down" : "up");
     expect(Math.abs(group.slope * (group.stems[3].stemX - group.stems[0].stemX))).toBeLessThanOrEqual(12.001);
     for (const stem of group.stems) {
-      expect(Math.abs(stem.stemY - stem.headY)).toBeGreaterThanOrEqual(30.99);
+      expect(Math.abs(stem.stemY - stem.headY)).toBeGreaterThanOrEqual(41.99);
       expect(stem.stemY).toBeCloseTo(group.anchorY + group.slope * (stem.stemX - group.anchorX));
     }
   }

@@ -38,7 +38,23 @@ test("beam polygons replace individual flags and meet scaled down-stem endpoints
 test("unbeamed notes keep their ordinary flag and original stem", () => {
   const view = render(<svg><NotebookNoteGlyph duration="eighth" x={10} y={100} size={26} /></svg>);
   expect(view.getByTestId("notebook-note-flag-0")).toBeTruthy();
-  expect(view.getByTestId("notebook-note-stem").getAttribute("d")).toBe("M 4.8 0 L 4.8 -31");
+  expect(view.getByTestId("notebook-note-stem").getAttribute("d")).toBe("M 4.8 0 L 4.8 -42");
+});
+
+test("unbeamed sixteenth and thirty-second notes render distinct compound Bravura flag outlines", () => {
+  const view = render(<svg>
+    <NotebookNoteGlyph duration="sixteenth" x={10} y={100} size={26} />
+    <NotebookNoteGlyph duration="thirty_second" x={70} y={100} size={26} />
+  </svg>);
+  const sixteenth = view.getByTestId("notebook-note-sixteenth");
+  const thirtySecond = view.getByTestId("notebook-note-thirty_second");
+  expect(sixteenth.querySelectorAll('[data-testid^="notebook-note-flag-"]')).toHaveLength(1);
+  expect(thirtySecond.querySelectorAll('[data-testid^="notebook-note-flag-"]')).toHaveLength(1);
+  const sixteenthOutline = sixteenth.querySelector('[data-testid="notebook-note-flag-0"]')!.getAttribute("d")!;
+  const thirtySecondOutline = thirtySecond.querySelector('[data-testid="notebook-note-flag-0"]')!.getAttribute("d")!;
+  expect(sixteenthOutline).not.toBe(thirtySecondOutline);
+  expect((sixteenthOutline.match(/M /g) ?? []).length).toBe(2);
+  expect((thirtySecondOutline.match(/M /g) ?? []).length).toBe(3);
 });
 
 test("fully beamed tuplets show only the number while partial groups retain hooks", () => {
