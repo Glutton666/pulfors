@@ -10,6 +10,83 @@ test.use({
 test.setTimeout(100000);
 test.describe.configure({ mode: "parallel" });
 
+for (const [width, height, language] of [
+  [320, 740, "ko"], [390, 844, "en"], [768, 1024, "ko"], [844, 390, "en"],
+] as const) {
+  test(`equal toolbar and manual row spacing at ${width}x${height} ${language}`, async ({ page }) => {
+    await page.setViewportSize({ width, height });
+    const reference = {
+      id: "spacing", title: "Equal spacing", updatedAt: 1,
+      settings: { ...DEFAULT_NOTEBOOK_SETTINGS, rowsPerPage: 7 },
+      pages: [{ id: "spacing-page", staffCount: 7, anchor: { x: 260, y: 114 },
+        strokes: [{ id: "ink", width: 3, color: "#2468c4", points: [{ x: 80, y: 135 }, { x: 450, y: 135 }] }],
+        stamps: [
+          { id: "a", glyph: "eighth", x: 90, y: 114, size: 26, dotted: true },
+          { id: "b", glyph: "rest-eighth", x: 125, y: 108, size: 26 },
+          { id: "c", glyph: "sixteenth", x: 260, y: 114, size: 26 },
+          { id: "sharp", glyph: "sharp", x: 70, y: 114, size: 26, attachTo: "a" },
+          { id: "outside", glyph: "quarter", x: 100, y: 269, size: 26 },
+        ], tuplets: [{ id: "t", stampIds: ["a", "b", "c"] }] }],
+    };
+    await page.addInitScript(({ reference, language }) => {
+      localStorage.setItem("metronome_language", language);
+      if (!localStorage.getItem("lab_staff_notebooks_v1")) localStorage.setItem("lab_staff_notebooks_v1", JSON.stringify([reference]));
+    }, { reference, language });
+    await openNotebook(page); await openSettings(page); await openSaved(page, reference.title);
+    await page.getByTestId("notebook-panel-close").click();
+    await chooseMode(page, "notes");
+    const controls = ["notebook-note-tile", "notebook-rest-tile", "notebook-tuplet", "notebook-category-marks"];
+    const boxes = [];
+    for (const control of controls) {
+      await expect(page.getByTestId(control)).toBeInViewport({ ratio: 1 });
+      const box = (await page.getByTestId(control).boundingBox())!;
+      expect(box.width).toBeGreaterThanOrEqual(44);
+      expect(box.height).toBeGreaterThanOrEqual(44);
+      boxes.push(box);
+    }
+    boxes.forEach((box) => {
+      expect(Math.abs(box.width - boxes[0].width)).toBeLessThan(3);
+      expect(Math.abs(box.height - boxes[0].height)).toBeLessThan(3);
+      expect(Math.abs(box.y - boxes[0].y)).toBeLessThan(2);
+    });
+    const auto = page.getByTestId("notebook-auto-space");
+    await expect(auto).toBeInViewport({ ratio: 1 });
+    const paper = page.getByTestId("notebook-drawing");
+    const content = () => paper.getByTestId("notebook-stamp-a").innerHTML();
+    const before = await content();
+    await auto.click();
+    const corrected = await content();
+    expect(corrected).not.toBe(before);
+    await auto.click();
+    expect(await content()).toBe(corrected);
+    await page.getByLabel(/^Undo$|^실행 취소$/).click();
+    expect(await content()).toBe(before);
+    await page.getByLabel(/^Redo$|^다시 실행$/).click();
+    expect(await content()).toBe(corrected);
+    await expect(paper.getByTestId("notebook-tuplet-number")).toHaveText("3");
+    await page.getByTestId("notebook-category-marks").click();
+    await expect(page.getByTestId("notebook-symbol-drawer")).toBeInViewport({ ratio: 1 });
+    await expect(page.getByTestId("notebook-symbol-sharp")).toBeInViewport({ ratio: 0.5 });
+    await page.screenshot({ path: `generated-artifacts/notebook-tools-marks-${width}.png` });
+    await page.getByLabel(/^Close tools$|^도구 닫기$/).click();
+    await page.screenshot({ path: `generated-artifacts/notebook-tools-spacing-${width}.png` });
+    await openSettings(page); await page.getByTestId("notebook-save").click(); await closeNotice(page);
+    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("lab_staff_notebooks_v1")!)[0]);
+    const stamps = saved.pages[0].stamps;
+    expect(stamps[1].x - stamps[0].x).toBeCloseTo(stamps[2].x - stamps[1].x);
+    expect(stamps[3].x - stamps[0].x).toBe(-20);
+    expect(stamps.map((s: { y: number }) => s.y)).toEqual(reference.pages[0].stamps.map((s) => s.y));
+    expect(saved.pages[0].strokes).toEqual(reference.pages[0].strokes);
+    expect(saved.pages[0].tuplets).toEqual(reference.pages[0].tuplets);
+    expect(stamps[4]).toEqual(reference.pages[0].stamps[4]);
+    await page.reload();
+    await page.getByTestId("mode-cycle-label").waitFor();
+    await enterNotebook(page); await openSettings(page); await openSaved(page, reference.title);
+    await page.getByTestId("notebook-panel-close").click();
+    expect(await content()).toBe(corrected);
+  });
+}
+
 for (const viewport of [{ width: 390, height: 844 }, { width: 768, height: 1024 }, { width: 844, height: 390 }]) {
   test(`automatic beams and notation meter persist at ${viewport.width}x${viewport.height}`, async ({ page }) => {
     await page.setViewportSize(viewport);

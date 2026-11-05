@@ -33,6 +33,8 @@ type Props = {
   onZoom: (scale: number) => void;
   onUndo: () => void;
   onRedo: () => void;
+  onAutoSpace: () => void;
+  autoSpaceDisabled: boolean;
   onChoose: (choice: Choice) => void;
   onTuplet: () => void;
   tupletCount: number | null;
@@ -84,7 +86,20 @@ export function NotebookBottomTools(props: Props) {
   const dockTop = useRef(0);
   const dockLeft = useRef(0);
   const [dockPosition, setDockPosition] = useState({ x: 0, y: 0 });
+  const [dockWidth, setDockWidth] = useState(0);
   const pickerTop = props.pickerTop ?? 128;
+  // RNW can deliver onLayout before this mode's ref is attached. Measure after
+  // commit as well, otherwise an untouched marks drawer uses y=0 and collapses.
+  useEffect(() => {
+    if (mode !== "notes") return;
+    const frame = requestAnimationFrame(() => dockRef.current?.measureInWindow((x, y, width) => {
+      dockLeft.current = x;
+      dockTop.current = y;
+      setDockWidth(width);
+      setDockPosition({ x, y });
+    }));
+    return () => cancelAnimationFrame(frame);
+  }, [mode, windowWidth, windowHeight, pickerTop, category]);
   const durationRowHeight = Math.max(8, Math.min(34, (dockPosition.y - pickerTop - 12) / 6));
   const durationColumnHeight = durationRowHeight * durations.length + 8;
   const restPicker = useNotebookRestPicker({
@@ -291,9 +306,10 @@ export function NotebookBottomTools(props: Props) {
 
   if (mode === "notes") {
     return (
-      <View ref={dockRef} style={styles.dock} onLayout={() => dockRef.current?.measureInWindow((x, y) => {
+      <View ref={dockRef} style={styles.dock} onLayout={() => dockRef.current?.measureInWindow((x, y, width) => {
         dockLeft.current = x;
         dockTop.current = y;
+        setDockWidth(width);
         setDockPosition({ x, y });
         originRef.current?.measureInWindow((originX, originY, width, height) => {
           originBox.current = { x: originX, y: originY, width, height };
@@ -301,53 +317,62 @@ export function NotebookBottomTools(props: Props) {
         });
       })}>
           <View style={styles.notesDockContent}>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryRow}>
-              <View ref={originRef} collapsable={false} pointerEvents={restGestureActive ? "none" : "auto"} onLayout={() => originRef.current?.measureInWindow((x, y, width, height) => setOriginLayout({ x, y, width, height }))} {...noteResponder.panHandlers} style={[styles.categoryButton, styles.noteOrigin, restGestureActive && { opacity: 0 }]}>
+            <View style={styles.categoryRow}>
+              <View testID="notebook-note-tile" ref={originRef} collapsable={false} pointerEvents={restGestureActive ? "none" : "auto"} onLayout={() => originRef.current?.measureInWindow((x, y, width, height) => setOriginLayout({ x, y, width, height }))} {...noteResponder.panHandlers} style={[styles.categoryButton, styles.noteOrigin, restGestureActive && { opacity: 0 }]}>
                 {!restGestureActive && <Pressable testID="notebook-note-origin" accessibilityRole="button" accessibilityLabel={ko ? "음표 선택. 좌우로 강도를, 위로 음가를 고르세요." : "Note picker. Swipe sideways for role, up for duration."} accessibilityState={{ expanded: showAccessibleChooser }} accessibilityActions={[{ name: "expand", label: ko ? "음표 선택기 펼치기" : "Expand note chooser" }]} onAccessibilityAction={(event) => { if (event.nativeEvent.actionName === "expand") setShowAccessibleChooser(true); }} onPress={() => { if (responderUsed.current) { responderUsed.current = false; return; } setShowAccessibleChooser(true); }} style={styles.originInner}>
-                  <NotebookGlyphPreview glyph={gestureDuration} size={17} role={gestureRole} dotted={dotChoice} />
-                  <Text style={styles.categoryLabel}>{ko ? "음표" : "NOTE"}</Text>
+                  <View style={styles.categoryIconFrame}><NotebookGlyphPreview glyph={gestureDuration} size={22} role={gestureRole} dotted={dotChoice} /></View>
+                  <Text style={styles.categoryLabel}>{ko ? "음표" : "Note"}</Text>
                 </Pressable>}
               </View>
               {restPicker.origin}
-              <Pressable testID="notebook-tuplet" disabled={gestureActive || restGestureActive} accessibilityElementsHidden={gestureActive || restGestureActive} accessibilityRole="button" accessibilityState={{ selected: props.tupletCount !== null }} onPress={props.onTuplet} style={[styles.categoryButton, props.tupletCount !== null && styles.tupletOpen, (gestureActive || restGestureActive) && { opacity: 0 }]}>
-                <NotebookTupletPreview count={props.tupletCount ?? 3} />
-                <Text style={styles.categoryLabel}>{props.tupletCount === null ? (ko ? "잇단음표" : "TUPLET") : `${ko ? "잇단음표" : "TUPLET"} ${props.tupletCount}`}</Text>
+              <Pressable testID="notebook-tuplet" disabled={gestureActive || restGestureActive} accessibilityElementsHidden={gestureActive || restGestureActive} accessibilityRole="button" accessibilityState={{ selected: props.tupletCount !== null }} onPress={props.onTuplet} style={[styles.categoryButton, props.tupletCount !== null && styles.categoryActive, (gestureActive || restGestureActive) && { opacity: 0 }]}>
+                <View style={styles.categoryIconFrame}><NotebookTupletPreview count={props.tupletCount ?? 3} /></View>
+                <Text style={styles.categoryLabel}>{ko ? "잇단음표" : "Tuplet"}</Text>
               </Pressable>
               <Pressable testID="notebook-category-marks" disabled={gestureActive || restGestureActive} accessibilityElementsHidden={gestureActive || restGestureActive} accessibilityRole="button" accessibilityState={{ expanded: category === "marks", selected: category === "marks" }} onPress={() => setCategory(category === "marks" ? null : "marks")} style={[styles.categoryButton, category === "marks" && styles.categoryActive, (gestureActive || restGestureActive) && { opacity: 0 }]}>
-                <Ionicons name="musical-notes-outline" size={16} color="#725b3c" />
-                <Text style={styles.categoryLabel}>{ko ? "기호" : "MARKS"}</Text>
-                <Ionicons name={category === "marks" ? "chevron-up" : "chevron-down"} size={12} color="#8b7a60" />
+                <View style={styles.categoryIconFrame}><Ionicons name="musical-notes-outline" size={21} color="#725b3c" /></View>
+                <Text style={styles.categoryLabel}>{ko ? "기호" : "Marks"}</Text>
               </Pressable>
-            </ScrollView>
+            </View>
+            <View style={styles.noteActions}>
+              <Text style={styles.actionsCaption}>{ko ? "편집" : "EDIT"}</Text>
+              <Pressable testID="notebook-auto-space" accessibilityRole="button" accessibilityLabel={ko ? "같은 간격으로 정리" : "Space notes evenly"} disabled={props.autoSpaceDisabled} onPress={props.onAutoSpace} style={[styles.autoSpaceButton, props.autoSpaceDisabled && styles.disabled]}>
+                <Ionicons name="options-outline" size={16} color="#695538" />
+                <Text style={styles.autoSpaceText}>{ko ? "간격 정리" : "Auto-space"}</Text>
+              </Pressable>
+              <View style={styles.actionsSpacer} />
+              <Pressable testID="notebook-note-undo" accessibilityRole="button" accessibilityLabel={ko ? "실행 취소" : "Undo"} disabled={!props.canUndo} onPress={props.onUndo} style={[styles.noteHistoryButton, !props.canUndo && styles.disabled]}><Ionicons name="arrow-undo" size={17} color="#675d50" /></Pressable>
+              <Pressable testID="notebook-note-redo" accessibilityRole="button" accessibilityLabel={ko ? "다시 실행" : "Redo"} disabled={!props.canRedo} onPress={props.onRedo} style={[styles.noteHistoryButton, !props.canRedo && styles.disabled]}><Ionicons name="arrow-redo" size={17} color="#675d50" /></Pressable>
+            </View>
           </View>
 
         {gestureActive && originLayout ? <View pointerEvents="box-none" style={[styles.gestureLayer, { bottom: 0 }]}>
-          <View pointerEvents="box-none" onLayout={measureRoleChoices} style={[styles.roleChoices, { left: originLayout.x + originLayout.width / 2 - dockLeft.current - 92, top: originLayout.y + originLayout.height / 2 - dockTop.current - 21 }]}>
+          <View pointerEvents="box-none" onLayout={measureRoleChoices} style={[styles.roleChoices, { left: Math.max(0, Math.min(Math.max(0, dockWidth - 184), originLayout.x + originLayout.width / 2 - dockLeft.current - 92)), top: originLayout.y + originLayout.height / 2 - dockTop.current - 21 }]}>
             {roleValues.map((role) => <Pressable key={role} ref={((node: any) => { roleRefs.current[role] = node; }) as any} testID={`notebook-note-role-${role}`} accessibilityRole="button" accessibilityLabel={`${ko ? "음표" : "Note"} ${role}`} onPress={() => { gestureRef.current.role = role; setGestureRole(role); }} style={[styles.roleChoice, gestureRole === role && styles.roleChoiceActive]}><NotebookGlyphPreview glyph="quarter" size={19} role={role} /></Pressable>)}
           </View>
           {gestureVertical && <View pointerEvents="box-none" onLayout={measureDurationRows} style={[
             styles.durationColumn,
-            { left: originLayout.x + originLayout.width / 2 - dockLeft.current - 48, top: Math.max(pickerTop - dockTop.current, originLayout.y - dockTop.current - durationColumnHeight - 8) },
+            { left: Math.max(42, Math.min(Math.max(42, dockWidth - 138), originLayout.x + originLayout.width / 2 - dockLeft.current - 48)), top: Math.max(pickerTop - dockTop.current, originLayout.y - dockTop.current - durationColumnHeight - 8) },
           ]}>
             {[...durations].reverse().map((duration) => <Pressable key={duration} ref={((node: any) => { rowRefs.current[duration] = node; }) as any} collapsable={false} testID={`notebook-note-duration-${duration}`} accessibilityRole="button" accessibilityLabel={durationLabels[ko ? "ko" : "en"][durations.indexOf(duration)]} onPress={() => chooseAccessibleNote({ glyph: duration, role: gestureRef.current.role, dotted: gestureRef.current.dotted })} style={[styles.durationChoice, { height: durationRowHeight }, gestureDuration === duration && styles.verticalDurationActive]}>
               <NotebookGlyphPreview glyph={duration} size={20} role={gestureRole} dotted={gestureDuration === duration && dotChoice} />
             </Pressable>)}
           </View>}
           {gestureVertical && rowBoxes.current[gestureDuration] && <>
-            <Pressable testID="notebook-note-dotted" accessibilityRole="button" accessibilityLabel={ko ? "점음표" : "Dotted"} onPress={() => { gestureRef.current.dotted = true; setDotChoice(true); }} style={[styles.branchChoice, { left: rowBoxes.current[gestureDuration].x - dockLeft.current - 42, top: rowBoxes.current[gestureDuration].y - dockTop.current + rowBoxes.current[gestureDuration].height / 2 - 18 }, dotChoice && styles.roleChoiceActive]}><NotebookGlyphPreview glyph={gestureDuration} size={18} role={gestureRole} dotted /></Pressable>
-            <Pressable testID="notebook-note-plain" accessibilityRole="button" accessibilityLabel={ko ? "일반 음표" : "Plain"} onPress={() => { gestureRef.current.dotted = false; setDotChoice(false); }} style={[styles.branchChoice, { left: rowBoxes.current[gestureDuration].x - dockLeft.current + rowBoxes.current[gestureDuration].width + 6, top: rowBoxes.current[gestureDuration].y - dockTop.current + rowBoxes.current[gestureDuration].height / 2 - 18 }, !dotChoice && styles.roleChoiceActive]}><NotebookGlyphPreview glyph={gestureDuration} size={18} role={gestureRole} /></Pressable>
+            <Pressable testID="notebook-note-dotted" accessibilityRole="button" accessibilityLabel={ko ? "점음표" : "Dotted"} onPress={() => { gestureRef.current.dotted = true; setDotChoice(true); }} style={[styles.branchChoice, { left: rowBoxes.current[gestureDuration].x - dockLeft.current - 46, top: rowBoxes.current[gestureDuration].y - dockTop.current + rowBoxes.current[gestureDuration].height / 2 - 18 }, dotChoice && styles.roleChoiceActive]}><NotebookGlyphPreview glyph={gestureDuration} size={18} role={gestureRole} dotted /></Pressable>
+            <Pressable testID="notebook-note-plain" accessibilityRole="button" accessibilityLabel={ko ? "일반 음표" : "Plain"} onPress={() => { gestureRef.current.dotted = false; setDotChoice(false); }} style={[styles.branchChoice, { left: rowBoxes.current[gestureDuration].x - dockLeft.current + 98, top: rowBoxes.current[gestureDuration].y - dockTop.current + rowBoxes.current[gestureDuration].height / 2 - 18 }, !dotChoice && styles.roleChoiceActive]}><NotebookGlyphPreview glyph={gestureDuration} size={18} role={gestureRole} /></Pressable>
           </>}
         </View> : null}
 
         {restPicker.overlay}
 
         {category ? (
-          <View testID="notebook-symbol-drawer" style={[styles.categoryDrawer, { maxHeight: 300 }]}>
+          <View testID="notebook-symbol-drawer" style={[styles.categoryDrawer, { height: Math.max(64, Math.min(350, dockPosition.y - pickerTop - 8)) }]}>
             <View style={styles.drawerHeader}>
               <Text style={styles.drawerTitle}>{ko ? "악보 기호" : "Musical marks"}</Text>
               <Pressable accessibilityRole="button" accessibilityLabel={ko ? "도구 닫기" : "Close tools"} onPress={() => setCategory(null)} style={styles.drawerClose}><Ionicons name="close" size={17} color="#796b55" /></Pressable>
             </View>
-            <ScrollView style={[styles.drawerScroll, { maxHeight: 255 }]} contentContainerStyle={styles.drawerContent} showsVerticalScrollIndicator keyboardShouldPersistTaps="handled">
+            <ScrollView style={[styles.drawerScroll, { flex: 1, minHeight: 0 }]} contentContainerStyle={styles.drawerContent} showsVerticalScrollIndicator keyboardShouldPersistTaps="handled">
               {markGroups.map((group) => (
                   <View key={group.label} style={styles.drawerMarkGroup}>
                     <Text style={styles.drawerEyebrow}>{group.label}</Text>
@@ -433,8 +458,13 @@ const styles = StyleSheet.create({
   iconTool: { width: 37, height: 37, borderRadius: 10, backgroundColor: "#f4f0e8", alignItems: "center", justifyContent: "center" },
   disabled: { opacity: 0.38 },
   zoomValue: { color: "#665944", minWidth: 38, textAlign: "center", fontSize: 11, fontWeight: "700", fontVariant: ["tabular-nums"] },
-  notesDockContent: { minHeight: 58, paddingHorizontal: 9, paddingTop: 5, paddingBottom: 5, gap: 4 },
-  noteGestureRow: { flexDirection: "row", alignItems: "center", gap: 9 },
+  notesDockContent: { paddingHorizontal: 9, paddingTop: 7, paddingBottom: 7, gap: 6 },
+  noteActions: { minHeight: 38, flexDirection: "row", alignItems: "center", gap: 7, paddingHorizontal: 2 },
+  actionsCaption: { color: "#9b8d77", fontSize: 8, fontWeight: "800", letterSpacing: 0.7 },
+  actionsSpacer: { flex: 1 },
+  autoSpaceButton: { minHeight: 38, paddingHorizontal: 11, borderRadius: 10, borderWidth: 1, borderColor: "#d9cbb5", backgroundColor: "#f5efe5", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
+  autoSpaceText: { color: "#655138", fontSize: 10, fontWeight: "700" },
+  noteHistoryButton: { width: 40, height: 40, borderRadius: 10, backgroundColor: "#f4f0e8", alignItems: "center", justifyContent: "center" },
   gestureCaption: { flex: 1, gap: 3 },
   dockEyebrow: { color: "#9b8d77", fontSize: 8, fontWeight: "800", letterSpacing: 0.7, textTransform: "uppercase" },
   gestureHint: { color: "#a19480", fontSize: 8 },
@@ -449,12 +479,13 @@ const styles = StyleSheet.create({
   previewLabel: { color: "#9a8b72", fontSize: 7, fontWeight: "800", letterSpacing: 0.7 },
   previewValue: { color: "#66533a", fontSize: 9, fontWeight: "700", marginTop: 2 },
   previewGlyph: { height: 42, alignItems: "center", justifyContent: "center", overflow: "hidden" },
-  categoryRow: { minHeight: 42, flexDirection: "row", alignItems: "center", gap: 6, paddingLeft: 54, paddingRight: 4 },
-  categoryButton: { minHeight: 39, paddingHorizontal: 10, borderRadius: 10, borderWidth: 1, borderColor: "#e7dfd2", backgroundColor: "#fffdf9", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
-  noteOrigin: { width: 104, minWidth: 104, height: 70, minHeight: 70, flexShrink: 0, borderColor: "#bca483", backgroundColor: "#f3ecdf" },
-  originInner: { flex: 1, alignSelf: "stretch", alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 4 },
-  categoryActive: { backgroundColor: "#f1eadd", borderColor: "#bba27f" },
-  categoryLabel: { color: "#62543e", fontSize: 9, fontWeight: "800", letterSpacing: 0.25 },
+  categoryRow: { minHeight: 64, flexDirection: "row", alignItems: "stretch", gap: 5 },
+  categoryButton: { flex: 1, minWidth: 0, height: 64, minHeight: 64, paddingHorizontal: 2, borderRadius: 11, borderWidth: 1, borderColor: "#e7dfd2", backgroundColor: "#fffdf9", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3 },
+  categoryIconFrame: { height: 36, width: 56, alignItems: "center", justifyContent: "center", overflow: "visible" },
+  noteOrigin: { width: undefined, minWidth: 0, height: 64, minHeight: 64, flexShrink: 1, borderColor: "#d7cbb7", backgroundColor: "#fffdf9" },
+  originInner: { flex: 1, alignSelf: "stretch", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 3 },
+  categoryActive: { backgroundColor: "#f0e7d9", borderColor: "#b69a70" },
+  categoryLabel: { color: "#62543e", fontSize: 10, fontWeight: "700", letterSpacing: 0.1, textAlign: "center" },
   tupletBracket: { color: "#725b3c", fontSize: 15, fontWeight: "700", lineHeight: 19 },
   gestureLayer: { position: "absolute", left: 0, right: 0, top: 0, zIndex: 80, elevation: 22, overflow: "visible" },
   roleChoices: { position: "absolute", height: 42, flexDirection: "row", alignItems: "center", gap: 5, overflow: "visible" },

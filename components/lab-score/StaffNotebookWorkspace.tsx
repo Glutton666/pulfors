@@ -16,6 +16,7 @@ import { NotebookSettingsPanel } from "@/components/lab-score/notebook/NotebookS
 import { NotebookPaper } from "@/components/lab-score/notebook/NotebookPaper";
 import { attachedPosition, captureSelection, emptySelection, hitObject, includeAttached, isAttachedMark, isNotebookNote, isTupletMember, paginateNotebook, rectangle, removeSelection, selectRectangle, selectionBounds, selectionCount, selectionDelta, transformSelection, type NotebookClipboard, type NotebookSelection, type NotebookBounds } from "@/lib/notebook-editing";
 import { eraseNotebookGesture, type NotebookEraserMode } from "@/lib/notebook-erasing";
+import { spaceNotebookRow } from "@/lib/notebook-spacing";
 
 type Tool = "pen" | "erase" | "move" | "select";
 const id = (prefix: string) => `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -344,6 +345,18 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
     if (ids.length < 2) { Alert.alert(ko ? "음표·쉼표를 두 개 이상 넣어 주세요" : "Add at least two notes or rests"); return; }
     checkpoint(); replacePage(pageIndex, { ...page, tuplets: [...(page.tuplets ?? []), { id: id("tuplet"), stampIds: ids }] }); setTupletIds(null);
   };
+  const autoSpace = () => {
+    if (playback.running || playback.preparing || dragDraft || drawingRef.current.length || eraseGesture.current) return;
+    const result = spaceNotebookRow(page);
+    if (result.reason === "crowded") {
+      Alert.alert(ko ? "간격을 정리하지 않았습니다" : "Spacing unchanged",
+        ko ? "이 줄에 객체가 너무 많거나 넓어 같은 간격으로 놓을 수 없습니다. 일부를 다른 줄로 옮긴 뒤 다시 시도해 주세요."
+          : "This row is too crowded to space safely. Move some objects to another row and try again.");
+      return;
+    }
+    if (result.reason !== "changed") return;
+    checkpoint(); replacePage(pageIndex, result.page);
+  };
   const commitDrag = (copy: boolean) => {
     if (!dragDraft) return;
     checkpoint();
@@ -437,11 +450,12 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
         </View>}
       </View>
       {tupletIds !== null && <View style={styles.tupletStatus}><Text>{ko ? `잇단음표 작성 중 · ${tupletIds.length}개` : `Open tuplet · ${tupletIds.length}`}</Text><Pressable testID="notebook-tuplet-cancel" onPress={() => setTupletIds(null)} style={{ padding: 8 }}><Text>{t.cancel}</Text></Pressable></View>}
-      {mode !== "ink" && <View style={{ flexDirection: "row", justifyContent: "flex-end", backgroundColor: "#fffdf8" }}>
+      {mode !== "ink" && mode !== "notes" && <View style={{ flexDirection: "row", justifyContent: "flex-end", backgroundColor: "#fffdf8" }}>
         <Pressable accessibilityLabel={t.undo} disabled={!undoStack.current.length} onPress={undo} style={{ padding: 10, opacity: undoStack.current.length ? 1 : 0.35 }}><Ionicons name="arrow-undo" size={18} color="#675d50" /></Pressable>
         <Pressable accessibilityLabel={t.redo} disabled={!redoStack.current.length} onPress={redo} style={{ padding: 10, opacity: redoStack.current.length ? 1 : 0.35 }}><Ionicons name="arrow-redo" size={18} color="#675d50" /></Pressable>
       </View>}
       <NotebookBottomTools ko={ko} mode={mode} tool={tool} lineWidth={lineWidth} scale={scale} pickerTop={paperTop}
+        onAutoSpace={autoSpace} autoSpaceDisabled={playback.running || playback.preparing || !!dragDraft}
         lineColor={lineColor} onColor={setLineColor} eraserMode={eraserMode} onEraserMode={setEraserMode}
         toolPopup={toolPopup} onToolPopup={(next) => { resetTransient(); setToolPopup(next); }}
         canUndo={undoStack.current.length > 0} canRedo={redoStack.current.length > 0}

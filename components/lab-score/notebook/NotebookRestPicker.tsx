@@ -160,7 +160,7 @@ export function useNotebookRestPicker(props: PickerProps) {
     : 30;
   const columnHeight = rowHeight * durations.length + 8;
   const columnLeft = originBox && dockBox
-    ? Math.max(42, Math.min(width - 138, originBox.x + originBox.width / 2 - dockBox.x - 48))
+    ? Math.max(42, Math.min(Math.max(42, dockBox.width - 138), originBox.x + originBox.width / 2 - dockBox.x - 48))
     : 42;
   const columnTop = originBox && dockBox
     ? Math.max(props.topBoundary - dockBox.y, originBox.y - dockBox.y - columnHeight - 8)
@@ -168,6 +168,7 @@ export function useNotebookRestPicker(props: PickerProps) {
 
   const origin = (
     <View
+      testID="notebook-rest-tile"
       ref={originRef}
       collapsable={false}
       pointerEvents={props.otherPickerActive ? "none" : "auto"}
@@ -192,8 +193,8 @@ export function useNotebookRestPicker(props: PickerProps) {
         }}
         style={styles.originInner}
       >
-        <NotebookGlyphPreview glyph={`rest-${duration}`} size={17} role="normal" dotted={dotted} />
-        <Text style={styles.categoryLabel}>{props.ko ? "쉼표" : "REST"}</Text>
+        <View style={styles.categoryIconFrame}><NotebookGlyphPreview glyph={`rest-${duration}`} size={22} role="normal" dotted={dotted} /></View>
+        <Text style={styles.categoryLabel}>{props.ko ? "쉼표" : "Rest"}</Text>
       </Pressable>}
     </View>
   );
@@ -222,7 +223,7 @@ export function useNotebookRestPicker(props: PickerProps) {
             accessibilityLabel={props.ko ? "점쉼표" : "Dotted rest"}
             onPress={() => setVariant(true)}
             style={[styles.branchChoice, {
-              left: rowBoxes.current[duration]!.x - dockBox.x - 42,
+              left: columnLeft - 42,
               top: rowBoxes.current[duration]!.y - dockBox.y + rowBoxes.current[duration]!.height / 2 - 18,
             }, dotted && styles.roleChoiceActive]}
           >
@@ -234,7 +235,7 @@ export function useNotebookRestPicker(props: PickerProps) {
             accessibilityLabel={props.ko ? "일반 쉼표" : "Plain rest"}
             onPress={() => setVariant(false)}
             style={[styles.branchChoice, {
-              left: rowBoxes.current[duration]!.x - dockBox.x + rowBoxes.current[duration]!.width + 6,
+              left: columnLeft + 96 + 6,
               top: rowBoxes.current[duration]!.y - dockBox.y + rowBoxes.current[duration]!.height / 2 - 18,
             }, !dotted && styles.roleChoiceActive]}
           >
@@ -267,9 +268,10 @@ export function useNotebookRestPicker(props: PickerProps) {
 }
 
 const styles = StyleSheet.create({
-  origin: { minWidth: 88, minHeight: 39, paddingHorizontal: 10, borderRadius: 10, borderWidth: 1, borderColor: "#d7cbb7", backgroundColor: "#fffdf9", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
-  originInner: { flex: 1, alignSelf: "stretch", alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 4 },
-  categoryLabel: { color: "#62543e", fontSize: 9, fontWeight: "800", letterSpacing: 0.25 },
+  origin: { flex: 1, minWidth: 0, height: 64, minHeight: 64, paddingHorizontal: 2, borderRadius: 11, borderWidth: 1, borderColor: "#e7dfd2", backgroundColor: "#fffdf9", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3 },
+  originInner: { flex: 1, alignSelf: "stretch", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 3 },
+  categoryIconFrame: { height: 36, width: 56, alignItems: "center", justifyContent: "center", overflow: "visible" },
+  categoryLabel: { color: "#62543e", fontSize: 10, fontWeight: "700", letterSpacing: 0.1, textAlign: "center" },
   gestureLayer: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0, zIndex: 80, elevation: 22, overflow: "visible" },
   durationColumn: { position: "absolute", width: 96, padding: 4, borderRadius: 12, borderWidth: 1, borderColor: "#ded3c2", backgroundColor: "#fffdf8", shadowColor: "#403321", shadowOpacity: 0.17, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 20 },
   durationChoice: { width: 86, borderRadius: 7, alignItems: "center", justifyContent: "center" },
