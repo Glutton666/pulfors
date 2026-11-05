@@ -84,6 +84,10 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
   const [dockMoving, setDockMoving] = useState(false);
   const [dockLayoutVersion, setDockLayoutVersion] = useState(0);
   const [frontDock, setFrontDock] = useState<"playback" | "tools">("tools");
+  const [inkDockWidth, setInkDockWidth] = useState(600);
+  const fitInkDock = useCallback((contentWidth: number) => {
+    if (Number.isFinite(contentWidth) && contentWidth > 0) setInkDockWidth(Math.ceil(contentWidth) + 46);
+  }, []);
   const [paperTop, setPaperTop] = useState(128);
   const paperStageRef = useRef<View>(null);
   const paperScroll = useRef<ScrollView>(null);
@@ -463,14 +467,14 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
           {!dragDraft.paste && <Pressable testID="notebook-drop-copy" onPress={() => commitDrag(true)} style={styles.previewButton}><Text>{ko ? "여기에 복사" : "Copy here"}</Text></Pressable>}
           <Pressable testID="notebook-drop-move" onPress={() => commitDrag(false)} style={styles.previewButton}><Text>{dragDraft.paste ? (ko ? "여기에 붙여넣기" : "Paste here") : (ko ? "여기로 이동" : "Move here")}</Text></Pressable>
         </View>}
-      <NotebookFloatingDock id="playback" ko={ko} bounds={viewport} maxWidth={380} edge="top"
+      <NotebookFloatingDock id="playback" ko={ko} bounds={viewport} maxWidth={424} edge="top"
         active={frontDock === "playback"} onActivate={() => setFrontDock("playback")}
         onDragStart={beginDockMove} onDragEnd={endDockMove}>
         <NotebookPlaybackBar ko={ko} settings={settings} running={playback.running} preparing={playback.preparing}
           layoutKey={dockLayoutKey} pickerTop={paperTop} pickerBottom={paperTop + viewport.height}
           onSettings={updateSettings} onToggle={() => void togglePlayback()} />
       </NotebookFloatingDock>
-      <NotebookFloatingDock id="tools" ko={ko} bounds={viewport} maxWidth={mode === "notes" ? 480 : 680} edge="bottom"
+      <NotebookFloatingDock id="tools" ko={ko} bounds={viewport} maxWidth={mode === "notes" ? 600 : mode === "ink" ? inkDockWidth : 680} edge="bottom"
         active={frontDock === "tools"} onActivate={() => setFrontDock("tools")}
         onDragStart={beginDockMove} onDragEnd={endDockMove}>
       {tupletIds !== null && <View style={styles.tupletStatus}><Text>{ko ? `잇단음표 작성 중 · ${tupletIds.length}개` : `Open tuplet · ${tupletIds.length}`}</Text><Pressable testID="notebook-tuplet-cancel" onPress={() => setTupletIds(null)} style={{ padding: 8 }}><Text>{t.cancel}</Text></Pressable></View>}
@@ -479,6 +483,7 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
         <Pressable accessibilityLabel={t.redo} disabled={!redoStack.current.length} onPress={redo} style={{ padding: 10, opacity: redoStack.current.length ? 1 : 0.35 }}><Ionicons name="arrow-redo" size={18} color="#675d50" /></Pressable>
       </View>}
       <NotebookBottomTools ko={ko} mode={mode} tool={tool} lineWidth={lineWidth} scale={scale} pickerTop={paperTop}
+        onPreferredWidth={mode === "ink" ? fitInkDock : undefined}
         pickerBottom={paperTop + viewport.height} layoutKey={dockLayoutKey}
         onAutoSpace={autoSpace} autoSpaceDisabled={playback.running || playback.preparing || !!dragDraft}
         lineColor={lineColor} onColor={setLineColor} eraserMode={eraserMode} onEraserMode={setEraserMode}

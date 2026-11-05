@@ -284,7 +284,7 @@ export function useNotebookRestPicker(props: PickerProps) {
 }
 
 const styles = StyleSheet.create({
-  origin: { flex: 1, minWidth: 0, height: 64, minHeight: 64, paddingHorizontal: 2, borderRadius: 11, borderWidth: 1, borderColor: "#e7dfd2", backgroundColor: "#fffdf9", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3 },
+  origin: { flex: 1, minWidth: 46, height: 64, minHeight: 64, paddingHorizontal: 0, borderRadius: 11, borderWidth: 1, borderColor: "#e7dfd2", backgroundColor: "#fffdf9", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3 },
   originInner: { flex: 1, alignSelf: "stretch", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 3 },
   categoryIconFrame: { height: 36, width: 56, alignItems: "center", justifyContent: "center", overflow: "visible" },
   categoryLabel: { color: "#62543e", fontSize: 10, fontWeight: "700", letterSpacing: 0.1, textAlign: "center" },

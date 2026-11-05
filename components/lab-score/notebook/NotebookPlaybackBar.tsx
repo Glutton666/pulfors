@@ -24,7 +24,7 @@ export function NotebookPlaybackBar({ ko, settings, running, preparing, onSettin
   const [barBox, setBarBox] = useState({ y: 0, height: 54, width: 0 });
   const shellRef = useRef<View>(null);
   const [bpmDraft, setBpmDraft] = useState(String(settings.source?.bpm ?? settings.bpm));
-  const compact = barBox.width > 0 && barBox.width < 310;
+  const compact = barBox.width > 0 && barBox.width < 410;
   const locked = Boolean(settings.source);
   const displayedBpm = settings.source?.bpm ?? settings.bpm;
   useEffect(() => setBpmDraft(String(displayedBpm)), [displayedBpm]);
@@ -61,7 +61,7 @@ export function NotebookPlaybackBar({ ko, settings, running, preparing, onSettin
           accessibilityLabel={collapsed ? (ko ? "재생바 펼치기" : "Expand playback controls") : (ko ? "재생바 접기" : "Collapse playback controls")}
           accessibilityState={{ expanded: !collapsed }}
           onPress={() => { setCollapsed((value) => !value); setMeterOpen(false); }}
-          style={styles.collapse}
+          style={[styles.collapse, compact && styles.compactCollapse]}
           hitSlop={4}
         >
           <Ionicons name={collapsed ? "chevron-down" : "chevron-up"} size={16} color="#75654d" />
@@ -101,14 +101,26 @@ export function NotebookPlaybackBar({ ko, settings, running, preparing, onSettin
               onSubmitEditing={(event) => commitBpm(event.nativeEvent.text)}
                   style={styles.bpmInput}
                 />
-                <Text style={styles.bpmSuffix}>bpm</Text>
+                {!compact && <Text style={styles.bpmSuffix}>bpm</Text>}
               </View>
             </View>
-            {locked ? <View style={styles.lockIcon}><Ionicons name="lock-closed-outline" size={13} color="#9a8a72" /></View> : null}
+            {locked && !compact ? <View style={styles.lockIcon}><Ionicons name="lock-closed-outline" size={13} color="#9a8a72" /></View> : null}
           </>
         )}
-        <View style={{ flex: 1 }} />
+        <View style={styles.rowSpacer} />
         {preparing ? <View style={styles.preparing}><View style={styles.pulse} />{!compact && <Text style={styles.preparingText}>{ko ? "준비 중" : "Preparing"}</Text>}</View> : null}
+        <Pressable
+          testID="notebook-playback-random"
+          accessibilityRole="switch"
+          accessibilityLabel={ko ? "무작위 재생" : "Random play"}
+          accessibilityState={{ checked: Boolean(settings.random) }}
+          aria-checked={Boolean(settings.random)}
+          onPress={() => onSettings({ random: !settings.random })}
+          style={[styles.randomButton, compact && styles.compactRandomButton, settings.random && styles.randomButtonActive]}
+        >
+          <Ionicons name="shuffle-outline" size={17} color={settings.random ? "#fffaf1" : "#75654d"} />
+          {!collapsed && !compact ? <Text style={[styles.randomText, settings.random && styles.randomTextActive]}>{ko ? "무작위" : "Random"}</Text> : null}
+        </Pressable>
         <Pressable
           testID="notebook-play"
           accessibilityRole="button"
@@ -148,9 +160,16 @@ export function NotebookPlaybackBar({ ko, settings, running, preparing, onSettin
 }
 
 const styles = StyleSheet.create({
-  shell: { position: "relative", zIndex: 10, alignSelf: "center", width: "100%", maxWidth: 336, overflow: "visible" },
+  shell: { position: "relative", zIndex: 10, alignSelf: "center", width: "100%", maxWidth: 410, overflow: "visible" },
   row: { minHeight: 48, flexDirection: "row", alignItems: "center", paddingHorizontal: 5, gap: 8 },
   collapse: { width: 31, height: 34, alignItems: "center", justifyContent: "center", borderRadius: 9, backgroundColor: "#f6f1e8" },
+  compactCollapse: { width: 28 },
+  randomButton: { minWidth: 72, minHeight: 36, paddingHorizontal: 9, borderRadius: 10, borderWidth: 1, borderColor: "#e7ddce", backgroundColor: "#f7f2e9", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5 },
+  compactRandomButton: { width: 44, minWidth: 44, height: 36, minHeight: 36, paddingHorizontal: 0 },
+  randomButtonActive: { backgroundColor: "#826747", borderColor: "#826747" },
+  randomText: { color: "#75654d", fontSize: 10, fontWeight: "700" },
+  randomTextActive: { color: "#fffaf1" },
+  rowSpacer: { flex: 1, minWidth: 0 },
   collapsedText: { color: "#6c604e", fontSize: 11, fontWeight: "700" },
   control: { alignItems: "center", justifyContent: "center", gap: 2 },
   miniLabel: { color: "#a0927d", fontSize: 8, fontWeight: "800", letterSpacing: 0.8 },
@@ -169,9 +188,9 @@ const styles = StyleSheet.create({
   pulse: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#b18a53" },
   preparingText: { color: "#968873", fontSize: 9 },
   meterMenu: { position: "absolute", left: 39, zIndex: 30, width: 76, minHeight: 42, padding: 4, borderRadius: 11, borderWidth: 1, borderColor: "#e4dbce", backgroundColor: "#fffdf8", shadowColor: "#403321", shadowOpacity: 0.15, shadowRadius: 9, shadowOffset: { width: 0, height: 4 }, elevation: 8 },
-  compactRow: { minHeight: 46, paddingHorizontal: 2, gap: 4 },
+  compactRow: { minHeight: 46, paddingHorizontal: 2, gap: 3 },
   compactMeterButton: { minWidth: 49, paddingHorizontal: 4 },
-  compactBpmBox: { minWidth: 64, paddingHorizontal: 4 },
+  compactBpmBox: { width: 57, minWidth: 57, paddingHorizontal: 3 },
   compactPlayButton: { minWidth: 44, paddingHorizontal: 7 },
   meterOption: { minHeight: 31, borderRadius: 7, alignItems: "center", justifyContent: "center" },
   meterOptionActive: { backgroundColor: "#eee5d7" },

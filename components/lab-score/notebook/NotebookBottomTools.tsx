@@ -9,6 +9,7 @@ import type { NotebookMode } from "./NotebookModeMenu";
 import { useLanguage } from "@/contexts/LanguageContext";
 import type { NotebookEraserMode } from "@/lib/notebook-erasing";
 import { NotebookInkOptions } from "./NotebookInkOptions";
+import { NotebookInkToolbar } from "./NotebookInkToolbar";
 
 type Tool = "pen" | "erase" | "move" | "select";
 type Choice = { glyph: string; role: "normal" | "ghost" | "strong"; dotted: boolean };
@@ -47,6 +48,7 @@ type Props = {
   onResizeSelection: (factor: number) => void;
   clipboard: ClipboardItem[];
   onPaste: (id: string) => void;
+  onPreferredWidth?: (contentWidth: number) => void;
 };
 
 const durations = ["whole", "half", "quarter", "eighth", "sixteenth", "thirty_second"];
@@ -81,7 +83,6 @@ export function NotebookBottomTools(props: Props) {
   const gestureRef = useRef({ active: false, dx: 0, dy: 0, vertical: false, role: "normal" as Choice["role"], duration: "quarter", dotted: false, lastX: 0, lastY: 0 });
   const gestureSnapshot = useRef({ role: "normal" as Choice["role"], duration: "quarter", dotted: false });
   const responderUsed = useRef(false);
-  const heldTool = useRef(false);
   const callbacks = useRef(props);
   callbacks.current = props;
   const [originLayout, setOriginLayout] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
@@ -89,27 +90,32 @@ export function NotebookBottomTools(props: Props) {
   const dockLeft = useRef(0);
   const [dockPosition, setDockPosition] = useState({ x: 0, y: 0 });
   const [dockWidth, setDockWidth] = useState(0);
+  const [dockHeight, setDockHeight] = useState(0);
+  const [moreActionsOpen, setMoreActionsOpen] = useState(false);
   const pickerTop = props.pickerTop ?? 8;
   const pickerBottom = props.pickerBottom ?? windowHeight - 8;
   // RNW can deliver onLayout before this mode's ref is attached. Measure after
   // commit as well, otherwise an untouched marks drawer uses y=0 and collapses.
   useEffect(() => {
     if (mode !== "notes") return;
-    const frame = requestAnimationFrame(() => dockRef.current?.measureInWindow((x, y, width) => {
+    const frame = requestAnimationFrame(() => dockRef.current?.measureInWindow((x, y, width, height) => {
       dockLeft.current = x;
       dockTop.current = y;
       setDockWidth(width);
+      setDockHeight(height);
       setDockPosition({ x, y });
     }));
     return () => cancelAnimationFrame(frame);
   }, [mode, windowWidth, windowHeight, pickerTop, pickerBottom, category, props.layoutKey]);
   const roomAbove = Math.max(0, dockPosition.y - pickerTop - 8);
-  const roomBelow = Math.max(0, pickerBottom - (dockPosition.y + (mode === "notes" ? 111 : 66)) - 8);
+  const roomBelow = Math.max(0, pickerBottom - (dockPosition.y + (dockHeight || 66)) - 8);
+  const compactNoteActions = dockWidth > 0 && dockWidth < 440;
   const durationSpace = Math.max(roomAbove, roomBelow);
   const durationRowHeight = Math.max(8, Math.min(34, (durationSpace - 16) / 6));
   const durationColumnHeight = durationRowHeight * durations.length + 8;
   const durationAbove = roomAbove >= durationColumnHeight || roomAbove >= roomBelow;
   const chooserAbove = roomAbove >= 66 || roomAbove >= roomBelow;
+  const moreActionsAbove = roomAbove >= 58 || roomAbove >= roomBelow;
   const drawerAvailable = Math.max(64, Math.min(350, Math.max(roomAbove, roomBelow)));
   const drawerAbove = roomAbove >= 180 || roomAbove >= roomBelow;
   const restPicker = useNotebookRestPicker({
@@ -277,51 +283,38 @@ export function NotebookBottomTools(props: Props) {
   }));
 
   if (mode === "ink") {
-    const tools: { id: Tool; icon: keyof typeof Ionicons.glyphMap; label: string }[] = [
-      { id: "pen", icon: "pencil-outline", label: ko ? "펜" : "Pen" },
-      { id: "erase", icon: "backspace-outline", label: ko ? "지우개" : "Erase" },
-      { id: "move", icon: "hand-left-outline", label: ko ? "화면 이동" : "Pan" },
-    ];
     return (
       <View style={[styles.dock, styles.wideDock]}>
         <NotebookInkOptions ko={ko} popup={props.toolPopup} onClose={() => props.onToolPopup(null)}
           color={props.lineColor} width={props.lineWidth} onColor={props.onColor} onWidth={props.onWidth}
           eraserMode={props.eraserMode} onEraserMode={props.onEraserMode} />
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.inkRow}>
-          {tools.map((item) => (
-            <Pressable key={item.id} testID={`notebook-tool-${item.id}`} accessibilityRole="button" accessibilityState={{ selected: props.tool === item.id }} aria-pressed={props.tool === item.id}
-              onPressIn={() => { heldTool.current = false; }}
-              onLongPress={item.id === "move" ? undefined : () => { heldTool.current = true; props.onToolPopup(item.id as "pen" | "erase"); }}
-              delayLongPress={400}
-              accessibilityActions={item.id === "move" ? undefined : [{ name: "expand", label: ko ? "옵션 열기" : "Open options" }]}
-              onAccessibilityAction={(event) => { if (event.nativeEvent.actionName === "expand" && (item.id === "pen" || item.id === "erase")) props.onToolPopup(item.id); }}
-              onPress={() => { if (!heldTool.current) props.onTool(item.id); }}
-              style={[styles.toolButton, props.tool === item.id && styles.selectedTool]}>
-              <Ionicons name={item.icon} size={17} color={props.tool === item.id ? "#674f31" : "#7b7163"} /><Text style={[styles.toolText, props.tool === item.id && styles.selectedText]}>{item.label}</Text>
-            </Pressable>
-          ))}
-          <View style={styles.separator} />
-          <Pressable accessibilityRole="button" accessibilityLabel={ko ? "실행 취소" : "Undo"} disabled={!props.canUndo} onPress={props.onUndo} style={[styles.iconTool, !props.canUndo && styles.disabled]}>
-            <Ionicons name="arrow-undo" size={17} color="#675d50" />
-          </Pressable>
-          <Pressable accessibilityRole="button" accessibilityLabel={ko ? "다시 실행" : "Redo"} disabled={!props.canRedo} onPress={props.onRedo} style={[styles.iconTool, !props.canRedo && styles.disabled]}>
-            <Ionicons name="arrow-redo" size={17} color="#675d50" />
-          </Pressable>
-          <View style={styles.separator} />
-          <Pressable accessibilityRole="button" accessibilityLabel={ko ? "축소" : "Zoom out"} onPress={() => props.onZoom(Math.max(0.35, props.scale - 0.1))} style={styles.iconTool}><Ionicons name="remove" size={17} color="#675d50" /></Pressable>
-          <Text style={styles.zoomValue}>{Math.round(props.scale * 100)}%</Text>
-          <Pressable accessibilityRole="button" accessibilityLabel={ko ? "확대" : "Zoom in"} onPress={() => props.onZoom(Math.min(2.5, props.scale + 0.1))} style={styles.iconTool}><Ionicons name="add" size={17} color="#675d50" /></Pressable>
-        </ScrollView>
+        <NotebookInkToolbar
+          ko={ko}
+          tool={props.tool}
+          scale={props.scale}
+          canUndo={props.canUndo}
+          canRedo={props.canRedo}
+          pickerTop={pickerTop}
+          pickerBottom={pickerBottom}
+          layoutKey={props.layoutKey}
+          onTool={props.onTool}
+          onToolPopup={props.onToolPopup}
+          onZoom={props.onZoom}
+          onUndo={props.onUndo}
+          onRedo={props.onRedo}
+          onPreferredWidth={props.onPreferredWidth}
+        />
       </View>
     );
   }
 
   if (mode === "notes") {
     return (
-      <View ref={dockRef} style={[styles.dock, styles.notesDock]} onLayout={() => dockRef.current?.measureInWindow((x, y, width) => {
+      <View ref={dockRef} style={[styles.dock, styles.notesDock]} onLayout={() => dockRef.current?.measureInWindow((x, y, width, height) => {
         dockLeft.current = x;
         dockTop.current = y;
         setDockWidth(width);
+        setDockHeight(height);
         setDockPosition({ x, y });
         originRef.current?.measureInWindow((originX, originY, width, height) => {
           originBox.current = { x: originX, y: originY, width, height };
@@ -345,18 +338,27 @@ export function NotebookBottomTools(props: Props) {
                 <View style={styles.categoryIconFrame}><Ionicons name="musical-notes-outline" size={21} color="#725b3c" /></View>
                 <Text style={styles.categoryLabel}>{ko ? "기호" : "Marks"}</Text>
               </Pressable>
-            </View>
-            <View style={styles.noteActions}>
-              <Text style={styles.actionsCaption}>{ko ? "편집" : "EDIT"}</Text>
-              <Pressable testID="notebook-auto-space" accessibilityRole="button" accessibilityLabel={ko ? "같은 간격으로 정리" : "Space notes evenly"} disabled={props.autoSpaceDisabled} onPress={props.onAutoSpace} style={[styles.autoSpaceButton, props.autoSpaceDisabled && styles.disabled]}>
-                <Ionicons name="options-outline" size={16} color="#695538" />
-                <Text style={styles.autoSpaceText}>{ko ? "간격 정리" : "Auto-space"}</Text>
-              </Pressable>
-              <View style={styles.actionsSpacer} />
-              <Pressable testID="notebook-note-undo" accessibilityRole="button" accessibilityLabel={ko ? "실행 취소" : "Undo"} disabled={!props.canUndo} onPress={props.onUndo} style={[styles.noteHistoryButton, !props.canUndo && styles.disabled]}><Ionicons name="arrow-undo" size={17} color="#675d50" /></Pressable>
-              <Pressable testID="notebook-note-redo" accessibilityRole="button" accessibilityLabel={ko ? "다시 실행" : "Redo"} disabled={!props.canRedo} onPress={props.onRedo} style={[styles.noteHistoryButton, !props.canRedo && styles.disabled]}><Ionicons name="arrow-redo" size={17} color="#675d50" /></Pressable>
+              {compactNoteActions ? (
+                <Pressable testID="notebook-note-more" accessibilityRole="button" accessibilityLabel={ko ? "더 많은 편집 도구" : "More editing tools"} accessibilityState={{ expanded: moreActionsOpen }} onPress={() => setMoreActionsOpen((open) => !open)} style={styles.moreActionsButton}>
+                  <Ionicons name={moreActionsOpen ? "close" : "ellipsis-horizontal"} size={19} color="#675d50" />
+                </Pressable>
+              ) : (
+                <>
+                  <Pressable testID="notebook-auto-space" accessibilityRole="button" accessibilityLabel={ko ? "같은 간격으로 정리" : "Space notes evenly"} disabled={props.autoSpaceDisabled} onPress={props.onAutoSpace} style={[styles.inlineActionButton, props.autoSpaceDisabled && styles.disabled]}>
+                    <Ionicons name="options-outline" size={16} color="#695538" /><Text style={styles.autoSpaceText}>{ko ? "간격 정리" : "Auto-space"}</Text>
+                  </Pressable>
+                  <Pressable testID="notebook-note-undo" accessibilityRole="button" accessibilityLabel={ko ? "실행 취소" : "Undo"} disabled={!props.canUndo} onPress={props.onUndo} style={[styles.noteHistoryButton, !props.canUndo && styles.disabled]}><Ionicons name="arrow-undo" size={17} color="#675d50" /></Pressable>
+                  <Pressable testID="notebook-note-redo" accessibilityRole="button" accessibilityLabel={ko ? "다시 실행" : "Redo"} disabled={!props.canRedo} onPress={props.onRedo} style={[styles.noteHistoryButton, !props.canRedo && styles.disabled]}><Ionicons name="arrow-redo" size={17} color="#675d50" /></Pressable>
+                </>
+              )}
             </View>
           </View>
+
+          {compactNoteActions && moreActionsOpen && <View testID="notebook-note-more-menu" accessibilityRole="menu" style={[styles.moreActionsMenu, moreActionsAbove ? { bottom: "100%", top: undefined } : { top: "100%", bottom: undefined }]}>
+            <Pressable testID="notebook-auto-space" accessibilityRole="menuitem" accessibilityLabel={ko ? "같은 간격으로 정리" : "Space notes evenly"} disabled={props.autoSpaceDisabled} onPress={() => { props.onAutoSpace(); setMoreActionsOpen(false); }} style={[styles.moreMenuAction, props.autoSpaceDisabled && styles.disabled]}><Ionicons name="options-outline" size={17} color="#695538" /><Text style={styles.moreMenuLabel}>{ko ? "간격" : "Space"}</Text></Pressable>
+            <Pressable testID="notebook-note-undo" accessibilityRole="menuitem" accessibilityLabel={ko ? "실행 취소" : "Undo"} disabled={!props.canUndo} onPress={() => { props.onUndo(); setMoreActionsOpen(false); }} style={[styles.moreMenuAction, !props.canUndo && styles.disabled]}><Ionicons name="arrow-undo" size={17} color="#675d50" /><Text style={styles.moreMenuLabel}>{ko ? "취소" : "Undo"}</Text></Pressable>
+            <Pressable testID="notebook-note-redo" accessibilityRole="menuitem" accessibilityLabel={ko ? "다시 실행" : "Redo"} disabled={!props.canRedo} onPress={() => { props.onRedo(); setMoreActionsOpen(false); }} style={[styles.moreMenuAction, !props.canRedo && styles.disabled]}><Ionicons name="arrow-redo" size={17} color="#675d50" /><Text style={styles.moreMenuLabel}>{ko ? "다시" : "Redo"}</Text></Pressable>
+          </View>}
 
           {gestureActive && originLayout ? <View pointerEvents="box-none" style={[styles.gestureLayer, { bottom: 0 }]}>
           <View pointerEvents="box-none" onLayout={measureRoleChoices} style={[styles.roleChoices, { left: Math.max(0, Math.min(Math.max(0, dockWidth - 184), originLayout.x + originLayout.width / 2 - dockLeft.current - 92)), top: originLayout.y + originLayout.height / 2 - dockTop.current - 21 }]}>
@@ -467,8 +469,7 @@ const styles = StyleSheet.create({
   selectionTab: { paddingHorizontal: 15, paddingVertical: 8, borderRadius: 9, borderWidth: 1, borderColor: "#e8e0d4" },
   dock: { position: "relative", alignSelf: "center", zIndex: 25, elevation: 12, overflow: "visible", width: "100%", minHeight: 66, maxHeight: 216, backgroundColor: "transparent" },
   wideDock: { maxWidth: 636 },
-  notesDock: { maxWidth: 436 },
-  inkRow: { minHeight: 66, alignItems: "center", paddingHorizontal: 10, gap: 6 },
+  notesDock: { maxWidth: 600 },
   toolButton: { minHeight: 42, paddingHorizontal: 12, borderRadius: 11, borderWidth: 1, borderColor: "#e8e0d4", backgroundColor: "#fffdf9", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7 },
   selectedTool: { borderColor: "#bca483", backgroundColor: "#f2ece2" },
   toolText: { color: "#70675a", fontSize: 11, fontWeight: "600" },
@@ -479,13 +480,18 @@ const styles = StyleSheet.create({
   iconTool: { width: 37, height: 37, borderRadius: 10, backgroundColor: "#f4f0e8", alignItems: "center", justifyContent: "center" },
   disabled: { opacity: 0.38 },
   zoomValue: { color: "#665944", minWidth: 38, textAlign: "center", fontSize: 11, fontWeight: "700", fontVariant: ["tabular-nums"] },
-  notesDockContent: { paddingHorizontal: 9, paddingTop: 7, paddingBottom: 7, gap: 6 },
+  notesDockContent: { paddingHorizontal: 6, paddingTop: 7, paddingBottom: 7 },
   noteActions: { minHeight: 38, flexDirection: "row", alignItems: "center", gap: 7, paddingHorizontal: 2 },
   actionsCaption: { color: "#9b8d77", fontSize: 8, fontWeight: "800", letterSpacing: 0.7 },
-  actionsSpacer: { flex: 1 },
+  actionsSpacer: { width: 0 },
+  inlineActionButton: { minHeight: 44, paddingHorizontal: 8, borderRadius: 10, borderWidth: 1, borderColor: "#d9cbb5", backgroundColor: "#f5efe5", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5 },
+  moreActionsButton: { width: 44, height: 44, flexShrink: 0, borderRadius: 10, borderWidth: 1, borderColor: "#ded5c7", backgroundColor: "#f5f0e8", alignItems: "center", justifyContent: "center" },
+  moreActionsMenu: { position: "absolute", right: 8, zIndex: 95, minHeight: 58, padding: 5, flexDirection: "row", alignItems: "center", gap: 4, borderRadius: 12, borderWidth: 1, borderColor: "#ded3c2", backgroundColor: "#fffdf8", shadowColor: "#403321", shadowOpacity: 0.17, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 20 },
+  moreMenuAction: { width: 54, height: 48, borderRadius: 8, alignItems: "center", justifyContent: "center", gap: 2 },
+  moreMenuLabel: { color: "#776b58", fontSize: 8, fontWeight: "700" },
   autoSpaceButton: { minHeight: 38, paddingHorizontal: 11, borderRadius: 10, borderWidth: 1, borderColor: "#d9cbb5", backgroundColor: "#f5efe5", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
   autoSpaceText: { color: "#655138", fontSize: 10, fontWeight: "700" },
-  noteHistoryButton: { width: 40, height: 40, borderRadius: 10, backgroundColor: "#f4f0e8", alignItems: "center", justifyContent: "center" },
+  noteHistoryButton: { width: 44, height: 44, flexShrink: 0, borderRadius: 10, backgroundColor: "#f4f0e8", alignItems: "center", justifyContent: "center" },
   gestureCaption: { flex: 1, gap: 3 },
   dockEyebrow: { color: "#9b8d77", fontSize: 8, fontWeight: "800", letterSpacing: 0.7, textTransform: "uppercase" },
   gestureHint: { color: "#a19480", fontSize: 8 },
@@ -500,8 +506,8 @@ const styles = StyleSheet.create({
   previewLabel: { color: "#9a8b72", fontSize: 7, fontWeight: "800", letterSpacing: 0.7 },
   previewValue: { color: "#66533a", fontSize: 9, fontWeight: "700", marginTop: 2 },
   previewGlyph: { height: 42, alignItems: "center", justifyContent: "center", overflow: "hidden" },
-  categoryRow: { minHeight: 64, flexDirection: "row", alignItems: "stretch", gap: 5 },
-  categoryButton: { flex: 1, minWidth: 0, height: 64, minHeight: 64, paddingHorizontal: 2, borderRadius: 11, borderWidth: 1, borderColor: "#e7dfd2", backgroundColor: "#fffdf9", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3 },
+  categoryRow: { minHeight: 64, flexDirection: "row", alignItems: "stretch", gap: 4 },
+  categoryButton: { flex: 1, minWidth: 46, height: 64, minHeight: 64, paddingHorizontal: 0, borderRadius: 11, borderWidth: 1, borderColor: "#e7dfd2", backgroundColor: "#fffdf9", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3 },
   categoryIconFrame: { height: 36, width: 56, alignItems: "center", justifyContent: "center", overflow: "visible" },
   noteOrigin: { width: undefined, minWidth: 0, height: 64, minHeight: 64, flexShrink: 1, borderColor: "#d7cbb7", backgroundColor: "#fffdf9" },
   originInner: { flex: 1, alignSelf: "stretch", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 3 },

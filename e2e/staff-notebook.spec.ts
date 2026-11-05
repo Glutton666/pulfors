@@ -10,6 +10,172 @@ test.use({
 test.setTimeout(100000);
 test.describe.configure({ mode: "parallel" });
 
+for (const viewport of [{ width: 320, height: 740 }, { width: 390, height: 844 }, { width: 768, height: 1024 }, { width: 844, height: 390 }]) {
+  test(`compact ink toolbar exposes all actions and long-press tool selection at ${viewport.width}x${viewport.height}`, async ({ page }) => {
+    await page.setViewportSize(viewport);
+    await page.addInitScript((width) => localStorage.setItem("metronome_language", width === 320 || width === 768 ? "ko" : "en"), viewport.width);
+    await openNotebook(page);
+    const paper = page.getByTestId("notebook-drawing");
+    const positions = [];
+    for (const id of ["notebook-ink-tool", "notebook-ink-undo", "notebook-ink-redo", "notebook-ink-zoom-out", "notebook-ink-zoom", "notebook-ink-zoom-in"]) {
+      const action = page.getByTestId(id);
+      await expect(action).toBeInViewport({ ratio: 1 });
+      const box = (await action.boundingBox())!;
+      if (id !== "notebook-ink-zoom") expect(box.height).toBeGreaterThanOrEqual(44);
+      positions.push(box.y + box.height / 2);
+    }
+    positions.forEach((y) => expect(Math.abs(y - positions[0])).toBeLessThan(2));
+    const original = await paper.innerHTML();
+    await openInkToolMenu(page);
+    await expect(page.getByTestId("notebook-ink-tool-menu")).toBeInViewport({ ratio: 1 });
+    for (const tool of ["pen", "erase", "move"]) await expect(page.getByTestId(`notebook-tool-${tool}`)).toBeInViewport({ ratio: 1 });
+    expect(await paper.innerHTML()).toBe(original);
+    await page.screenshot({ path: `generated-artifacts/notebook-ink-selector-${viewport.width}.png` });
+    await page.getByTestId("notebook-tool-erase").click();
+    await expect(page.getByTestId("notebook-ink-tool")).toHaveAccessibleName(/Eraser|지우개/);
+    await chooseInkTool(page, "move");
+    await expect(page.getByTestId("notebook-ink-tool")).toHaveAccessibleName(/Pan|화면 이동/);
+    const dock = (await page.getByTestId("notebook-tools-dock").boundingBox())!;
+    for (const id of ["notebook-ink-tool", "notebook-ink-undo", "notebook-ink-redo", "notebook-ink-zoom-out", "notebook-ink-zoom-in"]) {
+      const box = (await page.getByTestId(id).boundingBox())!;
+      expect(box.x).toBeGreaterThanOrEqual(dock.x);
+      expect(box.x + box.width).toBeLessThanOrEqual(dock.x + dock.width);
+    }
+    await chooseInkTool(page, "pen");
+    await expect(page.getByTestId("notebook-ink-tool")).toHaveAccessibleName(/Pen|펜/);
+    await paperDrag(page, { x: 100, y: 230 }, { x: 220, y: 230 });
+    await expect(paper.locator('[data-testid^="notebook-ink-"]')).toHaveCount(1);
+    await page.getByTestId("notebook-ink-undo").click();
+    await expect(paper.locator('[data-testid^="notebook-ink-"]')).toHaveCount(0);
+    await page.getByTestId("notebook-ink-redo").click();
+    await expect(paper.locator('[data-testid^="notebook-ink-"]')).toHaveCount(1);
+    await page.getByTestId("notebook-ink-zoom-in").click();
+    await expect(page.getByTestId("notebook-ink-zoom")).toHaveText("110%");
+    await page.getByTestId("notebook-ink-zoom-out").click();
+    await expect(page.getByTestId("notebook-ink-zoom")).toHaveText("100%");
+    const handle = (await page.getByTestId("notebook-tools-handle").boundingBox())!;
+    const stage = (await page.getByTestId("notebook-paper-stage").boundingBox())!;
+    await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(handle.x + handle.width / 2, stage.y + 32, { steps: 12 });
+    await page.mouse.up();
+    await openInkToolMenu(page);
+    await expect(page.getByTestId("notebook-ink-tool-menu")).toBeInViewport({ ratio: 1 });
+  });
+}
+
+for (const viewport of [{ width: 320, height: 740 }, { width: 390, height: 844 }, { width: 768, height: 1024 }, { width: 844, height: 390 }]) {
+  test(`single-row notebook controls stay reachable at ${viewport.width}x${viewport.height}`, async ({ page }) => {
+    await page.setViewportSize(viewport);
+    await openNotebook(page);
+    const random = page.getByTestId("notebook-playback-random");
+    const play = page.getByTestId("notebook-play");
+    await expect(random).toBeInViewport({ ratio: 1 });
+    await expect(play).toBeInViewport({ ratio: 1 });
+    const shuffleBox = (await random.boundingBox())!, playBox = (await play.boundingBox())!;
+    expect(shuffleBox.x + shuffleBox.width).toBeLessThanOrEqual(playBox.x);
+    expect(Math.abs(shuffleBox.y + shuffleBox.height / 2 - playBox.y - playBox.height / 2)).toBeLessThan(2);
+    await expect(random).toHaveAttribute("aria-checked", "false");
+    await random.click(); await expect(random).toHaveAttribute("aria-checked", "true");
+    await openSettings(page);
+    await expect(page.getByTestId("notebook-random")).toBeChecked();
+    await page.getByTestId("notebook-random").click();
+    await expect(random).toHaveAttribute("aria-checked", "false");
+    await page.getByTestId("notebook-panel-close").click();
+    await page.getByTestId("notebook-playback-collapse").click();
+    await expect(random).toBeInViewport({ ratio: 1 });
+    await expect(play).toBeInViewport({ ratio: 1 });
+    await page.getByTestId("notebook-playback-collapse").click();
+    if (viewport.width >= 768) {
+      const tools = (await page.getByTestId("notebook-tools-dock").boundingBox())!;
+      const last = (await page.getByLabel(/^Zoom in$|^확대$/).boundingBox())!;
+      expect(tools.x + tools.width - last.x - last.width).toBeLessThanOrEqual(15);
+      await expect(page.getByLabel(/^Zoom in$|^확대$/)).toBeInViewport({ ratio: 1 });
+    } else {
+      await page.getByLabel(/^Zoom in$|^확대$/).scrollIntoViewIfNeeded();
+      await expect(page.getByLabel(/^Zoom in$|^확대$/)).toBeInViewport({ ratio: 1 });
+    }
+    await chooseMode(page, "notes");
+    const boxes = [];
+    for (const id of ["notebook-note-origin", "notebook-rest-origin", "notebook-tuplet", "notebook-category-marks"]) {
+      const control = page.getByTestId(id);
+      await expect(control).toBeInViewport({ ratio: 1 });
+      const box = (await control.boundingBox())!;
+      expect(box.width).toBeGreaterThanOrEqual(44);
+      expect(box.height).toBeGreaterThanOrEqual(44);
+      boxes.push(box);
+    }
+    boxes.forEach((box) => expect(Math.abs(box.y - boxes[0].y)).toBeLessThan(2));
+    await chooseGlyph(page, "quarter");
+    const more = page.getByTestId("notebook-note-more");
+    if (viewport.width < 500) {
+      await expect(more).toBeInViewport({ ratio: 1 });
+      await more.click();
+      await expect(page.getByTestId("notebook-note-more-menu")).toBeInViewport({ ratio: 1 });
+    } else await expect(more).toHaveCount(0);
+    for (const id of ["notebook-auto-space", "notebook-note-undo", "notebook-note-redo"]) {
+      await expect(page.getByTestId(id)).toBeInViewport({ ratio: 1 });
+    }
+    await page.screenshot({ path: `generated-artifacts/notebook-one-row-${viewport.width}.png` });
+    await noteAction(page, "notebook-note-undo");
+    await expect(page.getByTestId("notebook-drawing").locator('[data-testid^="notebook-stamp-"]')).toHaveCount(0);
+    await noteAction(page, "notebook-note-redo");
+    await expect(page.getByTestId("notebook-drawing").locator('[data-testid^="notebook-stamp-"]')).toHaveCount(1);
+    if (viewport.width < 500) {
+      const handle = (await page.getByTestId("notebook-tools-handle").boundingBox())!;
+      const stage = (await page.getByTestId("notebook-paper-stage").boundingBox())!;
+      await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(handle.x + handle.width / 2, stage.y + 32, { steps: 12 });
+      await page.mouse.up();
+      await more.click();
+      await expect(page.getByTestId("notebook-note-more-menu")).toBeInViewport({ ratio: 1 });
+    }
+  });
+}
+
+test("tuplet toggle bounds beams, including leading/middle/trailing rests and cancellation", async ({ page }) => {
+  await page.setViewportSize({ width: 768, height: 1024 });
+  await openNotebook(page);
+  await chooseMode(page, "notes");
+  const paper = page.getByTestId("notebook-drawing");
+  for (let i = 0; i < 3; i++) await chooseGlyph(page, "eighth");
+  await expect(paper.getByTestId("notebook-beam-group")).toHaveCount(0);
+  await expect(paper.getByTestId("notebook-note-flag-0")).toHaveCount(3);
+  await page.getByTestId("notebook-tuplet").click();
+  for (const glyph of ["rest-eighth", "eighth", "rest-eighth", "eighth", "rest-eighth"]) await chooseGlyph(page, glyph);
+  await expect(paper.getByTestId("notebook-beam-level-1")).toHaveCount(1);
+  await expect(paper.getByTestId("notebook-note-stem")).toHaveCount(5); // Three ordinary plus two grouped notes; no rest stems.
+  await page.getByTestId("notebook-tuplet").click();
+  await expect(paper.getByTestId("notebook-tuplet-number")).toHaveText("5");
+  await expect(paper.getByTestId("notebook-tuplet-left")).toHaveCount(1);
+  await chooseGlyph(page, "eighth");
+  await expect(paper.getByTestId("notebook-beam-group")).toHaveCount(1);
+  await expect(paper.getByTestId("notebook-note-flag-0")).toHaveCount(4);
+  await page.getByTestId("notebook-tuplet").click();
+  await chooseGlyph(page, "sixteenth"); await chooseGlyph(page, "sixteenth");
+  await expect(paper.getByTestId("notebook-beam-group")).toHaveCount(2);
+  await page.getByTestId("notebook-tuplet-cancel").click();
+  await expect(paper.getByTestId("notebook-beam-group")).toHaveCount(1);
+  await expect(paper.getByTestId("notebook-note-flag-0")).toHaveCount(6);
+  await page.getByTestId("notebook-note-undo").click();
+  await expect(paper.locator('[data-testid^="notebook-stamp-"]')).toHaveCount(10);
+  await page.getByTestId("notebook-note-redo").click();
+  await expect(paper.locator('[data-testid^="notebook-stamp-"]')).toHaveCount(11);
+  await openSettings(page); await page.getByTestId("notebook-save").click(); await closeNotice(page);
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("lab_staff_notebooks_v1")!)[0]);
+  expect(saved.pages[0].tuplets).toHaveLength(1);
+  expect(saved.pages[0].tuplets[0].stampIds).toEqual(saved.pages[0].stamps.slice(3, 8).map((stamp: { id: string }) => stamp.id));
+  await page.reload();
+  await page.getByTestId("mode-cycle-label").waitFor();
+  await enterNotebook(page); await openSettings(page); await openSaved(page, saved.title);
+  await page.getByTestId("notebook-panel-close").click();
+  await expect(paper.getByTestId("notebook-tuplet-number")).toHaveText("5");
+  await expect(paper.getByTestId("notebook-beam-group")).toHaveCount(1);
+  await expect(paper.getByTestId("notebook-note-flag-0")).toHaveCount(6);
+  await page.screenshot({ path: "generated-artifacts/notebook-explicit-rest-beams.png" });
+});
+
 test("whole-note engraved silhouette is shared by paper and the picker", async ({ page }) => {
   await page.setViewportSize({ width: 768, height: 1024 });
   await openNotebook(page);
@@ -37,7 +203,7 @@ for (const viewport of [{ width: 320, height: 740 }, { width: 768, height: 1024 
     await expect(tools).toBeInViewport({ ratio: 1 });
     const stageBox = (await stage.boundingBox())!;
     const top = (await playback.boundingBox())!, bottom = (await tools.boundingBox())!;
-    expect(top.width).toBeLessThanOrEqual(380);
+    expect(top.width).toBeLessThanOrEqual(424);
     expect(bottom.width).toBeLessThanOrEqual(680);
     expect(Math.abs(top.x + top.width / 2 - (stageBox.x + stageBox.width / 2))).toBeLessThan(1);
     expect(Math.abs(bottom.x + bottom.width / 2 - (stageBox.x + stageBox.width / 2))).toBeLessThan(1);
@@ -142,18 +308,19 @@ for (const [width, height, language] of [
       expect(Math.abs(box.y - boxes[0].y)).toBeLessThan(2);
     });
     const auto = page.getByTestId("notebook-auto-space");
+    if (!await auto.isVisible()) await page.getByTestId("notebook-note-more").click();
     await expect(auto).toBeInViewport({ ratio: 1 });
     const paper = page.getByTestId("notebook-drawing");
     const content = () => paper.getByTestId("notebook-stamp-a").innerHTML();
     const before = await content();
-    await auto.click();
+    await noteAction(page, "notebook-auto-space");
     const corrected = await content();
     expect(corrected).not.toBe(before);
-    await auto.click();
+    await noteAction(page, "notebook-auto-space");
     expect(await content()).toBe(corrected);
-    await page.getByLabel(/^Undo$|^실행 취소$/).click();
+    await noteAction(page, "notebook-note-undo");
     expect(await content()).toBe(before);
-    await page.getByLabel(/^Redo$|^다시 실행$/).click();
+    await noteAction(page, "notebook-note-redo");
     expect(await content()).toBe(corrected);
     await expect(paper.getByTestId("notebook-tuplet-number")).toHaveText("3");
     await page.getByTestId("notebook-category-marks").click();
@@ -192,7 +359,7 @@ for (const viewport of [{ width: 390, height: 844 }, { width: 768, height: 1024 
         ...row(Array(8).fill("eighth"), 0, "a"),
         ...row(Array(4).fill("sixteenth"), 1, "s"),
         ...dotted.map((stamp, i) => ({ ...stamp, dotted: i === 0, role: i === 1 ? "strong" : "normal" })),
-        ...row(["eighth", "sixteenth", "eighth"], 3, "t"),
+        ...row(["sixteenth", "thirty_second", "eighth"], 3, "t"),
         ...row(["eighth", "rest-eighth", "eighth", "eighth"], 4, "r"),
       ];
       localStorage.setItem("lab_staff_notebooks_v1", JSON.stringify([{
@@ -204,19 +371,21 @@ for (const viewport of [{ width: 390, height: 844 }, { width: 768, height: 1024 
       }]));
     });
     await openNotebook(page);
-    await openSettings(page); await openSaved(page, "Automatic beams");
+    await openSettings(page); await openSaved(page, "Explicit tuplet beams");
     await page.getByTestId("notebook-panel-close").click();
     const paper = page.getByTestId("notebook-drawing");
     const firstRowBeams = () => paper.getByTestId("notebook-beam-level-1").evaluateAll((elements) =>
       elements.filter((element) => Number(element.getAttribute("points")!.split(/[ ,]/)[1]) < 155).length);
-    await expect.poll(firstRowBeams).toBe(4);
+    await expect.poll(firstRowBeams).toBe(0);
+    await expect(paper.getByTestId("notebook-beam-level-1")).toHaveCount(1);
     await expect(paper.getByTestId("notebook-tuplet-number")).toHaveText("3");
     await expect(paper.getByTestId("notebook-tuplet-left")).toHaveCount(0);
     await expect(paper.getByTestId("notebook-beam-level-2")).not.toHaveCount(0);
     await expect(paper.getByTestId("notebook-beam-hook")).not.toHaveCount(0);
-    await expect(paper.getByTestId("notebook-stamp-a0").getByTestId("notebook-note-flag-0")).toHaveCount(0);
+    await expect(paper.getByTestId("notebook-stamp-a0").getByTestId("notebook-note-flag-0")).toHaveCount(1);
     await expect(paper.getByTestId("notebook-stamp-r0").getByTestId("notebook-note-flag-0")).toHaveCount(1);
-    await page.screenshot({ path: `generated-artifacts/automatic-beams-${viewport.width}.png` });
+    await expect(paper.getByTestId("notebook-stamp-t0").getByTestId("notebook-note-flag-0")).toHaveCount(0);
+    await page.screenshot({ path: `generated-artifacts/explicit-beams-${viewport.width}.png` });
 
     await openSettings(page);
     // Changing the denominator by clicking away must preserve an unsubmitted numerator.
@@ -224,7 +393,7 @@ for (const viewport of [{ width: 390, height: 844 }, { width: 768, height: 1024 
     await page.getByTestId("notebook-notation-unit-8").click();
     await expect(page.getByTestId("notebook-notation-beats")).toHaveValue("6");
     await page.getByTestId("notebook-panel-close").click();
-    await expect.poll(firstRowBeams).toBe(3);
+    await expect.poll(firstRowBeams).toBe(0);
     await openSettings(page);
     await page.getByTestId("notebook-save").click(); await closeNotice(page);
     const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("lab_staff_notebooks_v1")!)[0]);
@@ -233,10 +402,10 @@ for (const viewport of [{ width: 390, height: 844 }, { width: 768, height: 1024 
     expect(saved.settings.bpm).toBe(84);
     await page.reload();
     await page.getByTestId("mode-cycle-label").waitFor();
-    await enterNotebook(page); await openSettings(page); await openSaved(page, "Automatic beams");
+    await enterNotebook(page); await openSettings(page); await openSaved(page, "Explicit tuplet beams");
     await expect(page.getByTestId("notebook-notation-beats")).toHaveValue("6");
     await page.getByTestId("notebook-panel-close").click();
-    await expect.poll(firstRowBeams).toBe(3);
+    await expect.poll(firstRowBeams).toBe(0);
   });
 }
 
@@ -278,6 +447,11 @@ async function chooseMode(page: Page, mode: "ink" | "notes" | "select" | "settin
   await page.getByTestId(`notebook-mode-${mode}`).click();
 }
 async function openSettings(page: Page) { await chooseMode(page, "settings"); }
+async function noteAction(page: Page, id: string) {
+  const action = page.getByTestId(id);
+  if (!await action.isVisible()) await page.getByTestId("notebook-note-more").click();
+  await action.click();
+}
 async function chooseGlyph(page: Page, glyph: string) {
   const category = glyph.startsWith("rest-") ? "rest" : ["whole", "half", "quarter", "eighth", "sixteenth", "thirty_second"].includes(glyph) ? "note" : "marks";
   if (category === "note") {
@@ -312,21 +486,31 @@ async function paperDrag(page: Page, from: { x: number; y: number }, to: { x: nu
 }
 
 async function holdInkTool(page: Page, tool: "pen" | "erase") {
-  const box = (await page.getByTestId(`notebook-tool-${tool}`).boundingBox())!;
-  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-  await page.mouse.down(); await page.waitForTimeout(550); await page.mouse.up();
+  await openInkToolMenu(page);
+  await page.getByTestId(`notebook-ink-options-${tool}`).click();
   await expect(page.getByTestId("notebook-ink-options")).toBeVisible();
+}
+async function openInkToolMenu(page: Page) {
+  const box = (await page.getByTestId("notebook-ink-tool").boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down(); await page.waitForTimeout(600); await page.mouse.up();
+  await expect(page.getByTestId("notebook-ink-tool-menu")).toBeVisible();
+}
+async function chooseInkTool(page: Page, tool: "pen" | "erase" | "move") {
+  await openInkToolMenu(page);
+  await page.getByTestId(`notebook-tool-${tool}`).click();
+  await expect(page.getByTestId("notebook-ink-tool-menu")).toHaveCount(0);
 }
 for (const viewport of [{ width: 390, height: 844 }, { width: 768, height: 1024 }, { width: 844, height: 390 }]) {
   test(`ink options and partial cuts persist without leaking input at ${viewport.width}x${viewport.height}`, async ({ page }) => {
     await page.setViewportSize(viewport);
     await openNotebook(page);
     const paper = page.getByTestId("notebook-drawing");
-    await page.getByTestId("notebook-tool-move").click();
+    await chooseInkTool(page, "move");
     await holdInkTool(page, "pen");
     await expect(page.getByTestId("notebook-ink-options")).toBeInViewport({ ratio: 1 });
     // A long press must not also execute the short tool-selection action.
-    await expect(page.getByTestId("notebook-tool-move")).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByTestId("notebook-ink-tool")).toHaveAccessibleName(/Pan|화면 이동/);
     await page.getByTestId("notebook-ink-color-2").click();
     await page.getByTestId("notebook-ink-width-6").click();
     const bounds = (await paper.boundingBox())!;
@@ -334,7 +518,7 @@ for (const viewport of [{ width: 390, height: 844 }, { width: 768, height: 1024 
     await expect(paper.locator('[data-testid^="notebook-ink-"]')).toHaveCount(0);
     // Backdrop click may close the modal.
     if (await page.getByTestId("notebook-ink-options-close").isVisible()) await page.getByTestId("notebook-ink-options-close").click();
-    await page.getByTestId("notebook-tool-pen").click();
+    await chooseInkTool(page, "pen");
     await paperDrag(page, { x: 140, y: 110 }, { x: 360, y: 110 });
     await expect(paper.locator('path[stroke="#2468c4"][stroke-width="6"]')).toHaveCount(1);
     await holdInkTool(page, "erase");
@@ -342,7 +526,7 @@ for (const viewport of [{ width: 390, height: 844 }, { width: 768, height: 1024 
     await page.screenshot({ path: `generated-artifacts/notebook-eraser-popup-${viewport.width}.png` });
     await page.getByTestId("notebook-eraser-partial").click();
     await page.getByTestId("notebook-ink-options-close").click();
-    await page.getByTestId("notebook-tool-erase").click();
+    await chooseInkTool(page, "erase");
     await paperDrag(page, { x: 250, y: 80 }, { x: 250, y: 140 });
     await expect(paper.locator("mask")).toHaveCount(1);
     await page.getByLabel(/^Undo$|^실행 취소$/).click();
@@ -369,7 +553,7 @@ test("second-finger takeover cancels ink, erasing and note/selection movement wi
   const paper = page.getByTestId("notebook-drawing");
   const cdp = await context.newCDPSession(page);
   for (const mode of ["pen", "erase", "notes", "select"] as const) {
-    if (mode === "pen" || mode === "erase") { await chooseMode(page, "ink"); await page.getByTestId(`notebook-tool-${mode}`).click(); }
+    if (mode === "pen" || mode === "erase") { await chooseMode(page, "ink"); await chooseInkTool(page, mode); }
     else await chooseMode(page, mode);
     const objectState = () => paper.locator('[data-testid^="notebook-ink-"], [data-testid^="notebook-stamp-"]').evaluateAll((nodes) =>
       nodes.map((node) => ({ id: node.getAttribute("data-testid"), paths: [...node.querySelectorAll("path")].map((p) => p.getAttribute("d")),
@@ -410,7 +594,7 @@ test("vector partial erasing keeps visible stems, tuplets and beams across undo 
   const paper = page.getByTestId("notebook-drawing");
   const beamPoints = await paper.getByTestId("notebook-beam-level-1").evaluateAll((nodes) => nodes.map((node) => node.getAttribute("points")));
   await holdInkTool(page, "erase"); await page.getByTestId("notebook-eraser-partial").click();
-  await page.getByTestId("notebook-ink-options-close").click(); await page.getByTestId("notebook-tool-erase").click();
+  await page.getByTestId("notebook-ink-options-close").click(); await chooseInkTool(page, "erase");
   await paperDrag(page, { x: 200, y: 112 }, { x: 200, y: 118 });
   await expect(paper.getByTestId("notebook-stamp-v0").locator("g[mask]")).toHaveCount(1);
   await expect(paper.getByTestId("notebook-note-stem")).toHaveCount(3);

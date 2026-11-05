@@ -52,6 +52,7 @@ export function NotebookSettingsPanel(props: Props) {
       testID={testID}
       accessibilityRole="switch"
       accessibilityState={{ checked: value }}
+      aria-checked={value}
       onPress={() => onChange(!value)}
       style={styles.switchRow}
     >
