@@ -142,6 +142,131 @@ async function paperDrag(page: Page, from: { x: number; y: number }, to: { x: nu
   await page.mouse.up();
 }
 
+async function holdInkTool(page: Page, tool: "pen" | "erase") {
+  const box = (await page.getByTestId(`notebook-tool-${tool}`).boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down(); await page.waitForTimeout(550); await page.mouse.up();
+  await expect(page.getByTestId("notebook-ink-options")).toBeVisible();
+}
+for (const viewport of [{ width: 390, height: 844 }, { width: 768, height: 1024 }, { width: 844, height: 390 }]) {
+  test(`ink options and partial cuts persist without leaking input at ${viewport.width}x${viewport.height}`, async ({ page }) => {
+    await page.setViewportSize(viewport);
+    await openNotebook(page);
+    const paper = page.getByTestId("notebook-drawing");
+    await page.getByTestId("notebook-tool-move").click();
+    await holdInkTool(page, "pen");
+    await expect(page.getByTestId("notebook-ink-options")).toBeInViewport({ ratio: 1 });
+    // A long press must not also execute the short tool-selection action.
+    await expect(page.getByTestId("notebook-tool-move")).toHaveAttribute("aria-pressed", "true");
+    await page.getByTestId("notebook-ink-color-2").click();
+    await page.getByTestId("notebook-ink-width-6").click();
+    const bounds = (await paper.boundingBox())!;
+    await page.mouse.click(bounds.x + 10, bounds.y + 10);
+    await expect(paper.locator('[data-testid^="notebook-ink-"]')).toHaveCount(0);
+    // Backdrop click may close the modal.
+    if (await page.getByTestId("notebook-ink-options-close").isVisible()) await page.getByTestId("notebook-ink-options-close").click();
+    await page.getByTestId("notebook-tool-pen").click();
+    await paperDrag(page, { x: 140, y: 110 }, { x: 360, y: 110 });
+    await expect(paper.locator('path[stroke="#2468c4"][stroke-width="6"]')).toHaveCount(1);
+    await holdInkTool(page, "erase");
+    await expect(page.getByTestId("notebook-ink-options")).toBeInViewport({ ratio: 1 });
+    await page.screenshot({ path: `generated-artifacts/notebook-eraser-popup-${viewport.width}.png` });
+    await page.getByTestId("notebook-eraser-partial").click();
+    await page.getByTestId("notebook-ink-options-close").click();
+    await page.getByTestId("notebook-tool-erase").click();
+    await paperDrag(page, { x: 250, y: 80 }, { x: 250, y: 140 });
+    await expect(paper.locator("mask")).toHaveCount(1);
+    await page.getByLabel(/^Undo$|^실행 취소$/).click();
+    await expect(paper.locator("mask")).toHaveCount(0);
+    await page.getByLabel(/^Redo$|^다시 실행$/).click();
+    await expect(paper.locator("mask")).toHaveCount(1);
+    await page.screenshot({ path: `generated-artifacts/notebook-partial-ink-${viewport.width}.png` });
+    await openSettings(page); await page.getByTestId("notebook-save").click(); await closeNotice(page);
+    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("lab_staff_notebooks_v1")!)[0]);
+    expect(saved.pages[0].strokes).toHaveLength(1);
+    expect(saved.pages[0].strokes[0]).toMatchObject({ color: "#2468c4", width: 6 });
+    expect(saved.pages[0].strokes[0].erasures).toHaveLength(1);
+    await openSaved(page, saved.title); await page.getByTestId("notebook-panel-close").click();
+    await expect(paper.locator("mask")).toHaveCount(1);
+    await expect(paper.locator('path[stroke="#2468c4"][stroke-width="6"]')).toHaveCount(1);
+  });
+}
+
+test("second-finger takeover cancels ink, erasing and note/selection movement without undo residue", async ({ page, context }) => {
+  await page.setViewportSize({ width: 768, height: 1024 });
+  await openNotebook(page);
+  await paperDrag(page, { x: 100, y: 110 }, { x: 300, y: 110 });
+  await chooseMode(page, "notes"); await chooseGlyph(page, "quarter");
+  const paper = page.getByTestId("notebook-drawing");
+  const cdp = await context.newCDPSession(page);
+  for (const mode of ["pen", "erase", "notes", "select"] as const) {
+    if (mode === "pen" || mode === "erase") { await chooseMode(page, "ink"); await page.getByTestId(`notebook-tool-${mode}`).click(); }
+    else await chooseMode(page, mode);
+    const objectState = () => paper.locator('[data-testid^="notebook-ink-"], [data-testid^="notebook-stamp-"]').evaluateAll((nodes) =>
+      nodes.map((node) => ({ id: node.getAttribute("data-testid"), paths: [...node.querySelectorAll("path")].map((p) => p.getAttribute("d")),
+        glyphs: [...node.querySelectorAll("g[transform]")].map((p) => p.getAttribute("transform")) })));
+    const before = await objectState();
+    const box = (await paper.boundingBox())!;
+    const x = box.x + 180, y = box.y + 100;
+    const point = (id: number, dx: number, dy: number) => ({ id, x: x + dx, y: y + dy, radiusX: 3, radiusY: 3, force: 1 });
+    const transform = await paper.locator("svg > g").first().getAttribute("transform");
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [point(1, 0, 0)] });
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [point(1, 10, 8)] });
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [point(1, 10, 8), point(2, 80, 8)] });
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [point(1, 40, 28), point(2, 110, 28)] });
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [point(2, 110, 28)] });
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+    await expect.poll(objectState).toEqual(before);
+    await expect(paper.getByTestId("notebook-live-ink")).toHaveCount(0);
+    await expect(page.getByTestId("notebook-drop-actions")).toHaveCount(0);
+    await expect(paper.locator("svg > g").first()).not.toHaveAttribute("transform", transform!);
+  }
+  await openSettings(page); await page.getByTestId("notebook-save").click(); await closeNotice(page);
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("lab_staff_notebooks_v1")!)[0]);
+  expect(saved.pages[0].strokes).toHaveLength(1);
+  expect(saved.pages[0].stamps).toHaveLength(1);
+});
+
+test("vector partial erasing keeps visible stems, tuplets and beams across undo and reopen", async ({ page }) => {
+  await page.setViewportSize({ width: 768, height: 1024 });
+  await page.addInitScript(() => localStorage.setItem("lab_staff_notebooks_v1", JSON.stringify([{
+    id: "vector-cuts", title: "Vector cuts", updatedAt: 1,
+    settings: { follow: false, lineUnit: "measure", playbackZoom: 1, bpm: 84, random: false, offsetX: 0, offsetY: 0, snap: true, beatsPerMeasure: 4 },
+    pages: [{ id: "p", staffCount: 7, strokes: [],
+      stamps: [0, 1, 2].map((i) => ({ id: `v${i}`, glyph: "eighth", x: 200 + i * 100, y: 114, size: 26 })),
+      tuplets: [{ id: "t", stampIds: ["v0", "v1", "v2"] }] }],
+  }])));
+  await openNotebook(page); await openSettings(page); await openSaved(page, "Vector cuts");
+  await page.getByTestId("notebook-panel-close").click();
+  const paper = page.getByTestId("notebook-drawing");
+  const beamPoints = await paper.getByTestId("notebook-beam-level-1").evaluateAll((nodes) => nodes.map((node) => node.getAttribute("points")));
+  await holdInkTool(page, "erase"); await page.getByTestId("notebook-eraser-partial").click();
+  await page.getByTestId("notebook-ink-options-close").click(); await page.getByTestId("notebook-tool-erase").click();
+  await paperDrag(page, { x: 200, y: 112 }, { x: 200, y: 118 });
+  await expect(paper.getByTestId("notebook-stamp-v0").locator("g[mask]")).toHaveCount(1);
+  await expect(paper.getByTestId("notebook-note-stem")).toHaveCount(3);
+  await expect(paper.getByTestId("notebook-tuplet-number")).toHaveText("3");
+  expect(await paper.getByTestId("notebook-beam-level-1").evaluateAll((nodes) => nodes.map((node) => node.getAttribute("points")))).toEqual(beamPoints);
+  await page.screenshot({ path: "generated-artifacts/notebook-vector-partial.png" });
+  await page.getByLabel(/^Undo$|^실행 취소$/).click();
+  await expect(paper.locator("mask")).toHaveCount(0);
+  await page.getByLabel(/^Redo$|^다시 실행$/).click();
+  await expect(paper.getByTestId("notebook-stamp-v0").locator("g[mask]")).toHaveCount(1);
+  await openSettings(page); await page.getByTestId("notebook-save").click(); await closeNotice(page);
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("lab_staff_notebooks_v1")!)[0]);
+  expect(saved.pages[0].stamps).toHaveLength(3);
+  expect(saved.pages[0].tuplets[0].stampIds).toEqual(["v0", "v1", "v2"]);
+  expect(saved.pages[0].stamps[0].erasures).toHaveLength(1);
+  await openSaved(page, "Vector cuts"); await page.getByTestId("notebook-panel-close").click();
+  await expect(paper.getByTestId("notebook-stamp-v0").locator("g[mask]")).toHaveCount(1);
+  await holdInkTool(page, "erase"); await page.getByTestId("notebook-eraser-object").click();
+  await page.getByTestId("notebook-ink-options-close").click();
+  await paperDrag(page, { x: 200, y: 80 }, { x: 200, y: 90 });
+  await expect(paper.getByTestId("notebook-stamp-v0")).toHaveCount(0);
+  await page.getByLabel(/^Undo$|^실행 취소$/).click();
+  await expect(paper.getByTestId("notebook-stamp-v0").locator("g[mask]")).toHaveCount(1);
+});
+
 test("automatic placement moves relatively from a remote touch and snaps live only vertically", async ({ page }) => {
   await page.setViewportSize({ width: 768, height: 1024 });
   await openNotebook(page); await chooseMode(page, "notes");

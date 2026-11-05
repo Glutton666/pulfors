@@ -93,7 +93,11 @@ export function inkInRow(stroke: StaffStroke, row: number, height = ROW_HEIGHT):
     current.push(end);
     if (to < 1) current = [];
   }
-  return pieces.map((points, index) => ({ ...stroke, id: `${stroke.id}:fragment:${index}`, points }));
+  return pieces.map((points, index) => ({ ...stroke, id: `${stroke.id}:fragment:${index}`, points,
+    ...(stroke.erasures ? { erasures: stroke.erasures.map((cut) => ({ ...cut, points: cut.points.map((p) => ({
+      x: p.x + (stroke.points[0].x - points[0].x) / stroke.width,
+      y: p.y + (stroke.points[0].y - points[0].y) / stroke.width,
+    })) })) } : {}) }));
 }
 /** A source row is a complete unit. Ink and stamps travel together without changing the original. */
 export function materializeRows(note: StaffNotebook, rows: NotebookRow[]): StaffPage {

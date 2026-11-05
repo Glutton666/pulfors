@@ -6,7 +6,7 @@ import { useTheme } from "@/contexts/ThemeContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useLabScoreNotebook } from "@/hooks/useLabScoreNotebook";
 import { useNotebookPlayback } from "@/hooks/useNotebookPlayback";
-import { DEFAULT_NOTEBOOK_SETTINGS, type NotebookSettings, type StaffNotebook, type StaffPage, type StaffPoint, type StaffStamp, type StaffStroke } from "@/lib/staff-notebook";
+import { DEFAULT_NOTEBOOK_SETTINGS, type NotebookSettings, type StaffNotebook, type StaffPage, type StaffPoint, type StaffStamp } from "@/lib/staff-notebook";
 import { loadPracticeBook, type PracticeEntry } from "@/lib/storage";
 import { constrainStaffPoint, fitNotebookPage, materializeRows, stampPosition, screenToPaper, PAPER_WIDTH, ROW_HEIGHT } from "@/lib/staff-notebook-layout";
 import { NotebookModeMenu, type NotebookMode } from "@/components/lab-score/notebook/NotebookModeMenu";
@@ -15,6 +15,7 @@ import { NotebookPlaybackBar } from "@/components/lab-score/notebook/NotebookPla
 import { NotebookSettingsPanel } from "@/components/lab-score/notebook/NotebookSettingsPanel";
 import { NotebookPaper } from "@/components/lab-score/notebook/NotebookPaper";
 import { attachedPosition, captureSelection, emptySelection, hitObject, includeAttached, isAttachedMark, isNotebookNote, isTupletMember, paginateNotebook, rectangle, removeSelection, selectRectangle, selectionBounds, selectionCount, selectionDelta, transformSelection, type NotebookClipboard, type NotebookSelection, type NotebookBounds } from "@/lib/notebook-editing";
+import { eraseNotebookGesture, type NotebookEraserMode } from "@/lib/notebook-erasing";
 
 type Tool = "pen" | "erase" | "move" | "select";
 const id = (prefix: string) => `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -23,14 +24,6 @@ const withDefaults = (note: StaffNotebook): StaffNotebook => ({
   settings: { ...DEFAULT_NOTEBOOK_SETTINGS, ...(note.settings ?? {}), offsetX: 0, offsetY: 0 },
   pages: note.pages.map((page) => ({ ...page, stamps: page.stamps ?? [] })),
 });
-const distToSegment = (p: StaffPoint, a: StaffPoint, b: StaffPoint) => {
-  const dx = b.x - a.x, dy = b.y - a.y;
-  const t = dx || dy ? Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / (dx * dx + dy * dy))) : 0;
-  return Math.hypot(p.x - a.x - t * dx, p.y - a.y - t * dy);
-};
-const strokeHit = (stroke: StaffStroke, p: StaffPoint) => stroke.points.length === 1
-  ? Math.hypot(stroke.points[0].x - p.x, stroke.points[0].y - p.y) < 24
-  : stroke.points.slice(1).some((point, i) => distToSegment(p, stroke.points[i], point) < 22);
 
 type Props = {
   active?: boolean;
@@ -67,6 +60,10 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
   const [note, setNote] = useState<StaffNotebook>(() => withDefaults(create()));
   const [tool, setTool] = useState<Tool>("pen");
   const [lineWidth, setLineWidth] = useState(2.5);
+  const [lineColor, setLineColor] = useState("#111111");
+  const [eraserMode, setEraserMode] = useState<NotebookEraserMode>("object");
+  const [toolPopup, setToolPopup] = useState<"pen" | "erase" | null>(null);
+  const [eraseDraft, setEraseDraft] = useState<StaffPage | null>(null);
   const [pageIndex, setPageIndex] = useState(0);
   const [panel, setPanel] = useState<"menu" | "settings" | null>(null);
   const [mode, setMode] = useState<NotebookMode>("ink");
@@ -89,7 +86,8 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
   const horizontalScroll = useRef<ScrollView>(null);
   const paperScrollOffset = useRef({ x: 0, y: 0 });
   const drawingRef = useRef<StaffPoint[]>([]);
-  const erasedInGesture = useRef(false);
+  const eraseGesture = useRef<{ base: StaffPage; points: StaffPoint[] } | null>(null);
+  const editSnapshot = useRef<{ selection: NotebookSelection; draft: typeof dragDraft } | null>(null);
   const rightToggleRef = useRef<any>(null);
   const undoStack = useRef<StaffNotebook[]>([]);
   const redoStack = useRef<StaffNotebook[]>([]);
@@ -109,6 +107,7 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
   const resetTransient = () => {
     setSelection(emptySelection()); setSelectionBox(null); setDragDraft(null); selectionGesture.current = null;
     setDrawing([]); drawingRef.current = []; setTupletIds(null); panStart.current = null;
+    eraseGesture.current = null; setEraseDraft(null); editSnapshot.current = null;
   };
   const updateSettings = (patch: Partial<NotebookSettings>) => {
     if ((playback.running || playback.preparing) && ["source", "bpm", "random", "lineUnit", "beatsPerMeasure", "followSymbols"].some((key) => key in patch)) playback.stop();
@@ -167,7 +166,7 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
     const sub = BackHandler.addEventListener("hardwareBackPress", () => { closePanel(); return true; });
     return () => sub.remove();
   }, [panel, closePanel]);
-  useEffect(() => { if (!active) { playback.stop(); resetTransient(); setPanel(null); } }, [active, playback.stop]);
+  useEffect(() => { if (!active) { playback.stop(); resetTransient(); setPanel(null); setToolPopup(null); } }, [active, playback.stop]);
   useEffect(() => {
     let alive = true;
     setPatternLoading(true); setPatternError("");
@@ -221,7 +220,14 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
     } catch { Alert.alert(t.playbackError); }
   };
   const onPaperTouch = (screen: StaffPoint, phase: "start" | "move" | "end" | "cancel") => {
-    if (phase === "cancel") { drawingRef.current = []; setDrawing([]); selectionGesture.current = null; setSelectionBox(null); setDragDraft(null); panStart.current = null; return; }
+    if (phase === "cancel") {
+      drawingRef.current = []; setDrawing([]); selectionGesture.current = null; setSelectionBox(null); panStart.current = null;
+      eraseGesture.current = null; setEraseDraft(null);
+      if (editSnapshot.current) { setSelection(editSnapshot.current.selection); setDragDraft(editSnapshot.current.draft); }
+      editSnapshot.current = null; return;
+    }
+    if (toolPopup || panel) return;
+    if (phase === "start") editSnapshot.current = { selection, draft: dragDraft };
     const zoom = playback.running && settings.follow ? settings.playbackZoom : scale;
     const doc = screenToPaper({ x: screen.x / paperScale, y: screen.y / paperScale }, offset, zoom);
     if (tool === "pen" || tool === "erase") {
@@ -235,14 +241,16 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
       return;
     }
     if (dragDraft?.awaiting) return;
-    if (phase === "start") erasedInGesture.current = false;
-    if ((phase === "start" || phase === "move") && tool === "erase") {
-      const hitStroke = page.strokes.some((stroke) => strokeHit(stroke, doc));
-      const hitStamps = (page.stamps ?? []).filter((stamp) => Math.hypot(stamp.x - doc.x, stamp.y - doc.y) < stamp.size * 0.7);
-      if (hitStroke || hitStamps.length) {
-        if (!erasedInGesture.current) { checkpoint(); erasedInGesture.current = true; }
-        replacePage(pageIndex, removeSelection(page, { strokeIds: page.strokes.filter((stroke) => strokeHit(stroke, doc)).map((s) => s.id), stampIds: hitStamps.map((s) => s.id) }));
-      }
+    if (tool === "erase") {
+      if (phase === "start") eraseGesture.current = { base: page, points: [] };
+      const gesture = eraseGesture.current;
+      if (!gesture) return;
+      gesture.points.push(doc);
+      const next = eraseNotebookGesture(gesture.base, gesture.points, eraserMode, 22, settings);
+      if (phase === "end") {
+        if (next !== gesture.base) { checkpoint(); replacePage(pageIndex, next); }
+        eraseGesture.current = null; setEraseDraft(null); editSnapshot.current = null;
+      } else setEraseDraft(next);
       return;
     }
     if (phase === "start") {
@@ -302,10 +310,10 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
       checkpoint();
       const points = [...drawingRef.current, doc];
       const count = Math.min(200, Math.max(page.staffCount ?? 7, ...points.map((point) => Math.ceil((point.y + 1) / ROW_HEIGHT))));
-      replacePage(pageIndex, { ...page, staffCount: count, anchor: doc, strokes: [...page.strokes, { id: id("stroke"), points, width: lineWidth }] });
+      replacePage(pageIndex, { ...page, staffCount: count, anchor: doc, strokes: [...page.strokes, { id: id("stroke"), points, width: lineWidth, color: lineColor }] });
       drawingRef.current = []; setDrawing([]);
     }
-    if (phase === "end") { selectionGesture.current = null; panStart.current = null; }
+    if (phase === "end") { selectionGesture.current = null; panStart.current = null; editSnapshot.current = null; }
   };
   const beginStamp = (choice: { glyph: string; role: "normal" | "ghost" | "strong"; dotted: boolean }) => {
     playback.stop();
@@ -388,22 +396,25 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
         paperStageRef.current?.measureInWindow((_x, y) => setPaperTop(y));
       }}>
         <ScrollView testID="notebook-horizontal-scroll" ref={horizontalScroll} horizontal style={styles.paperScroll}
+          disableScrollViewPanResponder scrollEnabled={Platform.OS === "web" || playback.running}
           scrollEventThrottle={16} onScroll={(event) => { paperScrollOffset.current.x = event.nativeEvent.contentOffset.x; }}
           contentContainerStyle={{ minWidth: "100%" }}
           showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled">
         <ScrollView testID="notebook-vertical-scroll" ref={paperScroll} style={{ height: viewport.height, width: Math.max(viewport.width, PAPER_WIDTH * paperScale * zoom) }}
+          disableScrollViewPanResponder scrollEnabled={Platform.OS === "web" || playback.running}
           scrollEventThrottle={16} onScroll={(event) => { paperScrollOffset.current.y = event.nativeEvent.contentOffset.y; }}
           contentContainerStyle={[styles.paperContent, { paddingVertical: following ? viewport.height / 2 : 0 }]}
           nestedScrollEnabled showsVerticalScrollIndicator={false}>
           <NotebookPaper
             settings={settings}
-            page={playback.running ? visiblePage : draftPage ?? page} width={PAPER_WIDTH * paperScale * zoom} height={visibleHeight * paperScale * zoom}
+            page={playback.running ? visiblePage : eraseDraft ?? draftPage ?? page} width={PAPER_WIDTH * paperScale * zoom} height={visibleHeight * paperScale * zoom}
             paperScale={paperScale} zoom={playback.running && settings.follow ? settings.playbackZoom : scale}
-            offset={offset} tool={playback.running ? "move" : tool} lineWidth={lineWidth}
+            offset={offset} tool={playback.running ? "move" : tool} lineWidth={lineWidth} lineColor={lineColor}
             drawing={drawing} pendingGlyph={null} preview={null}
             selection={playback.running ? undefined : selection} selectionBox={selectionBox}
             openTupletIds={tupletIds ?? undefined}
-            onTouch={playback.running ? undefined : onPaperTouch}
+            onTouch={playback.running || toolPopup || panel ? undefined : onPaperTouch}
+            onPan={(delta) => setOffset((old) => ({ x: old.x + delta.x / paperScale, y: old.y + delta.y / paperScale }))}
           />
         </ScrollView></ScrollView>
         {panel === "menu" ? (
@@ -426,7 +437,13 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
         </View>}
       </View>
       {tupletIds !== null && <View style={styles.tupletStatus}><Text>{ko ? `잇단음표 작성 중 · ${tupletIds.length}개` : `Open tuplet · ${tupletIds.length}`}</Text><Pressable testID="notebook-tuplet-cancel" onPress={() => setTupletIds(null)} style={{ padding: 8 }}><Text>{t.cancel}</Text></Pressable></View>}
+      {mode !== "ink" && <View style={{ flexDirection: "row", justifyContent: "flex-end", backgroundColor: "#fffdf8" }}>
+        <Pressable accessibilityLabel={t.undo} disabled={!undoStack.current.length} onPress={undo} style={{ padding: 10, opacity: undoStack.current.length ? 1 : 0.35 }}><Ionicons name="arrow-undo" size={18} color="#675d50" /></Pressable>
+        <Pressable accessibilityLabel={t.redo} disabled={!redoStack.current.length} onPress={redo} style={{ padding: 10, opacity: redoStack.current.length ? 1 : 0.35 }}><Ionicons name="arrow-redo" size={18} color="#675d50" /></Pressable>
+      </View>}
       <NotebookBottomTools ko={ko} mode={mode} tool={tool} lineWidth={lineWidth} scale={scale} pickerTop={paperTop}
+        lineColor={lineColor} onColor={setLineColor} eraserMode={eraserMode} onEraserMode={setEraserMode}
+        toolPopup={toolPopup} onToolPopup={(next) => { resetTransient(); setToolPopup(next); }}
         canUndo={undoStack.current.length > 0} canRedo={redoStack.current.length > 0}
         onTool={(next) => { playback.stop(); setDragDraft(null); setTool(next); }} onWidth={setLineWidth}
         onZoom={(value) => { playback.stop(); setScale(Math.max(0.35, Math.min(2.5, value))); }} onUndo={undo} onRedo={redo}

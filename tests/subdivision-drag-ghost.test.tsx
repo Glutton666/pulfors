@@ -16,6 +16,12 @@ jest.mock("@expo/vector-icons", () => ({
 jest.mock("expo-linear-gradient", () => ({
   LinearGradient: () => null,
 }));
+// The drag test does not exercise native SVG rendering. GradientLetter's
+// vector glyph must not load the native Touchable mixin in this DOM harness.
+jest.mock("react-native-svg", () => {
+  const React = require("react");
+  return { __esModule: true, default: ({ children }: any) => React.createElement("svg", null, children), Path: () => null };
+});
 
 jest.mock("@/contexts/ThemeContext", () => ({
   useTheme: () => ({

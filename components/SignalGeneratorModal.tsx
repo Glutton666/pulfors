@@ -2105,7 +2105,7 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
             </Text>
           )}
           {captureRequest && (
-            <View testID="tuning-capture-registration" style={{ gap: 8, padding: 12, borderWidth: 1, borderColor: C.accentDim, borderRadius: 12 }}>
+            <View testID="tuning-capture-registration" style={{ gap: Spacing.sm, padding: 12, borderWidth: 1, borderColor: C.accentDim, borderRadius: 12 }}>
               <Text style={{ color: C.text }}>{captureRequest.label}</Text>
               <Text style={{ color: C.textSecondary }}>{t("signalGenerator", "captureHint")}</Text>
               <Pressable
@@ -2113,7 +2113,7 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
                 accessibilityRole="button"
                 disabled={liveFrequency === null || captureSaving}
                 onPress={() => { void confirmCapture(); }}
-                style={{ minHeight: 44, padding: 12, borderRadius: 8, backgroundColor: C.accent, opacity: liveFrequency === null || captureSaving ? 0.4 : 1 }}
+                style={{ minHeight: 44, padding: 12, borderRadius: Radius.md, backgroundColor: C.accent, opacity: liveFrequency === null || captureSaving ? 0.4 : 1 }}
               >
                 <Text style={{ color: onAccentColor(C.accent), textAlign: "center" }}>
                   {captureSaving ? t("signalGenerator", "captureSaving") : t("signalGenerator", "captureSave")}

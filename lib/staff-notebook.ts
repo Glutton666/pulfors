@@ -2,9 +2,12 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { PracticeEntry } from "./storage";
 
 export type StaffPoint = { x: number; y: number };
-export type StaffStroke = { id: string; points: StaffPoint[]; width: number };
+/** Erasure coordinates are local to the object (stamp size / ink width units).
+ * Visual cuts travel with an object; they never change musical duration. */
+export type StaffErasure = { points: StaffPoint[]; width: number };
+export type StaffStroke = { id: string; points: StaffPoint[]; width: number; color?: string; erasures?: StaffErasure[] };
 export type NotebookNoteRole = "normal" | "ghost" | "strong";
-export type StaffStamp = { id: string; glyph: string; x: number; y: number; size: number; role?: NotebookNoteRole; dotted?: boolean; attachTo?: string };
+export type StaffStamp = { id: string; glyph: string; x: number; y: number; size: number; role?: NotebookNoteRole; dotted?: boolean; attachTo?: string; erasures?: StaffErasure[] };
 export type StaffTuplet = { id: string; stampIds: string[] };
 export type StaffPage = { id: string; strokes: StaffStroke[]; staffCount?: number; stamps?: StaffStamp[]; anchor?: StaffPoint; tuplets?: StaffTuplet[] };
 export type NotebookSettings = {
@@ -30,6 +33,9 @@ export type StaffNotebook = { id: string; title: string; updatedAt: number; page
 
 const KEY = "lab_staff_notebooks_v1";
 const id = () => `staff_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+const validPoint = (point: StaffPoint) => !!point && Number.isFinite(point.x) && Number.isFinite(point.y);
+const validErasures = (value?: StaffErasure[]) => value === undefined || Array.isArray(value) && value.every((cut) =>
+  !!cut && Number.isFinite(cut.width) && cut.width > 0 && Array.isArray(cut.points) && cut.points.length > 0 && cut.points.every(validPoint));
 
 function isNotebook(value: unknown): value is StaffNotebook {
   if (!value || typeof value !== "object") return false;
@@ -55,7 +61,7 @@ function isNotebook(value: unknown): value is StaffNotebook {
       (page.stamps === undefined || Array.isArray(page.stamps) && page.stamps.every((stamp) =>
         !!stamp && typeof stamp.id === "string" && typeof stamp.glyph === "string" && stamp.glyph.length <= 40 &&
         [stamp.x, stamp.y, stamp.size].every(Number.isFinite) && stamp.size >= 4 && stamp.size <= 200 &&
-        (stamp.role === undefined || ["normal", "ghost", "strong"].includes(stamp.role)) &&
+         validErasures(stamp.erasures) && (stamp.role === undefined || ["normal", "ghost", "strong"].includes(stamp.role)) &&
         (stamp.dotted === undefined || typeof stamp.dotted === "boolean") &&
         (stamp.attachTo === undefined || typeof stamp.attachTo === "string" && page.stamps?.some((target) => target.id === stamp.attachTo && target.id !== stamp.id)))) &&
       (page.tuplets === undefined || Array.isArray(page.tuplets) && page.tuplets.every((group) =>
@@ -64,7 +70,8 @@ function isNotebook(value: unknown): value is StaffNotebook {
         group.stampIds.every((stampId) => page.stamps?.some((stamp) => stamp.id === stampId &&
           /^(whole|half|quarter|eighth|sixteenth|thirty_second|rest-(whole|half|quarter|eighth|sixteenth|thirty_second))$/.test(stamp.glyph))))) &&
       typeof page.id === "string" && Array.isArray(page.strokes) && page.strokes.every((stroke) => !!stroke && typeof stroke === "object" &&
-        typeof stroke.id === "string" && Number.isFinite(stroke.width) && stroke.width > 0 &&
+         typeof stroke.id === "string" && Number.isFinite(stroke.width) && stroke.width > 0 && validErasures(stroke.erasures) &&
+         (stroke.color === undefined || typeof stroke.color === "string" && /^#[0-9a-f]{6}$/i.test(stroke.color)) &&
         Array.isArray(stroke.points) && stroke.points.every((point) => !!point && typeof point === "object" && Number.isFinite(point.x) && Number.isFinite(point.y))));
 }
 

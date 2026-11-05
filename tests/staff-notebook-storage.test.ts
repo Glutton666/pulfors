@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createStaffNotebook, DEFAULT_NOTEBOOK_SETTINGS, listStaffNotebooks, saveStaffNotebook } from "../lib/staff-notebook";
+import { eraseNotebookGesture } from "../lib/notebook-erasing";
 
 test("notation meter survives save and restore separately from playback meter", async () => {
   await AsyncStorage.setItem("lab_staff_notebooks_v1", "[]");
@@ -35,6 +36,21 @@ test("legacy ink-only notebooks remain readable and keep their exact points", as
   assert.deepEqual(restored, [legacy]);
   await saveStaffNotebook({ ...restored[0], settings: { ...DEFAULT_NOTEBOOK_SETTINGS } });
   assert.deepEqual((await listStaffNotebooks())[0].pages, legacy.pages);
+});
+test("colored ink, thickness and visual vector/ink cuts survive save/reopen; invalid styles are rejected", async () => {
+  await AsyncStorage.setItem("lab_staff_notebooks_v1", "[]");
+  const note = createStaffNotebook("Color and cuts");
+  note.pages[0].strokes = [{ id: "s", width: 6, color: "#2468c4", points: [{ x: 100, y: 110 }, { x: 300, y: 110 }] }];
+  note.pages[0].stamps = [{ id: "n", glyph: "quarter", x: 200, y: 110, size: 26 }];
+  note.pages[0] = eraseNotebookGesture(note.pages[0], [{ x: 200, y: 110 }], "partial");
+  await saveStaffNotebook(note);
+  assert.deepEqual((await listStaffNotebooks())[0].pages, note.pages);
+  const before = await AsyncStorage.getItem("lab_staff_notebooks_v1");
+  for (const patch of [{ color: "url(unsafe)" }, { erasures: [{ width: -1, points: [{ x: 0, y: 0 }] }] },
+    { erasures: [{ width: 1, points: [] }] }, { erasures: [{ width: 1, points: [{ x: Infinity, y: 0 }] }] }]) {
+    await assert.rejects(() => saveStaffNotebook({ ...note, pages: [{ ...note.pages[0], strokes: [{ ...note.pages[0].strokes[0], ...patch }] }] }));
+    assert.equal(await AsyncStorage.getItem("lab_staff_notebooks_v1"), before);
+  }
 });
 test("symbols, current writing anchor and follow settings round-trip without touching other notebooks", async () => {
   const untouched = createStaffNotebook("Untouched");

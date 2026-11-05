@@ -1,5 +1,6 @@
 import type { StaffNotebook, StaffPage, StaffPoint, StaffStamp, StaffStroke } from "./staff-notebook";
 import { ROW_HEIGHT, snapStaffY, inkInRow } from "./staff-notebook-layout";
+import { erasedAt } from "./notebook-ink";
 
 export type NotebookSelection = { strokeIds: string[]; stampIds: string[] };
 export type NotebookBounds = { x: number; y: number; width: number; height: number };
@@ -51,10 +52,10 @@ export function selectRectangle(page: StaffPage, bounds: NotebookBounds): Notebo
   });
 }
 export function hitObject(page: StaffPage, point: StaffPoint): { kind: "stroke" | "stamp"; id: string } | null {
-  const stamp = [...(page.stamps ?? [])].reverse().filter((s) => pointIn(point, stampBounds(s)))
+  const stamp = [...(page.stamps ?? [])].reverse().filter((s) => !erasedAt(s, point) && pointIn(point, stampBounds(s)))
     .sort((a, b) => Math.hypot(point.x - a.x, point.y - a.y) - Math.hypot(point.x - b.x, point.y - b.y))[0];
   if (stamp) return { kind: "stamp", id: stamp.id };
-  const stroke = [...page.strokes].reverse().find((s) => strokeIntersects(s, { x: point.x - 7, y: point.y - 7, width: 14, height: 14 }));
+  const stroke = [...page.strokes].reverse().find((s) => !erasedAt(s, point) && strokeIntersects(s, { x: point.x - 7, y: point.y - 7, width: 14, height: 14 }));
   return stroke ? { kind: "stroke", id: stroke.id } : null;
 }
 export function selectionBounds(page: StaffPage, selection: NotebookSelection): NotebookBounds | null {

@@ -7,6 +7,8 @@ import { NotebookTupletPreview } from "./NotebookTupletGlyph";
 import { useNotebookRestPicker } from "./NotebookRestPicker";
 import type { NotebookMode } from "./NotebookModeMenu";
 import { useLanguage } from "@/contexts/LanguageContext";
+import type { NotebookEraserMode } from "@/lib/notebook-erasing";
+import { NotebookInkOptions } from "./NotebookInkOptions";
 
 type Tool = "pen" | "erase" | "move" | "select";
 type Choice = { glyph: string; role: "normal" | "ghost" | "strong"; dotted: boolean };
@@ -16,6 +18,12 @@ type Props = {
   mode: NotebookMode;
   tool: Tool;
   lineWidth: number;
+  lineColor: string;
+  onColor: (color: string) => void;
+  eraserMode: NotebookEraserMode;
+  onEraserMode: (mode: NotebookEraserMode) => void;
+  toolPopup: "pen" | "erase" | null;
+  onToolPopup: (popup: "pen" | "erase" | null) => void;
   scale: number;
   pickerTop?: number;
   canUndo: boolean;
@@ -69,6 +77,7 @@ export function NotebookBottomTools(props: Props) {
   const gestureRef = useRef({ active: false, dx: 0, dy: 0, vertical: false, role: "normal" as Choice["role"], duration: "quarter", dotted: false, lastX: 0, lastY: 0 });
   const gestureSnapshot = useRef({ role: "normal" as Choice["role"], duration: "quarter", dotted: false });
   const responderUsed = useRef(false);
+  const heldTool = useRef(false);
   const callbacks = useRef(props);
   callbacks.current = props;
   const [originLayout, setOriginLayout] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
@@ -248,16 +257,20 @@ export function NotebookBottomTools(props: Props) {
     ];
     return (
       <View style={styles.dock}>
+        <NotebookInkOptions ko={ko} popup={props.toolPopup} onClose={() => props.onToolPopup(null)}
+          color={props.lineColor} width={props.lineWidth} onColor={props.onColor} onWidth={props.onWidth}
+          eraserMode={props.eraserMode} onEraserMode={props.onEraserMode} />
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.inkRow}>
           {tools.map((item) => (
-            <Pressable key={item.id} testID={`notebook-tool-${item.id}`} accessibilityRole="button" accessibilityState={{ selected: props.tool === item.id }} onPress={() => props.onTool(item.id)} style={[styles.toolButton, props.tool === item.id && styles.selectedTool]}>
+            <Pressable key={item.id} testID={`notebook-tool-${item.id}`} accessibilityRole="button" accessibilityState={{ selected: props.tool === item.id }} aria-pressed={props.tool === item.id}
+              onPressIn={() => { heldTool.current = false; }}
+              onLongPress={item.id === "move" ? undefined : () => { heldTool.current = true; props.onToolPopup(item.id as "pen" | "erase"); }}
+              delayLongPress={400}
+              accessibilityActions={item.id === "move" ? undefined : [{ name: "expand", label: ko ? "옵션 열기" : "Open options" }]}
+              onAccessibilityAction={(event) => { if (event.nativeEvent.actionName === "expand" && (item.id === "pen" || item.id === "erase")) props.onToolPopup(item.id); }}
+              onPress={() => { if (!heldTool.current) props.onTool(item.id); }}
+              style={[styles.toolButton, props.tool === item.id && styles.selectedTool]}>
               <Ionicons name={item.icon} size={17} color={props.tool === item.id ? "#674f31" : "#7b7163"} /><Text style={[styles.toolText, props.tool === item.id && styles.selectedText]}>{item.label}</Text>
-            </Pressable>
-          ))}
-          <View style={styles.separator} />
-          {[1.4, 2.5, 4, 6].map((width) => (
-            <Pressable key={width} accessibilityRole="button" accessibilityLabel={`${width} ${ko ? "픽셀 굵기" : "pixel width"}`} accessibilityState={{ selected: props.lineWidth === width }} onPress={() => props.onWidth(width)} style={[styles.widthButton, props.lineWidth === width && styles.selectedWidth]}>
-              <View style={{ width: 20, height: width, borderRadius: 3, backgroundColor: "#51473a" }} />
             </Pressable>
           ))}
           <View style={styles.separator} />
