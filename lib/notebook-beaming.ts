@@ -11,7 +11,7 @@ export type NotebookBeamSegment = {
   thickness: number; direction: "up" | "down"; hook: boolean;
 };
 export type NotebookBeamGroup = {
-  id: string; row: number; noteIds: string[]; tupletIds: string[];
+  id: string; row: number; noteIds: string[]; memberIds: string[]; tupletIds: string[];
   stems: NotebookBeamStem[]; segments: NotebookBeamSegment[];
   direction: "up" | "down"; anchorX: number; anchorY: number; slope: number;
 };
@@ -63,39 +63,46 @@ function beatAt(time: number, spans: number[]) {
 
 type Event = {
   stamp: StaffStamp; time: number; duration: number; level: number; row: number;
-  key: string; beatStart: number; beatSpan: number; tupletIds: string[];
+  key: string; beatStart: number; beatSpan: number; tupletIds: string[]; rest: boolean;
 };
 
 function engrave(events: Event[], compound: boolean, quantum: number): NotebookBeamGroup | null {
-  if (events.length < 2) return null;
+  const notes = events.filter((event) => !event.rest);
+  // Rests can extend/bridge a beam but must never acquire a head or stem.
+  // A single short note with a rest can still have a beam across that rest.
+  if (events.length < 2 || !notes.length) return null;
   const row = events[0].row;
-  const meanY = events.reduce((sum, item) => sum + item.stamp.y, 0) / events.length;
+  const meanY = notes.reduce((sum, item) => sum + item.stamp.y, 0) / notes.length;
   const direction = meanY <= row * ROW_HEIGHT + STAFF_TOP + 2 * STAFF_GAP ? "down" : "up";
   const sign = direction === "up" ? 1 : -1;
-  const scale = events.reduce((sum, item) => sum + item.stamp.size / 26, 0) / events.length;
+  const scale = notes.reduce((sum, item) => sum + item.stamp.size / 26, 0) / notes.length;
   const thickness = 3.5 * scale, gap = 5.8 * scale;
-  const stemXs = events.map(({ stamp }) => stamp.x + sign * 4.8 * stamp.size / 26);
-  const dx = stemXs[stemXs.length - 1] - stemXs[0];
+  const xs = events.map(({ stamp, rest }) => stamp.x + (rest ? 0 : sign * 4.8 * stamp.size / 26));
+  const dx = xs[xs.length - 1] - xs[0];
   if (dx <= 0) return null;
   const maxSlope = Math.min(0.18, 12 * scale / dx);
+  const noteDx = notes[notes.length - 1].stamp.x - notes[0].stamp.x;
   const slope = Math.max(-maxSlope, Math.min(maxSlope,
-    (events[events.length - 1].stamp.y - events[0].stamp.y) / dx));
+    noteDx > 0 ? (notes[notes.length - 1].stamp.y - notes[0].stamp.y) / noteDx : 0));
+  const maxLevel = Math.max(...events.map((event) => event.level));
   const starts = events.map((item, index) => {
-    const minStem = Math.max(3.5 * STAFF_GAP * item.stamp.size / 26, (item.level - 1) * gap + thickness + 14 * item.stamp.size / 26);
-    return item.stamp.y - sign * minStem - slope * (stemXs[index] - stemXs[0]);
+    const minStem = item.rest
+      ? (direction === "up" ? 36 : 18) * item.stamp.size / 26 + (maxLevel - 1) * gap + thickness
+      : Math.max(3.5 * STAFF_GAP * item.stamp.size / 26, (item.level - 1) * gap + thickness + 14 * item.stamp.size / 26);
+    return item.stamp.y - sign * minStem - slope * (xs[index] - xs[0]);
   });
   const anchorY = direction === "up" ? Math.min(...starts) : Math.max(...starts);
-  const beamY = (x: number) => anchorY + slope * (x - stemXs[0]);
-  const stems = events.map((item, index): NotebookBeamStem => ({
-    id: item.stamp.id, stemX: stemXs[index], headY: item.stamp.y,
-    stemY: beamY(stemXs[index]), direction, scale: item.stamp.size / 26, levels: item.level,
-  }));
+  const beamY = (x: number) => anchorY + slope * (x - xs[0]);
+  const stems = events.flatMap((item, index): NotebookBeamStem[] => item.rest ? [] : [{
+    id: item.stamp.id, stemX: xs[index], headY: item.stamp.y,
+    stemY: beamY(xs[index]), direction, scale: item.stamp.size / 26, levels: item.level,
+  }]);
   const segments: NotebookBeamSegment[] = [];
   const add = (level: number, x1: number, x2: number, hook = false) => {
     const offset = sign * (level - 1) * gap;
     segments.push({ level, x1, y1: beamY(x1) + offset, x2, y2: beamY(x2) + offset, thickness, direction, hook });
   };
-  add(1, stemXs[0], stemXs[stemXs.length - 1]);
+  add(1, xs[0], xs[xs.length - 1]);
   for (let level = 2; level <= 3; level++) {
     // Four sixteenths in simple time share both beams. Compound time
     // separates secondary beams at the written subdivision (e.g. eighths).
@@ -108,29 +115,34 @@ function engrave(events: Event[], compound: boolean, quantum: number): NotebookB
       let end = i;
       while (end + 1 < events.length && events[end + 1].level >= level &&
         subIndex(events[end + 1]) === subIndex(events[i])) end++;
-      if (end > i) add(level, stemXs[i], stemXs[end]);
-      else {
+      // Never draw a secondary beam belonging only to rests.
+      const hasNote = events.slice(i, end + 1).some((event) => !event.rest);
+      if (end > i && hasNote) add(level, xs[i], xs[end]);
+      else if (hasNote) {
         const phase = events[i].time - events[i].beatStart - subIndex(events[i]) * subSpan;
         const right = i === 0 || (i < events.length - 1 && phase < EPS);
         const neighbor = right ? i + 1 : i - 1;
-        const length = Math.min(10 * scale, Math.abs(stemXs[neighbor] - stemXs[i]) * 0.45);
-        const other = stemXs[i] + (right ? length : -length);
-        add(level, Math.min(stemXs[i], other), Math.max(stemXs[i], other), true);
+        const length = Math.min(10 * scale, Math.abs(xs[neighbor] - xs[i]) * 0.45);
+        const other = xs[i] + (right ? length : -length);
+        add(level, Math.min(xs[i], other), Math.max(xs[i], other), true);
       }
       i = end;
     }
   }
   return {
-    id: `beam:${events[0].stamp.id}`, row, noteIds: stems.map((stem) => stem.id), stems, segments,
+    id: `beam:${events[0].stamp.id}`, row, noteIds: stems.map((stem) => stem.id),
+    memberIds: events.map((event) => event.stamp.id), stems, segments,
     tupletIds: [...new Set(events.flatMap((item) => item.tupletIds))],
-    direction, anchorX: stemXs[0], anchorY, slope,
+    direction, anchorX: xs[0], anchorY, slope,
   };
 }
 
 /**
  * Derived engraving only: never mutates stamps, x/y, note values, or playback.
  * Each row starts a measure; within it, left-to-right order defines onsets.
- * Rests advance time but break beams. Marks/ink do not consume musical time.
+ * Only explicit closed/open membership permits a beam. Meter/onsets are used
+ * for secondary beam shape, never to infer additional connected notes.
+ * Rests advance time and extend/bridge beams without gaining stems.
  * Closed tuplets are explicit containers; their count is never guessed from
  * proximity. Their internal beams stay together, including unequal note values.
  */
@@ -195,17 +207,23 @@ export function notebookBeaming(page: StaffPage, settings?: Partial<NotebookSett
         (largest, group) => !largest || group.ids.size > largest.ids.size ? group : largest, undefined);
       if (outer && !tupletStarts.has(outer.id)) tupletStarts.set(outer.id, time);
       const beat = beatAt(time, spans);
-      const key = outer ? `tuplet:${outer.id}` : open.has(stamp.id) ? "open-tuplet" : beat.key;
-      const level = isNotebookNote(stamp.glyph) ? levels[stamp.glyph] ?? 0 : 0;
+      const key = outer ? `tuplet:${outer.id}` : open.has(stamp.id) ? "open-tuplet" : null;
+      const rest = !isNotebookNote(stamp.glyph);
+      const level = levels[stamp.glyph.replace(/^rest-/, "")] ?? 0;
       const duration = durations.get(stamp.id)!;
+      if (!key) {
+        flush();
+        time += duration;
+        continue;
+      }
       const previous = run[run.length - 1];
       // Keep a minimum legible head spacing; overlapping stamps retain flags.
-      if (!level || previous && (previous.key !== key ||
+      if ((!level && !rest) || previous && (previous.key !== key ||
         stamp.x - previous.stamp.x < 14 * Math.max(stamp.size, previous.stamp.size) / 26)) flush();
-      if (level) {
+      if (level || rest) {
         const first = run[0];
         run.push({
-          stamp, row, time, duration, level, key,
+          stamp, row, time, duration, level, key, rest,
           beatStart: outer ? tupletStarts.get(outer.id)! : open.has(stamp.id) ? first?.beatStart ?? time : beat.start,
           beatSpan: outer ? Math.max(quantum, groupDurations.get(outer.id) ?? quantum) : beat.span,
           tupletIds: memberships.map((group) => group.id),

@@ -79,7 +79,7 @@ export function NotebookPaper({ page, width, height, paperScale, zoom, offset, l
               </NotebookObjectMask>
             </G>
           ))}
-          {beaming.groups.map((group) => <NotebookObjectMask key={group.id} cuts={(page.stamps ?? []).filter((s) => group.noteIds.includes(s.id)).flatMap(paperErasures)}>
+          {beaming.groups.map((group) => <NotebookObjectMask key={group.id} cuts={(page.stamps ?? []).filter((s) => group.memberIds.includes(s.id)).flatMap(paperErasures)}>
             <NotebookBeamLayer groups={[group]} />
           </NotebookObjectMask>)}
           {tuplets.map((span) => <NotebookObjectMask key={`${span.id}:${span.row}`} cuts={(page.stamps ?? []).filter((s) => page.tuplets?.find((t) => t.id === span.id)?.stampIds.includes(s.id)).flatMap(paperErasures)}>

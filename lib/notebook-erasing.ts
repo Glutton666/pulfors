@@ -29,7 +29,7 @@ export function eraseNotebookGesture(page: StaffPage, points: StaffPoint[], mode
         y: Math.min(segment.y1, segment.y2) - segment.thickness,
         width: Math.abs(segment.x2 - segment.x1) + 2 * segment.thickness,
         height: Math.abs(segment.y2 - segment.y1) + 2 * segment.thickness };
-      group.noteIds.forEach((key) => stampAreas.get(key)?.push(area));
+      group.memberIds.forEach((key) => stampAreas.get(key)?.push(area));
     }));
     notebookTupletSpans(page, undefined, beams).forEach((span) => {
       const group = page.tuplets?.find((t) => t.id === span.id);

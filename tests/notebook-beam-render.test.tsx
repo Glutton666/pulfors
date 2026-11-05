@@ -17,7 +17,8 @@ jest.mock("react-native-svg", () => {
 
 test("beam polygons replace individual flags and meet scaled down-stem endpoints", () => {
   const page: StaffPage = { id: "p", strokes: [], stamps: [0, 1].map((i) =>
-    ({ id: `n${i}`, glyph: "sixteenth", x: 100 + i * 70, y: 80, size: 39 })) };
+    ({ id: `n${i}`, glyph: "sixteenth", x: 100 + i * 70, y: 80, size: 39 })),
+    tuplets: [{ id: "chosen", stampIds: ["n0", "n1"] }] };
   const beaming = notebookBeaming(page);
   const view = render(<svg>
     {page.stamps!.map((stamp) => <NotebookNoteGlyph key={stamp.id} duration="sixteenth" {...stamp}
