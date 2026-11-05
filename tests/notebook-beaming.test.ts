@@ -30,6 +30,27 @@ test("ordinary eighths never connect just because they share a beat", () => {
   expect(JSON.stringify(p)).toBe(before);
 });
 
+test("unmarked objects before and after explicit groups cannot join either group", () => {
+  const p = paper(Array(8).fill("eighth"));
+  p.tuplets = [
+    { id: "first-explicit", stampIds: ["n1", "n2"] },
+    { id: "second-explicit", stampIds: ["n5", "n6"] },
+  ];
+  const b = notebookBeaming(p);
+  expect(b.groups.map((group) => group.noteIds)).toEqual([["n1", "n2"], ["n5", "n6"]]);
+  for (const id of ["n0", "n3", "n4", "n7"]) expect(b.stems.has(id)).toBe(false);
+  expect(b.groups.map((group) => group.memberIds)).toEqual([["n1", "n2"], ["n5", "n6"]]);
+});
+
+test("the in-progress membership beams only its chosen stamps and never auto-enrolls neighbors", () => {
+  const p = paper(Array(5).fill("sixteenth"));
+  const preview = notebookBeaming(p, undefined, ["n1", "n2", "n3"]);
+  expect(preview.groups.map((group) => group.noteIds)).toEqual([["n1", "n2", "n3"]]);
+  expect(preview.stems.has("n0")).toBe(false);
+  expect(preview.stems.has("n4")).toBe(false);
+  expect(notebookBeaming(p).groups).toEqual([]);
+});
+
 test("four sixteenths share two complete beams; thirty-seconds add divided third beams", () => {
   const sixteenths = notebookBeaming(grouped(Array(4).fill("sixteenth")), meter(4, 4));
   expect(sixteenths.groups).toHaveLength(1);

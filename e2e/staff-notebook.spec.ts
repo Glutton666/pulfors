@@ -180,7 +180,7 @@ for (const [width, height, language] of [
 }
 
 for (const viewport of [{ width: 390, height: 844 }, { width: 768, height: 1024 }, { width: 844, height: 390 }]) {
-  test(`automatic beams and notation meter persist at ${viewport.width}x${viewport.height}`, async ({ page }) => {
+  test(`only explicit tuplet notes beam and notation meter persists at ${viewport.width}x${viewport.height}`, async ({ page }) => {
     await page.setViewportSize(viewport);
     await page.addInitScript(() => {
       if (localStorage.getItem("lab_staff_notebooks_v1")) return;
@@ -192,11 +192,11 @@ for (const viewport of [{ width: 390, height: 844 }, { width: 768, height: 1024 
         ...row(Array(8).fill("eighth"), 0, "a"),
         ...row(Array(4).fill("sixteenth"), 1, "s"),
         ...dotted.map((stamp, i) => ({ ...stamp, dotted: i === 0, role: i === 1 ? "strong" : "normal" })),
-        ...row(Array(3).fill("eighth"), 3, "t"),
+        ...row(["eighth", "sixteenth", "eighth"], 3, "t"),
         ...row(["eighth", "rest-eighth", "eighth", "eighth"], 4, "r"),
       ];
       localStorage.setItem("lab_staff_notebooks_v1", JSON.stringify([{
-        id: "auto-beams", title: "Automatic beams", updatedAt: 1,
+        id: "auto-beams", title: "Explicit tuplet beams", updatedAt: 1,
         settings: { follow: false, lineUnit: "measure", playbackZoom: 1, bpm: 84,
           random: false, offsetX: 0, offsetY: 0, snap: true, beatsPerMeasure: 4 },
         pages: [{ id: "p", strokes: [], staffCount: 7, stamps,
