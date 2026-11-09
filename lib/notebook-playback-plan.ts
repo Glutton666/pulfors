@@ -6,19 +6,21 @@ export type NotebookPlan = { rows: NotebookRow[]; chunks: NotebookChunk[]; rowEn
 
 /** Shuffle whole paper units, joining units when a source block crosses their boundary. */
 export function buildNotebookPlan(
-  rows: NotebookRow[], bars: NotebookBar[], measuresPerRow: 1 | 4,
-  random = false, rng: () => number = Math.random,
+  rows: NotebookRow[], bars: NotebookBar[], measuresPerRow: number,
+  random = false, rng: () => number = Math.random, rowCounts?: number[],
 ): NotebookPlan {
   if (!rows.length || !bars.length || bars.some((b) => !(b.endMs > b.startMs))) throw new Error("EMPTY_PATTERN");
   const barAt = (i: number) => ({ ...bars[i % bars.length], group: bars[i % bars.length].group === undefined
     ? undefined : `${Math.floor(i / bars.length)}:${bars[i % bars.length].group}` });
-  const count = rows.length * measuresPerRow;
+  const counts = rows.map((_, i) => rowCounts?.[i] ?? measuresPerRow);
+  const starts: number[] = []; let count = 0;
+  counts.forEach((n) => { starts.push(count); count += n; });
   const last = barAt(count - 1), next = barAt(count);
   if (last.group !== undefined && last.group === next.group) throw new Error("INCOMPLETE_BLOCK");
   const groups: number[][] = [];
   rows.forEach((_, i) => {
-    const prior = i ? barAt(i * measuresPerRow - 1) : undefined;
-    const first = barAt(i * measuresPerRow);
+    const prior = i ? barAt(starts[i] - 1) : undefined;
+    const first = barAt(starts[i]);
     if (rows[i - 1]?.keepWithNext || (prior?.group !== undefined && prior.group === first.group)) groups[groups.length - 1].push(i);
     else groups.push([i]);
   });
@@ -29,8 +31,8 @@ export function buildNotebookPlan(
   const order = groups.flat(), chunks: NotebookChunk[] = [], rowEnds: number[] = [];
   let durationMs = 0;
   order.forEach((original, row) => {
-    for (let j = 0; j < measuresPerRow; j++) {
-      const bar = barAt(original * measuresPerRow + j);
+    for (let j = 0; j < counts[original]; j++) {
+      const bar = barAt(starts[original] + j);
       chunks.push({ ...bar, row });
       durationMs += bar.endMs - bar.startMs;
     }

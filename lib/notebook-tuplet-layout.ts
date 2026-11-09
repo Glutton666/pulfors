@@ -13,9 +13,9 @@ export type NotebookTupletSpan = {
 function inkTop(stamp: StaffStamp, beam?: NotebookBeamStem): number {
   const scale = stamp.size / 26;
   if (!isNotebookNote(stamp.glyph)) return stamp.y - 6 * scale;
-  if (beam?.direction === "up") return beam.stemY - (stamp.role === "strong" ? 21 : 2) * scale;
-  if (beam?.direction === "down") return stamp.y - (stamp.role === "strong" ? 47 : 6) * scale;
-  if (stamp.role === "strong") return stamp.y - 47 * scale;
+  if (beam?.direction === "up") return beam.stemY - (stamp.role === "strong" ? 25 : 2) * scale;
+  if (beam?.direction === "down") return stamp.y - (stamp.role === "strong" ? 51 : 6) * scale;
+  if (stamp.role === "strong") return stamp.y - 51 * scale;
   if (stamp.glyph === "whole") return stamp.y - (stamp.role === "ghost" ? 10 : 5) * scale;
   return stamp.y - 32 * scale;
 }

@@ -25,12 +25,12 @@ const levels: Record<string, number> = { eighth: 1, sixteenth: 2, thirty_second:
 
 export function notebookMeter(settings?: Partial<NotebookSettings>): { beats: number; unit: 2 | 4 | 8 | 16 } {
   if (settings?.notationMeter) return settings.notationMeter;
-  return { beats: settings?.source?.beatsPerMeasure ?? settings?.beatsPerMeasure ?? 4, unit: 4 };
+  return { beats: 4, unit: 4 };
 }
 
 /** Durations are quarter-note units, never horizontal distances. */
 export function notebookStampDuration(stamp: StaffStamp): number {
-  return (values[stamp.glyph.replace(/^rest-/, "")] ?? 0) * (stamp.dotted ? 1.5 : 1);
+  return stamp.durationBeats ?? (values[stamp.glyph.replace(/^rest-/, "")] ?? 0) * (stamp.dotted ? 1.5 : 1);
 }
 
 function meterGroups(beats: number, unit: number): number[] {
@@ -172,7 +172,7 @@ export function notebookBeaming(page: StaffPage, settings?: Partial<NotebookSett
       const count = group.ids.size;
       const power = 2 ** Math.floor(Math.log2(count));
       const normal = count === 2 ? 3 : count === power ? count * 0.75 : power;
-      ratio *= normal / count;
+      ratio *= group.ratio ? group.ratio.normal / group.ratio.actual : normal / count;
       previous = group;
     }
     return [stamp.id, notebookStampDuration(stamp) * ratio] as const;

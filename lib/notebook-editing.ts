@@ -1,6 +1,8 @@
 import type { StaffNotebook, StaffPage, StaffPoint, StaffStamp, StaffStroke } from "./staff-notebook";
-import { ROW_HEIGHT, snapStaffY, inkInRow } from "./staff-notebook-layout";
+import { ROW_HEIGHT, snapStaffY, inkInRow, rowAt } from "./staff-notebook-layout";
 import { erasedAt } from "./notebook-ink";
+import { naturalPaperWidth, notebookMeasureRegions, standardTupletRatio } from "./notebook-music-layout";
+import type { NotebookSettings } from "./staff-notebook";
 
 export type NotebookSelection = { strokeIds: string[]; stampIds: string[] };
 export type NotebookBounds = { x: number; y: number; width: number; height: number };
@@ -40,8 +42,16 @@ export function strokeIntersects(stroke: StaffStroke, r: NotebookBounds) {
   const area = { x: r.x - stroke.width / 2, y: r.y - stroke.width / 2, width: r.width + stroke.width, height: r.height + stroke.width };
   return stroke.points.some((p) => pointIn(p, area)) || stroke.points.slice(1).some((b, i) => segmentHits(stroke.points[i], b, area));
 }
-export function includeAttached(page: StaffPage, selection: NotebookSelection): NotebookSelection {
+export function includeAttached(page: StaffPage, selection: NotebookSelection, includeGroups = true): NotebookSelection {
   const stamps = new Set(selection.stampIds);
+  if (includeGroups) {
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (const group of page.tuplets ?? []) if (group.stampIds.some((id) => stamps.has(id)))
+        for (const id of group.stampIds) if (!stamps.has(id)) { stamps.add(id); changed = true; }
+    }
+  }
   (page.stamps ?? []).forEach((stamp) => { if (stamp.attachTo && stamps.has(stamp.attachTo)) stamps.add(stamp.id); });
   return { ...selection, stampIds: [...stamps] };
 }
@@ -76,28 +86,117 @@ export function selectionDelta(page: StaffPage, selection: NotebookSelection, de
     dy = snapStaffY(reference.y + dy, page.staffCount ?? 7, reference.y - bounds.y,
       (page.staffCount ?? 7) * ROW_HEIGHT - bounds.height + reference.y - bounds.y) - reference.y;
   }
-  return { x: Math.max(-bounds.x, Math.min(900 - bounds.x - bounds.width, delta.x)),
+  return { x: Math.max(-bounds.x, Math.min(naturalPaperWidth(page) - bounds.x - bounds.width, delta.x)),
     y: Math.max(-bounds.y, Math.min((page.staffCount ?? 7) * ROW_HEIGHT - bounds.y - bounds.height, dy)) };
 }
 export function transformSelection(page: StaffPage, selection: NotebookSelection, delta: StaffPoint, copy = false, makeId: () => string = () => `${Date.now()}_${Math.random()}`): { page: StaffPage; selection: NotebookSelection } {
   const chosen = includeAttached(page, selection);
   const ids = new Map(chosen.stampIds.map((old) => [old, copy ? makeId() : old]));
+  const chordIds = new Map((page.stamps ?? []).filter((s) => chosen.stampIds.includes(s.id) && s.chordId).map((s) => [s.chordId!, copy ? makeId() : s.chordId!]));
   const strokes = page.strokes.filter((s) => chosen.strokeIds.includes(s.id)).map((s) => ({ ...s, id: copy ? makeId() : s.id, points: s.points.map((p) => ({ x: p.x + delta.x, y: p.y + delta.y })) }));
   const stamps = (page.stamps ?? []).filter((s) => chosen.stampIds.includes(s.id)).map((s) => ({ ...s, id: ids.get(s.id)!, x: s.x + delta.x, y: s.y + delta.y,
+    measure: delta.x || delta.y ? undefined : s.measure,
+    tieTo: s.tieTo ? ids.get(s.tieTo) ?? (copy ? undefined : s.tieTo) : undefined,
+    tieFrom: s.tieFrom ? ids.get(s.tieFrom) ?? (copy ? undefined : s.tieFrom) : undefined,
+    chordId: s.chordId ? chordIds.get(s.chordId) : undefined,
+    generated: copy && s.generated ? false : s.generated,
     attachTo: s.attachTo ? ids.get(s.attachTo) ?? (copy ? undefined : s.attachTo) : undefined }));
   const movedTuplets = (page.tuplets ?? []).filter((t) => t.stampIds.every((id) => ids.has(id)))
-    .map((t) => ({ id: copy ? makeId() : t.id, stampIds: t.stampIds.map((id) => ids.get(id)!) }));
+    .map((t) => ({ ...t, id: copy ? makeId() : t.id, stampIds: t.stampIds.map((id) => ids.get(id)!) }));
   return { page: { ...page,
     strokes: copy ? [...page.strokes, ...strokes] : page.strokes.map((s) => strokes.find((next) => next.id === s.id) ?? s),
     stamps: copy ? [...(page.stamps ?? []), ...stamps] : (page.stamps ?? []).map((s) => stamps.find((next) => next.id === s.id) ?? s),
     tuplets: copy ? [...(page.tuplets ?? []), ...movedTuplets] : page.tuplets,
   }, selection: { strokeIds: strokes.map((s) => s.id), stampIds: stamps.map((s) => s.id) } };
 }
-export function removeSelection(page: StaffPage, selection: NotebookSelection): StaffPage {
-  const chosen = includeAttached(page, selection);
-  const stamps = (page.stamps ?? []).filter((s) => !chosen.stampIds.includes(s.id));
+export function removeSelection(page: StaffPage, selection: NotebookSelection, includeGroups = true): StaffPage {
+  const chosen = includeAttached(page, selection, includeGroups);
+  const stamps = (page.stamps ?? []).filter((s) => !chosen.stampIds.includes(s.id))
+    .map((s) => ({ ...s, tieTo: s.tieTo && chosen.stampIds.includes(s.tieTo) ? undefined : s.tieTo,
+      tieFrom: s.tieFrom && chosen.stampIds.includes(s.tieFrom) ? undefined : s.tieFrom }));
   return { ...page, strokes: page.strokes.filter((s) => !chosen.strokeIds.includes(s.id)), stamps,
-    tuplets: (page.tuplets ?? []).map((t) => ({ ...t, stampIds: t.stampIds.filter((id) => stamps.some((s) => s.id === id)) })).filter((t) => t.stampIds.length >= 2) };
+    tuplets: (page.tuplets ?? []).map((t) => {
+      const stampIds = t.stampIds.filter((id) => stamps.some((s) => s.id === id));
+      return { ...t, stampIds, ...(stampIds.length !== t.stampIds.length ? { ratio: standardTupletRatio(stampIds.length) } : {}) };
+    }).filter((t) => t.stampIds.length >= 2) };
+}
+
+export type NotebookSelectionUnit = "object" | "measure" | "row";
+/** A split note is still one authored input: continue after its final tied fragment. */
+export function notebookWritingTail(note: StaffNotebook, pageIndex: number) {
+  let owner = note.pages[pageIndex];
+  let stamp = owner?.anchor && owner.stamps?.find((s) => !s.attachTo && Math.abs(s.x - owner.anchor!.x) < 1 && Math.abs(s.y - owner.anchor!.y) < 1);
+  if (!stamp?.tieTo) return undefined;
+  const seen = new Set<string>();
+  while (stamp.tieTo && !seen.has(stamp.id)) {
+    seen.add(stamp.id);
+    const nextOwner = note.pages.find((p) => p.stamps?.some((s) => s.id === stamp!.tieTo));
+    const next = nextOwner?.stamps?.find((s) => s.id === stamp!.tieTo);
+    if (!next || !nextOwner) break;
+    owner = nextOwner; stamp = next;
+  }
+  return { pageIndex: note.pages.indexOf(owner), stamp };
+}
+/** Keep a pasted/copied selection contiguous in insertion order before reflow. */
+export function insertSelectionBeforeFollowing(page: StaffPage, selection: NotebookSelection): StaffPage {
+  const ids = new Set(selection.stampIds), moved = new Map<string, number>();
+  const roots = (page.stamps ?? []).filter((s) => ids.has(s.id) && !s.attachTo).sort((a, b) => a.x - b.x);
+  for (let row = 0; row < (page.staffCount ?? 7); row++) {
+    const members = roots.filter((s) => rowAt(s.y, page.staffCount ?? 7) === row);
+    if (!members.length) continue;
+    const start = members[0].x;
+    const next = (page.stamps ?? []).filter((s) => !ids.has(s.id) && !s.attachTo && rowAt(s.y, page.staffCount ?? 7) === row && s.x >= start).sort((a, b) => a.x - b.x)[0];
+    if (!next) continue;
+    const gap = Math.max(.001, (next.x - start) / (members.length + 1));
+    members.forEach((s, i) => moved.set(s.id, next.x === start ? start - (members.length - i) * .001 : start + i * gap));
+  }
+  return { ...page, stamps: page.stamps?.map((s) => {
+    const x = moved.get(s.id), parentX = s.attachTo ? moved.get(s.attachTo) : undefined, parent = s.attachTo && page.stamps?.find((p) => p.id === s.attachTo);
+    return x !== undefined ? { ...s, x } : parentX !== undefined && parent ? { ...s, x: s.x + parentX - parent.x } : s;
+  }) };
+}
+/** Reorder whole rows, including their empty space. Ink follows only with explicit consent. */
+export function reorderNotebookRows(page: StaffPage, from: number, to: number, target: number, includeInk: boolean): StaffPage {
+  const count = page.staffCount ?? 7;
+  const low = Math.max(0, Math.min(from, to)), high = Math.min(count - 1, Math.max(from, to));
+  const order = Array.from({ length: count }, (_, i) => i);
+  const moved = order.splice(low, high - low + 1);
+  order.splice(Math.max(0, Math.min(order.length, target)), 0, ...moved);
+  const destination = new Map(order.map((source, index) => [source, index]));
+  const shifted = (y: number) => y + (destination.get(rowAt(y, count))! - rowAt(y, count)) * ROW_HEIGHT;
+  return { ...page,
+    stamps: page.stamps?.map((s) => ({ ...s, y: shifted(s.y) })),
+    strokes: includeInk ? page.strokes.map((s) => {
+      const r = rowAt(s.points[0]?.y ?? 0, count), dy = (destination.get(r)! - r) * ROW_HEIGHT;
+      return { ...s, points: s.points.map((p) => ({ ...p, y: p.y + dy })) };
+    }) : page.strokes,
+    completedRows: page.completedRows?.map((r) => destination.get(r)!),
+    measureCounts: page.measureCounts ? order.map((r) => page.measureCounts![r]) : undefined,
+    blankRows: [...new Set([...(page.blankRows ?? []).map((r) => destination.get(r)!),
+      ...moved.filter((r) => !(page.stamps ?? []).some((s) => rowAt(s.y, count) === r) && !page.strokes.some((s) => s.points.some((p) => rowAt(p.y, count) === r))).map((r) => destination.get(r)!)])],
+    anchor: page.anchor ? { ...page.anchor, y: shifted(page.anchor.y) } : undefined,
+  };
+}
+/** Select a contiguous musical range, including whole intersecting strokes/groups. */
+export function selectNotebookUnits(page: StaffPage, start: StaffPoint, end: StaffPoint, unit: NotebookSelectionUnit, settings?: Partial<NotebookSettings>): NotebookSelection {
+  if (unit === "object") return selectRectangle(page, rectangle(start, end));
+  const regions = notebookMeasureRegions(page, settings);
+  const count = page.staffCount ?? 7;
+  const locate = (p: StaffPoint) => {
+    const row = rowAt(p.y, count);
+    return regions.findIndex((r) => r.row === row && p.x >= r.left && p.x < r.right);
+  };
+  const nearest = (p: StaffPoint) => {
+    const i = locate(p);
+    if (i >= 0) return i;
+    return regions.findIndex((r) => r.row === rowAt(p.y, count));
+  };
+  const a = nearest(start), b = nearest(end);
+  const rows = [rowAt(start.y, count), rowAt(end.y, count)].sort((a, b) => a - b);
+  const picked = unit === "row" ? regions.filter((r) => r.row >= rows[0] && r.row <= rows[1])
+    : regions.slice(Math.min(a, b), Math.max(a, b) + 1);
+  const selections = picked.map((r) => selectRectangle(page, { x: r.left, y: r.row * ROW_HEIGHT, width: r.right - r.left, height: ROW_HEIGHT }));
+  return includeAttached(page, { stampIds: [...new Set(selections.flatMap((s) => s.stampIds))], strokeIds: [...new Set(selections.flatMap((s) => s.strokeIds))] });
 }
 export function captureSelection(page: StaffPage, selection: NotebookSelection): StaffPage {
   const chosen = includeAttached(page, selection);
@@ -111,6 +210,24 @@ export function captureSelection(page: StaffPage, selection: NotebookSelection):
 }
 /** Re-paginate whole rows; never crop existing ink when reducing page capacity. */
 export function paginateNotebook(note: StaffNotebook, count: number, makeId: () => string): StaffNotebook {
+  const scale = Math.min(1, ...note.pages.map((p) => p.layoutScale ?? 1));
+  let rowOffset = 0;
+  const joined: StaffPage = { id: note.pages[0].id, staffCount: 0, strokes: [], stamps: [], tuplets: [], layoutScale: scale, completedRows: [], blankRows: [], measureCounts: [] };
+  for (const page of note.pages) {
+    const dy = rowOffset * ROW_HEIGHT, factor = (page.layoutScale ?? 1) / scale;
+    joined.stamps!.push(...(page.stamps ?? []).map((s) => ({ ...s, x: 38 + (s.x - 38) * factor, y: s.y + dy })));
+    joined.strokes.push(...page.strokes.map((s) => ({ ...s, points: s.points.map((p) => ({ x: 38 + (p.x - 38) * factor, y: p.y + dy })) })));
+    joined.tuplets!.push(...(page.tuplets ?? []));
+    joined.completedRows!.push(...(page.completedRows ?? []).map((r) => r + rowOffset));
+    joined.blankRows!.push(...(page.blankRows ?? []).map((r) => r + rowOffset));
+    joined.measureCounts!.push(...Array.from({ length: page.staffCount ?? 7 }, (_, r) => page.measureCounts?.[r] ?? note.settings?.measuresPerRow ?? (note.settings?.lineUnit === "phrase" ? 4 : 1)));
+    rowOffset += page.staffCount ?? 7;
+  }
+  joined.staffCount = rowOffset;
+  const lastNote = note.lastNote ? { ...note.lastNote, pageId: joined.id } : undefined;
+  return paginateJoinedNotebook({ ...note, pages: [joined], lastNote }, count, makeId);
+}
+function paginateJoinedNotebook(note: StaffNotebook, count: number, makeId: () => string): StaffNotebook {
   const rows = Math.max(1, Math.min(200, Math.round(count)));
   const pages: StaffPage[] = [];
   let lastNote = note.lastNote;
@@ -136,6 +253,10 @@ export function paginateNotebook(note: StaffNotebook, count: number, makeId: () 
       pages.push({ id: pageId, staffCount: rows, strokes,
         stamps: stamps.map((s) => ({ ...s, attachTo: s.attachTo && ids.has(s.attachTo) ? s.attachTo : undefined })),
         tuplets: page.tuplets?.map((t) => ({ ...t, id: part ? makeId() : t.id, stampIds: t.stampIds.filter((id) => ids.has(id)) })).filter((t) => t.stampIds.length >= 2),
+        layoutScale: page.layoutScale,
+        measureCounts: page.measureCounts ? Array.from({ length: rows }, (_, r) => page.measureCounts?.[part * rows + r] ?? note.settings?.measuresPerRow ?? (note.settings?.lineUnit === "phrase" ? 4 : 1)) : undefined,
+        completedRows: page.completedRows?.filter((r) => r >= part * rows && r < (part + 1) * rows).map((r) => r - part * rows),
+        blankRows: page.blankRows?.filter((r) => r >= part * rows && r < (part + 1) * rows).map((r) => r - part * rows),
         anchor: page.anchor && page.anchor.y >= start && page.anchor.y < end ? { x: page.anchor.x, y: page.anchor.y - start } : undefined });
     }
   }

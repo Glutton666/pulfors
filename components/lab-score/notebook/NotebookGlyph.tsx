@@ -28,7 +28,7 @@ export function NotebookGlyph({ glyph, x, y, size, role = "normal", dotted = fal
         {role === "ghost" && <Path testID="notebook-ghost-mark" d="M-12 -9 Q-18 0 -12 9 M12 -9 Q18 0 12 9" fill="none" stroke="#111" strokeWidth={1.4} />}
         {role === "strong" && <Path testID="notebook-strong-mark" d={beam?.direction === "up"
           ? `M-8 ${((beam.stemY - y) / (size / 26)) - 20} L9 ${((beam.stemY - y) / (size / 26)) - 15} L-8 ${((beam.stemY - y) / (size / 26)) - 10}`
-          : "M-8 -46 L9 -41 L-8 -36"} fill="none" stroke="#111" strokeWidth={1.8} />}
+          : "M-8 -50 L9 -45 L-8 -40"} transform={beam?.direction === "up" ? "translate(0 -4)" : undefined} fill="none" stroke="#111" strokeWidth={1.8} />}
         {dotted && <Circle testID="notebook-dot" cx={role === "ghost" ? 23 : 16} cy={-3} r={2.2} fill="#111" />}
       </G>
     </G>;
@@ -40,6 +40,7 @@ export function NotebookGlyph({ glyph, x, y, size, role = "normal", dotted = fal
       {dotted && <Circle testID="notebook-rest-dot" cx={11} cy={-3} r={2.2} fill="#111" />}
     </G>;
   }
+  if (glyph === "barline" || glyph === "bar_line") return <Line x1={x} x2={x} y1={y - 24} y2={y + 24} stroke="#111" strokeWidth={1.5} />;
   if (glyph === "repeat_start" || glyph === "repeat_end" || glyph === "repeat_both") {
     return <G transform={`translate(${x} ${y}) scale(${size / 26})`}>
       <Line x1={-3} x2={-3} y1={-24} y2={24} stroke="#111" strokeWidth={3} />

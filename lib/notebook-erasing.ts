@@ -42,7 +42,7 @@ export function eraseNotebookGesture(page: StaffPage, points: StaffPoint[], mode
   const strokeIds = page.strokes.filter(hitStroke).map((s) => s.id);
   const stampIds = (page.stamps ?? []).filter(hitStamp).map((s) => s.id);
   if (!strokeIds.length && !stampIds.length) return page;
-  if (mode === "object") return removeSelection(page, { strokeIds, stampIds });
+  if (mode === "object") return removeSelection(page, { strokeIds, stampIds }, false);
   const cut = <T extends NotebookInkObject>(object: T): T => {
     const frame = objectFrame(object);
     return { ...object, erasures: [...(object.erasures ?? []), { width: width / frame.unit,

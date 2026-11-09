@@ -7,12 +7,14 @@ type Sign = { glyph: string; unit: number; id: string };
 const invalid = (detail: string) => new Error(`반복·이동 기호를 확인해 주세요: ${detail} / Check navigation signs: ${detail}`);
 
 /** Interpret only explicit stamps, at measure boundaries; never infer handwriting. */
-export function followNotebookSigns(note: StaffNotebook, base: NotebookPlan, measuresPerRow: 1 | 4, random = false, rng: () => number = Math.random): NotebookPlan {
-  const count = base.rows.length * measuresPerRow;
+export function followNotebookSigns(note: StaffNotebook, base: NotebookPlan, measuresPerRow: number, random = false, rng: () => number = Math.random): NotebookPlan {
+  const count = base.chunks.length;
+  const counts = base.rows.map((_, i) => base.chunks.filter((c) => c.row === i).length);
+  const starts = counts.map((_, i) => counts.slice(0, i).reduce((a, b) => a + b, 0));
   const signs: Sign[] = base.rows.flatMap((row, rowIndex) => (note.pages[row.pageIndex].stamps ?? [])
     .filter((s) => commands.has(s.glyph) && rowAt(s.y, note.pages[row.pageIndex].staffCount ?? 7) === row.rowIndex)
-    .map((s) => ({ id: s.id, glyph: s.glyph, unit: rowIndex * measuresPerRow +
-      Math.max(0, Math.min(measuresPerRow - 1, Math.floor((s.x - 38) / 824 * measuresPerRow))) })));
+    .map((s) => ({ id: s.id, glyph: s.glyph, unit: starts[rowIndex] +
+      Math.max(0, Math.min(counts[rowIndex] - 1, s.measure ?? Math.floor((s.x - 38) / (824 / (note.pages[row.pageIndex].layoutScale ?? 1)) * counts[rowIndex]))) })));
   const at = (unit: number, glyph: string) => signs.some((s) => s.unit === unit && s.glyph === glyph);
   const unitsOf = (glyph: string) => signs.filter((s) => s.glyph === glyph).map((s) => s.unit).sort((a, b) => a - b);
   for (const sign of signs) if (signs.filter((s) => s.unit === sign.unit && s.glyph === sign.glyph).length > 1)
@@ -70,10 +72,10 @@ export function followNotebookSigns(note: StaffNotebook, base: NotebookPlan, mea
     const previous = base.chunks[original - 1];
     if (previous?.group && previous.group === chunk.group && visits[i - 1] !== original - 1)
       throw invalid("불러온 반복 블록 중간으로 이동할 수 없음 / jump enters a source block");
-    const rowIndex = Math.floor(original / measuresPerRow), endOfRow = original % measuresPerRow === measuresPerRow - 1;
+    const rowIndex = base.chunks[original].row, endOfRow = original === starts[rowIndex] + counts[rowIndex] - 1;
     if (endOfRow && base.rows[rowIndex].keepWithNext && visits[i + 1] !== original + 1)
       throw invalid("잇단음표·연결 기호의 묶음 중간에서 이동할 수 없음 / jump splits linked notation");
-    if (original % measuresPerRow === 0 && base.rows[rowIndex - 1]?.keepWithNext && visits[i - 1] !== original - 1)
+    if (original === starts[rowIndex] && base.rows[rowIndex - 1]?.keepWithNext && visits[i - 1] !== original - 1)
       throw invalid("잇단음표·연결 기호의 묶음 중간으로 이동할 수 없음 / jump enters linked notation");
   });
   // Merge every crossed interval. Shuffle closed musical sections, not targets.
@@ -81,8 +83,8 @@ export function followNotebookSigns(note: StaffNotebook, base: NotebookPlan, mea
   visits.forEach((from, i) => { const to = visits[i + 1]; if (to !== undefined && to !== from + 1) spans.push([Math.min(from, to), Math.max(from, to)]); });
   base.chunks.forEach((chunk, i) => { if (chunk.group && chunk.group === base.chunks[i + 1]?.group) spans.push([i, i + 1]); });
   // A paper row is indivisible in the shuffled sheet.
-  for (let i = 0; i < count; i += measuresPerRow) spans.push([i, i + measuresPerRow - 1]);
-  base.rows.forEach((row, i) => { if (row.keepWithNext) spans.push([i * measuresPerRow, (i + 2) * measuresPerRow - 1]); });
+  starts.forEach((start, i) => spans.push([start, start + counts[i] - 1]));
+  base.rows.forEach((row, i) => { if (row.keepWithNext && i + 1 < base.rows.length) spans.push([starts[i], starts[i + 1] + counts[i + 1] - 1]); });
   spans.sort((a, b) => a[0] - b[0]);
   const merged: [number, number][] = [];
   spans.forEach((span) => { const last = merged.at(-1); if (last && span[0] <= last[1]) last[1] = Math.max(last[1], span[1]); else merged.push([...span]); });
@@ -95,9 +97,9 @@ export function followNotebookSigns(note: StaffNotebook, base: NotebookPlan, mea
   const chunks = order.map((original, index) => {
     const chunk = base.chunks[original];
     durationMs += chunk.endMs - chunk.startMs;
-    if (random && (!index || Math.floor(order[index - 1] / measuresPerRow) !== Math.floor(original / measuresPerRow) || order[index - 1] + 1 !== original))
-      displayRows.push(base.rows[Math.floor(original / measuresPerRow)]);
-    rowEnds.push(durationMs); positionRows.push(random ? displayRows.length - 1 : Math.floor(original / measuresPerRow));
+    if (random && (!index || base.chunks[order[index - 1]].row !== chunk.row || order[index - 1] + 1 !== original))
+      displayRows.push(base.rows[chunk.row]);
+    rowEnds.push(durationMs); positionRows.push(random ? displayRows.length - 1 : chunk.row);
     return { ...chunk, row: positionRows[index] };
   });
   if (durationMs > 600000) throw new Error("NOTEBOOK_TOO_LONG");

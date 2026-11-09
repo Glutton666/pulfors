@@ -239,7 +239,7 @@ test("moving, copying, deleting and JSON round-tripping retain explicit rest-spa
   const restored = JSON.parse(JSON.stringify(copied.page)) as StaffPage;
   expect(notebookBeaming(restored)).toEqual(notebookBeaming(copied.page));
   const rest = restored.stamps!.find((stamp) => copied.selection.stampIds.includes(stamp.id) && stamp.glyph === "rest-eighth")!;
-  const removed = removeSelection(restored, { stampIds: [rest.id], strokeIds: [] });
+  const removed = removeSelection(restored, { stampIds: [rest.id], strokeIds: [] }, false);
   const remaining = copied.selection.stampIds.filter((id) => id !== rest.id);
   expect(notebookBeaming(removed).groups.map((group) => group.memberIds)).toEqual([selection.stampIds, remaining]);
   expect(notebookTupletSpans(removed, undefined, notebookBeaming(removed)).map((span) => span.count)).toEqual([5, 4]);
@@ -270,10 +270,10 @@ test("rests, long values, cross-row fragments and open tuplets retain visible br
     .toMatchObject({ open: true, numberOnly: false });
 });
 
-test("empty pages are safe and legacy settings fall back to the playback source meter", () => {
+test("empty pages are safe and notation meter does not inherit the audio source meter", () => {
   expect(notebookBeaming(paper([])).groups).toEqual([]);
   expect(notebookMeter()).toEqual({ beats: 4, unit: 4 });
-  expect(notebookMeter({ beatsPerMeasure: 3 })).toEqual({ beats: 3, unit: 4 });
-  expect(notebookMeter({ source: { beatsPerMeasure: 6 } as any })).toEqual({ beats: 6, unit: 4 });
+  expect(notebookMeter({ beatsPerMeasure: 3 })).toEqual({ beats: 4, unit: 4 });
+  expect(notebookMeter({ source: { beatsPerMeasure: 6 } as any })).toEqual({ beats: 4, unit: 4 });
   expect(notebookMeter({ beatsPerMeasure: 3, ...meter(6, 8) })).toEqual({ beats: 6, unit: 8 });
 });

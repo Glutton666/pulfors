@@ -13,6 +13,7 @@ import type { NotebookBounds, NotebookSelection } from "@/lib/notebook-editing";
 import { paperErasures } from "@/lib/notebook-erasing";
 import { createNotebookPaperGesture } from "@/lib/notebook-paper-gesture";
 import { NotebookObjectMask } from "./NotebookObjectMask";
+import { naturalPaperWidth, notebookMeasureRegions } from "@/lib/notebook-music-layout";
 
 type Props = {
   page: StaffPage; width: number; height: number; paperScale: number; zoom: number;
@@ -48,7 +49,8 @@ export function NotebookPaper({ page, width, height, paperScale, zoom, offset, l
     onPanResponderRelease: (event) => send(event, "end"),
     onPanResponderTerminate: (event) => send(event, "cancel"),
   }); }, [gesture]);
-  const transform = `translate(${offset.x} ${offset.y}) scale(${zoom})`;
+  const layoutScale = page.layoutScale ?? 1;
+  const transform = `translate(${offset.x} ${offset.y}) scale(${zoom * layoutScale})`;
   const path = (points: StaffPoint[]) => points.map((point, i) => `${i ? "L" : "M"}${point.x},${point.y}`).join(" ") + (points.length === 1 ? " l0.01,0.01" : "");
   const displayedPage = page;
   const beaming = useMemo(() => notebookBeaming(displayedPage, settings, openTupletIds), [displayedPage, settings, openTupletIds]);
@@ -62,8 +64,11 @@ export function NotebookPaper({ page, width, height, paperScale, zoom, offset, l
       <Svg pointerEvents="none" width={width} height={height} viewBox={`0 0 ${width / paperScale} ${height / paperScale}`} preserveAspectRatio="none">
         <G transform={transform}>
           {Array.from({ length: page.staffCount ?? 7 }, (_, row) => Array.from({ length: 5 }, (_, line) => (
-            <Line key={`${row}-${line}`} x1={38} x2={862} y1={STAFF_TOP + row * ROW_HEIGHT + line * STAFF_GAP} y2={STAFF_TOP + row * ROW_HEIGHT + line * STAFF_GAP} stroke="#141414" strokeWidth={1.1} />
+            <Line key={`${row}-${line}`} x1={38} x2={naturalPaperWidth(page) - 38} y1={STAFF_TOP + row * ROW_HEIGHT + line * STAFF_GAP} y2={STAFF_TOP + row * ROW_HEIGHT + line * STAFF_GAP} stroke="#141414" strokeWidth={1.1} />
           )))}
+          {settings?.showBarlines && notebookMeasureRegions(page, settings).filter((r) => r.index > 0 &&
+            !(page.stamps ?? []).some((s) => /^(barline|bar_line)$/.test(s.glyph) && Math.abs(s.x - r.left) < 1 && Math.floor(s.y / ROW_HEIGHT) === r.row))
+            .map((r) => <Line testID="notebook-auto-barline" key={`${r.row}:${r.index}`} x1={r.left} x2={r.left} y1={r.row * ROW_HEIGHT + STAFF_TOP} y2={r.row * ROW_HEIGHT + STAFF_TOP + STAFF_GAP * 4} stroke="#333" strokeWidth={1} />)}
           {(page.strokes ?? []).map((stroke) => <G key={stroke.id} testID={`notebook-ink-${stroke.id}`}>
             <NotebookObjectMask cuts={paperErasures(stroke)}>
             {selection?.strokeIds.includes(stroke.id) && <Path d={path(stroke.points)} fill="none" stroke="#d69e37" opacity={0.45} strokeWidth={stroke.width + 9} strokeLinecap="round" />}
@@ -82,6 +87,16 @@ export function NotebookPaper({ page, width, height, paperScale, zoom, offset, l
           {beaming.groups.map((group) => <NotebookObjectMask key={group.id} cuts={(page.stamps ?? []).filter((s) => group.memberIds.includes(s.id)).flatMap(paperErasures)}>
             <NotebookBeamLayer groups={[group]} />
           </NotebookObjectMask>)}
+          {(page.stamps ?? []).filter((s) => s.tieTo).map((s) => {
+            const next = page.stamps?.find((n) => n.id === s.tieTo);
+            const sameRow = next && Math.floor(next.y / ROW_HEIGHT) === Math.floor(s.y / ROW_HEIGHT);
+            const end = sameRow ? next.x - 4 : naturalPaperWidth(page) - 38;
+            const y = s.y + 12, middle = (s.x + end) / 2;
+            return <G key={`tie:${s.id}`}><Path testID="notebook-tie" d={`M${s.x + 4} ${y} Q${middle} ${y + 14} ${end} ${y}`} stroke="#111" strokeWidth={1.5} fill="none" />
+              {next && !sameRow && <Path d={`M38 ${next.y + 12} Q${(38 + next.x) / 2} ${next.y + 26} ${next.x - 4} ${next.y + 12}`} stroke="#111" strokeWidth={1.5} fill="none" />}</G>;
+          })}
+          {(page.stamps ?? []).filter((s) => s.tieFrom && !page.stamps?.some((other) => other.id === s.tieFrom)).map((s) =>
+            <Path key={`incoming-tie:${s.id}`} testID="notebook-incoming-tie" d={`M38 ${s.y + 12} Q${(38 + s.x) / 2} ${s.y + 26} ${s.x - 4} ${s.y + 12}`} stroke="#111" strokeWidth={1.5} fill="none" />)}
           {tuplets.map((span) => <NotebookObjectMask key={`${span.id}:${span.row}`} cuts={(page.stamps ?? []).filter((s) => page.tuplets?.find((t) => t.id === span.id)?.stampIds.includes(s.id)).flatMap(paperErasures)}>
             <NotebookTupletGlyph {...span} />
           </NotebookObjectMask>)}

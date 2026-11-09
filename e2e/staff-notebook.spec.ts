@@ -427,6 +427,81 @@ async function openNotebook(page: Page) {
   await enterNotebook(page);
 }
 
+for (const width of [390, 768, 844]) test(`musical-layout settings, group edit and random copy at ${width}px`, async ({ page }) => {
+  await page.setViewportSize({ width, height: width === 390 ? 844 : width === 844 ? 390 : 1024 });
+  const reference: StaffNotebook = {
+    id: `layout-journey-${width}`, title: `Layout verification ${width}`, updatedAt: 1,
+    settings: { ...DEFAULT_NOTEBOOK_SETTINGS, autoSpacing: false, autoScale: true, notationMeter: { beats: 4, unit: 4 }, measuresPerRow: 2, rowsPerPage: 3 },
+    pages: [{ id: "reference-page", staffCount: 3,
+      stamps: Array.from({ length: 16 }, (_, i) => ({ id: `layout-${i}`, glyph: "sixteenth", x: 50 + i * 30, y: 102, size: 26, role: i === 0 ? "strong" : "normal" })),
+      strokes: [{ id: "reference-ink", width: 2, points: [{ x: 100, y: 115 }, { x: 150, y: 115 }] }],
+      tuplets: [{ id: "reference-tuplet", stampIds: ["layout-0", "layout-1", "layout-2"], ratio: { actual: 3, normal: 2 } }],
+      anchor: { x: 500, y: 102 },
+    }],
+  };
+  await page.addInitScript((ref) => {
+    if (!localStorage.getItem("lab_staff_notebooks_v1")) localStorage.setItem("lab_staff_notebooks_v1", JSON.stringify([ref]));
+    localStorage.setItem("metronome_language", "ko");
+  }, reference);
+  await openNotebook(page);
+  await openSettings(page);
+  await openSaved(page, reference.title);
+  for (const id of ["notebook-auto-spacing", "notebook-auto-scale", "notebook-show-barlines", "notebook-measures-per-row", "notebook-random-unit-measure", "notebook-random-unit-row", "notebook-random-signs"]) {
+    await page.getByTestId(id).scrollIntoViewIfNeeded();
+    await expect(page.getByTestId(id)).toBeVisible();
+  }
+  await page.getByTestId("notebook-auto-spacing").click();
+  await expect(page.getByTestId("notebook-layout-choice")).toBeVisible();
+  await page.getByTestId("notebook-layout-option-2").click();
+  await expect(page.getByTestId("notebook-layout-choice")).not.toBeVisible();
+  await page.getByTestId("notebook-show-barlines").click();
+  await page.getByTestId("notebook-save").click();
+  await closeNotice(page);
+  const read = () => page.evaluate(() => JSON.parse(localStorage.getItem("lab_staff_notebooks_v1")!));
+  const arranged = (await read()).find((n: StaffNotebook) => n.id === reference.id) as StaffNotebook;
+  expect(arranged.settings!.measuresPerRow).toBe(2);
+  expect(arranged.settings!.autoSpacing).toBe(true);
+  expect(arranged.pages[0].measureCounts![0]).toBe(1);
+  expect(arranged.pages.flatMap((p) => p.stamps ?? []).filter((s) => !s.generated)).toHaveLength(16);
+  expect(arranged.pages.flatMap((p) => p.tuplets ?? [])[0].ratio).toEqual({ actual: 3, normal: 2 });
+  await page.getByTestId("notebook-auto-spacing").click();
+  await page.getByTestId("notebook-save").click();
+  await closeNotice(page);
+  const disabled = (await read()).find((n: StaffNotebook) => n.id === reference.id) as StaffNotebook;
+  expect(disabled.pages).toEqual(arranged.pages);
+  await page.getByTestId("notebook-panel-close").click();
+  await chooseMode(page, "select");
+  await page.getByTestId("notebook-select-row").click();
+  const paper = (await page.getByTestId("notebook-drawing").boundingBox())!;
+  // The draggable control docks cover the middle on short landscape screens.
+  // Select the same row at its unobstructed left edge.
+  await page.mouse.click(paper.x + 45 * paper.width / 900, paper.y + 100 * paper.width / 900);
+  await expect(page.getByTestId("notebook-edit-selection")).toBeEnabled();
+  await page.getByTestId("notebook-edit-selection").click();
+  await expect(page.getByTestId("notebook-object-editor")).toBeVisible();
+  await page.getByTestId("notebook-ratio-normal").fill("1");
+  await page.getByTestId("notebook-ratio-apply").click();
+  await page.getByRole("button", { name: "편집기 닫기", exact: true }).click();
+  await openSettings(page);
+  await page.getByTestId("notebook-save").click();
+  await closeNotice(page);
+  const edited = (await read()).find((n: StaffNotebook) => n.id === reference.id) as StaffNotebook;
+  expect(edited.pages.flatMap((p) => p.tuplets ?? [])[0].ratio).toEqual({ actual: 3, normal: 1 });
+  await page.getByTestId("notebook-panel-close").click();
+  await page.getByTestId("notebook-playback-random").click();
+  await openSettings(page);
+  await page.getByTestId("notebook-reshuffle").click();
+  await page.getByTestId("notebook-panel-close").click();
+  await page.getByTestId("notebook-playback-random").click();
+  await expect(page.getByText("현재 순서를 저장할까요?", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: /^저장$/ }).click();
+  await expect.poll(async () => (await read()).length).toBe(2);
+  const saved = await read() as StaffNotebook[];
+  expect(saved.find((n) => n.id === reference.id)!.pages).toEqual(edited.pages);
+  expect(saved.find((n) => n.id !== reference.id)!.settings!.random).toBe(false);
+  await page.screenshot({ path: `generated-artifacts/notebook-layout-${width}.png` });
+});
+
 async function enterNotebook(page: Page) {
   const vp = page.viewportSize()!;
   await page.getByTestId("mode-cycle-label").click();

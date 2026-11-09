@@ -7,6 +7,7 @@ import { getNotebookPatternSchedule, renderNotebookPatternPCM } from "@/lib/audi
 import { getWebAudioContext, playWebRenderedLoop, releaseRenderedWav, saveRenderedWav } from "@/lib/audio-renderer";
 import type { PracticeEntry } from "@/lib/storage";
 import { followNotebookSigns } from "@/lib/notebook-navigation";
+import { measureDuration, measuresInRow } from "@/lib/notebook-music-layout";
 
 let fileId = 0;
 export function useNotebookPlayback(note: StaffNotebook, active: boolean) {
@@ -44,13 +45,19 @@ export function useNotebookPlayback(note: StaffNotebook, active: boolean) {
       const snapshot = input ?? latest.current;
       const settings = { ...DEFAULT_NOTEBOOK_SETTINGS, ...snapshot.settings };
       const continuousClick = !settings.source && !settings.followSymbols;
+      const perRow = measuresInRow(settings);
+      const barMs = measureDuration(settings) * 60_000 / settings.bpm;
+      const paperRows = notebookRows(snapshot);
+      const base = buildNotebookPlan(paperRows, [{ source: 0, startMs: 0, endMs: barMs }], perRow, false, Math.random,
+        paperRows.map((r) => snapshot.pages[r.pageIndex].measureCounts?.[r.rowIndex] ?? perRow));
+      const plan = settings.followSymbols ? followNotebookSigns(snapshot, base, perRow) : base;
       const beats = settings.beatsPerMeasure ?? 1;
       const simple: PracticeEntry = {
         id: "notebook-click", label: `${beats}/4`, createdAt: 0, mode: "beat",
         bpm: settings.bpm, beatsPerMeasure: beats, beatTypes: Array.from({ length: beats }, (_, i) => beats > 1 && i === 0 ? "accent" : "normal"),
         beatSubdivisions: {}, barRepeats: {}, barLoopMode: "once", subdivisionPattern: [],
       };
-      const source = settings.source ?? simple;
+      const source = settings.source ? settings.source.bpm === settings.bpm ? settings.source : { ...settings.source, bpm: settings.bpm } : simple;
       const inputs = [source];
       if (!inputs.length || inputs.some((entry) => entry.scoreId || entry.rhythmDocument ||
         entry.mode && !["beat", "bar"].includes(entry.mode))) throw new Error("UNSUPPORTED_PATTERN");
@@ -77,17 +84,13 @@ export function useNotebookPlayback(note: StaffNotebook, active: boolean) {
           });
         }
       }
-      const perRow = settings.lineUnit === "phrase" ? 4 : 1;
-      const base = buildNotebookPlan(notebookRows(snapshot), bars, perRow, settings.random && !settings.followSymbols);
-      const plan = settings.followSymbols ? followNotebookSigns(snapshot, base, perRow, settings.random) : base;
-      let cursor = 0;
-      const ticks = plan.chunks.flatMap((chunk) => {
-        const scheduled = rendered[chunk.source].ticks
-          .filter((tick) => tick.time >= chunk.startMs - 0.001 && tick.time < chunk.endMs - 0.001)
-          .map((tick) => ({ ...tick, time: cursor + tick.time - chunk.startMs }));
-        cursor += chunk.endMs - chunk.startMs;
-        return scheduled;
-      });
+      // The paper clock is notation time, not the imported pattern's bar clock.
+      // Loop the complete original pattern independently; never slice its blocks at paper boundaries.
+      const audio = rendered[0];
+      if (!(audio.durationMs > 0)) throw new Error("EMPTY_PATTERN");
+      const ticks = Array.from({ length: Math.ceil(plan.durationMs / audio.durationMs) }, (_, pass) =>
+        audio.ticks.map((tick) => ({ ...tick, time: tick.time + pass * audio.durationMs }))
+          .filter((tick) => tick.time < plan.durationMs)).flat();
       // Render the final schedule, not sliced old audio: sample tails must
       // overlap their NEW neighbours in the shuffled sheet.
       const { pcm } = await renderNotebookPatternPCM(source, controller.signal, { ticks, durationMs: plan.durationMs });

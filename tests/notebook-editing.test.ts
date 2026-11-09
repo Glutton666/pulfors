@@ -73,18 +73,18 @@ test("copy gives fresh IDs to ink, stamps, attachment references and complete tu
   expect(copied.page.tuplets![1].stampIds).toEqual(copied.page.stamps!.slice(3, 5).map((s) => s.id));
   expect(copied.page.tuplets![1].id).not.toBe("t");
 });
-test("clipboard is an independent snapshot; a partial tuplet has no dangling bracket", () => {
+test("clipboard is an independent snapshot; partial tuplet selection captures the whole group", () => {
   const original = page(), clipboard = captureSelection(original, chosen);
   const snapshot = JSON.stringify(clipboard);
   original.strokes[0].points[0].x = 999;
   original.stamps![0].size = 100;
   expect(JSON.stringify(clipboard)).toBe(snapshot);
   const partial = captureSelection(page(), { strokeIds: [], stampIds: ["r"] });
-  expect(partial.tuplets).toEqual([]);
-  expect(partial.stamps).toHaveLength(1);
+  expect(partial.tuplets).toEqual(page().tuplets);
+  expect(partial.stamps).toHaveLength(3);
 });
 test("deleting a note removes its attached marks and incomplete tuplet without affecting others", () => {
-  const next = removeSelection(page(), { strokeIds: [], stampIds: ["n"] });
+  const next = removeSelection(page(), { strokeIds: [], stampIds: ["n"] }, false);
   expect(next.stamps?.map((s) => s.id)).toEqual(["r"]);
   expect(next.tuplets).toEqual([]);
   expect(next.strokes).toHaveLength(2);

@@ -10,6 +10,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import type { NotebookEraserMode } from "@/lib/notebook-erasing";
 import { NotebookInkOptions } from "./NotebookInkOptions";
 import { NotebookInkToolbar } from "./NotebookInkToolbar";
+import type { NotebookSelectionUnit } from "@/lib/notebook-editing";
 
 type Tool = "pen" | "erase" | "move" | "select";
 type Choice = { glyph: string; role: "normal" | "ghost" | "strong"; dotted: boolean };
@@ -49,6 +50,9 @@ type Props = {
   clipboard: ClipboardItem[];
   onPaste: (id: string) => void;
   onPreferredWidth?: (contentWidth: number) => void;
+  selectionUnit?: NotebookSelectionUnit;
+  onSelectionUnit?: (unit: NotebookSelectionUnit) => void;
+  onEditSelection?: () => void;
 };
 
 const durations = ["whole", "half", "quarter", "eighth", "sixteenth", "thirty_second"];
@@ -271,11 +275,11 @@ export function NotebookBottomTools(props: Props) {
   const markGroups = [
     { label: ko ? "임시표" : "Accidentals", items: ACCIDENTALS.map((item) => ({ id: item.value, label: item.labelKey })) },
     { label: ko ? "아티큘레이션" : "Articulations", items: ARTICULATIONS.map((item) => ({ id: item.id, label: item.labelKey })) },
-    { label: ko ? "반복 · 이동 부호" : "Repeats & navigation", items: REPEAT_SIGNS.map((item) => ({ id: item.id, label: item.labelKey })) },
+    { label: ko ? "반복 · 이동 부호" : "Repeats & navigation", items: [{ id: "barline", label: ko ? "마디선" : "Barline" }, ...REPEAT_SIGNS.map((item) => ({ id: item.id, label: item.labelKey }))] },
     { label: ko ? "악기 기호" : "Instrument marks", items: ALL_INSTR_SYMBOLS.map((item) => ({ id: item.id, label: item.labelKey })) },
   ].map((group) => ({
     ...group,
-    items: group.items.map((item) => ({ ...item, label: t("scoreMode", item.label as any) })).filter((item) => {
+    items: group.items.map((item) => ({ ...item, label: item.id === "barline" ? item.label : t("scoreMode", item.label as any) })).filter((item) => {
       if (usedMarkIds.has(item.id)) return false;
       usedMarkIds.add(item.id);
       return true;
@@ -434,6 +438,14 @@ export function NotebookBottomTools(props: Props) {
             <Text style={[styles.toolText, props.tool === "select" && styles.selectedText]}>{ko ? "범위 선택" : "Select"}</Text>
           </Pressable>
           <View style={styles.selectionStatus}><Text style={styles.selectionCount}>{props.selectionCount}</Text><Text style={styles.selectionLabel}>{ko ? "개 선택됨" : "selected"}</Text></View>
+          {(["object", "measure", "row"] as const).map((unit) => <Pressable key={unit} testID={`notebook-select-${unit}`} accessibilityRole="button"
+            accessibilityState={{ selected: (props.selectionUnit ?? "object") === unit }}
+            onPress={() => props.onSelectionUnit?.(unit)} style={[styles.actionChip, (props.selectionUnit ?? "object") === unit && styles.selectedTool]}>
+            <Text style={styles.actionText}>{unit === "object" ? (ko ? "개별·영역" : "Objects") : unit === "measure" ? (ko ? "마디" : "Measure") : (ko ? "줄" : "Row")}</Text>
+          </Pressable>)}
+          <Pressable testID="notebook-edit-selection" accessibilityRole="button" disabled={!props.selectionCount} onPress={props.onEditSelection} style={[styles.actionChip, !props.selectionCount && styles.disabled]}>
+            <Text style={styles.actionText}>{ko ? "내부 편집" : "Edit"}</Text>
+          </Pressable>
           <Pressable accessibilityRole="button" accessibilityLabel={ko ? "선택 크기 줄이기" : "Shrink selection"} disabled={!props.selectionCount} onPress={() => props.onResizeSelection(0.9)} style={[styles.iconTool, !props.selectionCount && styles.disabled]}><Ionicons name="remove" size={17} color="#675d50" /></Pressable>
           <Pressable accessibilityRole="button" accessibilityLabel={ko ? "선택 크기 키우기" : "Grow selection"} disabled={!props.selectionCount} onPress={() => props.onResizeSelection(1.1)} style={[styles.iconTool, !props.selectionCount && styles.disabled]}><Ionicons name="add" size={17} color="#675d50" /></Pressable>
           <Pressable accessibilityRole="button" accessibilityLabel={ko ? "선택 지우기" : "Clear selection"} disabled={!props.selectionCount} onPress={props.onClearSelection} style={[styles.actionChip, !props.selectionCount && styles.disabled]}><Ionicons name="close" size={15} color="#756952" /><Text style={styles.actionText}>{ko ? "해제" : "Clear"}</Text></Pressable>

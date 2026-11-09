@@ -2,7 +2,6 @@ import React, { useEffect, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import type { NotebookSettings, StaffNotebook } from "@/lib/staff-notebook";
-import { notebookMeter } from "@/lib/notebook-beaming";
 import type { PracticeEntry } from "@/lib/storage";
 
 type Props = {
@@ -16,6 +15,7 @@ type Props = {
   notebooks: StaffNotebook[];
   error: string;
   onSettings: (patch: Partial<NotebookSettings>) => void;
+  onReshuffle?: () => void;
   onPattern: (entry: PracticeEntry) => void;
   onRefresh: () => void;
   onNew: () => void;
@@ -36,14 +36,16 @@ export function NotebookSettingsPanel(props: Props) {
   const { ko, t, note, settings, patterns, notebooks } = props;
   const [showPatterns, setShowPatterns] = useState(false);
   const currentRows = settings.rowsPerPage ?? note.pages[props.pageIndex]?.staffCount ?? 7;
-  const meter = notebookMeter(settings);
+  const meter = settings.notationMeter ?? { beats: 4, unit: 4 as const };
   const [rowsDraft, setRowsDraft] = useState(String(currentRows));
   const [zoomDraft, setZoomDraft] = useState(String(Math.round(props.scale * 100)));
   const [beatsDraft, setBeatsDraft] = useState(String(meter.beats));
+  const [measuresDraft, setMeasuresDraft] = useState(String(settings.measuresPerRow ?? (settings.lineUnit === "phrase" ? 4 : 1)));
 
   useEffect(() => setRowsDraft(String(currentRows)), [currentRows, note.id]);
   useEffect(() => setZoomDraft(String(Math.round(props.scale * 100))), [props.scale]);
   useEffect(() => setBeatsDraft(String(meter.beats)), [meter.beats]);
+  useEffect(() => setMeasuresDraft(String(settings.measuresPerRow ?? (settings.lineUnit === "phrase" ? 4 : 1))), [settings.measuresPerRow, settings.lineUnit]);
 
   const eligible = patterns.filter((entry) => !entry.mode || entry.mode === "beat" || entry.mode === "bar");
   const unsupported = patterns.filter((entry) => entry.mode && entry.mode !== "beat" && entry.mode !== "bar");
@@ -78,6 +80,12 @@ export function NotebookSettingsPanel(props: Props) {
     const beats = Number.isFinite(parsed) ? Math.max(1, Math.min(12, Math.round(parsed))) : meter.beats;
     setBeatsDraft(String(beats));
     if (beats !== meter.beats) props.onSettings({ notationMeter: { beats, unit: meter.unit } });
+  };
+  const commitMeasures = (text = measuresDraft) => {
+    const parsed = Number(text);
+    const value = Number.isFinite(parsed) ? Math.max(1, Math.min(32, Math.round(parsed))) : settings.measuresPerRow ?? 1;
+    setMeasuresDraft(String(value));
+    props.onSettings({ measuresPerRow: value, lineUnit: value === 1 ? "measure" : "phrase" });
   };
 
   return (
@@ -136,7 +144,7 @@ export function NotebookSettingsPanel(props: Props) {
       <View style={styles.meterSection}>
         <View style={styles.fieldLabelRow}>
           <Text style={styles.fieldLabel}>{ko ? "기보 박자" : "Notation meter"}</Text>
-          <Text style={styles.value}>{ko ? "빔 표기만" : "Beaming only"}</Text>
+          <Text style={styles.value}>{ko ? "악보 배치" : "Musical layout"}</Text>
         </View>
         <View style={styles.meterFraction}>
           <TextInput
@@ -172,7 +180,15 @@ export function NotebookSettingsPanel(props: Props) {
             ))}
           </View>
         </View>
-        <Text style={styles.meta}>{ko ? "이 설정은 빔 기보에만 적용되며 재생 타이밍은 바꾸지 않습니다." : "Controls beam notation only; playback timing is unchanged."}</Text>
+        <Text style={styles.meta}>{ko ? "기보 박자는 마디 배치와 진행 추적을 정합니다. 패턴 재생 박자는 바뀌지 않습니다." : "Sets measure layout and page tracking; it does not change pattern playback meter."}</Text>
+      </View>
+      {toggle(ko ? "자동 간격" : "Automatic spacing", settings.autoSpacing ?? false, (autoSpacing) => props.onSettings({ autoSpacing }), "notebook-auto-spacing")}
+      {toggle(ko ? "자동 크기 조정" : "Automatic scaling", settings.autoScale ?? false, (autoScale) => props.onSettings({ autoScale }), "notebook-auto-scale")}
+      {toggle(ko ? "마디선 표시" : "Show barlines", settings.showBarlines ?? false, (showBarlines) => props.onSettings({ showBarlines }), "notebook-show-barlines")}
+      <Text style={styles.meta}>{ko ? "마디선을 숨겨도 마디 계산은 계속됩니다." : "Hiding barlines leaves measure calculations intact."}</Text>
+      <View style={styles.fieldGroup}>
+        <View style={styles.fieldLabelRow}><Text style={styles.fieldLabel}>{ko ? "한 줄의 마디 수" : "Measures per row"}</Text><Text style={styles.value}>1–32</Text></View>
+        <TextInput testID="notebook-measures-per-row" accessibilityLabel={ko ? "한 줄의 마디 수" : "Measures per row"} value={measuresDraft} onChangeText={setMeasuresDraft} onBlur={() => commitMeasures()} onSubmitEditing={(event) => commitMeasures(event.nativeEvent.text)} keyboardType="number-pad" returnKeyType="done" style={styles.numberInput} />
       </View>
       <View style={styles.pageControls}>
         <Pressable accessibilityRole="button" accessibilityLabel={ko ? "이전 페이지" : "Previous page"} onPress={() => props.onPage(Math.max(0, props.pageIndex - 1))} disabled={props.pageIndex <= 0} style={[styles.pageArrow, props.pageIndex <= 0 && styles.disabled]}><Ionicons name="chevron-back" size={18} color="#665b4d" /></Pressable>
@@ -193,7 +209,17 @@ export function NotebookSettingsPanel(props: Props) {
           returnKeyType="done"
           style={styles.numberInput}
         />
-        <Text style={styles.meta}>{ko ? "화면 크기와 회전에 관계없이 이 줄 수를 유지합니다." : "This row count remains fixed across rotation and zoom."}</Text>
+        <Text style={styles.meta}>{ko ? "줄 수를 바꾸면 페이지 전체에서 줄 단위로 다시 나눕니다. 예: 6줄에서 4줄로 바꾸면 5–6번째 줄과 그 위의 잉크가 다음 페이지로 이동합니다." : "Changing this repartitions complete rows across pages. For example, 6 → 4 moves rows 5–6 and their ink to the next page."}</Text>
+      </View>
+      <View style={styles.fieldGroup}>
+        <View style={styles.fieldLabelRow}><Text style={styles.fieldLabel}>{ko ? "최소 음표 크기" : "Minimum note scale"}</Text><Text style={styles.value}>{Math.round((settings.minScale ?? 0.65) * 100)}%</Text></View>
+        <View style={styles.segment}>
+          {[0.2, 0.4, 0.65, 0.8, 1].map((value) => (
+            <Pressable key={value} accessibilityRole="button" accessibilityLabel={`${ko ? "최소 크기" : "Minimum scale"} ${Math.round(value * 100)}%`} accessibilityState={{ selected: (settings.minScale ?? 0.65) === value }} onPress={() => props.onSettings({ minScale: value })} style={[styles.segmentButton, (settings.minScale ?? 0.65) === value && styles.segmentSelected]}>
+              <Text style={[styles.segmentText, (settings.minScale ?? 0.65) === value && styles.segmentTextSelected]}>{Math.round(value * 100)}%</Text>
+            </Pressable>
+          ))}
+        </View>
       </View>
       <View style={styles.fieldGroup}>
         <View style={styles.fieldLabelRow}><Text style={styles.fieldLabel}>{ko ? "종이 확대" : "Paper zoom"}</Text><Text style={styles.value}>{Math.round(props.scale * 100)}%</Text></View>
@@ -210,14 +236,14 @@ export function NotebookSettingsPanel(props: Props) {
       <Text style={styles.sectionTitle}>{ko ? "진행 방식" : "Follow the page"}</Text>
       {toggle(t.follow, settings.follow, (follow) => props.onSettings({ follow }), "notebook-follow")}
       {toggle(ko ? "반복 · 이동 기호 따라가기" : "Follow repeat & navigation marks", settings.followSymbols ?? false, (followSymbols) => props.onSettings({ followSymbols }), "notebook-follow-symbols")}
-      <Text style={styles.meta}>{ko ? "놓은 부호만 해석합니다. 도돌이표는 2회, D.C./D.S. 뒤에는 반복하지 않습니다. 코다는 앞의 이동 지점과 뒤의 도착 지점, 두 곳에 놓아 주세요. 4마디 줄에서는 가로 위치로 마디를 구분합니다." : "Reads placed marks only. Repeats play twice, without repeats after D.C./D.S. Place two Coda marks: the earlier trigger and later destination. In a four-measure row, horizontal position selects the measure."}</Text>
+       <Text style={styles.meta}>{ko ? "놓은 부호만 해석합니다. 도돌이표는 2회, D.C./D.S. 뒤에는 반복하지 않습니다. 코다는 앞의 이동 지점과 뒤의 도착 지점, 두 곳에 놓아 주세요." : "Reads placed marks only. Repeats play twice, without repeats after D.C./D.S. Place two Coda marks: the earlier trigger and later destination."}</Text>
       <View style={styles.fieldGroup}>
         <Text style={styles.fieldLabel}>{ko ? "한 줄의 길이" : "Length of each staff row"}</Text>
         <View style={styles.segment}>
-          <Pressable testID="notebook-line-unit-measure" accessibilityRole="button" accessibilityState={{ selected: settings.lineUnit === "measure" }} onPress={() => props.onSettings({ lineUnit: "measure" })} style={[styles.segmentButton, settings.lineUnit === "measure" && styles.segmentSelected]}><Text style={[styles.segmentText, settings.lineUnit === "measure" && styles.segmentTextSelected]}>{t.measure}</Text></Pressable>
-          <Pressable testID="notebook-line-unit-phrase" accessibilityRole="button" accessibilityState={{ selected: settings.lineUnit === "phrase" }} onPress={() => props.onSettings({ lineUnit: "phrase" })} style={[styles.segmentButton, settings.lineUnit === "phrase" && styles.segmentSelected]}><Text style={[styles.segmentText, settings.lineUnit === "phrase" && styles.segmentTextSelected]}>{t.phrase}</Text></Pressable>
+          <Pressable testID="notebook-line-unit-measure" accessibilityRole="button" accessibilityState={{ selected: (settings.measuresPerRow ?? (settings.lineUnit === "phrase" ? 4 : 1)) === 1 }} onPress={() => { setMeasuresDraft("1"); props.onSettings({ lineUnit: "measure", measuresPerRow: 1 }); }} style={[styles.segmentButton, (settings.measuresPerRow ?? (settings.lineUnit === "phrase" ? 4 : 1)) === 1 && styles.segmentSelected]}><Text style={[styles.segmentText, (settings.measuresPerRow ?? (settings.lineUnit === "phrase" ? 4 : 1)) === 1 && styles.segmentTextSelected]}>{t.measure}</Text></Pressable>
+          <Pressable testID="notebook-line-unit-phrase" accessibilityRole="button" accessibilityState={{ selected: (settings.measuresPerRow ?? (settings.lineUnit === "phrase" ? 4 : 1)) === 4 }} onPress={() => { setMeasuresDraft("4"); props.onSettings({ lineUnit: "phrase", measuresPerRow: 4 }); }} style={[styles.segmentButton, (settings.measuresPerRow ?? (settings.lineUnit === "phrase" ? 4 : 1)) === 4 && styles.segmentSelected]}><Text style={[styles.segmentText, (settings.measuresPerRow ?? (settings.lineUnit === "phrase" ? 4 : 1)) === 4 && styles.segmentTextSelected]}>{t.phrase}</Text></Pressable>
         </View>
-        <Text style={styles.meta}>{ko ? "패턴이 있으면 소스의 실제 박자와 템포로 계산합니다." : "With a source, timing follows its meter and tempo."}</Text>
+        <Text style={styles.meta}>{ko ? "선택한 마디 수가 한 줄에 배치됩니다." : "Sets how many measures are laid out on each row."}</Text>
       </View>
       <View style={styles.fieldGroup}>
         <View style={styles.fieldLabelRow}><Text style={styles.fieldLabel}>{t.zoom}</Text><Text style={styles.value}>{settings.playbackZoom.toFixed(2)}×</Text></View>
@@ -228,7 +254,17 @@ export function NotebookSettingsPanel(props: Props) {
         </View>
       </View>
       {toggle(t.random, settings.random, (random) => props.onSettings({ random }), "notebook-random")}
-      <Text style={styles.meta}>{ko ? "무작위 순서는 재생 시작 전에 정해지며 원본 페이지는 유지됩니다." : "Order is randomized before playback; your page stays unchanged."}</Text>
+      <View style={styles.fieldGroup}>
+        <Text style={styles.fieldLabel}>{ko ? "무작위 단위" : "Shuffle unit"}</Text>
+        <View style={styles.segment}>
+          <Pressable testID="notebook-random-unit-measure" accessibilityRole="button" accessibilityState={{ selected: (settings.randomUnit ?? "row") === "measure" }} onPress={() => props.onSettings({ randomUnit: "measure" })} style={[styles.segmentButton, (settings.randomUnit ?? "row") === "measure" && styles.segmentSelected]}><Text style={[styles.segmentText, (settings.randomUnit ?? "row") === "measure" && styles.segmentTextSelected]}>{ko ? "마디" : "Measure"}</Text></Pressable>
+          <Pressable testID="notebook-random-unit-row" accessibilityRole="button" accessibilityState={{ selected: (settings.randomUnit ?? "row") === "row" }} onPress={() => props.onSettings({ randomUnit: "row" })} style={[styles.segmentButton, (settings.randomUnit ?? "row") === "row" && styles.segmentSelected]}><Text style={[styles.segmentText, (settings.randomUnit ?? "row") === "row" && styles.segmentTextSelected]}>{ko ? "줄" : "Row"}</Text></Pressable>
+        </View>
+      </View>
+      {toggle(ko ? "기호도 무작위화" : "Randomize signs", settings.randomSigns ?? false, (randomSigns) => props.onSettings({ randomSigns }), "notebook-random-signs")}
+      {!settings.randomSigns ? toggle(ko ? "줄 안에서 섞기" : "Shuffle within each row", settings.randomInside ?? false, (randomInside) => props.onSettings({ randomInside }), "notebook-random-inside") : null}
+      <Text style={styles.meta}>{ko ? "기호 무작위화가 켜지면 부호 자체를 섞습니다. 끄면 부호와 그 안의 음표를 한 덩어리로 묶어 이동합니다." : "With sign randomization on, signs are shuffled themselves. Off keeps each sign and its contained notes together as one block."}</Text>
+      {props.onReshuffle ? <Pressable testID="notebook-reshuffle" accessibilityRole="button" onPress={props.onReshuffle} style={styles.outlineButton}><Ionicons name="shuffle-outline" size={16} color="#5f5346" /><Text style={styles.buttonText}>{ko ? "다시 섞기" : "Reshuffle"}</Text></Pressable> : null}
       {toggle(ko ? "오선 줄 · 칸에 맞추기" : "Snap notes to staff lines & spaces", settings.snap, (snap) => props.onSettings({ snap }), "notebook-snap")}
 
       <View style={styles.rule} />

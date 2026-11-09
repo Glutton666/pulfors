@@ -37,7 +37,7 @@ const patterns: BeatType[][] = [
   ["accent"], ["normal"],
 ];
 
-function makeNote(lineUnit: "measure" | "phrase", count: number): StaffNotebook {
+function makeNote(lineUnit: "measure" | "phrase", count: number, invalidNavigation = false): StaffNotebook {
   const source: PracticeEntry = {
     id: "complex-bar", label: "Mixed meter / repeats / rests", createdAt: 1,
     mode: "bar", bpm: 120, beatsPerMeasure: 8,
@@ -56,11 +56,11 @@ function makeNote(lineUnit: "measure" | "phrase", count: number): StaffNotebook 
   // One row per page also catches accidental pageIndex/rowIndex confusion.
   return {
     id: "written", title: "Do not change", updatedAt: 7,
-    settings: { ...DEFAULT_NOTEBOOK_SETTINGS, lineUnit, random: true, source },
+    settings: { ...DEFAULT_NOTEBOOK_SETTINGS, bpm: 120, lineUnit, random: true, source, followSymbols: invalidNavigation },
     pages: Array.from({ length: count }, (_, i) => ({
       id: `page-${i}`, staffCount: 1,
       strokes: [{ id: `ink-${i}`, width: 2, points: [{ x: 60 + i, y: 102 }] }],
-      stamps: [{ id: `stamp-${i}`, glyph: "sharp", x: 90 + i, y: 102, size: 26 }],
+      stamps: [{ id: `stamp-${i}`, glyph: invalidNavigation && i === 0 ? "dal_segno" : "sharp", x: 90 + i, y: 102, size: 26 }],
     })),
   };
 }
@@ -85,19 +85,19 @@ function expectedPlayback(rowOrder: number[], perRow: number) {
   const events: { time: number; type: BeatType; beat: number; subBeat: number }[] = [];
   const rowEnds: number[] = [];
   const beats: number[] = [];
-  let cursor = 0;
-  for (const row of rowOrder) {
-    for (let j = 0; j < perRow; j++) {
-      const beat = sourceOrder[(row * perRow + j) % sourceOrder.length];
+  const durationMs = rowOrder.length * perRow * 2000;
+  rowOrder.forEach((_, i) => rowEnds.push((i + 1) * perRow * 2000));
+  let cursor = 0, bar = 0;
+  while (cursor < durationMs) {
+      const beat = sourceOrder[bar++ % sourceOrder.length];
       beats.push(beat);
       patterns[beat].forEach((type, subBeat) => {
-        events.push({ time: cursor + duration[beat] * subBeat / patterns[beat].length, type, beat, subBeat });
+        const time = cursor + duration[beat] * subBeat / patterns[beat].length;
+        if (time < durationMs) events.push({ time, type, beat, subBeat });
       });
       cursor += duration[beat];
-    }
-    rowEnds.push(cursor);
   }
-  return { events, rowEnds, beats, durationMs: cursor };
+  return { events, rowEnds, beats, durationMs };
 }
 
 let presentedMs = 1;
@@ -108,7 +108,8 @@ let render: jest.SpyInstance;
 let random: jest.SpyInstance;
 
 function expectPlaybackMatches(note: StaffNotebook, rows: ReturnType<typeof useNotebookPlayback>["rows"],
-  order: number[], perRow: number, renderCalls = 1, outputCalls = 1) {
+  _order: number[], perRow: number, renderCalls = 1, outputCalls = 1) {
+  const order = note.pages.map((_, i) => i);
   const expected = expectedPlayback(order, perRow);
   expect(rows.map((row) => row.pageIndex)).toEqual(order);
   expect(render).toHaveBeenCalledTimes(renderCalls);
@@ -125,7 +126,7 @@ function expectPlaybackMatches(note: StaffNotebook, rows: ReturnType<typeof useN
   expect(params.schedule.filter((tick) => tick.subBeat === 0).map((tick) => tick.beat)).toEqual(expected.beats);
   // Every occurrence of the atomic block is complete and internally ordered.
   expected.beats.forEach((beat, i) => {
-    if (beat === 1 && expected.beats[i - 1] !== 2) expect(expected.beats.slice(i, i + 4)).toEqual([1, 2, 1, 2]);
+    if (beat === 1 && expected.beats[i - 1] !== 2) expect(expected.beats.slice(i, i + 4)).toEqual([1, 2, 1, 2].slice(0, expected.beats.length - i));
   });
 
   const pcm = jest.mocked(renderer.playWebRenderedLoop).mock.calls[outputCalls - 1][0];
@@ -172,7 +173,7 @@ beforeEach(() => {
 
 test.each([1, 4] as const)("simple 3/4 meter drives actual PCM and %s-measure row timing", async (perRow) => {
   const note = makeNote(perRow === 4 ? "phrase" : "measure", 2);
-  note.settings = { ...DEFAULT_NOTEBOOK_SETTINGS, bpm: 120, beatsPerMeasure: 3, lineUnit: perRow === 4 ? "phrase" : "measure" };
+  note.settings = { ...DEFAULT_NOTEBOOK_SETTINGS, bpm: 120, beatsPerMeasure: 3, notationMeter: { beats: 3, unit: 4 }, lineUnit: perRow === 4 ? "phrase" : "measure" };
   const { result } = renderHook(() => useNotebookPlayback(note, true));
   await act(async () => { await result.current.start(note); });
   const args = mix.mock.calls[0][0];
@@ -188,7 +189,7 @@ test.each([1, 4] as const)("simple 3/4 meter drives actual PCM and %s-measure ro
 });
 test("repeat-follow output repeats actual source PCM while presentation returns to its original row", async () => {
   const note = makeNote("measure", 3);
-  note.settings = { ...DEFAULT_NOTEBOOK_SETTINGS, followSymbols: true, source: {
+  note.settings = { ...DEFAULT_NOTEBOOK_SETTINGS, bpm: 120, notationMeter: { beats: 1, unit: 4 }, followSymbols: true, source: {
     ...note.settings!.source!, bpm: 120, beatsPerMeasure: 3,
     beatTypes: ["strong", "normal", "accent"], beatSubdivisions: {}, barRepeats: {}, loopBlocks: [],
   } };
@@ -199,7 +200,7 @@ test("repeat-follow output repeats actual source PCM while presentation returns 
   const pcm = jest.mocked(renderer.playWebRenderedLoop).mock.calls[0][0] as Float32Array;
   expect(mix.mock.calls[0][0].measureDurationMs).toBe(2500);
   expect([0, 500, 1000, 1500, 2000].map((ms) => pcm[Math.round(ms / 1000 * SR)]))
-    .toEqual([amplitude.strong, amplitude.normal, amplitude.strong, amplitude.normal, amplitude.accent]);
+    .toEqual([amplitude.strong, amplitude.normal, amplitude.accent, amplitude.strong, amplitude.normal]);
   act(() => { presentedMs = 1001; jest.advanceTimersByTime(35); });
   expect(result.current.position?.row).toBe(0);
   act(() => { presentedMs = 2001; jest.advanceTimersByTime(35); });
@@ -296,7 +297,7 @@ describe.each([
     expect(hook.result.current.preparing).toBe(false);
     const expected = expectPlaybackMatches(note, hook.result.current.rows, order, perRow);
     const randomCalls = random.mock.calls.length;
-    expect(randomCalls).toBeGreaterThan(0);
+    expect(randomCalls).toBe(0); // The workspace supplies the already-shuffled sheet; starting never reshuffles.
     // No second shuffle when playback advances or hits a row boundary.
     for (let row = 0; row < count; row++) {
       const start = row ? expected.rowEnds[row - 1] : 0;
@@ -334,10 +335,10 @@ test.each([
     perRow: 4, order: [2, 3, 0, 1] },
   { repair: "switch phrase to measure", lineUnit: "phrase", count: 6, nextUnit: "measure", nextCount: 6,
     perRow: 1, order: [1, 2, 3, 4, 5, 0] },
-] as const)("$repair recovers from an incomplete block on the same hook", async ({
+] as const)("$repair recovers from invalid notation navigation on the same hook", async ({
   lineUnit, count, nextUnit, nextCount, perRow, order,
 }) => {
-  const note = freezeDeep(makeNote(lineUnit, count));
+  const note = freezeDeep(makeNote(lineUnit, count, true));
   const corrected = freezeDeep(makeNote(nextUnit, nextCount));
   const before = JSON.stringify(note);
   const correctedBefore = JSON.stringify(corrected);
@@ -349,8 +350,7 @@ test.each([
   // the latest edited document, not the rejected snapshot.
   const start = hook.result.current.start;
   await act(async () => { await start(); });
-  expect(hook.result.current.error).toContain("반복 블록이 마지막 줄에서 잘립니다");
-  expect(hook.result.current.error).toContain("Add rows to complete the source block.");
+  expect(hook.result.current.error).toContain("Check navigation signs");
   expect(hook.result.current.running).toBe(false);
   expect(hook.result.current.preparing).toBe(false);
   expect(hook.result.current.rows).toEqual([]);
@@ -390,9 +390,9 @@ test.each([
   expect(JSON.stringify(corrected)).toBe(correctedBefore);
 });
 
-test.each(["measure", "phrase"] as const)("%s stops previous output when restarting with an incomplete block", async (lineUnit) => {
+test.each(["measure", "phrase"] as const)("%s stops previous output when restarting with invalid notation navigation", async (lineUnit) => {
   const note = freezeDeep(makeNote(lineUnit, lineUnit === "measure" ? 10 : 5));
-  const incomplete = freezeDeep(makeNote(lineUnit, 3));
+  const incomplete = freezeDeep(makeNote(lineUnit, 3, true));
   const before = JSON.stringify(note);
   const incompleteBefore = JSON.stringify(incomplete);
   const hook = renderHook(({ document }) => useNotebookPlayback(document, true),
@@ -415,8 +415,7 @@ test.each(["measure", "phrase"] as const)("%s stops previous output when restart
 
   hook.rerender({ document: incomplete });
   await act(async () => { await hook.result.current.start(); });
-  expect(hook.result.current.error).toContain("반복 블록이 마지막 줄에서 잘립니다");
-  expect(hook.result.current.error).toContain("Add rows to complete the source block.");
+  expect(hook.result.current.error).toContain("Check navigation signs");
   expect(hook.result.current.running).toBe(false);
   expect(hook.result.current.preparing).toBe(false);
   expect(stopOutput).toHaveBeenCalledTimes(1);

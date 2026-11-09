@@ -7,9 +7,11 @@ export type StaffPoint = { x: number; y: number };
 export type StaffErasure = { points: StaffPoint[]; width: number };
 export type StaffStroke = { id: string; points: StaffPoint[]; width: number; color?: string; erasures?: StaffErasure[] };
 export type NotebookNoteRole = "normal" | "ghost" | "strong";
-export type StaffStamp = { id: string; glyph: string; x: number; y: number; size: number; role?: NotebookNoteRole; dotted?: boolean; attachTo?: string; erasures?: StaffErasure[] };
-export type StaffTuplet = { id: string; stampIds: string[] };
-export type StaffPage = { id: string; strokes: StaffStroke[]; staffCount?: number; stamps?: StaffStamp[]; anchor?: StaffPoint; tuplets?: StaffTuplet[] };
+export type StaffStamp = { id: string; glyph: string; x: number; y: number; size: number; role?: NotebookNoteRole; dotted?: boolean; attachTo?: string; erasures?: StaffErasure[];
+  durationBeats?: number; tieTo?: string; tieFrom?: string; chordId?: string; generated?: boolean; measure?: number; order?: number };
+export type StaffTuplet = { id: string; stampIds: string[]; ratio?: { actual: number; normal: number } };
+export type StaffPage = { id: string; strokes: StaffStroke[]; staffCount?: number; stamps?: StaffStamp[]; anchor?: StaffPoint; tuplets?: StaffTuplet[];
+  layoutScale?: number; completedRows?: number[]; blankRows?: number[]; measureCounts?: number[] };
 export type NotebookSettings = {
   follow: boolean;
   lineUnit: "measure" | "phrase";
@@ -24,10 +26,21 @@ export type NotebookSettings = {
   notationMeter?: { beats: number; unit: 2 | 4 | 8 | 16 };
   rowsPerPage?: number;
   followSymbols?: boolean;
+  measuresPerRow?: number;
+  autoSpacing?: boolean;
+  autoScale?: boolean;
+  showBarlines?: boolean;
+  minScale?: number;
+  randomUnit?: "measure" | "row";
+  randomSigns?: boolean;
+  randomInside?: boolean;
+  randomSeed?: number;
 };
 export const DEFAULT_NOTEBOOK_SETTINGS: NotebookSettings = {
   follow: false, lineUnit: "measure", playbackZoom: 1, bpm: 84,
   random: false, offsetX: 0, offsetY: 0, snap: true, beatsPerMeasure: 1, followSymbols: false,
+  autoSpacing: false, autoScale: false, showBarlines: false, minScale: 0.65,
+  randomUnit: "row", randomSigns: false, randomInside: false, randomSeed: 1,
 };
 export type StaffNotebook = { id: string; title: string; updatedAt: number; pages: StaffPage[]; settings?: NotebookSettings; lastNote?: { pageId: string; stampId: string } };
 
@@ -53,19 +66,35 @@ function isNotebook(value: unknown): value is StaffNotebook {
       !Number.isInteger(settings.notationMeter.beats) || settings.notationMeter.beats < 1 || settings.notationMeter.beats > 12 ||
       ![2, 4, 8, 16].includes(settings.notationMeter.unit)) ||
     settings.rowsPerPage !== undefined && (!Number.isInteger(settings.rowsPerPage) || settings.rowsPerPage < 1 || settings.rowsPerPage > 200) ||
-    settings.followSymbols !== undefined && typeof settings.followSymbols !== "boolean")) return false;
+    settings.followSymbols !== undefined && typeof settings.followSymbols !== "boolean" ||
+    ["autoSpacing", "autoScale", "showBarlines", "randomSigns", "randomInside"].some((key) => settings[key as keyof NotebookSettings] !== undefined && typeof settings[key as keyof NotebookSettings] !== "boolean") ||
+    settings.measuresPerRow !== undefined && (!Number.isInteger(settings.measuresPerRow) || settings.measuresPerRow < 1 || settings.measuresPerRow > 32) ||
+    settings.minScale !== undefined && (!Number.isFinite(settings.minScale) || settings.minScale < 0.2 || settings.minScale > 1) ||
+    settings.randomUnit !== undefined && !["measure", "row"].includes(settings.randomUnit) ||
+    settings.randomSeed !== undefined && (!Number.isInteger(settings.randomSeed) || settings.randomSeed < 0))) return false;
   return typeof note.id === "string" && typeof note.title === "string" && Number.isFinite(note.updatedAt) &&
     Array.isArray(note.pages) && note.pages.length > 0 && note.pages.every((page) => !!page && typeof page === "object" &&
       (page.anchor === undefined || !!page.anchor && Number.isFinite(page.anchor.x) && Number.isFinite(page.anchor.y)) &&
       (page.staffCount === undefined || Number.isInteger(page.staffCount) && page.staffCount > 0 && page.staffCount <= 200) &&
+      (page.layoutScale === undefined || Number.isFinite(page.layoutScale) && page.layoutScale >= 0.2 && page.layoutScale <= 1) &&
+      (page.measureCounts === undefined || Array.isArray(page.measureCounts) && page.measureCounts.length <= (page.staffCount ?? 7) && page.measureCounts.every((n) => Number.isInteger(n) && n >= 1 && n <= 32)) &&
+      [page.completedRows, page.blankRows].every((rows) => rows === undefined || Array.isArray(rows) && rows.every((row) => Number.isInteger(row) && row >= 0 && row < (page.staffCount ?? 7))) &&
       (page.stamps === undefined || Array.isArray(page.stamps) && page.stamps.every((stamp) =>
         !!stamp && typeof stamp.id === "string" && typeof stamp.glyph === "string" && stamp.glyph.length <= 40 &&
         [stamp.x, stamp.y, stamp.size].every(Number.isFinite) && stamp.size >= 4 && stamp.size <= 200 &&
          validErasures(stamp.erasures) && (stamp.role === undefined || ["normal", "ghost", "strong"].includes(stamp.role)) &&
-        (stamp.dotted === undefined || typeof stamp.dotted === "boolean") &&
+         (stamp.dotted === undefined || typeof stamp.dotted === "boolean") &&
+         (stamp.durationBeats === undefined || Number.isFinite(stamp.durationBeats) && stamp.durationBeats > 0 && stamp.durationBeats <= 128) &&
+         (stamp.tieTo === undefined || typeof stamp.tieTo === "string") &&
+         (stamp.tieFrom === undefined || typeof stamp.tieFrom === "string") &&
+         (stamp.chordId === undefined || typeof stamp.chordId === "string") &&
+         (stamp.generated === undefined || typeof stamp.generated === "boolean") &&
+         (stamp.measure === undefined || Number.isInteger(stamp.measure) && stamp.measure >= 0 && stamp.measure <= 100000) &&
+         (stamp.order === undefined || Number.isFinite(stamp.order)) &&
         (stamp.attachTo === undefined || typeof stamp.attachTo === "string" && page.stamps?.some((target) => target.id === stamp.attachTo && target.id !== stamp.id)))) &&
       (page.tuplets === undefined || Array.isArray(page.tuplets) && page.tuplets.every((group) =>
         !!group && typeof group.id === "string" && Array.isArray(group.stampIds) && group.stampIds.length >= 2 &&
+        (group.ratio === undefined || !!group.ratio && Number.isInteger(group.ratio.actual) && Number.isInteger(group.ratio.normal) && group.ratio.actual >= 1 && group.ratio.actual <= 128 && group.ratio.normal >= 1 && group.ratio.normal <= 128) &&
         new Set(group.stampIds).size === group.stampIds.length &&
         group.stampIds.every((stampId) => page.stamps?.some((stamp) => stamp.id === stampId &&
           /^(whole|half|quarter|eighth|sixteenth|thirty_second|rest-(whole|half|quarter|eighth|sixteenth|thirty_second))$/.test(stamp.glyph))))) &&

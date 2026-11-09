@@ -52,7 +52,7 @@ export function snapStaffY(y: number, count: number, low = 12, high = count * RO
 export function constrainStaffPoint(page: StaffPage, point: StaffPoint, snap: boolean): StaffPoint {
   const count = page.staffCount ?? 7;
   return {
-    x: Math.max(22, Math.min(PAPER_WIDTH - 22, point.x)),
+    x: Math.max(22, Math.min(76 + 824 / (page.layoutScale ?? 1) - 22, point.x)),
     y: snap ? snapStaffY(point.y, count) : Math.max(12, Math.min(count * ROW_HEIGHT - 12, point.y)),
   };
 }
@@ -64,9 +64,10 @@ export function stampPosition(page: StaffPage, settings: NotebookSettings, ancho
     : stroke?.points.at(-1));
   let x = previous ? previous.x + 22 : 55;
   let y = previous?.y ?? STAFF_TOP + STAFF_GAP * 2;
-  if (x > PAPER_WIDTH - 55) { x = 55; y = (rowAt(y, page.staffCount ?? 7) + 1) * ROW_HEIGHT + STAFF_TOP + STAFF_GAP * 2; }
+  const paperWidth = 76 + 824 / (page.layoutScale ?? 1);
+  if (x > paperWidth - 55) { x = 55; y = (rowAt(y, page.staffCount ?? 7) + 1) * ROW_HEIGHT + STAFF_TOP + STAFF_GAP * 2; }
   // Legacy offsets remain readable, but never silently shift new placements.
-  x = Math.max(38, Math.min(862, x));
+  x = Math.max(38, Math.min(paperWidth - 38, x));
   y = Math.max(12, Math.min((page.staffCount ?? 7) * ROW_HEIGHT - 12, y));
   return constrainStaffPoint(page, { x, y }, settings.snap);
 }
@@ -101,17 +102,28 @@ export function inkInRow(stroke: StaffStroke, row: number, height = ROW_HEIGHT):
 }
 /** A source row is a complete unit. Ink and stamps travel together without changing the original. */
 export function materializeRows(note: StaffNotebook, rows: NotebookRow[]): StaffPage {
+  const commonScale = Math.min(1, ...rows.map((r) => note.pages[r.pageIndex].layoutScale ?? 1));
+  const factor = (page: StaffPage) => (page.layoutScale ?? 1) / commonScale;
+  const linkedId = (id: string | undefined, index: number, forward: boolean) => {
+    if (!id) return undefined;
+    const positions = rows.flatMap((r, i) => note.pages[r.pageIndex].stamps?.some((s) => s.id === id && rowAt(s.y, note.pages[r.pageIndex].staffCount ?? 7) === r.rowIndex) ? [i] : []);
+    const target = forward ? positions.find((i) => i >= index) : positions.filter((i) => i <= index).at(-1);
+    return target === undefined ? undefined : `${target}:${id}`;
+  };
   return {
-    id: "playback-view", staffCount: rows.length,
+    id: "playback-view", staffCount: rows.length, layoutScale: commonScale,
+    measureCounts: rows.map((r) => note.pages[r.pageIndex].measureCounts?.[r.rowIndex] ?? note.settings?.measuresPerRow ?? (note.settings?.lineUnit === "phrase" ? 4 : 1)),
     strokes: rows.flatMap((row, index) => {
       const page = note.pages[row.pageIndex];
       const shift = (index - row.rowIndex) * ROW_HEIGHT;
       return page.strokes.flatMap((stroke) => inkInRow(stroke, row.rowIndex))
-        .map((stroke) => ({ ...stroke, id: `${index}:${stroke.id}`, points: stroke.points.map((p) => ({ x: p.x, y: p.y + shift })) }));
+        .map((stroke) => ({ ...stroke, id: `${index}:${stroke.id}`, points: stroke.points.map((p) => ({ x: 38 + (p.x - 38) * factor(page), y: p.y + shift })) }));
     }),
     stamps: rows.flatMap((row, index) => (note.pages[row.pageIndex].stamps ?? [])
       .filter((stamp) => rowAt(stamp.y, note.pages[row.pageIndex].staffCount ?? 7) === row.rowIndex)
-      .map((stamp) => ({ ...stamp, id: `${index}:${stamp.id}`, attachTo: stamp.attachTo ? `${index}:${stamp.attachTo}` : undefined, y: stamp.y + (index - row.rowIndex) * ROW_HEIGHT }))),
+      .map((stamp) => ({ ...stamp, id: `${index}:${stamp.id}`, attachTo: stamp.attachTo ? `${index}:${stamp.attachTo}` : undefined,
+        tieTo: linkedId(stamp.tieTo, index, true), tieFrom: linkedId(stamp.tieFrom, index, false),
+        x: 38 + (stamp.x - 38) * factor(note.pages[row.pageIndex]), y: stamp.y + (index - row.rowIndex) * ROW_HEIGHT }))),
     tuplets: rows.flatMap((row, index) => {
       const page = note.pages[row.pageIndex];
       return (page.tuplets ?? []).flatMap((group) => {
@@ -122,7 +134,7 @@ export function materializeRows(note: StaffNotebook, rows: NotebookRow[]): Staff
           const sourceRow = rowAt(stamp.y, page.staffCount ?? 7), target = index + sourceRow - firstRow;
           return rows[target]?.pageIndex === row.pageIndex && rows[target]?.rowIndex === sourceRow ? `${target}:${stamp.id}` : null;
         });
-        return positions.every(Boolean) ? [{ id: `${index}:${group.id}`, stampIds: positions as string[] }] : [];
+        return positions.every(Boolean) ? [{ ...group, id: `${index}:${group.id}`, stampIds: positions as string[] }] : [];
       });
     }),
   };

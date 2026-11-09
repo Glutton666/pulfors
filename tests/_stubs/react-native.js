@@ -41,6 +41,7 @@ function makeRNComponent(tag) {
 }
 
 const View = makeRNComponent("div");
+const Modal = ({ visible, children }) => visible ? React.createElement("div", { role: "dialog" }, children) : null;
 const Text = makeRNComponent("span");
 const ScrollView = makeRNComponent("div");
 const TextInput = makeRNComponent("input");
@@ -68,6 +69,7 @@ const Pressable = React.forwardRef(function Pressable(
 });
 
 module.exports = {
+  Modal,
   Platform: { OS: "ios", select: (specifics) => specifics.ios ?? specifics.default },
   StyleSheet: { create: (s) => s, flatten: (s) => s, absoluteFillObject: {} },
   Dimensions: { get: () => ({ width: 375, height: 812 }) },

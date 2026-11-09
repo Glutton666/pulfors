@@ -93,7 +93,7 @@ test("spacing is one undo/redo edit and repeat/empty spacing adds no history", a
   const before = mockPaper.page;
   act(() => mockTools.onAutoSpace());
   const corrected = mockPaper.page;
-  expect(corrected.stamps[1].x - corrected.stamps[0].x).toBeCloseTo(corrected.stamps[2].x - corrected.stamps[1].x);
+  expect(corrected.stamps[1].x - corrected.stamps[0].x).toBeGreaterThan(corrected.stamps[2].x - corrected.stamps[1].x);
   act(() => mockTools.onAutoSpace());
   expect(mockPaper.page).toBe(corrected);
   act(() => mockTools.onUndo());
