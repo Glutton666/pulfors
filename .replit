@@ -58,10 +58,6 @@ args = "Start App"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "Start Frontend"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
 args = "test"
 
 [[workflows.workflow]]
