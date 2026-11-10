@@ -177,9 +177,7 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
   const layoutError = (e: unknown) => Alert.alert(ko ? "배치를 확인해 주세요" : "Check layout",
     e instanceof Error && e.message === "TUPLET_EXCEEDS_MEASURE"
       ? (ko ? "이 잇단음표의 음악적 길이가 한 마디보다 깁니다. 크기를 줄여도 길이는 바뀌지 않습니다. 음가나 비율을 수정해 주세요." : "This tuplet exceeds one measure. Visual shrinking cannot change its duration. Edit its values or ratio.")
-      : e instanceof Error && e.message === "MANUAL_BAR_LIMIT"
-        ? (ko ? "설정한 마디 수를 유지하므로 수동 마디선을 더 넣을 수 없습니다. 기존 마디선을 옮기거나 줄당 마디 수를 늘려 주세요." : "The configured measure count is preserved. Move an existing barline or increase measures per row before adding another.")
-        : e instanceof Error ? e.message : String(e));
+      : e instanceof Error ? e.message : String(e));
   const commitDocument = (next: StaffNotebook, arrange = !!next.settings?.autoSpacing, after?: (next: StaffNotebook) => void, openIds?: string[]) => {
     const commit = (result: StaffNotebook) => {
       if (JSON.stringify(result) === JSON.stringify(editingNote)) { after?.(result); return; }
@@ -359,7 +357,7 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
         if (next !== gesture.base) {
           const boundary = gesture.base.stamps?.some((s) => isManualBar(s) && !next.stamps?.some((v) => v.id === s.id));
           const apply = () => commitDocument(pageDocument(pageIndex, next), !!settings.autoSpacing);
-          if (boundary) Alert.alert(ko ? "마디선을 지울까요?" : "Delete barline?", ko ? "마디 수와 음표 소속은 유지하고 경계 표시를 기본 위치로 되돌립니다." : "Restore the default boundary position without changing measure counts or note membership.", [{ text: t.cancel, style: "cancel" }, { text: ko ? "삭제" : "Delete", onPress: apply }]);
+          if (boundary) Alert.alert(ko ? "마디선을 지울까요?" : "Delete barline?", ko ? "남은 경계로 마디와 재생 길이를 다시 계산합니다. 마지막 수동선을 지우면 설정한 마디 수로 돌아갑니다." : "Measures and playback duration will use the remaining boundaries. Removing the last manual barline restores the configured count.", [{ text: t.cancel, style: "cancel" }, { text: ko ? "삭제" : "Delete", onPress: apply }]);
           else apply();
         }
         eraseGesture.current = null; setEraseDraft(null); editSnapshot.current = null;
@@ -479,7 +477,7 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
       }, nextOpen);
     };
     if (isManualBar(stamp)) {
-      Alert.alert(ko ? "마디선 위치를 지정합니다" : "Set barline position", ko ? "마디 수·음가·음표 소속은 바뀌지 않습니다. 자동 조정이 켜져 있을 때만 앞뒤 배치를 조정합니다." : "Measure count, durations and note membership stay unchanged. Spacing changes only when automatic spacing is enabled.", [
+      Alert.alert(ko ? "실제 마디 경계를 놓습니다" : "Place a musical barline", ko ? "이 줄은 자동 경계 대신 수동 마디선으로 나눕니다. 마디 수와 재생 길이, 음악적 배치가 바뀌며 마지막 수동선을 지우면 설정한 마디 수로 돌아갑니다." : "This row will use manual boundaries instead of automatic divisions, changing its measure count, playback duration and layout. Removing the last manual barline restores the configured count.", [
         { text: t.cancel, style: "cancel" }, { text: ko ? "놓기" : "Place", onPress: () => {
           const candidate = pageDocument(index, { ...destination, anchor, stamps: [...stamps, stamp] });
           commitDocument(candidate, !!settings.autoSpacing);
@@ -519,7 +517,7 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
   const finishMove = (base: StaffPage, chosen: NotebookSelection, delta: StaffPoint, copy: boolean, paste = false, boundaryConfirmed = false) => {
     const boundary = base.stamps?.some((s) => chosen.stampIds.includes(s.id) && isManualBar(s));
     if (boundary && !boundaryConfirmed) {
-      Alert.alert(ko ? "마디선 위치를 변경합니다" : "Move barline", ko ? "마디 수와 기존 음표의 소속은 유지합니다. 음표를 함께 옮기면 해당 음표의 소속은 이동 위치에 따라 달라집니다." : "Measure counts and existing note membership stay unchanged. Notes moved with the line are separate musical edits.", [
+      Alert.alert(ko ? "마디선 위치를 변경합니다" : "Move barline", ko ? "옮긴 경계를 기준으로 음표의 마디를 다시 해석합니다. 음가는 유지하고 자동 조정이 켜져 있을 때만 배치를 조정합니다." : "Note membership will follow the moved boundary. Durations stay unchanged; spacing changes only when automatic spacing is enabled.", [
         { text: t.cancel, style: "cancel" }, { text: ko ? "계속" : "Continue", onPress: () => finishMove(base, chosen, delta, copy, paste, true) },
       ]); return;
     }
@@ -594,7 +592,7 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
   const deleteSelection = () => {
     const boundary = page.stamps?.some((s) => selection.stampIds.includes(s.id) && isManualBar(s));
     const apply = () => { playback.stop(); commitDocument(pageDocument(pageIndex, removeSelection(page, selection)), !!settings.autoSpacing, () => { setSelection(emptySelection()); setDragDraft(null); }); };
-    if (boundary) Alert.alert(ko ? "마디선을 지울까요?" : "Delete barline?", ko ? "마디 수와 남은 음표 소속은 유지합니다. 자동 조정 OFF에서는 음표 위치도 유지합니다." : "Measure counts and remaining note membership stay unchanged. With auto spacing off, note positions also stay fixed.", [{ text: t.cancel, style: "cancel" }, { text: ko ? "삭제" : "Delete", onPress: apply }]);
+    if (boundary) Alert.alert(ko ? "마디선을 지울까요?" : "Delete barline?", ko ? "남은 경계로 마디와 재생 길이를 다시 계산합니다. 마지막 수동선을 지우면 설정한 마디 수로 돌아갑니다. 자동 조정 OFF에서는 음표 위치와 음가를 유지합니다." : "Measures and playback duration will use the remaining boundaries. Removing the last manual barline restores the configured count. With auto spacing off, note positions and durations stay unchanged.", [{ text: t.cancel, style: "cancel" }, { text: ko ? "삭제" : "Delete", onPress: apply }]);
     else apply();
   };
   const resizeSelection = (factor: number) => {

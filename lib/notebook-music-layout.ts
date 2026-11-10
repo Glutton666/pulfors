@@ -1,13 +1,13 @@
 import type { NotebookSettings, StaffNotebook, StaffPage, StaffStamp, StaffTuplet } from "./staff-notebook";
 import { ROW_HEIGHT, rowAt, inkInRow } from "./staff-notebook-layout";
+import { NOTEBOOK_LEFT, NOTEBOOK_SPAN, isManualBar, measuresInRow, naturalPaperWidth, notebookMeasureRegions } from "./notebook-measures";
+export { NOTEBOOK_LEFT, NOTEBOOK_SPAN, isManualBar, measuresInRow, naturalPaperWidth, notebookMeasureRegions } from "./notebook-measures";
+export type { NotebookMeasureRegion } from "./notebook-measures";
+export { notebookStampMeasure as notebookMeasureAt } from "./notebook-measures";
 
-export const NOTEBOOK_LEFT = 38;
-export const NOTEBOOK_SPAN = 824;
 const EPS = 1e-7;
 const values: Record<string, number> = { whole: 4, half: 2, quarter: 1, eighth: .5, sixteenth: .25, thirty_second: .125 };
 export const isMusic = (s: StaffStamp) => /^(rest-)?(whole|half|quarter|eighth|sixteenth|thirty_second)$/.test(s.glyph);
-export const isManualBar = (s: StaffStamp) => s.glyph === "barline" || s.glyph === "bar_line";
-export const measuresInRow = (settings?: Partial<NotebookSettings>) => settings?.measuresPerRow ?? (settings?.lineUnit === "phrase" ? 4 : 1);
 export const notationMeter = (settings?: Partial<NotebookSettings>) => settings?.notationMeter ?? { beats: 4, unit: 4 as const };
 export const measureDuration = (settings?: Partial<NotebookSettings>) => {
   const m = notationMeter(settings); return m.beats * 4 / m.unit;
@@ -23,49 +23,7 @@ export function musicalDuration(s: StaffStamp, groups: StaffTuplet[]) {
     const r = tupletRatio(g); return d * r.normal / r.actual;
   }, writtenDuration(s));
 }
-export function naturalPaperWidth(page: StaffPage) { return NOTEBOOK_LEFT + NOTEBOOK_SPAN / (page.layoutScale ?? 1) + 38; }
-
-export type NotebookMeasureRegion = { row: number; index: number; left: number; right: number };
-function manualBars(page: StaffPage, row: number) {
-  const end = naturalPaperWidth(page) - 38;
-  return (page.stamps ?? []).filter((s) => isManualBar(s) && rowAt(s.y, page.staffCount ?? 7) === row &&
-    s.x > NOTEBOOK_LEFT + 1 && s.x < end - 1).sort((a, b) => a.x - b.x);
-}
-/** Manual bars are real boundaries. Automatic bars are derived display, never stamps. */
-export function notebookMeasureRegions(page: StaffPage, settings?: Partial<NotebookSettings>): NotebookMeasureRegion[] {
-  const end = naturalPaperWidth(page) - 38;
-  return Array.from({ length: page.staffCount ?? 7 }, (_, row) => {
-    const n = page.measureCounts?.[row] ?? measuresInRow(settings);
-    // Pin distinct existing boundaries, keeping enough slots for later pins.
-    // Legacy overfull documents remain readable; edits/reflow reject excess pins.
-    const bars = manualBars(page, row).map((s) => s.x)
-      .filter((x, i, all) => !i || x - all[i - 1] > 1).slice(0, n - 1);
-    const pins = [{ index: 0, x: NOTEBOOK_LEFT }];
-    bars.forEach((x, i) => {
-      const stored = manualBars(page, row).find((s) => Math.abs(s.x - x) <= 1)?.measure;
-      pins.push({ x, index: Math.max(pins.at(-1)!.index + 1,
-        Math.min(n - bars.length + i, stored ?? Math.round((x - NOTEBOOK_LEFT) / (end - NOTEBOOK_LEFT) * n))) });
-    });
-    pins.push({ index: n, x: end });
-    const bounds: number[] = [];
-    for (let i = 1; i < pins.length; i++) {
-      const a = pins[i - 1], b = pins[i];
-      for (let j = a.index; j < b.index; j++) bounds[j] = a.x + (b.x - a.x) * (j - a.index) / (b.index - a.index);
-    }
-    bounds[n] = end;
-    return bounds.slice(0, -1).map((left, index) => ({ row, index, left, right: bounds[index + 1] }));
-  }).flat();
-}
-
-/** Coordinates locate an editing destination; persisted ownership wins for existing objects. */
-export function notebookMeasureAt(page: StaffPage, stamp: Pick<StaffStamp, "x" | "y" | "measure">, settings?: Partial<NotebookSettings>) {
-  const row = rowAt(stamp.y, page.staffCount ?? 7), count = page.measureCounts?.[row] ?? measuresInRow(settings);
-  return Math.max(0, Math.min(count - 1, stamp.measure ??
-    notebookMeasureRegions(page, settings).find((r) => r.row === row && stamp.x >= r.left && stamp.x < r.right)?.index ??
-    (stamp.x < NOTEBOOK_LEFT ? 0 : count - 1)));
-}
-
-type Unit = { stamps: StaffStamp[]; groups: StaffTuplet[]; duration: number; sourceRow: number; barrier?: boolean; boundary?: number; measure?: number };
+type Unit = { stamps: StaffStamp[]; groups: StaffTuplet[]; duration: number; sourceRow: number; sourceMeasure?: number };
 type Placed = { unit: Unit; row: number; measure: number; start: number; duration: number };
 export type MusicLayoutOptions = { allowCrowded?: boolean; spillVisual?: boolean; openGroup?: StaffTuplet };
 export type MusicLayoutResult = { note: StaffNotebook; reason: "changed" | "unchanged" | "crowded"; requiredScale: number };
@@ -106,24 +64,28 @@ export function layoutNotebookMusic(input: StaffNotebook, options: MusicLayoutOp
   const unitsByRow = new Map<number, Unit[]>();
   const completed = new Set<number>(), blank = new Set<number>();
   const rowCounts = new Map<number, number>();
-  const rowFractions = new Map<number, number[]>();
+  const configuredCounts = new Map<number, number>();
+  // Normalized geometry survives page scaling without moving an intentional
+  // boundary relative to its row. The saved count remains a separate fallback.
+  const manualRows = new Map<number, { bounds: number[]; bars: StaffStamp[] }>();
   input.pages.forEach((p, pi) => {
     const regions = notebookMeasureRegions(p, settings);
     for (let r = 0; r < (p.staffCount ?? 7); r++) {
-      const parts = regions.filter((v) => v.row === r);
-      const bars = manualBars(p, r);
-      const unique = bars.filter((s, i) => !i || s.x - bars[i - 1].x > 1);
-      if (unique.length > parts.length - 1) throw new Error("MANUAL_BAR_LIMIT");
-      rowFractions.set(rowOffsets[pi] + r, [...parts.map((v) => (v.left - NOTEBOOK_LEFT) / (naturalPaperWidth(p) - 76)), 1]);
+      const global = rowOffsets[pi] + r, rs = regions.filter((v) => v.row === r);
+      const bars = (p.stamps ?? []).filter((s) => isManualBar(s) && rowAt(s.y, p.staffCount ?? 7) === r);
+      configuredCounts.set(global, p.measureCounts?.[r] ?? perRow);
+      rowCounts.set(global, rs.length);
+      if (bars.length) manualRows.set(global, {
+        bounds: [...rs.map((v) => (v.left - NOTEBOOK_LEFT) / (naturalPaperWidth(p) - 76)), 1],
+        bars: bars.map((s) => ({ ...s, x: (s.x - NOTEBOOK_LEFT) / (naturalPaperWidth(p) - 76) })),
+      });
     }
-    p.measureCounts?.forEach((n, r) => rowCounts.set(rowOffsets[pi] + r, n));
     p.completedRows?.forEach((r) => completed.add(rowOffsets[pi] + r));
     p.blankRows?.forEach((r) => blank.add(rowOffsets[pi] + r));
-    const stamps = (p.stamps ?? []).filter((s) => !s.generated && !s.attachTo);
+    const stamps = (p.stamps ?? []).filter((s) => !s.generated && !s.attachTo && !isManualBar(s));
     const byId = new Map(stamps.map((s) => [s.id, s]));
     const consumed = new Set<string>();
-    for (const s of [...stamps].sort((a, b) => rowAt(a.y, p.staffCount ?? 7) - rowAt(b.y, p.staffCount ?? 7) ||
-      (a.measure !== undefined && b.measure !== undefined ? a.measure - b.measure : 0) || a.x - b.x || (a.order ?? 0) - (b.order ?? 0))) {
+    for (const s of [...stamps].sort((a, b) => rowAt(a.y, p.staffCount ?? 7) - rowAt(b.y, p.staffCount ?? 7) || a.x - b.x || (a.order ?? 0) - (b.order ?? 0))) {
       if (consumed.has(s.id)) continue;
       const group = allGroups.filter((g) => g.stampIds.includes(s.id)).sort((a, b) => b.stampIds.length - a.stampIds.length)[0];
       const members = group ? group.stampIds.map((id) => byId.get(id)).filter((s): s is StaffStamp => !!s).sort((a, b) => a.x - b.x)
@@ -133,14 +95,16 @@ export function layoutNotebookMusic(input: StaffNotebook, options: MusicLayoutOp
       const groups = group ? allGroups.filter((g) => g.stampIds.every((id) => members.some((m) => m.id === id))) : [];
       const chordDurations = new Map<string, number>();
       members.forEach((m) => chordDurations.set(m.chordId ?? m.id, Math.max(chordDurations.get(m.chordId ?? m.id) ?? 0, musicalDuration(m, groups))));
-      const unit: Unit = { stamps: members, groups, sourceRow, measure: s.measure, duration: [...chordDurations.values()].reduce((a, b) => a + b, 0), barrier: isManualBar(s),
-        boundary: isManualBar(s) ? regions.find((v) => v.row === sourceRow - rowOffsets[pi] && Math.abs(v.left - s.x) <= 1)?.index : undefined };
+      const localRow = sourceRow - rowOffsets[pi];
+      const sourceMeasure = manualRows.get(sourceRow)?.bars.some((s) => s.x > 1 / (naturalPaperWidth(p) - 76) && s.x < 1 - 1 / (naturalPaperWidth(p) - 76))
+        ? regions.find((r) => r.row === localRow && s.x < r.right)?.index ?? rowCounts.get(sourceRow)! - 1
+        : undefined;
+      const unit: Unit = { stamps: members, groups, sourceRow, sourceMeasure, duration: [...chordDurations.values()].reduce((a, b) => a + b, 0) };
       if (group && unit.duration > capacity + EPS) throw new Error("TUPLET_EXCEEDS_MEASURE");
       unitsByRow.set(sourceRow, [...(unitsByRow.get(sourceRow) ?? []), unit]);
     }
   });
-  const placed: Placed[] = [...unitsByRow.values()].flat().filter((u) => u.barrier)
-    .map((unit) => ({ unit, row: unit.sourceRow, measure: unit.boundary ?? 0, start: 0, duration: 0 }));
+  const placed: Placed[] = [];
   let carry: Unit[] = [], row = 0;
   // A malicious/imported document cannot cause unbounded row generation.
   for (; row < totalRows || carry.length; row++) {
@@ -154,12 +118,8 @@ export function layoutNotebookMusic(input: StaffNotebook, options: MusicLayoutOp
     let measure = 0, at = 0;
     while (queue.length) {
       const unit = queue.shift()!;
-      if (unit.barrier) {
-        // A visual boundary is not a rhythmic command or a new measure.
-        continue;
-      }
-      if (row === unit.sourceRow && unit.measure !== undefined && unit.measure > measure) {
-        measure = unit.measure; at = 0;
+      if (unit.sourceRow === row && unit.sourceMeasure !== undefined && unit.sourceMeasure > measure) {
+        measure = unit.sourceMeasure; at = 0;
       }
       const startsBoundary = /^(repeat_start|segno|volta1|volta2)$/.test(unit.stamps[0].glyph);
       if (at >= capacity - EPS && (unit.duration > 0 || startsBoundary)) { at = 0; measure++; }
@@ -207,35 +167,66 @@ export function layoutNotebookMusic(input: StaffNotebook, options: MusicLayoutOp
   // Ordinary musical reflow leaves ink fixed. Visual spill inserts physical rows,
   // so the later original rows (including ink-only/blank rows) move as units.
   const structuralRows = new Map(Array.from({ length: rowCount }, (_, r) => [r, { first: r, last: r }]));
+  const regionFraction = (r: number, m: number) => {
+    const bounds = manualRows.get(r)?.bounds;
+    return bounds ? bounds[m + 1] - bounds[m] : 1 / (rowCounts.get(r) ?? perRow);
+  };
   if (options.spillVisual) {
     let extraRows = 0;
     const updatedCounts = new Map<number, number>();
+    const updatedConfigured = new Map<number, number>();
+    const updatedManual = new Map<number, { bounds: number[]; bars: StaffStamp[] }>();
     const sourceEntries = Array.from({ length: rowCount }, (_, r) => placed.filter((e) => e.row === r));
     for (let oldRow = 0; oldRow < rowCount; oldRow++) {
       const entries = sourceEntries[oldRow];
       let targetRow = oldRow + extraRows, maximumWidth = 0, bars = 0;
       structuralRows.set(oldRow, { first: targetRow, last: targetRow });
-      if (!entries.length) { updatedCounts.set(targetRow, rowCounts.get(oldRow) ?? perRow); continue; }
+      if (!entries.length) {
+        updatedCounts.set(targetRow, rowCounts.get(oldRow) ?? perRow);
+        updatedConfigured.set(targetRow, configuredCounts.get(oldRow) ?? perRow);
+        const manual = manualRows.get(oldRow);
+        if (manual) updatedManual.set(targetRow, manual);
+        continue;
+      }
       const sourcePage = input.pages.find((_, i) => rowOffsets[i] <= oldRow && rowOffsets[i] + (input.pages[i].staffCount ?? 7) > oldRow);
       const scale = settings?.autoScale ? settings.minScale ?? .65 : sourcePage?.layoutScale ?? 1;
       const available = NOTEBOOK_SPAN / scale;
       const maxBars = rowCounts.get(oldRow) ?? perRow;
+      const manual = manualRows.get(oldRow);
+      let firstMeasure = 0;
+      const finishRow = (lastMeasure: number) => {
+        updatedCounts.set(targetRow, bars);
+        updatedConfigured.set(targetRow, firstMeasure === 0 && lastMeasure === maxBars
+          ? configuredCounts.get(oldRow) ?? perRow : bars);
+        if (manual) {
+          const left = manual.bounds[firstMeasure], right = manual.bounds[lastMeasure];
+          updatedManual.set(targetRow, {
+            bounds: manual.bounds.slice(firstMeasure, lastMeasure + 1).map((x) => (x - left) / (right - left)),
+            bars: manual.bars.filter((s) => s.x >= left && (s.x < right || lastMeasure === maxBars))
+              .map((s) => ({ ...s, x: (s.x - left) / (right - left) })),
+          });
+        }
+        firstMeasure = lastMeasure;
+      };
       for (let m = 0; m < maxBars; m++) {
         const bar = entries.filter((e) => e.measure === m);
-        const width = bar.reduce((sum, e) => sum + (e.unit.barrier ? 0 : unitWidth(e.unit, attachments)), 0) + 24;
+        const width = bar.reduce((sum, e) => sum + unitWidth(e.unit, attachments), 0) + 24;
         if (width > available) return { note: input, reason: "crowded", requiredScale: NOTEBOOK_SPAN / width };
-        if (bars && (Math.max(maximumWidth, width) * (bars + 1) > available || bars >= maxBars)) {
-          updatedCounts.set(targetRow, bars); targetRow++; extraRows++; bars = 0; maximumWidth = 0;
+        const fraction = manual ? regionFraction(oldRow, m) : 1;
+        const segment = manual ? manual.bounds[m + 1] - manual.bounds[firstMeasure] : bars + 1;
+        if (bars && (Math.max(maximumWidth, width / fraction) * segment > available || bars >= maxBars)) {
+          finishRow(m); targetRow++; extraRows++; bars = 0; maximumWidth = 0;
         }
         bar.forEach((e) => { e.row = targetRow; e.measure = bars; });
-        bars++; maximumWidth = Math.max(maximumWidth, width);
+        bars++; maximumWidth = Math.max(maximumWidth, width / fraction);
       }
-      updatedCounts.set(targetRow, Math.max(1, bars));
+      finishRow(maxBars);
       structuralRows.get(oldRow)!.last = targetRow;
     }
     rowCounts.clear();
-    rowFractions.clear();
     updatedCounts.forEach((n, r) => rowCounts.set(r, n));
+    configuredCounts.clear(); updatedConfigured.forEach((n, r) => configuredCounts.set(r, n));
+    manualRows.clear(); updatedManual.forEach((v, r) => manualRows.set(r, v));
     rowCount += extraRows;
   }
   const pageCount = Math.ceil(rowCount / rowsPerPage);
@@ -243,7 +234,7 @@ export function layoutNotebookMusic(input: StaffNotebook, options: MusicLayoutOp
     id: input.pages[i]?.id ?? `${input.id}:page:${i}`, staffCount: rowsPerPage, strokes: [] as StaffPage["strokes"],
     stamps: [] as StaffStamp[], tuplets: [] as StaffTuplet[], layoutScale: 1, completedRows: [] as number[], blankRows: [] as number[],
     anchor: undefined as StaffPage["anchor"],
-    measureCounts: Array.from({ length: rowsPerPage }, (_, r) => rowCounts.get(i * rowsPerPage + r) ?? perRow),
+    measureCounts: Array.from({ length: rowsPerPage }, (_, r) => configuredCounts.get(i * rowsPerPage + r) ?? perRow),
   }));
   const mappedRow = (r: number) => structuralRows.get(r)?.first ?? r;
   // Preserve ink geometry within each original row. If a stroke crosses a newly
@@ -279,16 +270,13 @@ export function layoutNotebookMusic(input: StaffNotebook, options: MusicLayoutOp
     layouts[Math.floor(target / rowsPerPage)].anchor = { x: p.anchor.x, y: p.anchor.y + (target % rowsPerPage - sourceRow) * ROW_HEIGHT };
   });
   let requiredScale = 1;
-  const fractions = (r: number) => rowFractions.get(r) ??
-    Array.from({ length: (rowCounts.get(r) ?? perRow) + 1 }, (_, i) => i / (rowCounts.get(r) ?? perRow));
   // Determine one scale per page. Every row retains its musical bar count.
   layouts.forEach((p, pi) => {
     let needed = 1;
     for (let r = pi * rowsPerPage; r < (pi + 1) * rowsPerPage; r++) for (let m = 0; m < (rowCounts.get(r) ?? perRow); m++) {
-      const entries = placed.filter((x) => x.row === r && x.measure === m && !x.unit.barrier);
+      const entries = placed.filter((x) => x.row === r && x.measure === m);
       const width = entries.reduce((sum, x) => sum + unitWidth(x.unit, attachments), 0) + 24;
-      const f = fractions(r);
-      needed = Math.min(needed, NOTEBOOK_SPAN * (f[m + 1] - f[m]) / Math.max(1, width));
+      needed = Math.min(needed, NOTEBOOK_SPAN * regionFraction(r, m) / Math.max(1, width));
     }
     requiredScale = Math.min(requiredScale, needed);
     p.layoutScale = settings?.autoScale ? Math.max(settings.minScale ?? .65, needed) : (input.pages[pi]?.layoutScale ?? 1);
@@ -296,9 +284,8 @@ export function layoutNotebookMusic(input: StaffNotebook, options: MusicLayoutOp
   });
   const crowded = layouts.some((p, pi) => {
     for (let r = pi * rowsPerPage; r < (pi + 1) * rowsPerPage; r++) for (let m = 0; m < (rowCounts.get(r) ?? perRow); m++) {
-      const width = placed.filter((x) => x.row === r && x.measure === m && !x.unit.barrier).reduce((s, x) => s + unitWidth(x.unit, attachments), 0) + 24;
-      const f = fractions(r);
-      if (width > NOTEBOOK_SPAN / p.layoutScale * (f[m + 1] - f[m]) + EPS) return true;
+      const width = placed.filter((x) => x.row === r && x.measure === m).reduce((s, x) => s + unitWidth(x.unit, attachments), 0) + 24;
+      if (width > NOTEBOOK_SPAN / p.layoutScale * regionFraction(r, m) + EPS) return true;
     }
     return false;
   });
@@ -307,20 +294,21 @@ export function layoutNotebookMusic(input: StaffNotebook, options: MusicLayoutOp
   for (let r = 0; r < rowCount; r++) {
     const pi = Math.floor(r / rowsPerPage), page = layouts[pi], localRow = r % rowsPerPage;
     const rowBars = rowCounts.get(r) ?? perRow;
-    const f = fractions(r), span = NOTEBOOK_SPAN / page.layoutScale;
+    const span = NOTEBOOK_SPAN / page.layoutScale;
+    const manual = manualRows.get(r);
+    manual?.bars.forEach((s) => page.stamps.push({ ...s, x: NOTEBOOK_LEFT + s.x * span,
+      y: localRow * ROW_HEIGHT + 102, measure: manual.bounds.findIndex((b) => Math.abs(b - s.x) < EPS) }));
     for (let m = 0; m < rowBars; m++) {
-      const regionLeft = NOTEBOOK_LEFT + span * f[m], regionWidth = span * (f[m + 1] - f[m]);
+      const regionWidth = span * regionFraction(r, m);
+      const regionLeft = NOTEBOOK_LEFT + span * (manual?.bounds[m] ?? m / rowBars);
       const entries = placed.filter((x) => x.row === r && x.measure === m).sort((a, b) => a.start - b.start);
-      const widths = entries.map((e) => e.unit.barrier ? 0 : unitWidth(e.unit, attachments));
+      const widths = entries.map((e) => unitWidth(e.unit, attachments));
       const slack = Math.max(0, regionWidth - 24 - widths.reduce((a, b) => a + b, 0));
       const weights = entries.map((e) => e.duration > 0 ? Math.sqrt(e.duration) : .25);
       const totalWeight = weights.reduce((a, b) => a + b, 0) || 1;
       let cursor = regionLeft + 12;
       entries.forEach((entry, index) => {
         const unit = entry.unit;
-        if (unit.barrier) {
-          const s = unit.stamps[0]; page.stamps.push({ ...s, x: regionLeft, y: localRow * ROW_HEIGHT + 102, measure: m }); return;
-        }
         const units = new Map<string, StaffStamp[]>();
         unit.stamps.forEach((s) => units.set(s.chordId ?? s.id, [...(units.get(s.chordId ?? s.id) ?? []), s]));
         const durationWeight = [...units.values()].map((items) => Math.sqrt(Math.max(.125, musicalDuration(items[0], unit.groups))));

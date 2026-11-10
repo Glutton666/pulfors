@@ -481,7 +481,7 @@ async function openNotebook(page: Page) {
   await enterNotebook(page);
 }
 
-test("manual boundary editing leaves note ownership and coordinates intact with automatic spacing off", async ({ page }) => {
+test("manual boundary editing refreshes effective measures without moving notes when automatic spacing is off", async ({ page }) => {
   await page.setViewportSize({ width: 768, height: 1024 });
   const reference: StaffNotebook = {
     id: "boundary-ownership", title: "Boundary ownership", updatedAt: 1,
@@ -508,7 +508,7 @@ test("manual boundary editing leaves note ownership and coordinates intact with 
   const saved: StaffNotebook = await page.evaluate(() => JSON.parse(localStorage.getItem("lab_staff_notebooks_v1")!).find((n: StaffNotebook) => n.id === "boundary-ownership"));
   const savedStamps = saved.pages[0].stamps!;
   expect(savedStamps.find((s) => s.id === "a")).toEqual(reference.pages[0].stamps![0]);
-  expect(savedStamps.find((s) => s.id === "b")).toEqual(reference.pages[0].stamps![1]);
+  expect(savedStamps.find((s) => s.id === "b")).toEqual({ ...reference.pages[0].stamps![1], measure: 0 });
   expect(Math.abs(savedStamps.find((s) => s.id === "bar")!.x - 500)).toBeLessThan(1 / ratio);
   expect(savedStamps.find((s) => s.id === "bar")!.measure).toBe(1);
 });

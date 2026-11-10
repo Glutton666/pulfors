@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AppState, Platform } from "react-native";
 import { DEFAULT_NOTEBOOK_SETTINGS, type StaffNotebook } from "@/lib/staff-notebook";
-import { notebookRows, type NotebookRow } from "@/lib/staff-notebook-layout";
-import { buildNotebookPlan, notebookPosition, type NotebookBar } from "@/lib/notebook-playback-plan";
+import { type NotebookRow } from "@/lib/staff-notebook-layout";
+import { buildNotebookNotationPlan, notebookPosition, type NotebookBar } from "@/lib/notebook-playback-plan";
 import { getNotebookPatternSchedule, renderNotebookPatternPCM } from "@/lib/audio-export";
 import { getWebAudioContext, playWebRenderedLoop, releaseRenderedWav, saveRenderedWav } from "@/lib/audio-renderer";
 import type { PracticeEntry } from "@/lib/storage";
 import { followNotebookSigns } from "@/lib/notebook-navigation";
-import { measureDuration, measuresInRow } from "@/lib/notebook-music-layout";
+import { measuresInRow } from "@/lib/notebook-music-layout";
 
 let fileId = 0;
 export function useNotebookPlayback(note: StaffNotebook, active: boolean) {
@@ -46,10 +46,7 @@ export function useNotebookPlayback(note: StaffNotebook, active: boolean) {
       const settings = { ...DEFAULT_NOTEBOOK_SETTINGS, ...snapshot.settings };
       const continuousClick = !settings.source && !settings.followSymbols;
       const perRow = measuresInRow(settings);
-      const barMs = measureDuration(settings) * 60_000 / settings.bpm;
-      const paperRows = notebookRows(snapshot);
-      const base = buildNotebookPlan(paperRows, [{ source: 0, startMs: 0, endMs: barMs }], perRow, false, Math.random,
-        paperRows.map((r) => snapshot.pages[r.pageIndex].measureCounts?.[r.rowIndex] ?? perRow));
+      const base = buildNotebookNotationPlan({ ...snapshot, settings });
       const plan = settings.followSymbols ? followNotebookSigns(snapshot, base, perRow) : base;
       const beats = settings.beatsPerMeasure ?? 1;
       const simple: PracticeEntry = {

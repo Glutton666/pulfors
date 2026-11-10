@@ -187,6 +187,26 @@ test.each([1, 4] as const)("simple 3/4 meter drives actual PCM and %s-measure ro
   expect(result.current.position?.row).toBe(1);
   act(() => result.current.stop());
 });
+test.each([true, false])("manual boundary add/move/delete drives actual rendered duration (show=%s)", async (showBarlines) => {
+  jest.mocked(renderer.loadAssetPCM).mockResolvedValue(new Float32Array([amplitude.normal]));
+  const note = makeNote("phrase", 1);
+  note.settings = { ...DEFAULT_NOTEBOOK_SETTINGS, measuresPerRow: 4, bpm: 60,
+    notationMeter: { beats: 4, unit: 4 }, showBarlines };
+  note.pages[0].measureCounts = [4];
+  const { result } = renderHook(() => useNotebookPlayback(note, true));
+  for (const x of [300, 600, null]) {
+    note.pages[0].stamps = x === null ? [] : [{ id: "manual", glyph: "barline", x, y: 102, size: 26 }];
+    await act(async () => { await result.current.start(note); });
+    expect(result.current.error).toBe("");
+    expect(result.current.running).toBe(true);
+    const ms = x === null ? 16000 : 8000;
+    expect(mix.mock.calls.at(-1)![0].measureDurationMs).toBe(ms);
+    const pcm = jest.mocked(renderer.playWebRenderedLoop).mock.calls.at(-1)![0] as Float32Array;
+    expect(pcm.length).toBe(Math.ceil(ms / 1000 * SR));
+    act(() => result.current.stop());
+    outputRunning = true;
+  }
+});
 test("repeat-follow output repeats actual source PCM while presentation returns to its original row", async () => {
   const note = makeNote("measure", 3);
   note.settings = { ...DEFAULT_NOTEBOOK_SETTINGS, bpm: 120, notationMeter: { beats: 1, unit: 4 }, followSymbols: true, source: {

@@ -1,8 +1,19 @@
 import type { NotebookRow } from "./staff-notebook-layout";
+import { notebookRows } from "./staff-notebook-layout";
+import type { StaffNotebook } from "./staff-notebook";
+import { measuresInRow, measureDuration } from "./notebook-music-layout";
+import { notebookPlaybackRowCounts } from "./notebook-measures";
 
 export type NotebookBar = { source: number; startMs: number; endMs: number; group?: string };
 export type NotebookChunk = NotebookBar & { row: number };
 export type NotebookPlan = { rows: NotebookRow[]; chunks: NotebookChunk[]; rowEnds: number[]; durationMs: number; positionRows?: number[] };
+
+/** Paper duration always comes from the same regions used by selection/layout. */
+export function buildNotebookNotationPlan(note: StaffNotebook, barMs = measureDuration(note.settings) * 60_000 / (note.settings?.bpm ?? 120)) {
+  const rows = notebookRows(note);
+  return buildNotebookPlan(rows, [{ source: 0, startMs: 0, endMs: barMs }], measuresInRow(note.settings),
+    false, Math.random, notebookPlaybackRowCounts(note, rows));
+}
 
 /** Shuffle whole paper units, joining units when a source block crosses their boundary. */
 export function buildNotebookPlan(

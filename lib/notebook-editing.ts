@@ -1,7 +1,7 @@
 import type { StaffNotebook, StaffPage, StaffPoint, StaffStamp, StaffStroke } from "./staff-notebook";
 import { ROW_HEIGHT, snapStaffY, inkInRow, rowAt } from "./staff-notebook-layout";
 import { erasedAt } from "./notebook-ink";
-import { naturalPaperWidth, notebookMeasureRegions, notebookMeasureAt, standardTupletRatio } from "./notebook-music-layout";
+import { naturalPaperWidth, notebookMeasureRegions, standardTupletRatio } from "./notebook-music-layout";
 import type { NotebookSettings } from "./staff-notebook";
 
 export type NotebookSelection = { strokeIds: string[]; stampIds: string[] };
@@ -196,11 +196,7 @@ export function selectNotebookUnits(page: StaffPage, start: StaffPoint, end: Sta
   const picked = unit === "row" ? regions.filter((r) => r.row >= rows[0] && r.row <= rows[1])
     : regions.slice(Math.min(a, b), Math.max(a, b) + 1);
   const selections = picked.map((r) => selectRectangle(page, { x: r.left, y: r.row * ROW_HEIGHT, width: r.right - r.left, height: ROW_HEIGHT }));
-  return includeAttached(page, {
-    stampIds: (page.stamps ?? []).filter((s) => picked.some((r) => r.row === rowAt(s.y, count) &&
-      r.index === notebookMeasureAt(page, s, settings))).map((s) => s.id),
-    strokeIds: [...new Set(selections.flatMap((s) => s.strokeIds))],
-  });
+  return includeAttached(page, { stampIds: [...new Set(selections.flatMap((s) => s.stampIds))], strokeIds: [...new Set(selections.flatMap((s) => s.strokeIds))] });
 }
 export function captureSelection(page: StaffPage, selection: NotebookSelection): StaffPage {
   const chosen = includeAttached(page, selection);

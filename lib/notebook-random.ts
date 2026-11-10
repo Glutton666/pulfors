@@ -1,7 +1,8 @@
 import type { StaffNotebook, StaffPage, StaffStamp, StaffTuplet, StaffStroke } from "./staff-notebook";
-import { notebookRows, ROW_HEIGHT, rowAt } from "./staff-notebook-layout";
-import { measuresInRow, naturalPaperWidth, notebookMeasureRegions, notebookMeasureAt } from "./notebook-music-layout";
-import { buildNotebookPlan } from "./notebook-playback-plan";
+import { ROW_HEIGHT, rowAt } from "./staff-notebook-layout";
+import { measuresInRow, naturalPaperWidth, notebookMeasureRegions } from "./notebook-music-layout";
+import { isManualBar, notebookStampMeasure } from "./notebook-measures";
+import { buildNotebookNotationPlan } from "./notebook-playback-plan";
 import { followNotebookSigns } from "./notebook-navigation";
 
 export const isNavigationSign = (s: StaffStamp) => /^(repeat_start|repeat_end|repeat_both|volta1|volta2|segno|coda|da_capo|dal_segno|dal_segno_coda|da_capo_coda|fine)$/.test(s.glyph);
@@ -17,8 +18,7 @@ function shuffle<T>(items: T[], rng: () => number) {
 type Packet = { stamps: StaffStamp[]; strokes: StaffStroke[]; groups: StaffTuplet[]; left: number; width: number; y: number; origin: number; measureCount: number };
 function validate(note: StaffNotebook) {
   const perRow = measuresInRow(note.settings);
-  const rows = notebookRows(note);
-  const base = buildNotebookPlan(rows, [{ source: 0, startMs: 0, endMs: 1 }], perRow, false, Math.random, rows.map((r) => note.pages[r.pageIndex].measureCounts?.[r.rowIndex] ?? perRow));
+  const base = buildNotebookNotationPlan(note, 1);
   followNotebookSigns(note, base, perRow);
 }
 /** Stable for a seed. The original notebook is never mutated or used as a shuffle buffer. */
@@ -31,7 +31,8 @@ export function randomizeNotebook(note: StaffNotebook): StaffNotebook {
     const regions = notebookMeasureRegions(page, settings);
     const regionsToUse = rowMode ? Array.from({ length: page.staffCount ?? 7 }, (_, row) => ({ row, index: 0, left: 38, right: naturalPaperWidth(page) - 38 })) : regions;
     regionsToUse.forEach((r) => {
-      const stamps = (page.stamps ?? []).filter((s) => rowAt(s.y, page.staffCount ?? 7) === r.row && (rowMode || notebookMeasureAt(page, s, settings) === r.index));
+      const stamps = (page.stamps ?? []).filter((s) => rowAt(s.y, page.staffCount ?? 7) === r.row &&
+        (rowMode || !isManualBar(s) && notebookStampMeasure(page, s, settings) === r.index));
       const ids = new Set(stamps.map((s) => s.id));
       packets.push({ stamps, strokes: page.strokes.filter((s) => {
         const p = s.points[0]; return p && rowAt(p.y, page.staffCount ?? 7) === r.row && (rowMode || p.x >= r.left && p.x < r.right);
@@ -103,10 +104,14 @@ export function randomizeNotebook(note: StaffNotebook): StaffNotebook {
   }
   const order = shuffle(blocks, rng).flat();
   const build = (signDestinations?: number[]): StaffNotebook => {
-    const pages = note.pages.map((p) => ({ ...p, measureCounts: [...(p.measureCounts ?? Array(p.staffCount ?? 7).fill(perRow))], stamps: [] as StaffStamp[], strokes: [] as StaffStroke[], tuplets: [] as StaffTuplet[] }));
+    // In measure mode the boundaries belong to the destination grid, not to
+    // shuffled content. Build targets from the original geometry before clearing.
+    const pages = note.pages.map((p) => ({ ...p, measureCounts: [...(p.measureCounts ?? Array(p.staffCount ?? 7).fill(perRow))],
+      stamps: rowMode ? [] as StaffStamp[] : (p.stamps ?? []).filter(isManualBar).map((s) => ({ ...s })),
+      strokes: [] as StaffStroke[], tuplets: [] as StaffTuplet[] }));
     const targets: { page: StaffPage; row: number; measure: number; left: number; width: number }[] = [];
-    pages.forEach((p) => {
-      const rs = rowMode ? Array.from({ length: p.staffCount ?? 7 }, (_, row) => ({ row, index: 0, left: 38, right: naturalPaperWidth(p) - 38 })) : notebookMeasureRegions(p, settings);
+    pages.forEach((p, pi) => {
+      const rs = rowMode ? Array.from({ length: p.staffCount ?? 7 }, (_, row) => ({ row, index: 0, left: 38, right: naturalPaperWidth(p) - 38 })) : notebookMeasureRegions(note.pages[pi], settings);
       rs.forEach((r) => targets.push({ page: p, row: r.row, measure: r.index, left: r.left, width: r.right - r.left }));
     });
     order.forEach((packet, index) => {
@@ -120,6 +125,7 @@ export function randomizeNotebook(note: StaffNotebook): StaffNotebook {
       const t = targets[signDestinations[i]], startSign = /^(repeat_start|segno|coda|volta)/.test(stamp.glyph);
       t.page.stamps!.push({ ...stamp, x: t.left + t.width * (startSign ? .06 : .9), y: t.row * ROW_HEIGHT + 102, measure: rowMode ? startSign ? 0 : perRow - 1 : t.measure });
     });
+    pages.forEach((p) => { p.stamps = p.stamps.map((s) => ({ ...s, measure: notebookStampMeasure(p, s, settings) })); });
     for (const group of allGroups) {
       const page = pages.find((p) => group.stampIds.every((id) => p.stamps.some((s) => s.id === id)));
       if (!page) throw new Error("RANDOM_GROUP_PAGE_BOUNDARY");
