@@ -1,6 +1,7 @@
 import type { StaffNotebook } from "./staff-notebook";
 import { rowAt } from "./staff-notebook-layout";
 import type { NotebookPlan } from "./notebook-playback-plan";
+import { notebookMeasureAt } from "./notebook-music-layout";
 
 const commands = new Set(["repeat_start", "repeat_end", "repeat_both", "volta1", "volta2", "segno", "coda", "da_capo", "dal_segno", "dal_segno_coda", "da_capo_coda", "fine"]);
 type Sign = { glyph: string; unit: number; id: string };
@@ -14,7 +15,8 @@ export function followNotebookSigns(note: StaffNotebook, base: NotebookPlan, mea
   const signs: Sign[] = base.rows.flatMap((row, rowIndex) => (note.pages[row.pageIndex].stamps ?? [])
     .filter((s) => commands.has(s.glyph) && rowAt(s.y, note.pages[row.pageIndex].staffCount ?? 7) === row.rowIndex)
     .map((s) => ({ id: s.id, glyph: s.glyph, unit: starts[rowIndex] +
-      Math.max(0, Math.min(counts[rowIndex] - 1, s.measure ?? Math.floor((s.x - 38) / (824 / (note.pages[row.pageIndex].layoutScale ?? 1)) * counts[rowIndex]))) })));
+      Math.max(0, Math.min(counts[rowIndex] - 1, notebookMeasureAt(note.pages[row.pageIndex], s,
+        { ...note.settings, measuresPerRow: counts[rowIndex] }))) })));
   const at = (unit: number, glyph: string) => signs.some((s) => s.unit === unit && s.glyph === glyph);
   const unitsOf = (glyph: string) => signs.filter((s) => s.glyph === glyph).map((s) => s.unit).sort((a, b) => a - b);
   for (const sign of signs) if (signs.filter((s) => s.unit === sign.unit && s.glyph === sign.glyph).length > 1)

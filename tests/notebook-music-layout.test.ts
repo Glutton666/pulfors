@@ -193,7 +193,7 @@ test("manual barlines define actual selection boundaries", () => {
   expect(notebookMeasureRegions(source.pages[0], source.settings).filter((r) => r.row === 0).map((r) => [r.left, r.right])).toEqual([[38, 300], [300, 862]]);
 });
 test.each([true, false])("four measures stay consistent after adding, moving and deleting a manual bar (visible=%s)", (showBarlines) => {
-  const source = notebook([stamp("before", "quarter", 80), stamp("bar", "barline", 300), stamp("after", "quarter", 340)],
+  const source = notebook([{ ...stamp("before", "quarter", 80), measure: 0 }, stamp("bar", "barline", 300), { ...stamp("after", "quarter", 340), measure: 1 }],
     { measuresPerRow: 4, showBarlines });
   const { buildNotebookPlan } = require("../lib/notebook-playback-plan");
   const { notebookRows } = require("../lib/staff-notebook-layout");

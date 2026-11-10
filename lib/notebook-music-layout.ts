@@ -41,8 +41,11 @@ export function notebookMeasureRegions(page: StaffPage, settings?: Partial<Noteb
     const bars = manualBars(page, row).map((s) => s.x)
       .filter((x, i, all) => !i || x - all[i - 1] > 1).slice(0, n - 1);
     const pins = [{ index: 0, x: NOTEBOOK_LEFT }];
-    bars.forEach((x, i) => pins.push({ x, index: Math.max(pins.at(-1)!.index + 1,
-      Math.min(n - bars.length + i, Math.round((x - NOTEBOOK_LEFT) / (end - NOTEBOOK_LEFT) * n))) }));
+    bars.forEach((x, i) => {
+      const stored = manualBars(page, row).find((s) => Math.abs(s.x - x) <= 1)?.measure;
+      pins.push({ x, index: Math.max(pins.at(-1)!.index + 1,
+        Math.min(n - bars.length + i, stored ?? Math.round((x - NOTEBOOK_LEFT) / (end - NOTEBOOK_LEFT) * n))) });
+    });
     pins.push({ index: n, x: end });
     const bounds: number[] = [];
     for (let i = 1; i < pins.length; i++) {
@@ -54,7 +57,15 @@ export function notebookMeasureRegions(page: StaffPage, settings?: Partial<Noteb
   }).flat();
 }
 
-type Unit = { stamps: StaffStamp[]; groups: StaffTuplet[]; duration: number; sourceRow: number; barrier?: boolean; boundary?: number };
+/** Coordinates locate an editing destination; persisted ownership wins for existing objects. */
+export function notebookMeasureAt(page: StaffPage, stamp: Pick<StaffStamp, "x" | "y" | "measure">, settings?: Partial<NotebookSettings>) {
+  const row = rowAt(stamp.y, page.staffCount ?? 7), count = page.measureCounts?.[row] ?? measuresInRow(settings);
+  return Math.max(0, Math.min(count - 1, stamp.measure ??
+    notebookMeasureRegions(page, settings).find((r) => r.row === row && stamp.x >= r.left && stamp.x < r.right)?.index ??
+    (stamp.x < NOTEBOOK_LEFT ? 0 : count - 1)));
+}
+
+type Unit = { stamps: StaffStamp[]; groups: StaffTuplet[]; duration: number; sourceRow: number; barrier?: boolean; boundary?: number; measure?: number };
 type Placed = { unit: Unit; row: number; measure: number; start: number; duration: number };
 export type MusicLayoutOptions = { allowCrowded?: boolean; spillVisual?: boolean; openGroup?: StaffTuplet };
 export type MusicLayoutResult = { note: StaffNotebook; reason: "changed" | "unchanged" | "crowded"; requiredScale: number };
@@ -111,7 +122,8 @@ export function layoutNotebookMusic(input: StaffNotebook, options: MusicLayoutOp
     const stamps = (p.stamps ?? []).filter((s) => !s.generated && !s.attachTo);
     const byId = new Map(stamps.map((s) => [s.id, s]));
     const consumed = new Set<string>();
-    for (const s of [...stamps].sort((a, b) => rowAt(a.y, p.staffCount ?? 7) - rowAt(b.y, p.staffCount ?? 7) || a.x - b.x || (a.order ?? 0) - (b.order ?? 0))) {
+    for (const s of [...stamps].sort((a, b) => rowAt(a.y, p.staffCount ?? 7) - rowAt(b.y, p.staffCount ?? 7) ||
+      (a.measure !== undefined && b.measure !== undefined ? a.measure - b.measure : 0) || a.x - b.x || (a.order ?? 0) - (b.order ?? 0))) {
       if (consumed.has(s.id)) continue;
       const group = allGroups.filter((g) => g.stampIds.includes(s.id)).sort((a, b) => b.stampIds.length - a.stampIds.length)[0];
       const members = group ? group.stampIds.map((id) => byId.get(id)).filter((s): s is StaffStamp => !!s).sort((a, b) => a.x - b.x)
@@ -121,7 +133,7 @@ export function layoutNotebookMusic(input: StaffNotebook, options: MusicLayoutOp
       const groups = group ? allGroups.filter((g) => g.stampIds.every((id) => members.some((m) => m.id === id))) : [];
       const chordDurations = new Map<string, number>();
       members.forEach((m) => chordDurations.set(m.chordId ?? m.id, Math.max(chordDurations.get(m.chordId ?? m.id) ?? 0, musicalDuration(m, groups))));
-      const unit: Unit = { stamps: members, groups, sourceRow, duration: [...chordDurations.values()].reduce((a, b) => a + b, 0), barrier: isManualBar(s),
+      const unit: Unit = { stamps: members, groups, sourceRow, measure: s.measure, duration: [...chordDurations.values()].reduce((a, b) => a + b, 0), barrier: isManualBar(s),
         boundary: isManualBar(s) ? regions.find((v) => v.row === sourceRow - rowOffsets[pi] && Math.abs(v.left - s.x) <= 1)?.index : undefined };
       if (group && unit.duration > capacity + EPS) throw new Error("TUPLET_EXCEEDS_MEASURE");
       unitsByRow.set(sourceRow, [...(unitsByRow.get(sourceRow) ?? []), unit]);
@@ -143,9 +155,11 @@ export function layoutNotebookMusic(input: StaffNotebook, options: MusicLayoutOp
     while (queue.length) {
       const unit = queue.shift()!;
       if (unit.barrier) {
-        // The line pins an existing boundary, never creates an extra measure.
-        if (row === unit.sourceRow && (unit.boundary ?? 0) > measure) { measure = unit.boundary!; at = 0; }
+        // A visual boundary is not a rhythmic command or a new measure.
         continue;
+      }
+      if (row === unit.sourceRow && unit.measure !== undefined && unit.measure > measure) {
+        measure = unit.measure; at = 0;
       }
       const startsBoundary = /^(repeat_start|segno|volta1|volta2)$/.test(unit.stamps[0].glyph);
       if (at >= capacity - EPS && (unit.duration > 0 || startsBoundary)) { at = 0; measure++; }

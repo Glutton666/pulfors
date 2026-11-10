@@ -1,6 +1,6 @@
 import type { StaffNotebook, StaffPage, StaffStamp, StaffTuplet, StaffStroke } from "./staff-notebook";
 import { notebookRows, ROW_HEIGHT, rowAt } from "./staff-notebook-layout";
-import { measuresInRow, naturalPaperWidth, notebookMeasureRegions } from "./notebook-music-layout";
+import { measuresInRow, naturalPaperWidth, notebookMeasureRegions, notebookMeasureAt } from "./notebook-music-layout";
 import { buildNotebookPlan } from "./notebook-playback-plan";
 import { followNotebookSigns } from "./notebook-navigation";
 
@@ -31,7 +31,7 @@ export function randomizeNotebook(note: StaffNotebook): StaffNotebook {
     const regions = notebookMeasureRegions(page, settings);
     const regionsToUse = rowMode ? Array.from({ length: page.staffCount ?? 7 }, (_, row) => ({ row, index: 0, left: 38, right: naturalPaperWidth(page) - 38 })) : regions;
     regionsToUse.forEach((r) => {
-      const stamps = (page.stamps ?? []).filter((s) => rowAt(s.y, page.staffCount ?? 7) === r.row && (rowMode || (s.measure !== undefined ? s.measure === r.index : s.x >= r.left && s.x < r.right)));
+      const stamps = (page.stamps ?? []).filter((s) => rowAt(s.y, page.staffCount ?? 7) === r.row && (rowMode || notebookMeasureAt(page, s, settings) === r.index));
       const ids = new Set(stamps.map((s) => s.id));
       packets.push({ stamps, strokes: page.strokes.filter((s) => {
         const p = s.points[0]; return p && rowAt(p.y, page.staffCount ?? 7) === r.row && (rowMode || p.x >= r.left && p.x < r.right);

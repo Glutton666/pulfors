@@ -481,6 +481,38 @@ async function openNotebook(page: Page) {
   await enterNotebook(page);
 }
 
+test("manual boundary editing leaves note ownership and coordinates intact with automatic spacing off", async ({ page }) => {
+  await page.setViewportSize({ width: 768, height: 1024 });
+  const reference: StaffNotebook = {
+    id: "boundary-ownership", title: "Boundary ownership", updatedAt: 1,
+    settings: { ...DEFAULT_NOTEBOOK_SETTINGS, autoSpacing: false, measuresPerRow: 4, rowsPerPage: 7 },
+    pages: [{ id: "boundary-page", staffCount: 7, strokes: [], stamps: [
+      { id: "a", glyph: "quarter", x: 150, y: 257, size: 26, measure: 0 },
+      { id: "b", glyph: "quarter", x: 330, y: 257, size: 26, measure: 1 },
+      { id: "bar", glyph: "barline", x: 244, y: 257, size: 26, measure: 1 },
+    ] }],
+  };
+  await page.addInitScript((ref) => {
+    if (!localStorage.getItem("lab_staff_notebooks_v1")) localStorage.setItem("lab_staff_notebooks_v1", JSON.stringify([ref]));
+    localStorage.setItem("metronome_language", "ko");
+  }, reference);
+  await openNotebook(page); await openSettings(page); await openSaved(page, reference.title);
+  await page.getByTestId("notebook-panel-close").click();
+  await chooseMode(page, "notes");
+  const paper = (await page.getByTestId("notebook-drawing").boundingBox())!, ratio = paper.width / 900;
+  await page.mouse.click(paper.x + 244 * ratio, paper.y + 257 * ratio);
+  await paperDrag(page, { x: 244, y: 257 }, { x: 500, y: 257 });
+  await expect(page.getByText("마디선 위치를 변경합니다", { exact: true })).toBeVisible();
+  await page.getByText("계속", { exact: true }).last().click();
+  await openSettings(page); await page.getByTestId("notebook-save").click(); await closeNotice(page);
+  const saved: StaffNotebook = await page.evaluate(() => JSON.parse(localStorage.getItem("lab_staff_notebooks_v1")!).find((n: StaffNotebook) => n.id === "boundary-ownership"));
+  const savedStamps = saved.pages[0].stamps!;
+  expect(savedStamps.find((s) => s.id === "a")).toEqual(reference.pages[0].stamps![0]);
+  expect(savedStamps.find((s) => s.id === "b")).toEqual(reference.pages[0].stamps![1]);
+  expect(Math.abs(savedStamps.find((s) => s.id === "bar")!.x - 500)).toBeLessThan(1 / ratio);
+  expect(savedStamps.find((s) => s.id === "bar")!.measure).toBe(1);
+});
+
 for (const width of [390, 768, 844]) test(`musical-layout settings, group edit and random copy at ${width}px`, async ({ page }) => {
   await page.setViewportSize({ width, height: width === 390 ? 844 : width === 844 ? 390 : 1024 });
   const reference: StaffNotebook = {
