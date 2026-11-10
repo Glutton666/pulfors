@@ -26,20 +26,35 @@ export function musicalDuration(s: StaffStamp, groups: StaffTuplet[]) {
 export function naturalPaperWidth(page: StaffPage) { return NOTEBOOK_LEFT + NOTEBOOK_SPAN / (page.layoutScale ?? 1) + 38; }
 
 export type NotebookMeasureRegion = { row: number; index: number; left: number; right: number };
+function manualBars(page: StaffPage, row: number) {
+  const end = naturalPaperWidth(page) - 38;
+  return (page.stamps ?? []).filter((s) => isManualBar(s) && rowAt(s.y, page.staffCount ?? 7) === row &&
+    s.x > NOTEBOOK_LEFT + 1 && s.x < end - 1).sort((a, b) => a.x - b.x);
+}
 /** Manual bars are real boundaries. Automatic bars are derived display, never stamps. */
 export function notebookMeasureRegions(page: StaffPage, settings?: Partial<NotebookSettings>): NotebookMeasureRegion[] {
   const end = naturalPaperWidth(page) - 38;
   return Array.from({ length: page.staffCount ?? 7 }, (_, row) => {
     const n = page.measureCounts?.[row] ?? measuresInRow(settings);
-    const bars = (page.stamps ?? []).filter((s) => isManualBar(s) && rowAt(s.y, page.staffCount ?? 7) === row)
-      .map((s) => s.x).filter((x) => x > NOTEBOOK_LEFT + 1 && x < end - 1).sort((a, b) => a - b);
-    const bounds = bars.length ? [NOTEBOOK_LEFT, ...bars.filter((x, i) => !i || x - bars[i - 1] > 1), end]
-      : Array.from({ length: n + 1 }, (_, i) => NOTEBOOK_LEFT + (end - NOTEBOOK_LEFT) * i / n);
+    // Pin distinct existing boundaries, keeping enough slots for later pins.
+    // Legacy overfull documents remain readable; edits/reflow reject excess pins.
+    const bars = manualBars(page, row).map((s) => s.x)
+      .filter((x, i, all) => !i || x - all[i - 1] > 1).slice(0, n - 1);
+    const pins = [{ index: 0, x: NOTEBOOK_LEFT }];
+    bars.forEach((x, i) => pins.push({ x, index: Math.max(pins.at(-1)!.index + 1,
+      Math.min(n - bars.length + i, Math.round((x - NOTEBOOK_LEFT) / (end - NOTEBOOK_LEFT) * n))) }));
+    pins.push({ index: n, x: end });
+    const bounds: number[] = [];
+    for (let i = 1; i < pins.length; i++) {
+      const a = pins[i - 1], b = pins[i];
+      for (let j = a.index; j < b.index; j++) bounds[j] = a.x + (b.x - a.x) * (j - a.index) / (b.index - a.index);
+    }
+    bounds[n] = end;
     return bounds.slice(0, -1).map((left, index) => ({ row, index, left, right: bounds[index + 1] }));
   }).flat();
 }
 
-type Unit = { stamps: StaffStamp[]; groups: StaffTuplet[]; duration: number; sourceRow: number; barrier?: boolean };
+type Unit = { stamps: StaffStamp[]; groups: StaffTuplet[]; duration: number; sourceRow: number; barrier?: boolean; boundary?: number };
 type Placed = { unit: Unit; row: number; measure: number; start: number; duration: number };
 export type MusicLayoutOptions = { allowCrowded?: boolean; spillVisual?: boolean; openGroup?: StaffTuplet };
 export type MusicLayoutResult = { note: StaffNotebook; reason: "changed" | "unchanged" | "crowded"; requiredScale: number };
@@ -80,7 +95,16 @@ export function layoutNotebookMusic(input: StaffNotebook, options: MusicLayoutOp
   const unitsByRow = new Map<number, Unit[]>();
   const completed = new Set<number>(), blank = new Set<number>();
   const rowCounts = new Map<number, number>();
+  const rowFractions = new Map<number, number[]>();
   input.pages.forEach((p, pi) => {
+    const regions = notebookMeasureRegions(p, settings);
+    for (let r = 0; r < (p.staffCount ?? 7); r++) {
+      const parts = regions.filter((v) => v.row === r);
+      const bars = manualBars(p, r);
+      const unique = bars.filter((s, i) => !i || s.x - bars[i - 1].x > 1);
+      if (unique.length > parts.length - 1) throw new Error("MANUAL_BAR_LIMIT");
+      rowFractions.set(rowOffsets[pi] + r, [...parts.map((v) => (v.left - NOTEBOOK_LEFT) / (naturalPaperWidth(p) - 76)), 1]);
+    }
     p.measureCounts?.forEach((n, r) => rowCounts.set(rowOffsets[pi] + r, n));
     p.completedRows?.forEach((r) => completed.add(rowOffsets[pi] + r));
     p.blankRows?.forEach((r) => blank.add(rowOffsets[pi] + r));
@@ -97,12 +121,14 @@ export function layoutNotebookMusic(input: StaffNotebook, options: MusicLayoutOp
       const groups = group ? allGroups.filter((g) => g.stampIds.every((id) => members.some((m) => m.id === id))) : [];
       const chordDurations = new Map<string, number>();
       members.forEach((m) => chordDurations.set(m.chordId ?? m.id, Math.max(chordDurations.get(m.chordId ?? m.id) ?? 0, musicalDuration(m, groups))));
-      const unit: Unit = { stamps: members, groups, sourceRow, duration: [...chordDurations.values()].reduce((a, b) => a + b, 0), barrier: isManualBar(s) };
+      const unit: Unit = { stamps: members, groups, sourceRow, duration: [...chordDurations.values()].reduce((a, b) => a + b, 0), barrier: isManualBar(s),
+        boundary: isManualBar(s) ? regions.find((v) => v.row === sourceRow - rowOffsets[pi] && Math.abs(v.left - s.x) <= 1)?.index : undefined };
       if (group && unit.duration > capacity + EPS) throw new Error("TUPLET_EXCEEDS_MEASURE");
       unitsByRow.set(sourceRow, [...(unitsByRow.get(sourceRow) ?? []), unit]);
     }
   });
-  const placed: Placed[] = [];
+  const placed: Placed[] = [...unitsByRow.values()].flat().filter((u) => u.barrier)
+    .map((unit) => ({ unit, row: unit.sourceRow, measure: unit.boundary ?? 0, start: 0, duration: 0 }));
   let carry: Unit[] = [], row = 0;
   // A malicious/imported document cannot cause unbounded row generation.
   for (; row < totalRows || carry.length; row++) {
@@ -117,9 +143,9 @@ export function layoutNotebookMusic(input: StaffNotebook, options: MusicLayoutOp
     while (queue.length) {
       const unit = queue.shift()!;
       if (unit.barrier) {
-        if (at > EPS) { measure++; at = 0; }
-        if (measure >= rowBars) { carry = [unit, ...queue]; break; }
-        placed.push({ unit, row, measure, start: 0, duration: 0 }); continue;
+        // The line pins an existing boundary, never creates an extra measure.
+        if (row === unit.sourceRow && (unit.boundary ?? 0) > measure) { measure = unit.boundary!; at = 0; }
+        continue;
       }
       const startsBoundary = /^(repeat_start|segno|volta1|volta2)$/.test(unit.stamps[0].glyph);
       if (at >= capacity - EPS && (unit.duration > 0 || startsBoundary)) { at = 0; measure++; }
@@ -194,6 +220,7 @@ export function layoutNotebookMusic(input: StaffNotebook, options: MusicLayoutOp
       structuralRows.get(oldRow)!.last = targetRow;
     }
     rowCounts.clear();
+    rowFractions.clear();
     updatedCounts.forEach((n, r) => rowCounts.set(r, n));
     rowCount += extraRows;
   }
@@ -238,13 +265,16 @@ export function layoutNotebookMusic(input: StaffNotebook, options: MusicLayoutOp
     layouts[Math.floor(target / rowsPerPage)].anchor = { x: p.anchor.x, y: p.anchor.y + (target % rowsPerPage - sourceRow) * ROW_HEIGHT };
   });
   let requiredScale = 1;
+  const fractions = (r: number) => rowFractions.get(r) ??
+    Array.from({ length: (rowCounts.get(r) ?? perRow) + 1 }, (_, i) => i / (rowCounts.get(r) ?? perRow));
   // Determine one scale per page. Every row retains its musical bar count.
   layouts.forEach((p, pi) => {
     let needed = 1;
     for (let r = pi * rowsPerPage; r < (pi + 1) * rowsPerPage; r++) for (let m = 0; m < (rowCounts.get(r) ?? perRow); m++) {
       const entries = placed.filter((x) => x.row === r && x.measure === m && !x.unit.barrier);
       const width = entries.reduce((sum, x) => sum + unitWidth(x.unit, attachments), 0) + 24;
-      needed = Math.min(needed, NOTEBOOK_SPAN / (rowCounts.get(r) ?? perRow) / Math.max(1, width));
+      const f = fractions(r);
+      needed = Math.min(needed, NOTEBOOK_SPAN * (f[m + 1] - f[m]) / Math.max(1, width));
     }
     requiredScale = Math.min(requiredScale, needed);
     p.layoutScale = settings?.autoScale ? Math.max(settings.minScale ?? .65, needed) : (input.pages[pi]?.layoutScale ?? 1);
@@ -253,7 +283,8 @@ export function layoutNotebookMusic(input: StaffNotebook, options: MusicLayoutOp
   const crowded = layouts.some((p, pi) => {
     for (let r = pi * rowsPerPage; r < (pi + 1) * rowsPerPage; r++) for (let m = 0; m < (rowCounts.get(r) ?? perRow); m++) {
       const width = placed.filter((x) => x.row === r && x.measure === m && !x.unit.barrier).reduce((s, x) => s + unitWidth(x.unit, attachments), 0) + 24;
-      if (width > NOTEBOOK_SPAN / p.layoutScale / (rowCounts.get(r) ?? perRow) + EPS) return true;
+      const f = fractions(r);
+      if (width > NOTEBOOK_SPAN / p.layoutScale * (f[m + 1] - f[m]) + EPS) return true;
     }
     return false;
   });
@@ -262,18 +293,19 @@ export function layoutNotebookMusic(input: StaffNotebook, options: MusicLayoutOp
   for (let r = 0; r < rowCount; r++) {
     const pi = Math.floor(r / rowsPerPage), page = layouts[pi], localRow = r % rowsPerPage;
     const rowBars = rowCounts.get(r) ?? perRow;
-    const regionWidth = NOTEBOOK_SPAN / page.layoutScale / rowBars;
+    const f = fractions(r), span = NOTEBOOK_SPAN / page.layoutScale;
     for (let m = 0; m < rowBars; m++) {
+      const regionLeft = NOTEBOOK_LEFT + span * f[m], regionWidth = span * (f[m + 1] - f[m]);
       const entries = placed.filter((x) => x.row === r && x.measure === m).sort((a, b) => a.start - b.start);
       const widths = entries.map((e) => e.unit.barrier ? 0 : unitWidth(e.unit, attachments));
       const slack = Math.max(0, regionWidth - 24 - widths.reduce((a, b) => a + b, 0));
       const weights = entries.map((e) => e.duration > 0 ? Math.sqrt(e.duration) : .25);
       const totalWeight = weights.reduce((a, b) => a + b, 0) || 1;
-      let cursor = NOTEBOOK_LEFT + m * regionWidth + 12;
+      let cursor = regionLeft + 12;
       entries.forEach((entry, index) => {
         const unit = entry.unit;
         if (unit.barrier) {
-          const s = unit.stamps[0]; page.stamps.push({ ...s, x: NOTEBOOK_LEFT + m * regionWidth, y: localRow * ROW_HEIGHT + 102, measure: m }); return;
+          const s = unit.stamps[0]; page.stamps.push({ ...s, x: regionLeft, y: localRow * ROW_HEIGHT + 102, measure: m }); return;
         }
         const units = new Map<string, StaffStamp[]>();
         unit.stamps.forEach((s) => units.set(s.chordId ?? s.id, [...(units.get(s.chordId ?? s.id) ?? []), s]));

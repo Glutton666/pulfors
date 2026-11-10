@@ -176,7 +176,9 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
   const layoutError = (e: unknown) => Alert.alert(ko ? "배치를 확인해 주세요" : "Check layout",
     e instanceof Error && e.message === "TUPLET_EXCEEDS_MEASURE"
       ? (ko ? "이 잇단음표의 음악적 길이가 한 마디보다 깁니다. 크기를 줄여도 길이는 바뀌지 않습니다. 음가나 비율을 수정해 주세요." : "This tuplet exceeds one measure. Visual shrinking cannot change its duration. Edit its values or ratio.")
-      : e instanceof Error ? e.message : String(e));
+      : e instanceof Error && e.message === "MANUAL_BAR_LIMIT"
+        ? (ko ? "설정한 마디 수를 유지하므로 수동 마디선을 더 넣을 수 없습니다. 기존 마디선을 옮기거나 줄당 마디 수를 늘려 주세요." : "The configured measure count is preserved. Move an existing barline or increase measures per row before adding another.")
+        : e instanceof Error ? e.message : String(e));
   const commitDocument = (next: StaffNotebook, arrange = !!next.settings?.autoSpacing, after?: (next: StaffNotebook) => void, openIds?: string[]) => {
     const commit = (result: StaffNotebook) => {
       if (JSON.stringify(result) === JSON.stringify(editingNote)) { after?.(result); return; }
@@ -476,7 +478,7 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
       }, nextOpen);
     };
     if (isManualBar(stamp)) {
-      Alert.alert(ko ? "실제 마디 경계를 놓습니다" : "Place a musical barline", ko ? "이 경계를 기준으로 음악적 해석과 배치가 조정됩니다." : "Musical interpretation and layout will use this boundary.", [
+      Alert.alert(ko ? "실제 마디 경계를 놓습니다" : "Place a musical barline", ko ? "설정한 마디 수는 유지하고 기존 경계 하나를 이 위치에 맞춥니다. 음악적 해석과 배치도 조정됩니다." : "The configured measure count stays unchanged. An existing boundary moves here, adjusting musical interpretation and layout.", [
         { text: t.cancel, style: "cancel" }, { text: ko ? "놓기" : "Place", onPress: () => {
           const candidate = pageDocument(index, { ...destination, anchor, stamps: [...stamps, stamp] });
           commitDocument(candidate, true);

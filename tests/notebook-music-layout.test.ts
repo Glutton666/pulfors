@@ -192,6 +192,53 @@ test("manual barlines define actual selection boundaries", () => {
   const source = notebook([stamp("bar", "barline", 300)], { measuresPerRow: 2 });
   expect(notebookMeasureRegions(source.pages[0], source.settings).filter((r) => r.row === 0).map((r) => [r.left, r.right])).toEqual([[38, 300], [300, 862]]);
 });
+test.each([true, false])("four measures stay consistent after adding, moving and deleting a manual bar (visible=%s)", (showBarlines) => {
+  const source = notebook([stamp("before", "quarter", 80), stamp("bar", "barline", 300), stamp("after", "quarter", 340)],
+    { measuresPerRow: 4, showBarlines });
+  const { buildNotebookPlan } = require("../lib/notebook-playback-plan");
+  const { notebookRows } = require("../lib/staff-notebook-layout");
+  const check = (note: StaffNotebook, manualX?: number) => {
+    const page = note.pages[0], regions = notebookMeasureRegions(page, note.settings).filter((r) => r.row === 0);
+    expect(regions).toHaveLength(4);
+    if (manualX !== undefined) expect(regions.some((r) => r.left === manualX)).toBe(true);
+    const rows = notebookRows(note);
+    const plan = buildNotebookPlan(rows, [{ source: 0, startMs: 0, endMs: 4000 }], 4, false, Math.random,
+      rows.map((r: { pageIndex: number; rowIndex: number }) => note.pages[r.pageIndex].measureCounts?.[r.rowIndex] ?? measuresInRow(note.settings)));
+    expect(plan.rowEnds[0]).toBe(16000);
+    expect(plan.chunks.filter((c: { row: number }) => c.row === 0)).toHaveLength(regions.length);
+    return regions;
+  };
+  check(source, 300);
+  const laid = layoutNotebookMusic(source).note;
+  check(laid, 300);
+  expect(all(laid).find((s) => s.id === "after")!.measure).toBe(1);
+  expect(selectNotebookUnits(laid.pages[0], { x: 320, y: 102 }, { x: 320, y: 102 }, "measure", laid.settings).stampIds).toContain("after");
+  const moved = { ...laid, pages: laid.pages.map((p) => ({ ...p, stamps: p.stamps!.map((s) => s.id === "bar" ? { ...s, x: 500 } : s) })) };
+  check(layoutNotebookMusic(moved).note, 500);
+  const removed = { ...source, pages: source.pages.map((p) => ({ ...p, stamps: p.stamps!.filter((s) => s.id !== "bar") })) };
+  expect(check(layoutNotebookMusic(removed).note).map((r) => r.left)).toEqual([38, 244, 450, 656]);
+});
+test("multiple manual pins replace distinct boundaries and preserve positions through repeated reflow", () => {
+  const source = notebook([stamp("a", "barline", 280), stamp("b", "barline", 310)], { measuresPerRow: 4 });
+  const first = layoutNotebookMusic(source).note;
+  expect(notebookMeasureRegions(first.pages[0], first.settings).filter((r) => r.row === 0).map((r) => r.left)).toEqual([38, 280, 310, 586]);
+  expect(layoutNotebookMusic(first).note.pages[0].stamps).toEqual(first.pages[0].stamps);
+});
+test("extra manual boundaries are rejected transactionally rather than changing the configured count", () => {
+  const source = notebook([stamp("a", "barline", 250), stamp("b", "barline", 500)], { measuresPerRow: 2 });
+  const before = JSON.stringify(source);
+  expect(() => layoutNotebookMusic(source)).toThrow("MANUAL_BAR_LIMIT");
+  expect(JSON.stringify(source)).toBe(before);
+  expect(notebookMeasureRegions(source.pages[0], source.settings).filter((r) => r.row === 0)).toHaveLength(2);
+});
+test("measure randomization keeps all four packets when a row has a manual boundary", () => {
+  const source = notebook([stamp("bar", "barline", 300),
+    ...Array.from({ length: 4 }, (_, i) => stamp(`n${i}`, "quarter", [80, 340, 560, 760][i]))],
+    { measuresPerRow: 4, random: true, randomUnit: "measure", randomSeed: 32 });
+  const result = randomizeNotebook(layoutNotebookMusic(source).note);
+  expect(all(result).filter((s) => /^n\d$/.test(s.id)).map((s) => s.id).sort()).toEqual(["n0", "n1", "n2", "n3"]);
+  expect(notebookMeasureRegions(result.pages[0], result.settings).filter((r) => r.row === 0)).toHaveLength(4);
+});
 test("whole-row reorder preserves empty space and conditionally carries ink", () => {
   const source = notebook([stamp("a"), stamp("b", "quarter", 100, 412)]);
   source.pages[0].strokes = [{ id: "ink", width: 2, points: [{ x: 100, y: 100 }] }];
