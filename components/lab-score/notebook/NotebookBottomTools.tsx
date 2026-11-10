@@ -10,6 +10,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import type { NotebookEraserMode } from "@/lib/notebook-erasing";
 import { NotebookInkOptions } from "./NotebookInkOptions";
 import { NotebookInkToolbar } from "./NotebookInkToolbar";
+import { NotebookSelectionTools } from "./NotebookSelectionTools";
 import type { NotebookSelectionUnit } from "@/lib/notebook-editing";
 
 type Tool = "pen" | "erase" | "move" | "select";
@@ -76,7 +77,6 @@ export function NotebookBottomTools(props: Props) {
   const [dotChoice, setDotChoice] = useState(false);
   const [category, setCategory] = useState<NotesCategory>(null);
   const [restGestureActive, setRestGestureActive] = useState(false);
-  const [selectionTab, setSelectionTab] = useState<"select" | "clipboard">("select");
   const originRef = useRef<View>(null);
   const dockRef = useRef<View>(null);
   const rowRefs = useRef<Record<string, View | null>>({});
@@ -96,6 +96,7 @@ export function NotebookBottomTools(props: Props) {
   const [dockWidth, setDockWidth] = useState(0);
   const [dockHeight, setDockHeight] = useState(0);
   const [moreActionsOpen, setMoreActionsOpen] = useState(false);
+  const pickerActive = gestureActive || restGestureActive;
   const pickerTop = props.pickerTop ?? 8;
   const pickerBottom = props.pickerBottom ?? windowHeight - 8;
   // RNW can deliver onLayout before this mode's ref is attached. Measure after
@@ -131,7 +132,14 @@ export function NotebookBottomTools(props: Props) {
     otherPickerActive: gestureActive,
     dockRef,
     onChoose: props.onChoose,
-    onActiveChange: setRestGestureActive,
+    onActiveChange: (active) => {
+      setRestGestureActive(active);
+      if (active) {
+        setMoreActionsOpen(false);
+        setCategory(null);
+        setShowAccessibleChooser(false);
+      }
+    },
   });
 
   const restoreCancelledGesture = () => {
@@ -185,6 +193,7 @@ export function NotebookBottomTools(props: Props) {
         setDockPosition({ x, y });
       });
       setGestureActive(true);
+      setMoreActionsOpen(false);
       setGestureVertical(false);
       setShowAccessibleChooser(false);
       setGestureRole(state.role);
@@ -325,7 +334,7 @@ export function NotebookBottomTools(props: Props) {
           setOriginLayout({ x: originX, y: originY, width, height });
         });
       })}>
-          <View style={styles.notesDockContent}>
+          <View testID="notebook-note-idle-tools" accessibilityElementsHidden={pickerActive} importantForAccessibility={pickerActive ? "no-hide-descendants" : "auto"} style={[styles.notesDockContent, pickerActive && { opacity: 0 }]}>
             <View style={styles.categoryRow}>
               <View testID="notebook-note-tile" ref={originRef} collapsable={false} pointerEvents={restGestureActive ? "none" : "auto"} onLayout={() => originRef.current?.measureInWindow((x, y, width, height) => setOriginLayout({ x, y, width, height }))} {...noteResponder.panHandlers} style={[styles.categoryButton, styles.noteOrigin, restGestureActive && { opacity: 0 }]}>
                 {!restGestureActive && <Pressable testID="notebook-note-origin" accessibilityRole="button" accessibilityLabel={ko ? "음표 선택. 좌우로 강도를, 위로 음가를 고르세요." : "Note picker. Swipe sideways for role, up for duration."} accessibilityState={{ expanded: showAccessibleChooser }} accessibilityActions={[{ name: "expand", label: ko ? "음표 선택기 펼치기" : "Expand note chooser" }]} onAccessibilityAction={(event) => { if (event.nativeEvent.actionName === "expand") setShowAccessibleChooser(true); }} onPress={() => { if (responderUsed.current) { responderUsed.current = false; return; } setShowAccessibleChooser(true); }} style={styles.originInner}>
@@ -343,31 +352,31 @@ export function NotebookBottomTools(props: Props) {
                 <Text style={styles.categoryLabel}>{ko ? "기호" : "Marks"}</Text>
               </Pressable>
               {compactNoteActions ? (
-                <Pressable testID="notebook-note-more" accessibilityRole="button" accessibilityLabel={ko ? "더 많은 편집 도구" : "More editing tools"} accessibilityState={{ expanded: moreActionsOpen }} onPress={() => setMoreActionsOpen((open) => !open)} style={styles.moreActionsButton}>
+                <Pressable testID="notebook-note-more" disabled={pickerActive} accessibilityRole="button" accessibilityLabel={ko ? "더 많은 편집 도구" : "More editing tools"} accessibilityState={{ expanded: moreActionsOpen }} onPress={() => setMoreActionsOpen((open) => !open)} style={styles.moreActionsButton}>
                   <Ionicons name={moreActionsOpen ? "close" : "ellipsis-horizontal"} size={19} color="#675d50" />
                 </Pressable>
               ) : (
                 <>
-                  <Pressable testID="notebook-auto-space" accessibilityRole="button" accessibilityLabel={ko ? "같은 간격으로 정리" : "Space notes evenly"} disabled={props.autoSpaceDisabled} onPress={props.onAutoSpace} style={[styles.inlineActionButton, props.autoSpaceDisabled && styles.disabled]}>
+                  <Pressable testID="notebook-auto-space" accessibilityRole="button" accessibilityLabel={ko ? "같은 간격으로 정리" : "Space notes evenly"} disabled={pickerActive || props.autoSpaceDisabled} onPress={props.onAutoSpace} style={[styles.inlineActionButton, props.autoSpaceDisabled && styles.disabled]}>
                     <Ionicons name="options-outline" size={16} color="#695538" /><Text style={styles.autoSpaceText}>{ko ? "간격 정리" : "Auto-space"}</Text>
                   </Pressable>
-                  <Pressable testID="notebook-note-undo" accessibilityRole="button" accessibilityLabel={ko ? "실행 취소" : "Undo"} disabled={!props.canUndo} onPress={props.onUndo} style={[styles.noteHistoryButton, !props.canUndo && styles.disabled]}><Ionicons name="arrow-undo" size={17} color="#675d50" /></Pressable>
-                  <Pressable testID="notebook-note-redo" accessibilityRole="button" accessibilityLabel={ko ? "다시 실행" : "Redo"} disabled={!props.canRedo} onPress={props.onRedo} style={[styles.noteHistoryButton, !props.canRedo && styles.disabled]}><Ionicons name="arrow-redo" size={17} color="#675d50" /></Pressable>
+                  <Pressable testID="notebook-note-undo" accessibilityRole="button" accessibilityLabel={ko ? "실행 취소" : "Undo"} disabled={pickerActive || !props.canUndo} onPress={props.onUndo} style={[styles.noteHistoryButton, !props.canUndo && styles.disabled]}><Ionicons name="arrow-undo" size={17} color="#675d50" /></Pressable>
+                  <Pressable testID="notebook-note-redo" accessibilityRole="button" accessibilityLabel={ko ? "다시 실행" : "Redo"} disabled={pickerActive || !props.canRedo} onPress={props.onRedo} style={[styles.noteHistoryButton, !props.canRedo && styles.disabled]}><Ionicons name="arrow-redo" size={17} color="#675d50" /></Pressable>
                 </>
               )}
             </View>
           </View>
 
-          {compactNoteActions && moreActionsOpen && <View testID="notebook-note-more-menu" accessibilityRole="menu" style={[styles.moreActionsMenu, moreActionsAbove ? { bottom: "100%", top: undefined } : { top: "100%", bottom: undefined }]}>
+          {compactNoteActions && moreActionsOpen && !pickerActive && <View testID="notebook-note-more-menu" accessibilityRole="menu" style={[styles.moreActionsMenu, moreActionsAbove ? { bottom: "100%", top: undefined } : { top: "100%", bottom: undefined }]}>
             <Pressable testID="notebook-auto-space" accessibilityRole="menuitem" accessibilityLabel={ko ? "같은 간격으로 정리" : "Space notes evenly"} disabled={props.autoSpaceDisabled} onPress={() => { props.onAutoSpace(); setMoreActionsOpen(false); }} style={[styles.moreMenuAction, props.autoSpaceDisabled && styles.disabled]}><Ionicons name="options-outline" size={17} color="#695538" /><Text style={styles.moreMenuLabel}>{ko ? "간격" : "Space"}</Text></Pressable>
             <Pressable testID="notebook-note-undo" accessibilityRole="menuitem" accessibilityLabel={ko ? "실행 취소" : "Undo"} disabled={!props.canUndo} onPress={() => { props.onUndo(); setMoreActionsOpen(false); }} style={[styles.moreMenuAction, !props.canUndo && styles.disabled]}><Ionicons name="arrow-undo" size={17} color="#675d50" /><Text style={styles.moreMenuLabel}>{ko ? "취소" : "Undo"}</Text></Pressable>
             <Pressable testID="notebook-note-redo" accessibilityRole="menuitem" accessibilityLabel={ko ? "다시 실행" : "Redo"} disabled={!props.canRedo} onPress={() => { props.onRedo(); setMoreActionsOpen(false); }} style={[styles.moreMenuAction, !props.canRedo && styles.disabled]}><Ionicons name="arrow-redo" size={17} color="#675d50" /><Text style={styles.moreMenuLabel}>{ko ? "다시" : "Redo"}</Text></Pressable>
           </View>}
 
           {gestureActive && originLayout ? <View pointerEvents="box-none" style={[styles.gestureLayer, { bottom: 0 }]}>
-          <View pointerEvents="box-none" onLayout={measureRoleChoices} style={[styles.roleChoices, { left: Math.max(0, Math.min(Math.max(0, dockWidth - 184), originLayout.x + originLayout.width / 2 - dockLeft.current - 92)), top: originLayout.y + originLayout.height / 2 - dockTop.current - 21 }]}>
-            {roleValues.map((role) => <Pressable key={role} ref={((node: any) => { roleRefs.current[role] = node; }) as any} testID={`notebook-note-role-${role}`} accessibilityRole="button" accessibilityLabel={`${ko ? "음표" : "Note"} ${role}`} onPress={() => { gestureRef.current.role = role; setGestureRole(role); }} style={[styles.roleChoice, gestureRole === role && styles.roleChoiceActive]}><NotebookGlyphPreview glyph="quarter" size={19} role={role} /></Pressable>)}
-          </View>
+          {!gestureVertical && <View pointerEvents="box-none" onLayout={measureRoleChoices} style={[styles.roleChoices, { left: Math.max(0, Math.min(Math.max(0, dockWidth - 184), originLayout.x + originLayout.width / 2 - dockLeft.current - 92)), top: originLayout.y + originLayout.height / 2 - dockTop.current - 21 }]}>
+            {roleValues.map((role) => <Pressable key={role} ref={((node: any) => { roleRefs.current[role] = node; }) as any} testID={`notebook-note-role-${role}`} accessibilityRole="button" accessibilityLabel={`${ko ? "음표" : "Note"} ${role}`} onPress={() => { gestureRef.current.role = role; setGestureRole(role); }} style={[styles.roleChoice, gestureRole === role && styles.roleChoiceActive]}><NotebookGlyphPreview glyph="quarter" size={19} role={role} /><Text style={styles.roleLabel}>{ko ? ({ ghost: "고스트", normal: "노말", strong: "스트롱" }[role]) : role}</Text></Pressable>)}
+          </View>}
           {gestureVertical && <View pointerEvents="box-none" onLayout={measureDurationRows} style={[
             styles.durationColumn,
              { left: Math.max(42, Math.min(Math.max(42, dockWidth - 138), originLayout.x + originLayout.width / 2 - dockLeft.current - 48)), top: durationAbove
@@ -386,7 +395,7 @@ export function NotebookBottomTools(props: Props) {
 
         {restPicker.overlay}
 
-         {category ? (
+         {category && !pickerActive ? (
           <View testID="notebook-symbol-drawer" style={[styles.categoryDrawer, drawerAbove
             ? { bottom: "100%", top: undefined }
             : { top: "100%", bottom: undefined },
@@ -412,7 +421,7 @@ export function NotebookBottomTools(props: Props) {
             </ScrollView>
           </View>
         ) : null}
-        {showAccessibleChooser && !gestureActive && <ScrollView horizontal showsHorizontalScrollIndicator={false}
+        {showAccessibleChooser && !pickerActive && <ScrollView horizontal showsHorizontalScrollIndicator={false}
           style={[styles.accessibleChooser, chooserAbove ? { bottom: "100%", top: undefined } : { top: "100%", bottom: undefined }, { maxHeight: Math.max(44, Math.min(58, chooserAbove ? roomAbove : roomBelow)) }]}
           contentContainerStyle={styles.accessibleChooserContent}>
           {roleValues.map((role) => <Pressable key={role} testID={`notebook-note-role-${role}`} accessibilityRole="button" accessibilityLabel={`${ko ? "음표" : "Note"} ${role}`} onPress={() => { gestureRef.current.role = role; setGestureRole(role); }} style={styles.accessibleChoice}><NotebookGlyphPreview glyph={gestureDuration} size={19} role={role} dotted={dotChoice} /></Pressable>)}
@@ -425,45 +434,7 @@ export function NotebookBottomTools(props: Props) {
   }
 
   if (mode === "select") {
-    return (
-      <View style={[styles.dock, styles.wideDock]}>
-        <View style={styles.selectionTabs}>
-          <Pressable testID="notebook-selection-tab" accessibilityRole="tab" accessibilityState={{ selected: selectionTab === "select" }} onPress={() => setSelectionTab("select")} style={[styles.selectionTab, selectionTab === "select" && styles.selectedTool]}><Text style={styles.toolText}>{ko ? "선택" : "Selection"}</Text></Pressable>
-          <Pressable testID="notebook-clipboard-tab" accessibilityRole="tab" accessibilityState={{ selected: selectionTab === "clipboard" }} onPress={() => setSelectionTab("clipboard")} style={[styles.selectionTab, selectionTab === "clipboard" && styles.selectedTool]}><Text style={styles.toolText}>{ko ? "클립보드" : "Clipboard"} · {props.clipboard.length}</Text></Pressable>
-        </View>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.selectRow}>
-          {selectionTab === "select" ? <>
-          <Pressable testID="notebook-tool-select" accessibilityRole="button" accessibilityState={{ selected: props.tool === "select" }} onPress={() => props.onTool("select")} style={[styles.toolButton, props.tool === "select" && styles.selectedTool]}>
-            <Ionicons name="scan-outline" size={17} color={props.tool === "select" ? "#674f31" : "#7b7163"} />
-            <Text style={[styles.toolText, props.tool === "select" && styles.selectedText]}>{ko ? "범위 선택" : "Select"}</Text>
-          </Pressable>
-          <View style={styles.selectionStatus}><Text style={styles.selectionCount}>{props.selectionCount}</Text><Text style={styles.selectionLabel}>{ko ? "개 선택됨" : "selected"}</Text></View>
-          {(["object", "measure", "row"] as const).map((unit) => <Pressable key={unit} testID={`notebook-select-${unit}`} accessibilityRole="button"
-            accessibilityState={{ selected: (props.selectionUnit ?? "object") === unit }}
-            onPress={() => props.onSelectionUnit?.(unit)} style={[styles.actionChip, (props.selectionUnit ?? "object") === unit && styles.selectedTool]}>
-            <Text style={styles.actionText}>{unit === "object" ? (ko ? "개별·영역" : "Objects") : unit === "measure" ? (ko ? "마디" : "Measure") : (ko ? "줄" : "Row")}</Text>
-          </Pressable>)}
-          <Pressable testID="notebook-edit-selection" accessibilityRole="button" disabled={!props.selectionCount} onPress={props.onEditSelection} style={[styles.actionChip, !props.selectionCount && styles.disabled]}>
-            <Text style={styles.actionText}>{ko ? "내부 편집" : "Edit"}</Text>
-          </Pressable>
-          <Pressable accessibilityRole="button" accessibilityLabel={ko ? "선택 크기 줄이기" : "Shrink selection"} disabled={!props.selectionCount} onPress={() => props.onResizeSelection(0.9)} style={[styles.iconTool, !props.selectionCount && styles.disabled]}><Ionicons name="remove" size={17} color="#675d50" /></Pressable>
-          <Pressable accessibilityRole="button" accessibilityLabel={ko ? "선택 크기 키우기" : "Grow selection"} disabled={!props.selectionCount} onPress={() => props.onResizeSelection(1.1)} style={[styles.iconTool, !props.selectionCount && styles.disabled]}><Ionicons name="add" size={17} color="#675d50" /></Pressable>
-          <Pressable accessibilityRole="button" accessibilityLabel={ko ? "선택 지우기" : "Clear selection"} disabled={!props.selectionCount} onPress={props.onClearSelection} style={[styles.actionChip, !props.selectionCount && styles.disabled]}><Ionicons name="close" size={15} color="#756952" /><Text style={styles.actionText}>{ko ? "해제" : "Clear"}</Text></Pressable>
-          <Pressable accessibilityRole="button" accessibilityLabel={ko ? "선택 항목 삭제" : "Delete selection"} disabled={!props.selectionCount} onPress={props.onDeleteSelection} style={[styles.deleteChip, !props.selectionCount && styles.disabled]}><Ionicons name="trash-outline" size={15} color="#925d4c" /><Text style={styles.deleteText}>{ko ? "삭제" : "Delete"}</Text></Pressable>
-          <Pressable testID="notebook-clipboard-save" accessibilityRole="button" accessibilityLabel={ko ? "선택 묶음 저장" : "Save selection to clipboard"} disabled={!props.selectionCount} onPress={props.onSaveClipboard} style={[styles.saveChip, !props.selectionCount && styles.disabled]}><Ionicons name="copy-outline" size={15} color="#fffaf1" /><Text style={styles.saveText}>{ko ? "클립보드에 보관" : "Save bundle"}</Text></Pressable>
-          </> : <>
-          <Text style={styles.dockEyebrow}>{ko ? "보관한 묶음" : "SAVED BUNDLES"}</Text>
-          {props.clipboard.length ? props.clipboard.map((item) => (
-            <Pressable key={item.id} testID={`notebook-paste-${item.id}`} accessibilityRole="button" accessibilityLabel={`${ko ? "붙여넣기" : "Paste"} ${item.label}`} onPress={() => props.onPaste(item.id)} style={styles.bundleButton}>
-              <Ionicons name="albums-outline" size={16} color="#725b3c" />
-              <View><Text numberOfLines={1} style={styles.bundleName}>{item.label}</Text><Text style={styles.bundleMeta}>{item.count} {ko ? "개체" : "objects"}</Text></View>
-              <Ionicons name="add-circle-outline" size={17} color="#927a57" />
-            </Pressable>
-          )) : <Text style={styles.emptyBundle}>{ko ? "선택한 묶음을 보관하면 여기에 나타납니다." : "Saved bundles will appear here."}</Text>}
-          </>}
-        </ScrollView>
-      </View>
-    );
+    return <NotebookSelectionTools {...props} />;
   }
 
   return (
@@ -530,6 +501,7 @@ const styles = StyleSheet.create({
   roleChoices: { position: "absolute", height: 42, flexDirection: "row", alignItems: "center", gap: 5, overflow: "visible" },
   roleChoice: { width: 58, height: 42, alignItems: "center", justifyContent: "center", borderRadius: 10, borderWidth: 1, borderColor: "#e4d9c7", backgroundColor: "#fffdf8" },
   roleChoiceActive: { backgroundColor: "#f0e5d3", borderColor: "#b69a70" },
+  roleLabel: { color: "#725b3c", fontSize: 10, lineHeight: 13, fontWeight: "600" },
   durationColumn: { position: "absolute", width: 96, padding: 4, borderRadius: 12, borderWidth: 1, borderColor: "#ded3c2", backgroundColor: "#fffdf8", shadowColor: "#403321", shadowOpacity: 0.17, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 20 },
   durationChoice: { width: 86, height: 35, borderRadius: 7, alignItems: "center", justifyContent: "center" },
   branchChoice: { position: "absolute", width: 36, height: 36, alignItems: "center", justifyContent: "center", borderRadius: 7, borderWidth: 1, borderColor: "#e6dccd", backgroundColor: "#fffdf8" },

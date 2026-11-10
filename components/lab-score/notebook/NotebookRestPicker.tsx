@@ -213,6 +213,12 @@ export function useNotebookRestPicker(props: PickerProps) {
   const overlay = (
     <>
       {active && originBox && dockBox && <View pointerEvents="box-none" style={styles.gestureLayer}>
+        {!vertical && <View testID="notebook-rest-gesture-preview" pointerEvents="none" style={[styles.durationColumn, {
+          left: originBox.x - dockBox.x, top: originBox.y - dockBox.y, width: originBox.width, alignItems: "center",
+        }]}>
+          <NotebookGlyphPreview glyph={`rest-${duration}`} size={22} role="normal" dotted={dotted} />
+          <Text style={styles.previewLabel}>{props.ko ? "쉼표" : "Rest"}</Text>
+        </View>}
         {vertical && <View pointerEvents="box-none" onLayout={measureRows} style={[styles.durationColumn, { left: columnLeft, top: columnTop }]}>
           {[...durations].reverse().map((item) => <Pressable
             key={item}
@@ -284,6 +290,7 @@ export function useNotebookRestPicker(props: PickerProps) {
 }
 
 const styles = StyleSheet.create({
+  previewLabel: { color: "#725b3c", fontSize: 10, lineHeight: 14, fontWeight: "600" },
   origin: { flex: 1, minWidth: 46, height: 64, minHeight: 64, paddingHorizontal: 0, borderRadius: 11, borderWidth: 1, borderColor: "#e7dfd2", backgroundColor: "#fffdf9", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3 },
   originInner: { flex: 1, alignSelf: "stretch", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 3 },
   categoryIconFrame: { height: 36, width: 56, alignItems: "center", justifyContent: "center", overflow: "visible" },

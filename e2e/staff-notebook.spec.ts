@@ -1,4 +1,58 @@
 import { test, expect, type Page } from "@playwright/test";
+
+for (const viewport of [{ width: 320, height: 740 }, { width: 768, height: 1024 }, { width: 844, height: 390 }]) {
+  test(`isolated notation pickers and visible selection actions at ${viewport.width}`, async ({ page }) => {
+    await page.setViewportSize(viewport);
+    await openNotebook(page); await chooseMode(page, "notes");
+    const idle = page.getByTestId("notebook-note-idle-tools");
+    if (await page.getByTestId("notebook-note-more").count()) {
+      await page.getByTestId("notebook-note-more").click();
+      await expect(page.getByTestId("notebook-note-more-menu")).toBeVisible();
+    }
+    const note = (await page.getByTestId("notebook-note-origin").boundingBox())!;
+    await page.mouse.move(note.x + note.width / 2, note.y + note.height / 2); await page.mouse.down();
+    await expect(idle).toHaveCSS("opacity", "0");
+    await expect(page.getByTestId("notebook-note-more-menu")).toHaveCount(0);
+    await expect(page.getByTestId("notebook-note-role-normal")).toBeInViewport({ ratio: 1 });
+    await page.screenshot({ path: `generated-artifacts/notebook-isolated-roles-${viewport.width}.png` });
+    await page.mouse.move(note.x + note.width / 2 + 20, note.y - 80, { steps: 8 });
+    await expect(page.getByTestId("notebook-note-role-normal")).toHaveCount(0);
+    const duration = (await page.getByTestId("notebook-note-duration-quarter").boundingBox())!;
+    await page.mouse.move(duration.x + duration.width / 2, duration.y + duration.height / 2, { steps: 5 });
+    await page.screenshot({ path: `generated-artifacts/notebook-isolated-duration-${viewport.width}.png` });
+    await page.mouse.up(); await expect(idle).toHaveCSS("opacity", "1");
+    const rest = (await page.getByTestId("notebook-rest-origin").boundingBox())!;
+    await page.mouse.move(rest.x + rest.width / 2, rest.y + rest.height / 2); await page.mouse.down();
+    await expect(idle).toHaveCSS("opacity", "0");
+    await expect(page.getByTestId("notebook-rest-gesture-preview")).toBeVisible();
+    await page.mouse.move(rest.x + rest.width / 2, rest.y - 80, { steps: 8 });
+    await expect(page.getByTestId("notebook-rest-gesture-preview")).toHaveCount(0);
+    const restDuration = (await page.getByTestId("notebook-rest-duration-quarter").boundingBox())!;
+    await page.mouse.move(restDuration.x + restDuration.width / 2, restDuration.y + restDuration.height / 2, { steps: 5 });
+    await page.mouse.up(); await expect(idle).toHaveCSS("opacity", "1");
+    await expect(page.getByTestId("notebook-drawing").locator('[data-testid^="notebook-stamp-"]')).toHaveCount(2);
+    await chooseMode(page, "select");
+    await expect(page.getByTestId("notebook-edit-selection")).toHaveCount(0);
+    for (const unit of ["object", "measure", "row"]) await expect(page.getByTestId(`notebook-select-${unit}`)).toBeInViewport({ ratio: 1 });
+    await page.getByTestId("notebook-select-row").click();
+    const paper = (await page.getByTestId("notebook-drawing").boundingBox())!;
+    await page.mouse.click(paper.x + 45 * paper.width / 900, paper.y + 100 * paper.width / 900);
+    for (const action of [
+      page.getByTestId("notebook-edit-selection"), page.getByTestId("notebook-clipboard-save"),
+      page.getByRole("button", { name: /^(선택 항목 삭제|Delete selection)$/ }),
+      page.getByRole("button", { name: /^(선택 해제|Clear selection)$/ }),
+    ]) {
+      await expect(action).toBeInViewport({ ratio: 1 });
+      expect((await action.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+    }
+    await page.getByRole("button", { name: /^(선택 크기 조절|Resize selection)$/ }).click();
+    await expect(page.getByRole("button", { name: /^(선택 크기 줄이기|Shrink selection)$/ })).toBeInViewport({ ratio: 1 });
+    await page.screenshot({ path: `generated-artifacts/notebook-selection-clear-${viewport.width}.png` });
+    await page.getByRole("button", { name: /^(선택 해제|Clear selection)$/ }).click();
+    await expect(page.getByTestId("notebook-edit-selection")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /^(선택 크기 줄이기|Shrink selection)$/ })).toHaveCount(0);
+  });
+}
 import type { StaffNotebook } from "../lib/staff-notebook";
 import { DEFAULT_NOTEBOOK_SETTINGS } from "../lib/staff-notebook";
 
