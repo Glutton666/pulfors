@@ -2,7 +2,7 @@
  * BarBlockEditModal — loop-block repeat / BPM / sound-set editor.
  * Self-contained: initialises local state from props when visible changes.
  */
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { View, Text, Pressable, TextInput, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { AnimatedModal } from "@/components/AnimatedModal";
@@ -36,28 +36,43 @@ export function BarBlockEditModal({
   const [repCount, setRepCount] = useState(2);
   const [repMin, setRepMin] = useState(0);
   const [repSec, setRepSec] = useState(30);
-  const [repBpm, setRepBpm] = useState<number | null>(null);
+  const [bpmDraft, setBpmDraft] = useState<string | null>(null);
+  const bpmDraftRef = useRef<string | null>(null);
+  const [bpmInvalid, setBpmInvalid] = useState(false);
+  const session = useRef<number | null>(null);
+  const setBpm = (value: string | null) => {
+    bpmDraftRef.current = value; setBpmDraft(value); setBpmInvalid(false);
+  };
   const [repSoundSet, setRepSoundSet] = useState<string | null>(null);
 
-  // Sync local state when blockIndex changes
+  // Open a fresh draft on every visit, including reopening the same block.
+  // Wait for a newly created block to arrive without overwriting active edits.
   useEffect(() => {
+    if (!visible) { session.current = null; return; }
     if (blockIndex === null) return;
     const lb = loopBlocks[blockIndex];
-    if (!lb) return;
+    if (!lb || session.current === blockIndex) return;
+    session.current = blockIndex;
     setRepType(lb.type);
-    if (lb.type === "count") setRepCount(lb.value);
-    else { setRepMin(Math.floor(lb.value / 60)); setRepSec(lb.value % 60); }
-    setRepBpm(lb.bpm ?? null);
+    setRepCount(lb.type === "count" ? lb.value : 2);
+    setRepMin(lb.type === "duration" ? Math.floor(lb.value / 60) : 0);
+    setRepSec(lb.type === "duration" ? lb.value % 60 : 30);
+    setBpm(lb.bpm === undefined ? null : String(lb.bpm));
     setRepSoundSet((lb.soundSet ?? null) as string | null);
-  }, [blockIndex]); // loopBlocks intentionally omitted to avoid reset on external changes
+  }, [visible, blockIndex, loopBlocks]);
 
   const handleSave = () => {
     if (blockIndex === null) return;
     const lb = loopBlocks[blockIndex];
     if (!lb) return;
+    const text = bpmDraftRef.current?.trim() ?? "";
+    const bpm = text === "" ? null : Number(text);
+    if (bpm !== null && (!/^\d+$/.test(text) || bpm < 20 || bpm > 300)) {
+      setBpmInvalid(true); return;
+    }
     const val = repType === "count" ? repCount : repMin * 60 + repSec;
     const next: LoopBlock = { ...lb, type: repType, value: Math.max(1, val) };
-    if (repBpm !== null && repBpm > 0) next.bpm = repBpm; else delete next.bpm;
+    if (bpm !== null) next.bpm = bpm; else delete next.bpm;
     if (repSoundSet) (next as LoopBlock).soundSet = repSoundSet as LoopBlock["soundSet"];
     else delete (next as LoopBlock).soundSet;
     onSave(blockIndex, next);
@@ -84,10 +99,10 @@ export function BarBlockEditModal({
             <Pressable onPress={handleDelete} hitSlop={8} style={{ marginRight: 6 }}>
               <Ionicons name="trash-outline" size={ms(15, 0.4)} color="#e05c5c" />
             </Pressable>
-            <Pressable onPress={onClose} hitSlop={8}>
+            <Pressable testID="bar-block-cancel" onPress={onClose} hitSlop={8}>
               <Ionicons name="close" size={ms(14, 0.4)} color={C.textSecondary} />
             </Pressable>
-            <Pressable onPress={handleSave} hitSlop={8} style={{ marginLeft: 10 }}>
+            <Pressable testID="bar-block-save" onPress={handleSave} hitSlop={8} style={{ marginLeft: 10 }}>
               <Ionicons name="checkmark" size={ms(16, 0.4)} color={C.accent} />
             </Pressable>
           </View>
@@ -97,6 +112,7 @@ export function BarBlockEditModal({
             {(["count", "duration"] as const).map(repT => (
               <Pressable
                 key={repT}
+                testID={`bar-block-type-${repT}`}
                 onPress={() => setRepType(repT)}
                 style={[styles.typeToggle, { backgroundColor: repType === repT ? C.accent + "30" : C.overlay08 }]}
               >
@@ -112,7 +128,7 @@ export function BarBlockEditModal({
                   <Ionicons name="remove" size={ms(15, 0.4)} color={C.textSecondary} />
                 </Pressable>
                 <Text style={{ color: C.text, fontSize: 18, fontFamily: "SpaceGrotesk_700Bold", minWidth: 36, textAlign: "center" }}>×{repCount}</Text>
-                <Pressable onPress={() => setRepCount(v => Math.min(99, v + 1))} style={[styles.stepBtn, { backgroundColor: C.overlay10 }]}>
+                <Pressable testID="bar-block-count-increase" onPress={() => setRepCount(v => Math.min(99, v + 1))} style={[styles.stepBtn, { backgroundColor: C.overlay10 }]}>
                   <Ionicons name="add" size={ms(15, 0.4)} color={C.textSecondary} />
                 </Pressable>
               </>
@@ -140,35 +156,34 @@ export function BarBlockEditModal({
           <View style={{ marginBottom: 12 }}>
             <Text style={{ color: C.textSecondary, fontSize: FontSize.caption, marginBottom: 6 }}>{t("barModeView", "repBpmOverride")}</Text>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 8, justifyContent: "center" }}>
-              {repBpm !== null ? (
+              {bpmDraft !== null ? (
                 <>
-                  <Pressable onPress={() => setRepBpm(v => v !== null ? Math.max(20, v - 5) : null)} style={[styles.stepBtn, { backgroundColor: C.overlay10 }]}>
+                  <Pressable onPress={() => setBpm(String(Math.max(20, Math.min(300, Number(bpmDraftRef.current) || 120) - 5)))} style={[styles.stepBtn, { backgroundColor: C.overlay10 }]}>
                     <Ionicons name="remove" size={ms(13, 0.4)} color={C.accent} />
                   </Pressable>
                   <TextInput
+                    testID="bar-block-bpm-input"
                     style={[styles.bpmInput, { color: C.accent, borderBottomColor: C.accent }]}
-                    value={String(repBpm)}
+                    value={bpmDraft}
                     keyboardType="number-pad"
-                    onEndEditing={e => {
-                      const v = parseInt(e.nativeEvent.text, 10);
-                      if (!isNaN(v) && v >= 20 && v <= 300) setRepBpm(v);
-                      else if (!e.nativeEvent.text) setRepBpm(null);
-                    }}
+                    onChangeText={setBpm}
+                    onSubmitEditing={e => { setBpm(e.nativeEvent.text); handleSave(); }}
                     selectTextOnFocus
                   />
-                  <Pressable onPress={() => setRepBpm(v => v !== null ? Math.min(300, v + 5) : null)} style={[styles.stepBtn, { backgroundColor: C.overlay10 }]}>
+                  <Pressable onPress={() => setBpm(String(Math.min(300, Math.max(20, Number(bpmDraftRef.current) || 120) + 5)))} style={[styles.stepBtn, { backgroundColor: C.overlay10 }]}>
                     <Ionicons name="add" size={ms(13, 0.4)} color={C.accent} />
                   </Pressable>
-                  <Pressable onPress={() => setRepBpm(null)} style={[styles.typeToggle, { backgroundColor: C.overlay08 }]} hitSlop={4}>
+                  <Pressable testID="bar-block-bpm-reset" onPress={() => setBpm(null)} style={[styles.typeToggle, { backgroundColor: C.overlay08 }]} hitSlop={4}>
                     <Text style={{ color: C.textSecondary, fontSize: FontSize.caption }}>{t("barModeView", "repBpmReset")}</Text>
                   </Pressable>
                 </>
               ) : (
-                <Pressable onPress={() => setRepBpm(120)} style={[styles.typeToggle, { backgroundColor: C.overlay08 }]}>
+                <Pressable testID="bar-block-bpm-enable" onPress={() => setBpm("120")} style={[styles.typeToggle, { backgroundColor: C.overlay08 }]}>
                   <Text style={{ color: C.textSecondary, fontSize: FontSize.caption }}>{t("barModeView", "repBpmSet")}</Text>
                 </Pressable>
               )}
             </View>
+            {bpmInvalid && <Text accessibilityRole="alert" style={{ color: "#e05c5c", fontSize: FontSize.caption, textAlign: "center", marginTop: 6 }}>BPM 20–300</Text>}
           </View>
 
           {/* Sound set */}
@@ -185,6 +200,7 @@ export function BarBlockEditModal({
             {SOUND_SET_OPTIONS.map(opt => (
               <Pressable
                 key={opt.key}
+                testID={`bar-block-sound-${opt.key}`}
                 onPress={() => setRepSoundSet(opt.key)}
                 style={[styles.typeToggle, { backgroundColor: repSoundSet === opt.key ? C.accent + "30" : C.overlay08 }]}
               >
