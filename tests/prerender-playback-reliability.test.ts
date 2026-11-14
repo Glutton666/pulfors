@@ -1862,7 +1862,7 @@ describe("pre-rendered playback reliability", () => {
       },
     });
     result.current.samplePlayStateRef.current = {
-      "0-0": { playing: true, endTimer: setTimeout(jest.fn(), 1000) },
+      "0-0": { playing: true, endTimer: setTimeout(jest.fn(), 1000) as unknown as NodeJS.Timeout },
     };
     act(() => result.current.armAudioWatchdog());
     expect(result.current.scheduleRealtimeWebClick("strong", "both", performance.now())).toBe(true);
@@ -1987,7 +1987,7 @@ describe("pre-rendered playback reliability", () => {
     } as any;
     const { result, unmount } = renderHook(() => useAudioPipeline(params));
     result.current.samplePlayStateRef.current = {
-      "0-0": { playing: true, endTimer: setTimeout(jest.fn(), 1000) },
+      "0-0": { playing: true, endTimer: setTimeout(jest.fn(), 1000) as unknown as NodeJS.Timeout },
     };
     let pendingPreload!: Promise<void>;
     act(() => {
