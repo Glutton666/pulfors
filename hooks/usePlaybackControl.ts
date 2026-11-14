@@ -17,7 +17,6 @@ import type { CustomSoundSetConfig, PracticeEntry, SoundSet } from "@/lib/storag
 import { PracticeSessionTracker, type PracticeSessionData } from "@/lib/activity-log";
 import type { Language } from "@/lib/i18n";
 import type { SampleChannel } from "@/lib/stereo-channel";
-import type { TonePosition } from "@/lib/metronome-tone-dsp";
 import {
   readAudioToneSnapshot,
   type AudioToneSnapshot,
@@ -200,6 +199,10 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
   );
   const invalidateAudioStartupProbe = p.invalidateAudioStartupProbe;
   const preparingCancelledRef = p.preparingCancelledRef;
+  // Native listeners own a session, not a render. Read the latest reporter
+  // without tearing down live audio whenever the parent callback changes.
+  const capturePlaybackErrorRef = useRef(p.capturePlaybackError);
+  capturePlaybackErrorRef.current = p.capturePlaybackError;
 
   const releaseBackgroundLease = useCallback(() => {
     endBackgroundPlaybackLease(backgroundLeaseRef.current);
@@ -361,7 +364,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
         // The native clock skips late events and keeps running. Report the
         // recoverable delay without tearing down the session.
         if (ownsSession(event.sessionId)) {
-          p.capturePlaybackError("Android sparse scheduling delay", event, "warning");
+          capturePlaybackErrorRef.current("Android sparse scheduling delay", event, "warning");
         }
       }),
       addSparseMetronomeReplacementListener?.((event) => {

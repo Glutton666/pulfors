@@ -13,25 +13,18 @@ import { useSettings } from "@/hooks/useSettings";
 import {
   View,
   Platform,
-  PanResponder,
   useWindowDimensions,
   AppState,
-  type GestureResponderEvent,
-  type PanResponderGestureState,
 } from "react-native";
 import { Alert } from "@/lib/alert";
-import * as ImagePicker from "expo-image-picker";
-import { ensurePermission } from "@/lib/permissions";
 import * as Linking from "expo-linking";
 import {
   showPlayingNotification,
   showPausedNotification,
-  updateNotificationBpm,
   dismissNotification,
-  addNotificationActionListener,
   isSparsePlaybackActive,
 } from "@/lib/notification-controls";
-import Animated, {
+import {
   useAnimatedStyle,
   withTiming,
   withSequence,
@@ -39,37 +32,32 @@ import Animated, {
   useSharedValue,
   cancelAnimation,
 } from "react-native-reanimated";
-import { safePlay, safePlayAndConfirm, notifyAudioPoolFallback, detectPoolCutoffRisk } from "@/lib/audio-utils";
+import { safePlayAndConfirm, notifyAudioPoolFallback, detectPoolCutoffRisk } from "@/lib/audio-utils";
 import { registerMetronomeBridge, notifyUserMetronomeToggle } from "@/lib/audio-session";
 import { captureBreadcrumb } from "@/lib/error-tracking";
 import { sanitizeDeepLinkEntry } from "@/lib/deep-link-import";
 import {
-  loadSettings, saveSettings, loadCustomSoundSets, saveCustomSoundSets,
-  loadPracticeBook, savePracticeBook, subscribePracticeBook, createPracticeEntry,
+  loadCustomSoundSets,
+  loadPracticeBook, savePracticeBook, createPracticeEntry,
   runStorageMigrations, clearAllAppStorage, loadTutorialState, DEFAULT_TUTORIAL_STATE,
-  type NoteImageCrop, type MetronomeSettings, type TutorialAction, type TutorialMode,
-  type TutorialState, type FlashMode, type HapticMode, type SoundSet,
-  type BuiltinSoundSet, type CustomSoundSetConfig, type CustomSoundSample,
-  type FadeOutSettings, type PracticeEntry, type MetronomeMode,
+  type TutorialAction, type TutorialMode,
+  type TutorialState, type SoundSet,
+  type CustomSoundSetConfig,
+  type PracticeEntry, type MetronomeMode,
 } from "@/lib/storage";
 import * as Haptics from "expo-haptics";
 import * as Crypto from "expo-crypto";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import Colors from "@/constants/colors";
-import { Radius, Spacing, FontSize } from "@/constants/tokens";
-import type { ThemeColor } from "@/constants/colors";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { getTempoLabel as getTempoLabelI18n } from "@/lib/i18n";
 import { useScale } from "@/lib/scale";
-import type { ScaleValues } from "@/lib/scale";
 import { MetronomeEngine, soundSets, toEngineBpm } from "@/lib/metronome-engine";
 import type { BeatType, ProgressInfo } from "@/lib/metronome-engine";
 import {
   appendBarRandomPlaybackChunk,
   type BarRandomSession,
 } from "@/lib/bar-random-session";
-import { MODE_TUTORIALS_ENABLED } from "@/lib/tutorial-config";
 import { NEUTRAL, type TonePosition } from "@/lib/metronome-tone-dsp";
 import type { BarRepeat, LoopBlock } from "@/components/BeatIndicator";
 import { clampLoopBlocksToMeter } from "@/lib/bar-config-helpers";
@@ -78,14 +66,11 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useDeepLink } from "@/contexts/DeepLinkContext";
 import { useVoiceAssistant } from "@/contexts/VoiceAssistantContext";
 import { make_styles } from "@/lib/index.styles";
-import { defaultBeatTypes, isSafeNoteSampleUri, createInitialDialConfig, createInitialBarConfig, hydrateDialConfigFromSettings, createShuffledIndices as createShuffledIndicesPure, beatSubdivisionCounts as beatSubdivisionCountsPure, selectCurrentBarConfig, computeLandscapeStats, entryToBarConfig, applyEntryToEngine as applyEntryToEngineCore, migrateLayerBlocks, applyLoopBlocksChange } from "@/lib/index.helpers";
+import { defaultBeatTypes, hydrateDialConfigFromSettings, createShuffledIndices as createShuffledIndicesPure, beatSubdivisionCounts as beatSubdivisionCountsPure, selectCurrentBarConfig, applyEntryToEngine as applyEntryToEngineCore, migrateLayerBlocks } from "@/lib/index.helpers";
 import { serializeNoteQueueEntries } from "@/lib/note-queue-helpers";
 import {
   type ActiveModal,
-  type SgTgState,
   deriveModalFlags,
-  openTuningGuideFromSignalGen,
-  closeTuningGuide,
 } from "@/lib/modal-routing";
 import { BUILTIN_POOL_SIZE, type BuiltinPlayers, type SoundSetPlayers } from "@/hooks/useAudioPlayers";
 import { useNoteSamples } from "@/hooks/useNoteSamples";
@@ -134,7 +119,6 @@ import {
   getBarRowDropTargetFromElement,
 } from "@/lib/bar-pattern-drop";
 import { useBeatStaffControls } from "@/hooks/useBeatStaffControls";
-import { createDebouncedPersister, type DebouncedPersister } from "@/lib/persist";
 import { createRafBatcher } from "@/lib/raf-batcher";
 import { scheduleOwnedNoteQueueAdvance } from "@/lib/note-queue-transition";
 import type { ModeSlot } from "@/components/ModeSwitcherDial";
@@ -151,32 +135,18 @@ import {
   type PlaybackContext,
   type PlaybackMode,
 } from "@/lib/playback-context";
-import { PracticeSessionTracker, loadLoggingEnabled, saveLoggingEnabled, addActivityLog, loadActivityLogs, loadGoals, saveGoals } from "@/lib/activity-log";
-import { loadNoteSamples, saveNoteSamples, setNoteSample, removeNoteSample, hasNoteSample, sampleSlotKeys, loadNoteSampleNames, saveNoteSampleNames, setNoteSampleName, removeNoteSampleName, loadNoteSampleSources, saveNoteSampleSources, setNoteSampleSource, removeNoteSampleSource, loadNoteSampleChannels, saveNoteSampleChannels, setNoteSampleChannel, removeNoteSampleChannel, loadNoteSampleVolumes, saveNoteSampleVolumes, setNoteSampleVolume, removeNoteSampleVolume, loadNoteSampleSpeeds, saveNoteSampleSpeeds, setNoteSampleSpeed, removeNoteSampleSpeed, loadNoteSampleMetroChannels, saveNoteSampleMetroChannels, setNoteSampleMetroChannel, removeNoteSampleMetroChannel } from "@/lib/note-samples";
-import type { NoteSampleMap, NoteSampleNameMap, NoteSampleSourceMap, NoteSampleChannelMap, NoteSampleVolumeMap, NoteSampleSpeedMap, NoteSampleMetroChannelMap, SampleSource } from "@/lib/note-samples";
-import type { SampleChannel, MetroChannel } from "@/lib/stereo-channel";
-import { AudioModule, createAudioPlayer } from "expo-audio";
-import type { AudioPlayer as ExpoAudioPlayer } from "expo-audio";
+import { PracticeSessionTracker, loadLoggingEnabled, saveLoggingEnabled, addActivityLog, loadGoals, saveGoals } from "@/lib/activity-log";
+import { loadNoteSamples, saveNoteSamples, sampleSlotKeys, loadNoteSampleNames, saveNoteSampleNames, loadNoteSampleSources, saveNoteSampleSources, loadNoteSampleChannels, saveNoteSampleChannels, loadNoteSampleVolumes, saveNoteSampleVolumes, loadNoteSampleSpeeds, saveNoteSampleSpeeds, loadNoteSampleMetroChannels, removeNoteSampleMetroChannel } from "@/lib/note-samples";
+import type { NoteSampleMetroChannelMap } from "@/lib/note-samples";
+import type { SampleChannel } from "@/lib/stereo-channel";
 import {
-  decodeSampleFile,
-  loadAssetPCM,
-  parseTrimInfo,
-  renderMeasure,
-  saveRenderedWav,
   ensureWebClickBuffers,
-  clearWebClickBuffers,
-  playWebRenderedLoop,
   getWebAudioContext,
-  installAudioPlayInterruptHandler,
 } from "@/lib/audio-renderer";
-import { syncStereoArtifact } from "@/lib/sample-cache";
 import { invalidatePCMCache } from "@/lib/pcm-cache";
-import type { ClickPCMs, SamplePCMEntry, TickInfo, DecodedSample } from "@/lib/audio-renderer";
-import type { ActivityLog, Goal } from "@/lib/activity-log";
+import type { Goal } from "@/lib/activity-log";
 import {
   loadModeKeyBindings,
-  matchesBinding,
-  isEditableTarget,
   DEFAULT_BINDINGS,
   type KeyBindingsMap,
   type RecorderKeyboardActions,

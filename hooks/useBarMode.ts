@@ -20,7 +20,7 @@ import * as Haptics from "expo-haptics";
 import { toEngineBpm } from "@/lib/metronome-engine";
 import type { BeatType, MetronomeEngine } from "@/lib/metronome-engine";
 import type { BarRepeat, LoopBlock } from "@/components/BeatIndicator";
-import type { MetronomeSettings, PracticeEntry } from "@/lib/storage";
+import type { MetronomeSettings } from "@/lib/storage";
 import {
   loadPracticeBook,
   savePracticeBook,
@@ -675,6 +675,12 @@ export function useBarMode(p: UseBarModeParams): UseBarModeResult {
     p.beatSubdivisions,
     p.subdivisionPattern,
     p.username,
+    p.noteSamples,
+    p.noteSampleNames,
+    p.noteSampleSources,
+    p.noteSampleChannels,
+    p.noteSampleVolumes,
+    p.noteSampleSpeeds,
     barRepeats,
     loopBlocks,
     barLoopMode,

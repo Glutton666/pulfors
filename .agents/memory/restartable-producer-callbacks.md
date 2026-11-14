@@ -8,3 +8,9 @@ Callbacks installed into engines or other external producers must capture an imm
 **Why:** A live `enabled` or `playing` boolean suppresses an old callback only while stopped. After restart or re-enable, the boolean becomes true again, so both stale and current callbacks can run and corrupt phase or duplicate output.
 
 **How to apply:** Rotate the producer generation whenever registration lifetime changes, including cleanup, stop/restart, and disable/re-enable. Test by retaining the old callback, restarting, then invoking both old and current callbacks.
+
+For long-lived audio subscriptions, keep transport ownership separate from replaceable reporting callbacks. Read the latest reporter through a ref rather than rebuilding the subscription on each reporter change.
+
+**Why:** Subscription cleanup can stop live audio. Adding a changing callback to an effect's dependencies merely to satisfy lint can interrupt playback.
+
+**How to apply:** Test that rerendering updates the reporter without removing listeners or stopping audio; retain session-identity checks before reporting events.

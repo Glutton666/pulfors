@@ -48,6 +48,9 @@ const mockSparseStart = jest.fn();
 const mockSparseReplace = jest.fn();
 const mockSparseStop = jest.fn();
 const mockSparseListener = () => ({ remove: jest.fn() });
+const mockSparseTimingListener = jest.fn(
+  (_listener: (event: { sessionId: string }) => void) => ({ remove: jest.fn() }),
+);
 const mockSetSparseNotificationMode = jest.fn();
 const mockReleaseDormantBackgroundPlaybackControls = jest.fn();
 const mockBeginBackgroundPlaybackLease = jest.fn(() => ({
@@ -91,7 +94,8 @@ jest.mock("@/modules/sparse-metronome/src", () => ({
   addSparseMetronomeErrorListener: mockSparseListener,
   addSparseMetronomeInterruptionListener: mockSparseListener,
   addSparseMetronomeReplacementListener: mockSparseListener,
-  addSparseMetronomeTimingOverrunListener: mockSparseListener,
+  addSparseMetronomeTimingOverrunListener: (listener: (event: { sessionId: string }) => void) =>
+    mockSparseTimingListener(listener),
 }));
 
 jest.mock("@/lib/audio-renderer", () => ({
@@ -2438,6 +2442,36 @@ describe("pre-rendered playback reliability", () => {
     expect(mockSaveRenderedWav.mock.calls.every(([_, filename]) =>
       String(filename).startsWith("sparse_event_"),
     )).toBe(true);
+  });
+
+  it("keeps the active native subscription but uses the latest error reporter after rerender", async () => {
+    (Platform as unknown as { OS: string }).OS = "android";
+    const engine = makeEngine();
+    const params = makePlaybackParams(engine, null);
+    const { result, rerender, unmount } = renderHook(
+      p => usePlaybackControl(p as any), { initialProps: params },
+    );
+    await act(async () => { await result.current.togglePlayPause(); });
+    const sessionId = mockSparseStart.mock.calls[0][0] as string;
+    const listener = mockSparseTimingListener.mock.calls[0][0];
+    const subscription = mockSparseTimingListener.mock.results[0].value;
+    const latestReporter = jest.fn();
+    mockSparseStop.mockClear();
+
+    rerender({ ...params, capturePlaybackError: latestReporter });
+    act(() => { listener({ sessionId }); });
+    expect(latestReporter).toHaveBeenCalledWith(
+      "Android sparse scheduling delay", { sessionId }, "warning",
+    );
+    expect(params.capturePlaybackError).not.toHaveBeenCalled();
+    expect(mockSparseTimingListener).toHaveBeenCalledTimes(1);
+    expect(subscription.remove).not.toHaveBeenCalled();
+    expect(mockSparseStop).not.toHaveBeenCalled();
+    act(() => { listener({ sessionId: "unowned-session" }); });
+    expect(latestReporter).toHaveBeenCalledTimes(1);
+    unmount();
+    expect(subscription.remove).toHaveBeenCalledTimes(1);
+    expect(mockSparseStop).toHaveBeenCalledTimes(1);
   });
 
   it("keeps Android on the legacy playback path when the sparse feature flag is absent", async () => {

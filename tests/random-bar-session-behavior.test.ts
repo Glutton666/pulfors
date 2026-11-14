@@ -105,6 +105,71 @@ const makeParams = (
 };
 
 describe("useRandomBarSession behavior", () => {
+  it.each(["resolve", "reject"] as const)("ignores an old startup %s after a new session takes ownership", async (outcome) => {
+    const events: string[] = [];
+    const blockPlayModeRef = { current: "loop" as PlaybackMode };
+    const engine = makeEngine(events);
+    const fixture = makeParams({ isPlaying: false }, events, { current: engine }, blockPlayModeRef);
+    const { result } = renderHook(() => useRandomBarSession(fixture));
+    let settle!: (value: boolean) => void;
+    let reject!: (error: Error) => void;
+    const pending = new Promise<boolean>((resolve, fail) => { settle = resolve; reject = fail; });
+    let first!: Promise<void>;
+    act(() => { first = result.current.handleRandomBarPlay(() => pending); });
+    act(() => { result.current.finishRandomBarPlay(); });
+    await act(async () => { await result.current.handleRandomBarPlay(async () => true); });
+    const currentSession = result.current.randomBarSessionRef.current;
+    jest.mocked(engine.setRandomBarOrder).mockClear();
+
+    await act(async () => {
+      if (outcome === "resolve") settle(false);
+      else reject(new Error("Previous startup failed late"));
+      await first;
+    });
+
+    expect(result.current.randomBarSessionRef.current).toBe(currentSession);
+    expect(currentSession?.active).toBe(true);
+    expect(blockPlayModeRef.current).toBe("random");
+    expect(engine.setRandomBarOrder).not.toHaveBeenCalled();
+  });
+
+  it("does not restore engine or React state when a pending start fails after unmount", async () => {
+    const events: string[] = [];
+    const blockPlayModeRef = { current: "loop" as PlaybackMode };
+    const engine = makeEngine(events);
+    const fixture = makeParams({ isPlaying: false }, events, { current: engine }, blockPlayModeRef);
+    const { result, unmount } = renderHook(() => useRandomBarSession(fixture));
+    let settle!: (value: boolean) => void;
+    const pending = new Promise<boolean>(resolve => { settle = resolve; });
+    let start!: Promise<void>;
+    act(() => { start = result.current.handleRandomBarPlay(() => pending); });
+    unmount();
+    jest.mocked(engine.setRandomBarOrder).mockClear();
+    jest.mocked(fixture.setBlockPlayMode).mockClear();
+    await act(async () => { settle(false); await start; });
+    expect(engine.setRandomBarOrder).not.toHaveBeenCalled();
+    expect(fixture.setBlockPlayMode).not.toHaveBeenCalled();
+  });
+
+  it("rejects duplicate replay requests before the playback state rerenders", async () => {
+    const events: string[] = [];
+    const blockPlayModeRef = { current: "loop" as PlaybackMode };
+    const fixture = makeParams({ isPlaying: false }, events, { current: makeEngine(events) }, blockPlayModeRef);
+    const { result } = renderHook(() => useRandomBarSession(fixture));
+    await act(async () => { await result.current.handleRandomBarPlay(async () => true); });
+    act(() => { result.current.finishRandomBarPlay(); });
+    const toggle = jest.fn(async () => true);
+    await act(async () => {
+      await Promise.all([
+        result.current.handleReplayRandomBarSession(toggle),
+        result.current.handleReplayRandomBarSession(toggle),
+      ]);
+    });
+    expect(toggle).toHaveBeenCalledTimes(1);
+    act(() => { result.current.finishRandomBarPlay(); });
+    expect(blockPlayModeRef.current).toBe("loop");
+  });
+
   it("restores the previous block mode after random playback becomes active and stops", async () => {
     const events: string[] = [];
     const blockPlayModeRef = { current: "loop" as PlaybackMode };

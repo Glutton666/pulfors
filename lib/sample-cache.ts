@@ -36,6 +36,7 @@ function getDefaultDeps(): {
   // Use require() for lazy loading — works identically on Hermes/native and in
   // Jest's CJS environment (dynamic import() is not transformed by babel-jest).
 
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- Defer native audio initialization; Jest also needs the synchronous CJS boundary.
   const m = require("./audio-renderer") as typeof import("./audio-renderer");
   return { decode: m.decodeSampleFile, save: m.saveStereoSampleWav };
 }
@@ -69,6 +70,7 @@ async function defaultDeleteArtifact(path: string): Promise<void> {
     // Use require() for lazy loading — works identically on Hermes/native and in
     // Jest's CJS environment (dynamic import() is not transformed by babel-jest).
 
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- Load the native filesystem only on the non-web deletion path.
     const m = require("expo-file-system") as unknown as FileSystemModule;
     const fileUri = path.split("#")[0];
     if (m.File) {

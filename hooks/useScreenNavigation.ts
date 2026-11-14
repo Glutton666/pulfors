@@ -7,7 +7,6 @@ import {
   type ActiveModal,
 } from "@/lib/modal-routing";
 import {
-  DEFAULT_TUTORIAL_STATE,
   TUTORIAL_CONTENT_VERSION,
   resetTutorialState,
   saveTutorialState,
@@ -53,6 +52,10 @@ export interface UseScreenNavigationParams {
 }
 
 export function useScreenNavigation(p: UseScreenNavigationParams) {
+  const {
+    setActiveModal, setScoreEditorDoc, setScoreMode, setTutorialState,
+    setTutorialMode, setTutorialLastAction, setShowReboot,
+  } = p;
   const settingsReturnModalRef = useRef<ActiveModal>(null);
   const menuItemReturnRef = useRef(false);
   const menuItemReturnGenerationRef = useRef(0);
@@ -69,19 +72,19 @@ export function useScreenNavigation(p: UseScreenNavigationParams) {
     const target = getMenuItemCloseTarget(menuItemReturnRef.current);
     menuItemReturnGenerationRef.current += 1;
     menuItemReturnRef.current = false;
-    p.setActiveModal(target);
-  }, [p.setActiveModal]);
+    setActiveModal(target);
+  }, [setActiveModal]);
   const closeScoreMode = useCallback(() => {
-    p.setScoreEditorDoc(null);
-    p.setScoreMode(null);
+    setScoreEditorDoc(null);
+    setScoreMode(null);
     clearMenuItemReturn();
-    p.setActiveModal("menu");
-  }, [clearMenuItemReturn, p.setActiveModal, p.setScoreEditorDoc, p.setScoreMode]);
+    setActiveModal("menu");
+  }, [clearMenuItemReturn, setActiveModal, setScoreEditorDoc, setScoreMode]);
   const openExclusive = useCallback((modal: ActiveModal) => {
     p.tuningGuideOnSelectRef.current = null;
     if (modal === "polygon") p.playbackModeRef.current = "polygon";
-    p.setActiveModal(modal);
-  }, [p.playbackModeRef, p.setActiveModal, p.tuningGuideOnSelectRef]);
+    setActiveModal(modal);
+  }, [p.playbackModeRef, setActiveModal, p.tuningGuideOnSelectRef]);
 
   const tutorialShouldShow = useCallback((mode: TutorialMode, state = p.tutorialStateRef.current) => {
     const entry = state[mode];
@@ -96,78 +99,78 @@ export function useScreenNavigation(p: UseScreenNavigationParams) {
         [mode]: { contentVersion: TUTORIAL_CONTENT_VERSION, status: "in_progress" as const, completedSteps: [] },
       };
       p.tutorialStateRef.current = next;
-      p.setTutorialState(next);
+      setTutorialState(next);
       void saveTutorialState(next).catch(() => {});
     }
     p.tutorialModeRef.current = mode;
-    p.setTutorialMode(mode);
-    p.setTutorialLastAction(null);
-  }, [p.setTutorialLastAction, p.setTutorialMode, p.setTutorialState, p.tutorialModeRef, p.tutorialStateRef]);
+    setTutorialMode(mode);
+    setTutorialLastAction(null);
+  }, [setTutorialLastAction, setTutorialMode, setTutorialState, p.tutorialModeRef, p.tutorialStateRef]);
   const recordTutorialAction = useCallback((action: TutorialAction) => {
-    if (p.tutorialModeRef.current) p.setTutorialLastAction(action);
-  }, [p.setTutorialLastAction, p.tutorialModeRef]);
+    if (p.tutorialModeRef.current) setTutorialLastAction(action);
+  }, [setTutorialLastAction, p.tutorialModeRef]);
   const completeTutorialStep = useCallback((stepId: string) => {
     const mode = p.tutorialModeRef.current;
     if (!mode) return;
     const current = p.tutorialStateRef.current;
     const next = { ...current, [mode]: { ...current[mode], status: "in_progress" as const, contentVersion: TUTORIAL_CONTENT_VERSION, completedSteps: [...new Set([...current[mode].completedSteps, stepId])] } };
     p.tutorialStateRef.current = next;
-    p.setTutorialState(next);
-    p.setTutorialLastAction(null);
+    setTutorialState(next);
+    setTutorialLastAction(null);
     void saveTutorialState(next).catch(() => {});
-  }, [p.setTutorialLastAction, p.setTutorialState, p.tutorialModeRef, p.tutorialStateRef]);
+  }, [setTutorialLastAction, setTutorialState, p.tutorialModeRef, p.tutorialStateRef]);
   const finishModeTutorial = useCallback(() => {
     const mode = p.tutorialModeRef.current;
     if (!mode) return;
     const next = { ...p.tutorialStateRef.current, [mode]: { contentVersion: TUTORIAL_CONTENT_VERSION, status: "completed" as const, completedSteps: [...p.tutorialStateRef.current[mode].completedSteps] } };
     p.tutorialStateRef.current = next;
-    p.setTutorialState(next);
+    setTutorialState(next);
     p.tutorialModeRef.current = null;
-    p.setTutorialMode(null);
-    p.setTutorialLastAction(null);
+    setTutorialMode(null);
+    setTutorialLastAction(null);
     void saveTutorialState(next).catch(() => {});
-  }, [p.setTutorialLastAction, p.setTutorialMode, p.setTutorialState, p.tutorialModeRef, p.tutorialStateRef]);
+  }, [setTutorialLastAction, setTutorialMode, setTutorialState, p.tutorialModeRef, p.tutorialStateRef]);
   const skipModeTutorial = useCallback(() => {
     const mode = p.tutorialModeRef.current;
     if (!mode) return;
     const next = { ...p.tutorialStateRef.current, [mode]: { contentVersion: TUTORIAL_CONTENT_VERSION, status: "skipped" as const, completedSteps: [...p.tutorialStateRef.current[mode].completedSteps] } };
     p.tutorialStateRef.current = next;
-    p.setTutorialState(next);
+    setTutorialState(next);
     p.tutorialModeRef.current = null;
-    p.setTutorialMode(null);
-    p.setTutorialLastAction(null);
+    setTutorialMode(null);
+    setTutorialLastAction(null);
     void saveTutorialState(next).catch(() => {});
-  }, [p.setTutorialLastAction, p.setTutorialMode, p.setTutorialState, p.tutorialModeRef, p.tutorialStateRef]);
+  }, [setTutorialLastAction, setTutorialMode, setTutorialState, p.tutorialModeRef, p.tutorialStateRef]);
   const resetModeTutorials = useCallback(async () => {
     const next = await resetTutorialState();
     p.tutorialStateRef.current = next;
-    p.setTutorialState(next);
-    p.setTutorialLastAction(null);
-  }, [p.setTutorialLastAction, p.setTutorialState, p.tutorialStateRef]);
+    setTutorialState(next);
+    setTutorialLastAction(null);
+  }, [setTutorialLastAction, setTutorialState, p.tutorialStateRef]);
 
   useEffect(() => {
     if (Platform.OS !== "android") return;
     const onBack = () => {
-      if (p.showSettings) { p.setActiveModal(null); return true; }
+      if (p.showSettings) { setActiveModal(null); return true; }
       if (p.showProfile || p.showAssistant) { closeMenuItem(); return true; }
       if (p.showTuningGuide) {
         p.tuningGuideOnSelectRef.current = null;
         if (p.reopenSignalGenAfterTuningGuideRef.current) {
           p.reopenSignalGenAfterTuningGuideRef.current = false;
-          p.setActiveModal("signalGen");
-        } else p.setActiveModal(null);
+          setActiveModal("signalGen");
+        } else setActiveModal(null);
         return true;
       }
       if (p.showSignalGen) { p.tuningGuideOnSelectRef.current = null; p.reopenSignalGenAfterTuningGuideRef.current = false; closeMenuItem(); return true; }
       if (p.showPracticeBook) { closeMenuItem(); return true; }
       if (p.showWorkUp) { closeMenuItem(); return true; }
-      if (p.showFadeOut) { p.setActiveModal(null); return true; }
-      if (p.showScheduledStart) { p.setActiveModal(null); return true; }
+      if (p.showFadeOut) { setActiveModal(null); return true; }
+      if (p.showScheduledStart) { setActiveModal(null); return true; }
       if (p.showDrumKit) { closeMenuItem(); return true; }
       if (p.showPolygon) { closeMenuItem(); return true; }
-      if (p.showMenu) { clearMenuItemReturn(); p.setActiveModal(null); return true; }
-      if (p.showOnboarding) { p.setActiveModal(null); return true; }
-      if (p.showReboot) { p.setShowReboot(false); return true; }
+      if (p.showMenu) { clearMenuItemReturn(); setActiveModal(null); return true; }
+      if (p.showOnboarding) { setActiveModal(null); return true; }
+      if (p.showReboot) { setShowReboot(false); return true; }
       if (p.coreMode === "score") { closeScoreMode(); return true; }
       if (p.barModeRef.current) { p.handleBarModeChangeRef.current(false); return true; }
       Alert.alert("앱 종료", "앱을 종료하시겠습니까?", [
@@ -186,8 +189,8 @@ export function useScreenNavigation(p: UseScreenNavigationParams) {
     p.coreMode,
     p.handleBarModeChangeRef,
     p.reopenSignalGenAfterTuningGuideRef,
-    p.setActiveModal,
-    p.setShowReboot,
+    setActiveModal,
+    setShowReboot,
     p.showAssistant,
     p.showDrumKit,
     p.showFadeOut,

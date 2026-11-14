@@ -166,7 +166,7 @@ test("score close: 목록과 편집기의 X는 문서 상태를 비우고 실험
   assert.equal((ui.match(/onClose=\{closeScoreToLab\}/g) ?? []).length, 2);
   assert.match(
     hook,
-    /const closeScoreMode = useCallback\(\(\) => \{\s*p\.setScoreEditorDoc\(null\);\s*p\.setScoreMode\(null\);[\s\S]*?clearMenuItemReturn\(\);[\s\S]*?p\.setActiveModal\("menu"\);/,
+    /const closeScoreMode = useCallback\(\(\) => \{\s*setScoreEditorDoc\(null\);\s*setScoreMode\(null\);[\s\S]*?clearMenuItemReturn\(\);[\s\S]*?setActiveModal\("menu"\);/,
   );
   assert.match(hook, /p\.coreMode === "score"\s*\)\s*\{\s*closeScoreMode\(\);/);
 });

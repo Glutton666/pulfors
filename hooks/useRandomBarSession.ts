@@ -109,6 +109,13 @@ export function useRandomBarSession(
   } | null>(null);
   const randomBarPreviousModeRef = useRef<BlockPlayMode | null>(null);
   const randomBarPlaybackBecameActiveRef = useRef(false);
+  const startGenerationRef = useRef(0);
+  const { setStrategy, persistSettings, setBlockPlayMode } = p;
+
+  useEffect(() => () => {
+    // A rejected/pending start must not restore state after this owner exits.
+    startGenerationRef.current += 1;
+  }, []);
 
   const randomBarConfig = useMemo<BarRandomConfig>(
     () => ({ ...DEFAULT_BAR_RANDOM_CONFIG, strategy: p.strategy }),
@@ -135,20 +142,21 @@ export function useRandomBarSession(
     (config: BarRandomConfig) => {
       randomBarPreparedChunkRef.current = null;
       randomBarBoundaryPreviewRef.current = null;
-      p.setStrategy(config.strategy);
-      p.persistSettings({ barRandomStrategy: config.strategy });
+      setStrategy(config.strategy);
+      persistSettings({ barRandomStrategy: config.strategy });
     },
-    [p.persistSettings, p.setStrategy],
+    [persistSettings, setStrategy],
   );
 
   const finishRandomBarPlay = useCallback(() => {
+    startGenerationRef.current += 1;
     const previousMode = randomBarPreviousModeRef.current;
     if (previousMode === null) return;
     randomBarPreviousModeRef.current = null;
     randomBarPreparedChunkRef.current = null;
     randomBarBoundaryPreviewRef.current = null;
     p.blockPlayModeRef.current = previousMode;
-    p.setBlockPlayMode(previousMode);
+    setBlockPlayMode(previousMode);
     p.engineRef.current?.setRandomBarOrder(null);
     p.engineRef.current?.setBlockPlayMode(previousMode);
     const session = randomBarSessionRef.current;
@@ -156,7 +164,7 @@ export function useRandomBarSession(
       session.active = false;
       updateRandomBarSession(session);
     }
-  }, [p.blockPlayModeRef, p.engineRef, p.setBlockPlayMode, updateRandomBarSession]);
+  }, [p.blockPlayModeRef, p.engineRef, setBlockPlayMode, updateRandomBarSession]);
 
   useEffect(() => {
     if (randomBarPreviousModeRef.current === null) {
@@ -183,6 +191,7 @@ export function useRandomBarSession(
     const repeat = p.barLoopModeRef.current === "loop";
     const chunk = appendBarRandomPlaybackChunk(session, repeat ? Math.max(2, randomBarViewportCapacityRef.current * 2) : sourceCount, repeat, randomBarConfig);
     if (!chunk.length) return;
+    const generation = ++startGenerationRef.current;
     randomBarChunkStartRef.current = 0;
     randomBarChunkLengthRef.current = chunk.length;
     randomBarPreparedChunkRef.current = null;
@@ -190,24 +199,25 @@ export function useRandomBarSession(
     updateRandomBarSession(session);
     randomBarPreviousModeRef.current = p.blockPlayModeRef.current;
     p.blockPlayModeRef.current = "random";
-    p.setBlockPlayMode("random");
+    setBlockPlayMode("random");
     p.engineRef.current?.setRandomBarOrder(chunk);
     p.engineRef.current?.setBlockPlayMode("random");
     try {
-      if (await togglePlayPause() === false) finishRandomBarPlay();
+      if (await togglePlayPause() === false && startGenerationRef.current === generation) finishRandomBarPlay();
     } catch {
-      finishRandomBarPlay();
+      if (startGenerationRef.current === generation) finishRandomBarPlay();
     }
-  }, [finishRandomBarPlay, p.barConfigRef, p.barLoopModeRef, p.barMode, p.blockPlayModeRef, p.engineRef, p.isPlaying, p.isPreparing, p.setBlockPlayMode, randomBarConfig, updateRandomBarSession]);
+  }, [finishRandomBarPlay, p.barConfigRef, p.barLoopModeRef, p.barMode, p.blockPlayModeRef, p.engineRef, p.isPlaying, p.isPreparing, setBlockPlayMode, randomBarConfig, updateRandomBarSession]);
 
   const handleReplayRandomBarSession = useCallback(async (togglePlayPause: PlaybackToggle) => {
     const previous = randomBarSessionRef.current;
-    if (!previous || !previous.order.length || p.isPlaying || p.isPreparing) return;
+    if (!previous || !previous.order.length || p.isPlaying || p.isPreparing || randomBarPreviousModeRef.current !== null) return;
     if (previous.loopBlocks && JSON.stringify(previous.loopBlocks) !== JSON.stringify(p.barConfigRef.current.loopBlocks)) {
       updateRandomBarSession(null);
       return;
     }
     const session = { ...previous, order: [...previous.order], cursor: 0, active: true };
+    const generation = ++startGenerationRef.current;
     randomBarChunkStartRef.current = 0;
     randomBarChunkLengthRef.current = session.order.length;
     randomBarPreparedChunkRef.current = null;
@@ -215,15 +225,15 @@ export function useRandomBarSession(
     updateRandomBarSession(session);
     randomBarPreviousModeRef.current = p.blockPlayModeRef.current;
     p.blockPlayModeRef.current = "random";
-    p.setBlockPlayMode("random");
+    setBlockPlayMode("random");
     p.engineRef.current?.setRandomBarOrder(session.order);
     p.engineRef.current?.setBlockPlayMode("random");
     try {
-      if (await togglePlayPause() === false) finishRandomBarPlay();
+      if (await togglePlayPause() === false && startGenerationRef.current === generation) finishRandomBarPlay();
     } catch {
-      finishRandomBarPlay();
+      if (startGenerationRef.current === generation) finishRandomBarPlay();
     }
-  }, [finishRandomBarPlay, p.barConfigRef, p.blockPlayModeRef, p.engineRef, p.isPlaying, p.isPreparing, p.setBlockPlayMode, updateRandomBarSession]);
+  }, [finishRandomBarPlay, p.barConfigRef, p.blockPlayModeRef, p.engineRef, p.isPlaying, p.isPreparing, setBlockPlayMode, updateRandomBarSession]);
 
   const handleSaveRandomBarSession = useCallback(async (): Promise<boolean> => {
     const session = randomBarSessionRef.current;
