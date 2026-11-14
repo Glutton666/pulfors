@@ -17,6 +17,13 @@ jest.mock("expo-linear-gradient", () => ({
   LinearGradient: () => null,
 }));
 
+// GradientLetter (imported by SubdivisionBar) draws the strong "S" with react-native-svg.
+jest.mock("react-native-svg", () => ({
+  __esModule: true,
+  default: () => null,
+  Path: () => null,
+}));
+
 jest.mock("@/contexts/ThemeContext", () => ({
   useTheme: () => ({
     colors: {

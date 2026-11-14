@@ -691,9 +691,8 @@ export function DragGhost({
 const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
   gestureWrapper: {
     width: "100%",
-    cursor: "grab" as any,
-    userSelect: "none" as any,
-    touchAction: "none" as any,
+    // Web-only CSS props (not in RN's style types); spread to skip excess-property checks.
+    ...({ cursor: "grab", userSelect: "none", touchAction: "none" } as {}),
   },
   wrapper: {
     flexDirection: "row",

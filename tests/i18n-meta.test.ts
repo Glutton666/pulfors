@@ -100,6 +100,10 @@ test("[meta] detectDeviceLanguage는 navigator.languages → language → Intl �
   const setNav = (v: unknown) => {
     Object.defineProperty(globalThis, "navigator", { value: v, configurable: true, writable: true });
   };
+  // Pin the Intl fallback so the result does not depend on the host machine's locale.
+  const intlSpy = jest.spyOn(Intl, "DateTimeFormat").mockImplementation(
+    () => ({ resolvedOptions: () => ({ locale: "fr-FR" }) }) as unknown as Intl.DateTimeFormat,
+  );
   try {
     setNav({ language: "ko-KR", languages: ["ko-KR", "en-US"] });
     assert.equal(detectDeviceLanguage(), "ko");
@@ -109,6 +113,7 @@ test("[meta] detectDeviceLanguage는 navigator.languages → language → Intl �
     // 미지원 로케일은 FALLBACK_LANGUAGE로 매핑.
     assert.equal(detectDeviceLanguage(), FALLBACK_LANGUAGE);
   } finally {
+    intlSpy.mockRestore();
     if (desc) Object.defineProperty(globalThis, "navigator", desc);
     else delete (globalThis as { navigator?: unknown }).navigator;
   }

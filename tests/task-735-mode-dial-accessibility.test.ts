@@ -38,7 +38,8 @@ test("idle portrait Note mode reserves a separate row below the mode trigger", (
   const ui = readSource("components/MetronomeScreenUI.tsx");
   assert.match(
     ui,
-    /noteIsPlaying \? 4 : 48/,
+    // Content starts below the measured mode header (see e2e/mode-settings-placement.spec.ts).
+    /mainHeaderHeight \+ \(noteMode \? 8 : 0\)/,
     "Note controls must start below the tappable mode label while idle",
   );
 });
