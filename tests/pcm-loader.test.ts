@@ -1,14 +1,14 @@
-jest.mock("@/lib/audio-renderer", () => ({
-  decodeSampleFile: jest.fn(),
-  loadAssetPCM: jest.fn(),
-}));
-
 import { decodeSampleFile, loadAssetPCM } from "@/lib/audio-renderer";
 import {
   PCMLoadError,
   isPCMCancelled,
   loadPCM,
 } from "@/lib/pcm-loader";
+
+jest.mock("@/lib/audio-renderer", () => ({
+  decodeSampleFile: jest.fn(),
+  loadAssetPCM: jest.fn(),
+}));
 
 const mockDecode = decodeSampleFile as jest.MockedFunction<typeof decodeSampleFile>;
 const mockAsset = loadAssetPCM as jest.MockedFunction<typeof loadAssetPCM>;

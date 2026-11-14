@@ -123,7 +123,7 @@ export function useAudioPlayers(
     }
     cacheRef.current.set(key, players);
     return players;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
   }, [playerOutput, playerOwner]);
 
   /**
@@ -150,7 +150,7 @@ export function useAudioPlayers(
         set.strongD.volume = clamped;
       } catch {}
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
   }, []); // cacheRef and currentVolumeRef are refs — stable
 
   /**

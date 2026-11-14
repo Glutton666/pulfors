@@ -84,7 +84,7 @@ export type BarRepeatSpec = {
   /** ←N 점프 목적지 */
   jumpToId?: number;
   /** 바 단위 레이어: 각 레이어는 독립적인 subdivision 패턴으로 메인 비트와 동시에 재생됨 */
-  layers?: Array<{ beatType?: string; subdivisions?: string[]; soundSet?: string }>;
+  layers?: { beatType?: string; subdivisions?: string[]; soundSet?: string }[];
 };
 
 export interface ScheduleInputs {
@@ -295,7 +295,7 @@ function pureAddBarLayerTicks(
   blockBpm: number | undefined,
   beatStartTime: number,
   beatDur: number,
-  layers: Array<{ beatType?: string; subdivisions?: string[]; soundSet?: string }>,
+  layers: { beatType?: string; subdivisions?: string[]; soundSet?: string }[],
 ): void {
   for (let li = 0; li < layers.length; li++) {
     const layer = layers[li];

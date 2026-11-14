@@ -3,6 +3,9 @@ import React from "react";
 import { cleanup, render } from "@testing-library/react";
 import { Platform } from "react-native";
 
+import { GradientLetter } from "@/components/GradientLetter";
+import { DialBeatDot } from "@/components/DialBeatDot";
+
 jest.mock("react-native-reanimated", () => ({
   __esModule: true,
   default: { View: require("react-native").View },
@@ -31,9 +34,6 @@ jest.mock("react-native-svg", () => {
       React.createElement("path", { ...props, "data-testid": testID }),
   };
 });
-
-import { GradientLetter } from "@/components/GradientLetter";
-import { DialBeatDot } from "@/components/DialBeatDot";
 
 afterEach(cleanup);
 

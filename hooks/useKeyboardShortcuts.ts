@@ -258,10 +258,10 @@ export function useKeyboardShortcuts(params: UseKeyboardShortcutsParams): UseKey
           return;
         }
 
-        const symbolShortcuts: Array<{
+        const symbolShortcuts: {
           binding: typeof b.barRepeat;
           symbol: BarSymbolShortcut;
-        }> = [
+        }[] = [
           { binding: b.barRepeat, symbol: "repeat" },
           { binding: b.barJumpFrom, symbol: "jump_from" },
           { binding: b.barJumpTo, symbol: "jump_to" },

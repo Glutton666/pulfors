@@ -871,7 +871,7 @@ function MeasureRender({
     stemDir: "up" | "down";  // 그룹 내 평균 noteY로 결정한 공통 기둥 방향
     beamAbsY: number;         // 빔 선의 절대 Y
     /** 빔 그룹에 속한 음표(note)별 기둥 좌표: {stemX, noteAbsY} */
-    noteStems: Array<{ id: string; stemX: number; noteAbsY: number }>;
+    noteStems: { id: string; stemX: number; noteAbsY: number }[];
   }
   const tupletBeamInfoMap = new Map<string, TupletBeamInfo>();
   const flagSuppressSet = new Set<string>();  // 꼬리를 그리지 않을 elementId
@@ -955,7 +955,7 @@ function MeasureRender({
     beamLevel: number;
     stemDir: "up" | "down";
     beamAbsY: number;
-    noteStems: Array<{ id: string; stemX: number; noteAbsY: number }>;
+    noteStems: { id: string; stemX: number; noteAbsY: number }[];
   }
   const regularBeamGroups: RegularBeamInfo[] = [];
   const regularStemDirMap = new Map<string, "up" | "down">();

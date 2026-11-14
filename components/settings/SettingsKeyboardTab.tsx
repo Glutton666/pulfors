@@ -11,8 +11,7 @@ import { useScale } from "@/lib/scale";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { kbStyles } from "@/components/SettingsModal.styles";
-import type { KbSectionKey } from "@/lib/i18n";
-import type { TranslationFn } from "@/lib/i18n";
+import type { KbSectionKey , TranslationFn } from "@/lib/i18n";
 import type { SettingsScope } from "@/components/SettingsModal";
 import {
   DEFAULT_BINDINGS,

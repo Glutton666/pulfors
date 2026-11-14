@@ -205,7 +205,7 @@ test("source: 시그널 및 샘플 편집의 자동 BPM 분석은 제거된다",
 });
 
 test("modal-routing: 각 activeModal 값은 정확히 해당 show* 플래그만 true로 만든다", () => {
-  const cases: Array<[ActiveModal, keyof ReturnType<typeof deriveModalFlags>]> = [
+  const cases: [ActiveModal, keyof ReturnType<typeof deriveModalFlags>][] = [
     ["settings",       "showSettings"],
     ["profile",        "showProfile"],
     ["assistant",      "showAssistant"],
@@ -258,7 +258,7 @@ test("modal-routing: SignalGen → TuningGuide 전환 중 두 모달이 동시�
 
   const beforeFlags = deriveModalFlags(before.activeModal);
   const afterFlags  = deriveModalFlags(after.activeModal);
-  const keys = Object.keys(beforeFlags) as Array<keyof typeof beforeFlags>;
+  const keys = Object.keys(beforeFlags) as (keyof typeof beforeFlags)[];
   const simultaneous = keys.filter((k) => beforeFlags[k] && afterFlags[k]);
   assert.deepEqual(simultaneous, [], "SignalGen → TuningGuide 전환 중 동시에 두 모달이 visible 이면 안 된다");
 });
@@ -337,7 +337,7 @@ test("rapid-tap: menu → settings — 빠른 연속 탭에서 visible 모달은
 
 test("rapid-tap: menu → settings 빠른 토글 — 동일 모달이 open-close-open 반복해도 동시에 두 개 visible 안 됨", () => {
   // 같은 모달을 빠르게 열고 닫을 때: 연속된 두 상태에서 동시에 true 인 플래그가 없어야 한다
-  const transitions: Array<[ActiveModal, ActiveModal]> = [
+  const transitions: [ActiveModal, ActiveModal][] = [
     [null,       "menu"],
     ["menu",     "settings"],
     ["settings", null],
@@ -349,7 +349,7 @@ test("rapid-tap: menu → settings 빠른 토글 — 동일 모달이 open-close
   for (const [from, to] of transitions) {
     const beforeFlags = deriveModalFlags(from);
     const afterFlags  = deriveModalFlags(to);
-    const keys = Object.keys(beforeFlags) as Array<keyof typeof beforeFlags>;
+    const keys = Object.keys(beforeFlags) as (keyof typeof beforeFlags)[];
     const simultaneous = keys.filter((k) => beforeFlags[k] && afterFlags[k]);
     assert.deepEqual(
       simultaneous,
@@ -404,14 +404,14 @@ test("rapid-tap: menu → signalGen → tuningGuide — 빠른 연속 탭에서 
 
 test("rapid-tap: menu → signalGen → tuningGuide — 연속 전환에서 동시에 두 모달 visible 없음", () => {
   // signalGen → tuningGuide 전환을 포함한 연속 탭 시나리오
-  const plainTransitions: Array<[ActiveModal, ActiveModal]> = [
+  const plainTransitions: [ActiveModal, ActiveModal][] = [
     [null,      "menu"],
     ["menu",    "signalGen"],
   ];
   for (const [from, to] of plainTransitions) {
     const beforeFlags = deriveModalFlags(from);
     const afterFlags  = deriveModalFlags(to);
-    const keys = Object.keys(beforeFlags) as Array<keyof typeof beforeFlags>;
+    const keys = Object.keys(beforeFlags) as (keyof typeof beforeFlags)[];
     const simultaneous = keys.filter((k) => beforeFlags[k] && afterFlags[k]);
     assert.deepEqual(
       simultaneous,
@@ -426,7 +426,7 @@ test("rapid-tap: menu → signalGen → tuningGuide — 연속 전환에서 동�
   {
     const bf = deriveModalFlags(sgStart.activeModal);
     const af = deriveModalFlags(afterOpen.activeModal);
-    const keys = Object.keys(bf) as Array<keyof typeof bf>;
+    const keys = Object.keys(bf) as (keyof typeof bf)[];
     const simultaneous = keys.filter((k) => bf[k] && af[k]);
     assert.deepEqual(
       simultaneous,
@@ -440,7 +440,7 @@ test("rapid-tap: menu → signalGen → tuningGuide — 연속 전환에서 동�
   {
     const bf = deriveModalFlags(afterOpen.activeModal);
     const af = deriveModalFlags(afterClose.activeModal);
-    const keys = Object.keys(bf) as Array<keyof typeof bf>;
+    const keys = Object.keys(bf) as (keyof typeof bf)[];
     const simultaneous = keys.filter((k) => bf[k] && af[k]);
     assert.deepEqual(
       simultaneous,
@@ -796,7 +796,7 @@ test("android-appstate: 복귀 후 연속 모달 전환에서도 mutual exclusio
   let activeModal: ActiveModal = "settings";
   activeModal = simulateAppStateForegroundReturn(activeModal); // 복귀 → 동일
 
-  const transitions: Array<[ActiveModal, ActiveModal]> = [
+  const transitions: [ActiveModal, ActiveModal][] = [
     [activeModal, simulateBackPress(activeModal, false).nextActiveModal], // back-press
     [null, "menu"],
     ["menu", "drumKit"],
@@ -808,7 +808,7 @@ test("android-appstate: 복귀 후 연속 모달 전환에서도 mutual exclusio
   for (const [from, to] of transitions) {
     const beforeFlags = deriveModalFlags(from);
     const afterFlags  = deriveModalFlags(to);
-    const keys = Object.keys(beforeFlags) as Array<keyof typeof beforeFlags>;
+    const keys = Object.keys(beforeFlags) as (keyof typeof beforeFlags)[];
     const simultaneous = keys.filter((k) => beforeFlags[k] && afterFlags[k]);
     assert.deepEqual(
       simultaneous,

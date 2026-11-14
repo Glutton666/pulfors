@@ -8,11 +8,10 @@ import {
   ScrollView,
   ActivityIndicator,
   Linking,
-} from "react-native";
+ Share } from "react-native";
 import { Alert } from "@/lib/alert";
 import * as Clipboard from "expo-clipboard";
 import { Ionicons } from "@expo/vector-icons";
-import { Share } from "react-native";
 import { useScale } from "@/lib/scale";
 import { Spacing } from "@/constants/tokens";
 import { PUBLIC_WEBSITE_URL } from "@/constants/website";

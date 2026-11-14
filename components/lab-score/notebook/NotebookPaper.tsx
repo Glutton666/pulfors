@@ -1,14 +1,13 @@
 import React, { useMemo, useRef } from "react";
 import { PanResponder, Platform, StyleSheet, View } from "react-native";
 import Svg, { G, Line, Path, Rect } from "react-native-svg";
-import type { StaffPage, StaffPoint } from "@/lib/staff-notebook";
+import type { StaffPage, StaffPoint , NotebookSettings } from "@/lib/staff-notebook";
 import { ROW_HEIGHT, STAFF_GAP, STAFF_TOP } from "@/lib/staff-notebook-layout";
 import { NotebookGlyph } from "./NotebookGlyph";
 import { NotebookTupletGlyph } from "./NotebookTupletGlyph";
 import { NotebookBeamLayer } from "./NotebookBeamLayer";
 import { notebookTupletSpans } from "@/lib/notebook-tuplet-layout";
 import { notebookBeaming } from "@/lib/notebook-beaming";
-import type { NotebookSettings } from "@/lib/staff-notebook";
 import type { NotebookBounds, NotebookSelection } from "@/lib/notebook-editing";
 import { paperErasures } from "@/lib/notebook-erasing";
 import { createNotebookPaperGesture } from "@/lib/notebook-paper-gesture";

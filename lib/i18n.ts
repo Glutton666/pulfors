@@ -5,6 +5,16 @@
 // ============================================================
 
 // 데이터 모듈의 모든 export를 re-export — 기존 import 경로 호환
+import {
+  SUPPORTED_LANGUAGES,
+  FALLBACK_LANGUAGE,
+  type LanguageCode,
+  type Language,
+  type TranslationLeaf,
+  type TranslationFn,
+  translations,
+} from "./i18n.data";
+
 export {
   SUPPORTED_LANGUAGES,
   FALLBACK_LANGUAGE,
@@ -19,16 +29,6 @@ export type {
   BarModeViewKey,
   KbSectionKey,
   TranslationFn,
-} from "./i18n.data";
-
-import {
-  SUPPORTED_LANGUAGES,
-  FALLBACK_LANGUAGE,
-  type LanguageCode,
-  type Language,
-  type TranslationLeaf,
-  type TranslationFn,
-  translations,
 } from "./i18n.data";
 
 export function isLanguageCode(v: unknown): v is LanguageCode {

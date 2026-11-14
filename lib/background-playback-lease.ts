@@ -70,7 +70,7 @@ async function activate(expectedGeneration: number): Promise<boolean> {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { createAudioPlayer } = require("expo-audio") as typeof import("expo-audio");
     player = createAudioPlayer(
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
+
       require("@/assets/sounds/silence.wav"),
       { updateInterval: 10_000 },
     );

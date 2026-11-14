@@ -7,9 +7,8 @@ import {
   savePracticeBook,
   createPracticeEntry,
   type PracticeEntry,
-} from "@/lib/storage";
+ BarRepeatEntry } from "@/lib/storage";
 import type { BeatType } from "@/lib/metronome-engine";
-import type { BarRepeatEntry } from "@/lib/storage";
 import type { TranslationFn } from "@/lib/i18n";
 
 export interface UseBeatQuickSaveParams {

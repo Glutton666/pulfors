@@ -2,6 +2,8 @@
 import React from "react";
 import { fireEvent, render } from "@testing-library/react";
 
+import { StageEmptyPerformanceDisplay } from "@/components/StageEmptyPerformanceDisplay";
+
 jest.mock("@/contexts/LanguageContext", () => ({
   useLanguage: () => ({ t: (_section: string, key: string) => key }),
 }));
@@ -17,8 +19,6 @@ jest.mock("@/components/StageBeatColumn", () => ({
 jest.mock("@/components/SubdivisionBar", () => ({
   SubdivisionBar: () => <div data-testid="mock-subdivision-bar" />,
 }));
-
-import { StageEmptyPerformanceDisplay } from "@/components/StageEmptyPerformanceDisplay";
 
 const makeProps = () => ({
   currentBeat: -1,

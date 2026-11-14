@@ -1,3 +1,5 @@
+/** @jest-environment jsdom */
+import { renderHook } from "@testing-library/react";
 import { Platform, useWindowDimensions } from "react-native";
 import { useScale } from "@/lib/scale";
 
@@ -14,7 +16,10 @@ jest.mock("react-native", () => ({
 function layout(width: number, height: number, platform = "web") {
   Object.assign(Platform, { OS: platform });
   jest.mocked(useWindowDimensions).mockReturnValue({ width, height, scale: 1, fontScale: 1 });
-  return useScale();
+  const { result, unmount } = renderHook(() => useScale());
+  const scale = result.current;
+  unmount();
+  return scale;
 }
 
 describe("web desktop scale isolation", () => {

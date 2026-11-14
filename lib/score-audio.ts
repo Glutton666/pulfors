@@ -156,9 +156,9 @@ function _generateDrumPCM(drumType: DrumType, sr: number): Float32Array {
 async function _ensureDrumFile(drumType: DrumType): Promise<void> {
   const cacheKey = `drum_${drumType}`;
   if (_fileCache.has(cacheKey)) return;
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+
   const { encodeWav } = require("./audio-renderer") as typeof import("./audio-renderer");
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+
   const { File, Paths } = require("expo-file-system") as typeof import("expo-file-system");
   const pcm = _generateDrumPCM(drumType, NOTE_SR);
   const wav = encodeWav(pcm, NOTE_SR);
@@ -173,9 +173,9 @@ async function _ensureNoteFile(midi: number, waveform: WaveformType): Promise<vo
   if (_fileCache.has(cacheKey)) return;
   // Use require() for lazy loading — works identically on Hermes/native and in
   // Jest's CJS environment (dynamic import() is not transformed by babel-jest).
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+
   const { encodeWav } = require("./audio-renderer") as typeof import("./audio-renderer");
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+
   const { File, Paths } = require("expo-file-system") as typeof import("expo-file-system");
   const pcm = _generatePCM(midi, NOTE_FILE_DUR_S, NOTE_SR, waveform);
   const wav = encodeWav(pcm, NOTE_SR);
@@ -322,7 +322,7 @@ async function _playNativeDrum(drumType: DrumType, volume: number, onAccepted?: 
 
   let player: any;
   try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+
     const { createAudioPlayer } = require("expo-audio") as typeof import("expo-audio");
     player = createAudioPlayer({ uri });
     player.volume = Math.max(0, Math.min(1, volume));
@@ -363,7 +363,7 @@ async function _playNativeNote(
 
   let player: any;
   try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+
     const { createAudioPlayer } = require("expo-audio") as typeof import("expo-audio");
     player = createAudioPlayer({ uri });
     player.volume = Math.max(0, Math.min(1, volume));
@@ -446,7 +446,7 @@ export async function prepareScoreAudio(
   onProgress?: (done: number, total: number) => void,
   batchSize = 4,
   instrumentId?: string,
-  noteInstrumentPairs?: Array<{ midi: number; instrumentId: string }>,
+  noteInstrumentPairs?: { midi: number; instrumentId: string }[],
 ): Promise<void> {
   if (Platform.OS === "web") return;
 
@@ -454,7 +454,7 @@ export async function prepareScoreAudio(
   // When noteInstrumentPairs is supplied we use per-note instrument data so that
   // a score switching instruments mid-stream generates the correct WAV for each
   // instrument (e.g. violin → sawtooth AND piano → triangle for the same pitch).
-  let pairs: Array<{ midi: number; waveform: WaveformType }>;
+  let pairs: { midi: number; waveform: WaveformType }[];
 
   if (noteInstrumentPairs && noteInstrumentPairs.length > 0) {
     const seen = new Set<string>();
@@ -535,7 +535,7 @@ export function scheduleMeasureNotes(
   }
 
   const myTids: ReturnType<typeof setTimeout>[] = [];
-  const myStopFns: Array<() => void> = [];
+  const myStopFns: (() => void)[] = [];
   let cancelled = false;
 
   for (const [noteIndex, note] of notes.entries()) {

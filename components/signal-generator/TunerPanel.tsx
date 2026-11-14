@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useCallback, useEffect, useRef } from "react";
 import {
   FlatList,
   Platform,
@@ -8,7 +8,6 @@ import {
   View,
   useWindowDimensions,
 } from "react-native";
-import { useCallback, useEffect, useRef } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
 import { FontSize, Radius, Spacing } from "@/constants/tokens";

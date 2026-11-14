@@ -1,7 +1,6 @@
 import { createAudioPlayer } from "expo-audio";
-import type { AudioPlayer } from "expo-audio";
+import type { AudioPlayer , AudioSource } from "expo-audio";
 import { safePlayAndConfirm, safePlayWithVolume } from "./audio-utils";
-import type { AudioSource } from "expo-audio";
 
 export type NativePlayer = AudioPlayer & { remove?: () => void };
 export type NativePool = Record<string, NativePlayer> | {

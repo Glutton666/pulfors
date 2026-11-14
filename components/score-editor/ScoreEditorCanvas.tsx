@@ -73,7 +73,7 @@ export interface ScoreEditorCanvasProps {
   onMeasureLongPress: (measureIdx: number) => void;
   onClearSelection: () => void;
   onEraseElement: (elementId: string, measureIdx: number) => void;
-  onEraseMultiple: (elements: Array<{ elementId: string; measureIdx: number }>) => void;
+  onEraseMultiple: (elements: { elementId: string; measureIdx: number }[]) => void;
   onNoteMoved: (elementId: string, measureIdx: number, newPitch: Pitch, drumType?: DrumType) => void;
   onTupletBracketTap: (elementIds: string[]) => void;
   onAddMeasure: () => void;

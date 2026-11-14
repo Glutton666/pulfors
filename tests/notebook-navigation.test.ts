@@ -3,7 +3,7 @@ import { buildNotebookPlan, notebookPosition } from "../lib/notebook-playback-pl
 import { notebookRows, ROW_HEIGHT } from "../lib/staff-notebook-layout";
 import { type StaffNotebook, DEFAULT_NOTEBOOK_SETTINGS } from "../lib/staff-notebook";
 
-function fixture(signs: Array<[number, string]>, count = 6, phrase = false) {
+function fixture(signs: [number, string][], count = 6, phrase = false) {
   const note: StaffNotebook = { id: "n", title: "", updatedAt: 0, settings: { ...DEFAULT_NOTEBOOK_SETTINGS }, pages: [{
     id: "p", staffCount: count, strokes: [], stamps: signs.map(([unit, glyph], i) => ({
       id: `sign${i}`, glyph, x: phrase ? 38 + (unit % 4 + 0.5) * 206 : 400,
@@ -72,8 +72,8 @@ test.each([
   [[1, "volta1"]],
   [[1, "da_capo_coda"], [2, "coda"]],
   [[1, "repeat_start"], [1, "repeat_start"]],
-] as Array<Array<[number, string]>>) ("invalid or ambiguous signs refuse playback with an actionable message", (...signs) => {
-  const { note, base } = fixture(signs as Array<[number, string]>);
+] as [number, string][][]) ("invalid or ambiguous signs refuse playback with an actionable message", (...signs) => {
+  const { note, base } = fixture(signs as [number, string][]);
   expect(() => followNotebookSigns(note, base, 1)).toThrow(/Check navigation signs/);
 });
 test("ordinary marks never become navigation commands", () => {

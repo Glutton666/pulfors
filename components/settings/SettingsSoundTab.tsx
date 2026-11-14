@@ -8,9 +8,8 @@ import {
   PanResponder,
   LayoutChangeEvent,
   Switch,
-} from "react-native";
+ TextInput } from "react-native";
 import { Alert } from "@/lib/alert";
-import { TextInput } from "react-native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import {

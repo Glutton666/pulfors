@@ -36,7 +36,7 @@ export function createEmptyPart(instrumentId: string): ScorePart {
 // 새 악보 생성
 export function createScoreDocument(options: {
   title?: string;
-  parts: Array<{ instrumentId: string }>;
+  parts: { instrumentId: string }[];
   timeSignature?: { numerator: number; denominator: number };
   bpm?: number;
   keySharps?: number;

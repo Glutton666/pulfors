@@ -20,7 +20,7 @@ import type {
 import type { EditorTool } from "@/components/ScoreCanvas";
 
 // ── 음표 머리 선택 항목 (퍼커션 클레프 전용) ───────────────────
-const NOTE_HEAD_OPTIONS: Array<{ value: NoteHeadType; symbol: string; labelKey: string }> = [
+const NOTE_HEAD_OPTIONS: { value: NoteHeadType; symbol: string; labelKey: string }[] = [
   { value: "normal",      symbol: "●",  labelKey: "noteHeadNormal" },
   { value: "cross",       symbol: "✕",  labelKey: "noteHeadCross" },
   { value: "cross_open",  symbol: "✕°", labelKey: "noteHeadCrossOpen" },
@@ -31,7 +31,7 @@ const NOTE_HEAD_OPTIONS: Array<{ value: NoteHeadType; symbol: string; labelKey: 
 
 // ── 음표 길이 ─────────────────────────────────────────────────
 
-const DURATIONS: Array<{ value: NoteDuration; symbol: string; labelKey: string }> = [
+const DURATIONS: { value: NoteDuration; symbol: string; labelKey: string }[] = [
   { value: "whole",          symbol: "𝅝",  labelKey: "durationWhole" },
   { value: "half",           symbol: "𝅗𝅥", labelKey: "durationHalf" },
   { value: "quarter",        symbol: "♩",  labelKey: "durationQuarter" },
@@ -42,7 +42,7 @@ const DURATIONS: Array<{ value: NoteDuration; symbol: string; labelKey: string }
 
 // ── 아티큘레이션 ──────────────────────────────────────────────
 
-export const ARTICULATIONS: Array<{ id: ArticulationType; symbol: string; labelKey: string }> = [
+export const ARTICULATIONS: { id: ArticulationType; symbol: string; labelKey: string }[] = [
   { id: "staccato",           symbol: "·",    labelKey: "articulStaccato" },
   { id: "tenuto",             symbol: "—",    labelKey: "articulTenuto" },
   { id: "accent",             symbol: ">",    labelKey: "articulAccent" },
@@ -56,7 +56,7 @@ export const ARTICULATIONS: Array<{ id: ArticulationType; symbol: string; labelK
 
 // ── 임시표 ────────────────────────────────────────────────────
 
-export const ACCIDENTALS: Array<{ value: Accidental; symbol: string; labelKey: string }> = [
+export const ACCIDENTALS: { value: Accidental; symbol: string; labelKey: string }[] = [
   { value: "natural",      symbol: "♮", labelKey: "accidentalNatural" },
   { value: "sharp",        symbol: "♯", labelKey: "accidentalSharp" },
   { value: "flat",         symbol: "♭", labelKey: "accidentalFlat" },
@@ -99,7 +99,7 @@ export const REPEAT_SIGNS: RepeatSignItem[] = [
 
 // ── 꾸밈음 ────────────────────────────────────────────────────
 
-const ORNAMENTS: Array<{ id: OrnamentType; symbol: string; labelKey: string }> = [
+const ORNAMENTS: { id: OrnamentType; symbol: string; labelKey: string }[] = [
   { id: "trill",         symbol: "tr~",   labelKey: "ornTrill" },
   { id: "mordent",       symbol: "𝒎",    labelKey: "ornMordent" },
   { id: "turn",          symbol: "𝒔",    labelKey: "ornTurn" },
@@ -111,7 +111,7 @@ const ORNAMENTS: Array<{ id: OrnamentType; symbol: string; labelKey: string }> =
 ];
 
 export type CrescType = "cresc" | "decresc" | null;
-const CRESC_ITEMS: Array<{ id: CrescType; symbol: string; labelKey: string }> = [
+const CRESC_ITEMS: { id: CrescType; symbol: string; labelKey: string }[] = [
   { id: "cresc",   symbol: "<",  labelKey: "dynCresc" },
   { id: "decresc", symbol: ">",  labelKey: "dynDecresc" },
 ];
@@ -289,7 +289,7 @@ export function ScorePalette({
   const isBpmOutOfRange = isTempoEditVisible && !isNaN(editingBpmNum)
     && (editingBpmNum < activeTempoItem!.bpmMin! || editingBpmNum > activeTempoItem!.bpmMax!);
 
-  const TAB_DEFS: Array<{ id: PaletteTab; labelKey: string; tool?: EditorTool }> = [
+  const TAB_DEFS: { id: PaletteTab; labelKey: string; tool?: EditorTool }[] = [
     { id: "notes",    labelKey: "paletteNotes",    tool: "note" },
     { id: "rests",    labelKey: "paletteRests",    tool: "rest" },
     { id: "signs",    labelKey: "paletteSigns",    tool: "select" },

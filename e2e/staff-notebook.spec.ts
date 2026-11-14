@@ -1,4 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
+import type { StaffNotebook } from "../lib/staff-notebook";
+import { DEFAULT_NOTEBOOK_SETTINGS } from "../lib/staff-notebook";
 
 for (const viewport of [{ width: 320, height: 740 }, { width: 768, height: 1024 }, { width: 844, height: 390 }]) {
   test(`isolated notation pickers and visible selection actions at ${viewport.width}`, async ({ page }) => {
@@ -53,8 +55,6 @@ for (const viewport of [{ width: 320, height: 740 }, { width: 768, height: 1024 
     await expect(page.getByRole("button", { name: /^(선택 크기 줄이기|Shrink selection)$/ })).toHaveCount(0);
   });
 }
-import type { StaffNotebook } from "../lib/staff-notebook";
-import { DEFAULT_NOTEBOOK_SETTINGS } from "../lib/staff-notebook";
 
 test.use({
   baseURL: process.env.NOTEBOOK_TEST_URL ?? (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : undefined),
@@ -1167,7 +1167,7 @@ test("random playback follows the rendered sheet and leaves the saved original u
 test("simple metronome continues beyond the last row until Stop or notebook exit", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.addInitScript(() => {
-    const scope = window as typeof window & { __notebookSources: Array<{ loop: boolean; ended: boolean }> };
+    const scope = window as typeof window & { __notebookSources: { loop: boolean; ended: boolean }[] };
     scope.__notebookSources = [];
     const start = AudioBufferSourceNode.prototype.start;
     AudioBufferSourceNode.prototype.start = function (...args) {
@@ -1191,17 +1191,17 @@ test("simple metronome continues beyond the last row until Stop or notebook exit
   // The click must continue even after the complete padded sheet.
   await page.waitForTimeout(4000);
   await expect(page.getByTestId("notebook-play")).toHaveAttribute("aria-label", /정지|Stop/);
-  expect(await page.evaluate(() => (window as typeof window & { __notebookSources: Array<{ loop: boolean; ended: boolean }> })
+  expect(await page.evaluate(() => (window as typeof window & { __notebookSources: { loop: boolean; ended: boolean }[] })
     .__notebookSources.some((source) => source.loop && !source.ended))).toBe(true);
   await page.getByTestId("notebook-play").click();
-  await expect.poll(() => page.evaluate(() => (window as typeof window & { __notebookSources: Array<{ loop: boolean; ended: boolean }> })
+  await expect.poll(() => page.evaluate(() => (window as typeof window & { __notebookSources: { loop: boolean; ended: boolean }[] })
     .__notebookSources.filter((source) => source.loop && !source.ended).length)).toBe(0);
   await page.getByTestId("notebook-play").click();
   await expect(page.getByTestId("notebook-play")).toHaveAttribute("aria-label", /정지|Stop/);
   await page.getByTestId("notebook-panel-close").click();
   await page.getByTestId("notebook-close").click();
   await expect(page.getByTestId("notebook-drawing")).toHaveCount(0);
-  await expect.poll(() => page.evaluate(() => (window as typeof window & { __notebookSources: Array<{ loop: boolean; ended: boolean }> })
+  await expect.poll(() => page.evaluate(() => (window as typeof window & { __notebookSources: { loop: boolean; ended: boolean }[] })
     .__notebookSources.filter((source) => source.loop && !source.ended).length)).toBe(0);
 });
 

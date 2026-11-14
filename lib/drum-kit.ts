@@ -29,7 +29,7 @@ export type DrumKitMapping = (DrumPadConfig | null)[];
  * like a real drum machine (kick, snare, hi-hat, clap, toms, crash).
  * Metronome click sounds follow as additional options.
  */
-const BUILTIN_ORDER: Array<{ setName: BuiltinSoundSet; role: SoundRole }> = [
+const BUILTIN_ORDER: { setName: BuiltinSoundSet; role: SoundRole }[] = [
   { setName: "kick",    role: "strong" },  // 1  hard kick
   { setName: "kick",    role: "high"   },  // 2  soft kick
   { setName: "snare",   role: "strong" },  // 3  hard snare
@@ -49,7 +49,7 @@ const BUILTIN_ORDER: Array<{ setName: BuiltinSoundSet; role: SoundRole }> = [
 ];
 
 /** All options available in the pad-picker (drum sounds first, then metronome clicks). */
-const ALL_BUILTIN_OPTIONS: Array<{ setName: BuiltinSoundSet; role: SoundRole }> = [
+const ALL_BUILTIN_OPTIONS: { setName: BuiltinSoundSet; role: SoundRole }[] = [
   ...BUILTIN_ORDER,
   { setName: "kick",    role: "low"    },
   { setName: "openhat", role: "low"    },
@@ -87,7 +87,7 @@ export function createDefaultDrumKitMapping(): DrumKitMapping {
   return mapping;
 }
 
-export function listBuiltinPadOptions(): Array<{ setName: BuiltinSoundSet; role: SoundRole }> {
+export function listBuiltinPadOptions(): { setName: BuiltinSoundSet; role: SoundRole }[] {
   return ALL_BUILTIN_OPTIONS;
 }
 

@@ -50,7 +50,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   saveMock.mockImplementation(async (_pcm, filename) => `file:///private/${filename}`);
 });
-const ttsCombinations: Array<["off" | "ko", "mixed" | "voice-only", "both" | "off", number]> = [
+const ttsCombinations: ["off" | "ko", "mixed" | "voice-only", "both" | "off", number][] = [
   ["off", "mixed", "both", 1],
   ["ko", "mixed", "both", 1],
   ["ko", "voice-only", "both", 1],

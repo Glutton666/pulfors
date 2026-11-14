@@ -57,7 +57,7 @@ export interface SwipeableBarRowProps {
   showStaffNotation?: boolean;
   cellOverlayOpacity?: number;
   sampleCells?: boolean[];
-  sampleCellCoverage?: Array<SampleCellCoverage | undefined>;
+  sampleCellCoverage?: (SampleCellCoverage | undefined)[];
 }
 
 export function getBarRightRailLayout(blockEnd: boolean, blockRepeatText?: string | null) {

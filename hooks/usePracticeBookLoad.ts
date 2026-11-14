@@ -139,7 +139,7 @@ function isNoteSourceEntry(e: PracticeEntry): boolean {
   return (e.mode || "bar") === "bar" || e.mode === "score" || e.mode === "beat";
 }
 
-// eslint-disable-next-line @typescript-eslint/explicit-function-return-type
+
 export function usePracticeBookLoad({
   engineRef,
   barModeRef,

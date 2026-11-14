@@ -3,6 +3,14 @@ import assert from "node:assert/strict";
 import { Platform } from "react-native";
 import * as audioModeCache from "../lib/audio-mode-cache";
 
+import {
+  _foregroundPlaybackDebugState,
+  holdForegroundForPausedNotification,
+  releasePausedNotificationHold,
+  requestForegroundPlayback,
+  relinquishForegroundPlayback,
+} from "../lib/android-foreground-service";
+
 const mockApplyAudioModeIfChanged = jest.spyOn(audioModeCache, "applyAudioModeIfChanged");
 const mockCreateAudioPlayer = jest.fn();
 const mockAcquireBackgroundService = jest.fn(async (_token: string) => {});
@@ -18,14 +26,6 @@ jest.mock("../modules/sparse-metronome/src", () => ({
 jest.mock("expo-audio", () => ({
   createAudioPlayer: mockCreateAudioPlayer,
 }));
-
-import {
-  _foregroundPlaybackDebugState,
-  holdForegroundForPausedNotification,
-  releasePausedNotificationHold,
-  requestForegroundPlayback,
-  relinquishForegroundPlayback,
-} from "../lib/android-foreground-service";
 
 function createPlayer() {
   return {

@@ -167,7 +167,7 @@ export function createDebouncedPersister<T extends object>(
           // Failure observers must never interfere with persister recovery.
         }
         if (typeof __DEV__ !== "undefined" && __DEV__) {
-          // eslint-disable-next-line no-console
+
           console.warn(
             `[persist] write failed after ${attempt} attempts; ${Object.keys(pending).length} key(s) still pending`,
             err,

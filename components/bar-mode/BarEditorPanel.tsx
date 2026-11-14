@@ -25,8 +25,7 @@ import { CustomSoundSetEditor } from "@/components/CustomSoundSetEditor";
 import { SubdivisionBar } from "@/components/SubdivisionBar";
 import { BarPlayButton } from "@/components/BarPlayButton";
 import { FontSize, Spacing, Radius } from "@/constants/tokens";
-import type { BeatType, BarRepeat, BarLayer } from "@/components/beat-indicator.types";
-import type { LoopBlock } from "@/components/beat-indicator.types";
+import type { BeatType, BarRepeat, BarLayer , LoopBlock } from "@/components/beat-indicator.types";
 import type { CustomSoundSetConfig } from "@/lib/storage";
 import type { TranslationFn } from "@/lib/i18n";
 import {
@@ -192,7 +191,7 @@ export function BarEditorPanel({
 
   // ─── Sync repeat local state when selected bar changes ───────────────────
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     // A newly selected row should never appear uneditable because the previous
     // row's panel was collapsed.

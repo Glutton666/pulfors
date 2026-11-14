@@ -15,6 +15,10 @@ import assert from "node:assert/strict";
 import { Platform } from "react-native";
 import { applyNotePreviewOnRelease } from "../lib/score-canvas-helpers";
 
+// score-audio 임포트는 위 전역 설정 이후에 이루어지므로 sharedAudioCtx가
+// null인 상태에서 첫 발음 시 MockAudioContext를 사용한다.
+import { previewScoreNote, stopPreviewNote } from "../lib/score-audio";
+
 // ── Mock AudioContext ────────────────────────────────────────────────────────
 // audio-renderer.ts의 getSharedAudioContext()는 globalThis.AudioContext가
 // 존재할 때 새 인스턴스를 만든다.
@@ -60,10 +64,6 @@ let oscillatorCount = 0;
 // Platform.OS를 "web"으로 설정 — AudioContext(오실레이터) 경로를 사용하게 해
 // 발음 시도를 직접 추적할 수 있도록 한다.
 (Platform as unknown as Record<string, unknown>).OS = "web";
-
-// score-audio 임포트는 위 전역 설정 이후에 이루어지므로 sharedAudioCtx가
-// null인 상태에서 첫 발음 시 MockAudioContext를 사용한다.
-import { previewScoreNote, stopPreviewNote } from "../lib/score-audio";
 
 // ── 1. MIDI 범위 유효성 검사 ─────────────────────────────────────────────────
 

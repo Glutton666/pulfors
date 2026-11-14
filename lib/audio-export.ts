@@ -30,6 +30,7 @@ import {
   safeFilename as _safeFilename,
   makeSampleRenderSettings,
 } from "./audio-export-pure";
+import type { ExportFormat } from "./audio-export-pure";
 
 const clampRepeats = _clampRepeats;
 const clampFadeOutSec = _clampFadeOutSec;
@@ -53,7 +54,6 @@ export {
   EXPORT_ABORTED,
 } from "./audio-export-pure";
 export type { ExportFormat } from "./audio-export-pure";
-import type { ExportFormat } from "./audio-export-pure";
 
 const SR = getRenderSampleRate();
 

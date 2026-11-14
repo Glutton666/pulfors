@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Dispatch, MutableRefObject, SetStateAction } from "react";
-import type { NoteImageCrop } from "@/lib/storage";
-import type { PracticeEntry } from "@/lib/storage";
+import type { NoteImageCrop , PracticeEntry } from "@/lib/storage";
 import { loadPracticeBook } from "@/lib/storage";
 import { isNoteSourceEntry } from "@/lib/note-mode-sources";
 import { applyQueueInsert } from "@/lib/index.helpers";

@@ -330,7 +330,7 @@ test("짧은 false/true 상태 진동은 중단·복구 콜백을 발생시키�
  * cleanup() 으로 설치된 mock 을 제거한다.
  */
 function installNativeMock() {
-  const registeredCallbacks: Array<(e: { type: string }) => void> = [];
+  const registeredCallbacks: ((e: { type: string }) => void)[] = [];
   let removeCount = 0;
 
   stubAudioModule.addInterruptionListener = (

@@ -1,5 +1,8 @@
+import { createAudioOutputOwner } from "@/lib/audio-output-owner";
+import { createWebAudioOutput, createWebVisualTimingProvider } from "@/lib/web-audio-output";
+
 const loopStops: jest.Mock[] = [];
-const renderedEnded: Array<() => void> = [];
+const renderedEnded: (() => void)[] = [];
 const context = { currentTime: 10, sampleRate: 48000, state: "running", outputLatency: 0.08 };
 
 jest.mock("@/lib/audio-renderer", () => ({
@@ -23,9 +26,6 @@ jest.mock("@/lib/audio-renderer", () => ({
   }),
   scheduleWebClickAt: jest.fn(() => null),
 }));
-
-import { createAudioOutputOwner } from "@/lib/audio-output-owner";
-import { createWebAudioOutput, createWebVisualTimingProvider } from "@/lib/web-audio-output";
 
 describe("web audio output handoff", () => {
   it("maps realtime presentation against the reservation clock after an audio clock stall", () => {

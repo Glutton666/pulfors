@@ -440,7 +440,7 @@ function ModeSwitcherDial({
       AsyncStorage.setItem(WALL_KEY, JSON.stringify(SAFE_FALLBACK));
       return SAFE_FALLBACK;
     });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+
   }, [currentMode, hideHandle]);
 
   // ── Animation shared values ───────────────────────────────────────────────
@@ -586,7 +586,7 @@ function ModeSwitcherDial({
     fanOpacity.value = withTiming(1,   { duration: motionDuration(180, reduceMotion) });
     overlayOp.value  = withTiming(0.5, { duration: motionDuration(200, reduceMotion) });
   // currentMode 제거 — ref로 읽으므로 deps 불필요, React Compiler 재생성 방지
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+
   }, [fanScale, fanOpacity, overlayOp, resetDialSession, reduceMotion]);
 
   const doClose = useCallback(() => {
@@ -610,7 +610,7 @@ function ModeSwitcherDial({
   useImperativeHandle(ref, () => ({
     open:  () => doOpenRef.current(),
     close: () => doCloseRef.current(),
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+
   }), []);
 
   // Sync refs so stale PanResponder closures always call the latest version

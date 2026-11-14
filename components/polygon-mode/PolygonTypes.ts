@@ -235,7 +235,7 @@ export function computeLayerRadii(sortedLayers: PolygonLayer[], maxRadius: numbe
 /** 정 N각형의 꼭짓점 좌표 계산 (중심 cx, cy, 반지름 r, 시작 각도 -90°) */
 export function polygonVertices(
   cx: number, cy: number, r: number, sides: number,
-): Array<{ x: number; y: number }> {
+): { x: number; y: number }[] {
   if (sides <= 1) return [{ x: cx, y: cy - r }]; // 원/펄스
   return Array.from({ length: sides }, (_, i) => {
     const angle = (2 * Math.PI * i) / sides - Math.PI / 2;

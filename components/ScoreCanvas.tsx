@@ -9,9 +9,7 @@ import Svg, { Line, Ellipse, G, Rect, Text as SvgText } from "react-native-svg";
 import { useTheme } from "@/contexts/ThemeContext";
 import { previewScoreNote, previewScoreDrum } from "@/lib/score-audio";
 import { applyNotePreviewOnRelease } from "@/lib/score-canvas-helpers";
-import { pitchToMidi } from "@/lib/score-layout";
-import { ScoreRenderer } from "@/components/ScoreRenderer";
-import {
+import { pitchToMidi ,
   computeScoreLayout,
   yToPitch,
   pitchToY,
@@ -30,6 +28,7 @@ import {
   layoutMeasure,
   yToDrumType,
 } from "@/lib/score-layout";
+import { ScoreRenderer } from "@/components/ScoreRenderer";
 import { BASE_LINE_SPACING, scoreScaleFactor } from "@/lib/score-scale";
 import type {
   ScoreDocument,
@@ -130,7 +129,7 @@ export interface ScoreCanvasProps {
   onMeasureTap: (measureIdx: number) => void;
   onMeasureLongPress?: (measureIdx: number) => void;
   onEraseElement: (elementId: string, measureIdx: number) => void;
-  onEraseMultiple?: (elements: Array<{elementId: string; measureIdx: number}>) => void;
+  onEraseMultiple?: (elements: {elementId: string; measureIdx: number}[]) => void;
   onNoteMoved?: (elementId: string, measureIdx: number, newPitch: Pitch, drumType?: DrumType) => void;
   /** 잇단음표 브래킷/숫자를 탭했을 때 호출 — 그룹 전체 elementIds를 전달 (다중 선택용) */
   onTupletBracketTap?: (elementIds: string[]) => void;
@@ -621,7 +620,7 @@ export function ScoreCanvas({
     };
 
     // 지우개 드래그 범위 삭제용 누적 목록
-    let eraseHitsList: Array<{elementId: string; measureIdx: number}> = [];
+    let eraseHitsList: {elementId: string; measureIdx: number}[] = [];
     const eraseHitIds = new Set<string>();
 
     return PanResponder.create({

@@ -203,8 +203,8 @@ function makeRest(d: NoteDuration): ScoreRest {
 }
 
 // ─── Measure Fill: Level 1 (quarter-note only) ────────────────
-function fillMeasureL1(totalSlots: number, density: number): Array<ScoreNote | ScoreRest> {
-  const elements: Array<ScoreNote | ScoreRest> = [];
+function fillMeasureL1(totalSlots: number, density: number): (ScoreNote | ScoreRest)[] {
+  const elements: (ScoreNote | ScoreRest)[] = [];
   for (let i = 0; i < totalSlots; i++) {
     elements.push(
       Math.random() < density
@@ -221,8 +221,8 @@ function fillMeasureL1(totalSlots: number, density: number): Array<ScoreNote | S
 function fillMeasureHemiola(
   totalSlots: number,
   density: number,
-): Array<ScoreNote | ScoreRest> {
-  const elements: Array<ScoreNote | ScoreRest> = [];
+): (ScoreNote | ScoreRest)[] {
+  const elements: (ScoreNote | ScoreRest)[] = [];
 
   if (totalSlots === 12) {
     // 6/4 헤미올라: 6×quarter (slots=2 each) 대 원래 4×quarter_dot (slots=3)
@@ -249,13 +249,13 @@ function fillMeasureHemiola(
 }
 
 // ─── Measure Fill: Level 2 (eighth-note based, syncopation + hemiola) ──
-function fillMeasureL2(totalSlots: number, density: number): Array<ScoreNote | ScoreRest> {
+function fillMeasureL2(totalSlots: number, density: number): (ScoreNote | ScoreRest)[] {
   // 30% chance: use hemiola cross-accent pattern (only for meters that support it)
   if (Math.random() < 0.30 && (totalSlots === 12 || totalSlots === 8)) {
     return fillMeasureHemiola(totalSlots, density);
   }
 
-  const elements: Array<ScoreNote | ScoreRest> = [];
+  const elements: (ScoreNote | ScoreRest)[] = [];
   let remaining = totalSlots;
   let noteIndex = 0;
 
@@ -283,8 +283,8 @@ function fillMeasureL2(totalSlots: number, density: number): Array<ScoreNote | S
 }
 
 // ─── Measure Fill: Level 3 (eighth-note based, complex) ───────
-function fillMeasureL3(totalSlots: number, density: number): Array<ScoreNote | ScoreRest> {
-  const elements: Array<ScoreNote | ScoreRest> = [];
+function fillMeasureL3(totalSlots: number, density: number): (ScoreNote | ScoreRest)[] {
+  const elements: (ScoreNote | ScoreRest)[] = [];
   let remaining = totalSlots;
   let noteIndex = 0;
 
@@ -311,7 +311,7 @@ function buildMeasure(
 ): ScoreMeasure {
   const slots = getMeasureSlots(ts, level);
 
-  let elements: Array<ScoreNote | ScoreRest>;
+  let elements: (ScoreNote | ScoreRest)[];
   if (level === 1) {
     elements = fillMeasureL1(slots, density);
   } else if (level === 2) {

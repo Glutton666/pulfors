@@ -58,12 +58,12 @@ jest.mock("../components/lab-score/RhythmInputSurface", () => ({
 jest.mock("react-native", () => {
   const React = require("react");
   return { ...jest.requireActual("react-native"),
-    ScrollView: React.forwardRef(({ children, testID, onLayout, onScroll }: any, ref: any) => React.createElement("div", {
+    ScrollView: React.forwardRef(function MockScrollView({ children, testID, onLayout, onScroll }: any, ref: any) { return React.createElement("div", {
       "data-testid": testID, ref: (node: any) => {
         if (node) { node.__onLayout = onLayout; node.__onScroll = onScroll; node.scrollTo = jest.fn(); }
         if (typeof ref === "function") ref(node); else if (ref) ref.current = node;
       },
-    }, children)),
+    }, children); }),
     AppState: { addEventListener: jest.fn(() => ({ remove: jest.fn() })) },
     Modal: ({ visible, children }: any) => visible ? React.createElement("div", null, children) : null,
   };

@@ -40,7 +40,7 @@ async function loadLame(): Promise<LameModule> {
   // in tests (dynamic import() is not intercepted by moduleNameMapper in CJS
   // Jest without --experimental-vm-modules). In the React Native bundle,
   // Metro/Expo treats require() just like import() for code splitting.
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
+
   const mod: unknown = typeof require === "function"
     ? require("@breezystack/lamejs")
     : await import("@breezystack/lamejs");

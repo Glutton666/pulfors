@@ -39,11 +39,11 @@ export function createWebRecognition(
   minConfidence = 0.0,
 ): { start: () => void; stop: () => void; abort: () => void } {
   const g = globalThis as Record<string, unknown>;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
   const SR = (g["SpeechRecognition"] ?? g["webkitSpeechRecognition"]) as (new () => any) | undefined;
   if (!SR) throw new Error("SpeechRecognition not available in this browser");
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
   const rec: any = new SR();
   rec.continuous = true;
   rec.interimResults = true;

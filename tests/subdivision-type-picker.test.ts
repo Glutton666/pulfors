@@ -224,7 +224,7 @@ describe("SubdivisionBar 타입 피커 — backdrop 탭으로 닫기", () => {
 describe("SubdivisionBar 타입 피커 — 연속 상호작용", () => {
   test("연속으로 다른 셀 타입 변경: 각 변경이 독립적으로 적용된다", () => {
     const sim = new TypePickerSimulation(["normal", "normal", "normal", "normal"]);
-    const assignments: Array<[number, BeatType]> = [
+    const assignments: [number, BeatType][] = [
       [0, "strong"],
       [1, "accent"],
       [2, "mute"],

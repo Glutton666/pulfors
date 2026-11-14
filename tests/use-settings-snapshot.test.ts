@@ -11,12 +11,16 @@
 
 import { renderHook, act, waitFor } from "@testing-library/react";
 
+import { useRef, act as reactAct } from "react";
+import { useSettings } from "../hooks/useSettings";
+import type { UseSettingsParams } from "../hooks/useSettings";
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Stubs
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Saved settings accumulator — records every call to saveSettings
-const savedSettings: Array<Record<string, unknown>> = [];
+const savedSettings: Record<string, unknown>[] = [];
 let mockPersistStatus = {
   lastSaveAt: null as number | null,
   lastErrorAt: null as number | null,
@@ -98,10 +102,6 @@ jest.mock("@/lib/audio-renderer", () => ({
 jest.mock("@/lib/index.helpers", () => ({
   defaultBeatTypes: (n: number) => Array.from({ length: n }, () => "normal"),
 }));
-
-import { useRef, act as reactAct } from "react";
-import { useSettings } from "../hooks/useSettings";
-import type { UseSettingsParams } from "../hooks/useSettings";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helper: build the minimal params required by useSettings

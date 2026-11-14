@@ -27,7 +27,7 @@ let sentryActive = false;
 // 정의되지 않은 곳에서는 false로 폴백한다.
 function isDev(): boolean {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
     return typeof (globalThis as any).__DEV__ !== "undefined"
       ? Boolean((globalThis as any).__DEV__)
       : process.env.NODE_ENV !== "production";

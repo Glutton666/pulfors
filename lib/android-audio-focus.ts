@@ -240,7 +240,7 @@ export async function startAndroidFocusProbe(): Promise<void> {
     // 소리로 확인됨 — click-low.wav를 쓰고 있었음). 샘플 자체가 무음이면 이
     // 레이스와 무관하게 항상 들리지 않는다.
     const player = expoAudioMod.createAudioPlayer(
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
+
       require("@/assets/sounds/silence.wav"),
       { updateInterval: PROBE_PROGRESS_UPDATE_INTERVAL_MS },
     );

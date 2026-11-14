@@ -55,6 +55,21 @@
 
 import { Platform } from "react-native";
 
+import {
+  getPrepareBatchSize,
+  instrumentToWaveform,
+  prepareScoreAudio,
+  prepareRhythmReferenceAudio,
+  previewScoreNote,
+  scheduleMeasureNotes,
+  stopAllScoreNotes,
+} from "../lib/score-audio";
+
+import { buildPlayTimeline } from "../lib/score-playback";
+import type { ScoreDocument } from "../lib/score-types";
+
+import * as audioRenderer from "../lib/audio-renderer";
+
 // ── Stubs ────────────────────────────────────────────────────────────────────
 // expo-file-system stub exposes _mockState so we can observe how many WAV files
 // were written by _ensureNoteFile() without touching the real filesystem.
@@ -76,21 +91,6 @@ audioStub.createAudioPlayer = jest.fn(() => ({
 // Ensure we are on "native" so the WAV-file code path is active.
 // The react-native stub defaults to { OS: "ios" }, so this is already set.
 (Platform as unknown as Record<string, unknown>).OS = "ios";
-
-import {
-  getPrepareBatchSize,
-  instrumentToWaveform,
-  prepareScoreAudio,
-  prepareRhythmReferenceAudio,
-  previewScoreNote,
-  scheduleMeasureNotes,
-  stopAllScoreNotes,
-} from "../lib/score-audio";
-
-import { buildPlayTimeline } from "../lib/score-playback";
-import type { ScoreDocument } from "../lib/score-types";
-
-import * as audioRenderer from "../lib/audio-renderer";
 
 describe("calibration reference output acknowledgement", () => {
   beforeEach(() => {
@@ -190,7 +190,7 @@ describe("prepareScoreAudio — WAV cache population (A)", () => {
 
 describe("prepareScoreAudio — progress callback (B)", () => {
   it("progress callback fires once per unique note", async () => {
-    const calls: Array<{ done: number; total: number }> = [];
+    const calls: { done: number; total: number }[] = [];
     await prepareScoreAudio([32, 33, 34], (done, total) => {
       calls.push({ done, total });
     });
@@ -446,7 +446,7 @@ describe("prepareScoreAudio — batchSize edge cases (H)", () => {
   });
 
   it("single note: progress fires once with done=1, total=1", async () => {
-    const calls: Array<[number, number]> = [];
+    const calls: [number, number][] = [];
     await prepareScoreAudio([50], (done, total) => calls.push([done, total]));
     expect(calls).toHaveLength(1);
     expect(calls[0]).toEqual([1, 1]);
@@ -488,7 +488,7 @@ describe("prepareScoreAudio — batchSize edge cases (H)", () => {
   });
 
   it("custom batchSize=1: 2 notes → strictly serial, done increments 1→2 in order", async () => {
-    const calls: Array<[number, number]> = [];
+    const calls: [number, number][] = [];
     await prepareScoreAudio(
       [64, 65],
       (done, total) => calls.push([done, total]),
@@ -1305,7 +1305,7 @@ describe("prepareScoreAudio — multi-instrument via noteInstrumentPairs (M1)", 
 
 describe("prepareScoreAudio — multi-instrument progress callback (M2)", () => {
   it("progress fires once per unique (midi, waveform) pair", async () => {
-    const calls: Array<{ done: number; total: number }> = [];
+    const calls: { done: number; total: number }[] = [];
     // MIDI 95: violin (sawtooth) and piano (triangle) → 2 unique pairs
     await prepareScoreAudio(
       [],
@@ -1343,7 +1343,7 @@ describe("prepareScoreAudio — multi-instrument progress callback (M2)", () => 
 
   it("progress done values are 1-based and monotonically increasing", async () => {
     // 91_triangle and 92_sawtooth are both fresh (M1 prepared 91_sawtooth and 92_triangle)
-    const calls: Array<[number, number]> = [];
+    const calls: [number, number][] = [];
     await prepareScoreAudio(
       [],
       (done, total) => calls.push([done, total]),

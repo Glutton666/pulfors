@@ -13,7 +13,7 @@ function createEngine() {
     beatsPerMeasure: number;
     beatTypes: any[];
     beatSubdivisions: Record<string, any[]>;
-    loopBlocks: Array<{ startBeat: number; endBeat: number; type: "count"; value: number }>;
+    loopBlocks: { startBeat: number; endBeat: number; type: "count"; value: number }[];
     blockPlayMode: "loop";
     barRepeats: Record<number, any>;
     barBpmOverrides: Record<number, number>;

@@ -5,6 +5,9 @@ import * as ReactNative from "react-native";
 import { Image } from "react-native";
 import type { PracticeEntry } from "@/lib/storage";
 
+import { NOTE_SOURCE_HEADER_LAYOUT, NoteModeView } from "@/components/NoteModeView";
+import { ImageFramingModal } from "@/components/NoteModeModals";
+
 let mockDimensions = { width: 390, height: 844, scale: 1, fontScale: 1 };
 
 jest.mock("react-native", () => {
@@ -99,9 +102,6 @@ jest.mock("@/lib/scale", () => ({
     ms: (value: number) => value,
   }),
 }));
-
-import { NOTE_SOURCE_HEADER_LAYOUT, NoteModeView } from "@/components/NoteModeView";
-import { ImageFramingModal } from "@/components/NoteModeModals";
 
 const getLastPanResponderConfig = (
   ReactNative as unknown as { __getLastPanResponderConfig: () => any }

@@ -85,7 +85,7 @@ test("[migrate] 미래 버전 백업은 UnsupportedBackupVersionError를 던진�
 });
 
 test("[migrate] 비정상 schemaVersion(NaN, 문자열, 음수, 소수)는 v0으로 안전하게 분기한다", () => {
-  const cases: Array<{ label: string; value: unknown }> = [
+  const cases: { label: string; value: unknown }[] = [
     { label: "NaN", value: Number.NaN },
     { label: "문자열", value: "1" as unknown },
     { label: "Infinity", value: Number.POSITIVE_INFINITY },

@@ -2,6 +2,8 @@
 import React from "react";
 import { act, render } from "@testing-library/react";
 
+import { StageBeatColumn } from "@/components/StageBeatColumn";
+
 jest.mock("@/components/GradientLetter", () => ({
   GradientLetter: ({ letter, width, height }: { letter: string; width: number; height: number }) => (
     <span data-testid="gradient-letter" data-width={width} data-height={height}>{letter}</span>
@@ -15,8 +17,6 @@ jest.mock("@/contexts/ThemeContext", () => ({
     },
   }),
 }));
-
-import { StageBeatColumn } from "@/components/StageBeatColumn";
 
 describe("StageBeatColumn rendered strong markers", () => {
   const baseProps: React.ComponentProps<typeof StageBeatColumn> = {

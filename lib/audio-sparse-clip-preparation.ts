@@ -63,12 +63,12 @@ function descriptorParts(
   periodFrames: number,
   intervalIndex: number,
   preparationId: number,
-): Array<{
+): {
   startFrame: number;
   endFrame: number;
   wrapGroupId?: string;
   wrapRole?: "head" | "tail";
-}> {
+}[] {
   if (interval.endFrame <= periodFrames) {
     return [{ startFrame: interval.startFrame, endFrame: interval.endFrame }];
   }

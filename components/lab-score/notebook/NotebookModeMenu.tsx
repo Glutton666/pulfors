@@ -10,7 +10,7 @@ type Props = {
   onMode: (mode: NotebookMode) => void;
 };
 
-const options: Array<{ id: NotebookMode; icon: keyof typeof Ionicons.glyphMap; ko: string; en: string }> = [
+const options: { id: NotebookMode; icon: keyof typeof Ionicons.glyphMap; ko: string; en: string }[] = [
   { id: "ink", icon: "pencil-outline", ko: "필기모드", en: "Ink" },
   { id: "notes", icon: "musical-note-outline", ko: "음표모드", en: "Notes" },
   { id: "select", icon: "scan-outline", ko: "선택모드", en: "Select" },

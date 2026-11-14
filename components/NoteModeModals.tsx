@@ -16,8 +16,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useScale } from "@/lib/scale";
-import type { PracticeEntry } from "@/lib/storage";
-import type { NoteImageCrop } from "@/lib/storage";
+import type { PracticeEntry , NoteImageCrop } from "@/lib/storage";
 import { getNoteSourceMode } from "@/lib/note-mode-sources";
 import {
   clampNoteImageCropToFrame,

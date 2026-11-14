@@ -36,26 +36,7 @@
 import { renderHook, act } from "@testing-library/react";
 import { Alert, Platform } from "react-native";
 
-// ── Module mock — lib/score-audio ────────────────────────────────────────────
-jest.mock("../lib/score-audio", () => ({
-  getPrepareBatchSize: jest.fn(() => 4),
-  prepareScoreAudio: jest.fn(),
-  // prepareDrumAudio must be mocked: the hook calls it inside Promise.all and a
-  // missing (undefined) export causes a synchronous TypeError that escapes
-  // .catch(() => {}) and crashes the Jest worker on Node.js v22+.
-  prepareDrumAudio: jest.fn().mockResolvedValue(undefined),
-  scheduleMeasureNotes: jest.fn(() => jest.fn()),
-  stopAllScoreNotes: jest.fn(),
-}));
-
 import * as scoreAudio from "../lib/score-audio";
-
-const mockPrepare = scoreAudio.prepareScoreAudio as jest.MockedFunction<
-  typeof scoreAudio.prepareScoreAudio
->;
-const mockPrepareDrum = scoreAudio.prepareDrumAudio as jest.MockedFunction<
-  typeof scoreAudio.prepareDrumAudio
->;
 
 // ── Subject under test ───────────────────────────────────────────────────────
 import { useScorePlayback } from "../hooks/useScorePlayback";
@@ -70,6 +51,25 @@ import {
 // buildPlayTimeline returns notes: [{midiNote: 60, ...}] → allMidi = [60]
 // → native prepare path fires (Platform.OS = "ios" by default in the stub).
 import type { ScoreDocument, ScoreNote } from "../lib/score-types";
+
+// ── Module mock — lib/score-audio ────────────────────────────────────────────
+jest.mock("../lib/score-audio", () => ({
+  getPrepareBatchSize: jest.fn(() => 4),
+  prepareScoreAudio: jest.fn(),
+  // prepareDrumAudio must be mocked: the hook calls it inside Promise.all and a
+  // missing (undefined) export causes a synchronous TypeError that escapes
+  // .catch(() => {}) and crashes the Jest worker on Node.js v22+.
+  prepareDrumAudio: jest.fn().mockResolvedValue(undefined),
+  scheduleMeasureNotes: jest.fn(() => jest.fn()),
+  stopAllScoreNotes: jest.fn(),
+}));
+
+const mockPrepare = scoreAudio.prepareScoreAudio as jest.MockedFunction<
+  typeof scoreAudio.prepareScoreAudio
+>;
+const mockPrepareDrum = scoreAudio.prepareDrumAudio as jest.MockedFunction<
+  typeof scoreAudio.prepareDrumAudio
+>;
 
 const DOC_WITH_NOTES: ScoreDocument = {
   id: "test-doc-notes",
@@ -227,7 +227,7 @@ describe("useScorePlayback — prepare-before-RAF guard (H1–H4)", () => {
   });
 
   it("H4: multiple stop/play cycles — only the latest session fires RAF", async () => {
-    const resolvers: Array<() => void> = [];
+    const resolvers: (() => void)[] = [];
     mockPrepare.mockImplementation(
       () => new Promise<void>((r) => resolvers.push(r)),
     );
@@ -629,13 +629,13 @@ describe("useScorePlayback — instrument change during prepare uses fresh pairs
     expect(mockPrepare).toHaveBeenCalledTimes(2);
 
     // Verify the second call's noteInstrumentPairs use the NEW instrumentId ("violin")
-    const secondCallPairs = mockPrepare.mock.calls[1][4] as Array<{ midi: number; instrumentId: string }>;
+    const secondCallPairs = mockPrepare.mock.calls[1][4] as { midi: number; instrumentId: string }[];
     expect(secondCallPairs).toBeDefined();
     expect(secondCallPairs.length).toBeGreaterThan(0);
     expect(secondCallPairs.every((p) => p.instrumentId === "violin")).toBe(true);
 
     // The FIRST call's pairs should have had the old instrumentId ("piano")
-    const firstCallPairs = mockPrepare.mock.calls[0][4] as Array<{ midi: number; instrumentId: string }>;
+    const firstCallPairs = mockPrepare.mock.calls[0][4] as { midi: number; instrumentId: string }[];
     expect(firstCallPairs.every((p) => p.instrumentId === "piano")).toBe(true);
 
     // Resolve first (stale) prepare — session guard ensures it does NOT start RAF
@@ -670,7 +670,7 @@ describe("useScorePlayback — instrument change during prepare uses fresh pairs
     act(() => { rerender(DOC_CELLO); });
     expect(mockPrepare).toHaveBeenCalledTimes(2);
 
-    const secondCallPairs = mockPrepare.mock.calls[1][4] as Array<{ midi: number; instrumentId: string }>;
+    const secondCallPairs = mockPrepare.mock.calls[1][4] as { midi: number; instrumentId: string }[];
     // Must NOT contain "piano" (old stale value)
     expect(secondCallPairs.some((p) => p.instrumentId === "piano")).toBe(false);
     // Must contain "cello" (new instrument)
@@ -717,7 +717,7 @@ describe("useScorePlayback — instrument change during prepare uses fresh pairs
     expect(mockPrepare).toHaveBeenCalledTimes(2);
 
     // The re-prepare pairs must reflect "violin", not the old "piano"
-    const rePreparePairs = mockPrepare.mock.calls[1][4] as Array<{ midi: number; instrumentId: string }>;
+    const rePreparePairs = mockPrepare.mock.calls[1][4] as { midi: number; instrumentId: string }[];
     expect(rePreparePairs.every((p) => p.instrumentId === "violin")).toBe(true);
   });
 });
@@ -800,7 +800,7 @@ describe("useScorePlayback — same-measure content invalidation (H18)", () => {
   });
 
   it("H18c: edits during pending preparation publish the fresh timeline before RAF starts", async () => {
-    const resolvers: Array<() => void> = [];
+    const resolvers: (() => void)[] = [];
     mockPrepare.mockImplementation(
       () => new Promise<void>((resolve) => resolvers.push(resolve)),
     );
@@ -819,7 +819,7 @@ describe("useScorePlayback — same-measure content invalidation (H18)", () => {
         }],
       }],
     };
-    const rafCallbacks: Array<FrameRequestCallback> = [];
+    const rafCallbacks: FrameRequestCallback[] = [];
     rafSpy.mockImplementation((callback: FrameRequestCallback) => {
       rafCallbacks.push(callback);
       return rafCallbacks.length;

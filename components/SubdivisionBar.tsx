@@ -36,6 +36,9 @@ import {
   trackSubdivisionShake,
 } from "@/lib/subdivision-shake";
 
+import { MAX_SUBDIVISION_CELLS } from "@/lib/subdivision-limits";
+import { usePlaybackVisual } from "@/contexts/PlaybackVisualContext";
+
 interface SubdivisionBarProps {
   pattern: BeatType[];
   onPatternChange: (pattern: BeatType[]) => void;
@@ -50,9 +53,6 @@ interface SubdivisionBarProps {
   /** 재생 중 현재 비트의 타입 — 지정 패턴이 없는 비트 차례에 실제 소리(단일 클릭)와 일치하는 1셀 표시용 */
   currentBeatType?: BeatType | null;
 }
-
-import { MAX_SUBDIVISION_CELLS } from "@/lib/subdivision-limits";
-import { usePlaybackVisual } from "@/contexts/PlaybackVisualContext";
 export { MAX_SUBDIVISION_CELLS } from "@/lib/subdivision-limits";
 const MIN_CELLS = 1;
 const SWIPE_THRESHOLD = 30;

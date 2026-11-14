@@ -2,9 +2,9 @@
 import { act, renderHook } from "@testing-library/react";
 import { Platform } from "react-native";
 import { useNoteTts } from "@/hooks/useNoteTts";
-jest.mock("@/lib/note-tts-file", () => ({ prepareNoteTtsFile: async (result: unknown) => result }));
 import { noteTtsNative } from "@/lib/note-tts-runtime";
 import type { NoteTtsNative, NoteTtsResult } from "@/lib/note-tts";
+jest.mock("@/lib/note-tts-file", () => ({ prepareNoteTtsFile: async (result: unknown) => result }));
 
 jest.mock("@/lib/note-tts-runtime", () => ({
   noteTtsNative: { getVoices: jest.fn(), generate: jest.fn(), claim: jest.fn(), cancel: jest.fn(), discard: jest.fn(), listFiles: jest.fn() },

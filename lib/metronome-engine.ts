@@ -1,9 +1,6 @@
 import * as Haptics from "expo-haptics";
 import { Platform } from "react-native";
 import { findVisualTick, visualTickInterval, type PlaybackVisual } from "./playback-visual";
-
-// ── 순수 스케줄링 함수·타입은 metronome-engine-pure.ts에서 가져와 re-export ──
-export * from "./metronome-engine-pure";
 import type {
   BeatType,
   HapticMode,
@@ -26,6 +23,9 @@ import {
   pureProcessOuterCached,
   pureEmitStackedBlockTicks,
 } from "./metronome-engine-pure";
+
+// ── 순수 스케줄링 함수·타입은 metronome-engine-pure.ts에서 가져와 re-export ──
+export * from "./metronome-engine-pure";
 
 export const soundSets = {
   tempo: {
@@ -749,9 +749,9 @@ export class MetronomeEngine {
     if (maxBeat < minBeat) maxBeat = minBeat;
 
     const btSlice = this.beatTypes.slice(minBeat, maxBeat + 1);
-    const subs: Array<[number, BeatType[]]> = [];
-    const reps: Array<[number, BarRepeatSpec]> = [];
-    const ovs: Array<[number, number]> = [];
+    const subs: [number, BeatType[]][] = [];
+    const reps: [number, BarRepeatSpec][] = [];
+    const ovs: [number, number][] = [];
     for (let b = minBeat; b <= maxBeat; b++) {
       const s = this.beatSubdivisions.get(b);
       if (s) subs.push([b, s]);
@@ -893,7 +893,7 @@ export class MetronomeEngine {
           covered.add(beat);
         }
       });
-      const units: Array<{ beat: number; outerIdx?: number }> = [
+      const units: { beat: number; outerIdx?: number }[] = [
         ...outerBlocks.map(outerIdx => ({ beat: sortedBlocks[outerIdx].startBeat, outerIdx })),
         ...Array.from({ length: this.beatsPerMeasure }, (_, beat) => beat)
           .filter(beat => !covered.has(beat))
@@ -1015,11 +1015,11 @@ export class MetronomeEngine {
 
   private computeScheduleCacheKey(): string {
     const subKeys = [...this.beatSubdivisions.keys()].sort((a, b) => a - b);
-    const subs: Array<[number, BeatType[]]> = subKeys.map(k => [k, this.beatSubdivisions.get(k)!]);
+    const subs: [number, BeatType[]][] = subKeys.map(k => [k, this.beatSubdivisions.get(k)!]);
     const repKeys = [...this.barRepeats.keys()].sort((a, b) => a - b);
-    const reps: Array<[number, BarRepeatSpec]> = repKeys.map(k => [k, this.barRepeats.get(k)!]);
+    const reps: [number, BarRepeatSpec][] = repKeys.map(k => [k, this.barRepeats.get(k)!]);
     const ovKeys = [...this.barBpmOverrides.keys()].sort((a, b) => a - b);
-    const ovs: Array<[number, number]> = ovKeys.map(k => [k, this.barBpmOverrides.get(k)!]);
+    const ovs: [number, number][] = ovKeys.map(k => [k, this.barBpmOverrides.get(k)!]);
     return JSON.stringify({
       bpm: this.bpm,
       ht: this.halfTime,

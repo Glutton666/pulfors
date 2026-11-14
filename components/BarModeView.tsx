@@ -446,15 +446,15 @@ export function BarModeView({
     const existing = barRepeats[beat];
     if (!existing) return;
     if (sym === "jump_from") {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+
       const { jumpFromId: _jf, ...updated } = existing;
       onBarRepeatChange(beat, updated as BarRepeat);
     } else if (sym === "jump_to") {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+
       const { jumpToId: _jt, ...updated } = existing;
       onBarRepeatChange(beat, updated as BarRepeat);
     } else if (sym === "volta") {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+
       const { voltaMax: _vm, ...updated } = existing;
       onBarRepeatChange(beat, updated as BarRepeat);
     } else if (sym === "end") {

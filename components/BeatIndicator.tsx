@@ -51,9 +51,15 @@ import { BlockEditPanel } from "./BlockEditPanel";
 import { BarModeView } from "./BarModeView";
 import { BeatStaffMode } from "./BeatStaffMode";
 import type { BeatStaffCellRects } from "@/lib/beat-staff-logic";
+import type { BeatType, BarRepeat, LoopBlock } from "./beat-indicator.types";
+
+// DialBeatDot 컴포넌트는 components/DialBeatDot.tsx 로 분리되었습니다.
+// (T-SPLIT 1차 진입: BeatIndicator 약 220줄 감소)
+
+// BarRepeat/LoopBlock/BeatType 은 ./beat-indicator.types 에서 re-export (위 라인 참조).
+import { onAccentColor } from "@/lib/color-contrast";
 
 export type { BeatType, BarRepeat, LoopBlock } from "./beat-indicator.types";
-import type { BeatType } from "./beat-indicator.types";
 
 // Kept as compatibility exports for consumers/tests. Runtime layout is derived
 // from useScale() in BeatIndicator.styles and its child components.
@@ -64,13 +70,6 @@ const MIN_BEATS = 1;
 const MAX_BEATS = 16;
 
 export { DIAL_SIZE, DIAL_RADIUS, DOT_RADIUS_FROM_CENTER };
-
-// DialBeatDot 컴포넌트는 components/DialBeatDot.tsx 로 분리되었습니다.
-// (T-SPLIT 1차 진입: BeatIndicator 약 220줄 감소)
-
-// BarRepeat/LoopBlock/BeatType 은 ./beat-indicator.types 에서 re-export (위 라인 참조).
-import type { BarRepeat, LoopBlock } from "./beat-indicator.types";
-import { onAccentColor } from "@/lib/color-contrast";
 
 export type { ProgressInfo } from "@/lib/metronome-engine";
 type ProgressInfo = import("@/lib/metronome-engine").ProgressInfo;
@@ -1673,7 +1672,7 @@ export function BeatIndicator({
           </View>
         </View>
         {pillDragGhost}
-  
+
       </>
     );
   }

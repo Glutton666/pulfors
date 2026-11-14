@@ -273,7 +273,7 @@ test("web fallback reserves a 160ms audio-clock window once and survives a JS st
     engine.setBeatsPerMeasure(4);
     engine.setBeatTypes(["accent", "normal", "normal", "normal"]);
     engine.buildScheduleOnly();
-    const scheduled: Array<{ tick: EngineInternals["schedule"][number]; at: number }> = [];
+    const scheduled: { tick: EngineInternals["schedule"][number]; at: number }[] = [];
     let immediateAudio = 0;
     engine.setAudioCallbacks(
       () => { immediateAudio += 1; },

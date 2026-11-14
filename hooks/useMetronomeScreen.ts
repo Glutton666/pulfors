@@ -43,7 +43,15 @@ import { safePlay, safePlayAndConfirm, notifyAudioPoolFallback, detectPoolCutoff
 import { registerMetronomeBridge, notifyUserMetronomeToggle } from "@/lib/audio-session";
 import { captureBreadcrumb } from "@/lib/error-tracking";
 import { sanitizeDeepLinkEntry } from "@/lib/deep-link-import";
-import type { NoteImageCrop } from "@/lib/storage";
+import {
+  loadSettings, saveSettings, loadCustomSoundSets, saveCustomSoundSets,
+  loadPracticeBook, savePracticeBook, subscribePracticeBook, createPracticeEntry,
+  runStorageMigrations, clearAllAppStorage, loadTutorialState, DEFAULT_TUTORIAL_STATE,
+  type NoteImageCrop, type MetronomeSettings, type TutorialAction, type TutorialMode,
+  type TutorialState, type FlashMode, type HapticMode, type SoundSet,
+  type BuiltinSoundSet, type CustomSoundSetConfig, type CustomSoundSample,
+  type FadeOutSettings, type PracticeEntry, type MetronomeMode,
+} from "@/lib/storage";
 import * as Haptics from "expo-haptics";
 import * as Crypto from "expo-crypto";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -61,10 +69,8 @@ import {
   appendBarRandomPlaybackChunk,
   type BarRandomSession,
 } from "@/lib/bar-random-session";
-import { loadSettings, saveSettings, loadCustomSoundSets, saveCustomSoundSets, loadPracticeBook, savePracticeBook, subscribePracticeBook, createPracticeEntry, runStorageMigrations, clearAllAppStorage, loadTutorialState, DEFAULT_TUTORIAL_STATE, type MetronomeSettings, type TutorialAction, type TutorialMode, type TutorialState } from "@/lib/storage";
 import { MODE_TUTORIALS_ENABLED } from "@/lib/tutorial-config";
 import { NEUTRAL, type TonePosition } from "@/lib/metronome-tone-dsp";
-import type { FlashMode, HapticMode, SoundSet, BuiltinSoundSet, CustomSoundSetConfig, CustomSoundSample, FadeOutSettings, PracticeEntry, MetronomeMode } from "@/lib/storage";
 import type { BarRepeat, LoopBlock } from "@/components/BeatIndicator";
 import { clampLoopBlocksToMeter } from "@/lib/bar-config-helpers";
 import type { StopwatchTimerHandle } from "@/components/StopwatchTimer";
@@ -176,7 +182,7 @@ import {
   type RecorderKeyboardActions,
 } from "@/lib/keyboard-bindings";
 
-// eslint-disable-next-line @typescript-eslint/explicit-function-return-type
+
 export function useMetronomeScreen() {
   const insets = useSafeAreaInsets();
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
@@ -3524,7 +3530,7 @@ export function useMetronomeScreen() {
       modeSlideY.value       = withTiming(0, { duration: 270, easing: Easing.out(Easing.cubic) });
       modeSlideOpacity.value = withTiming(1, { duration: 220, easing: Easing.out(Easing.cubic) });
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+
   }, [currentMode, modeSlideX, modeSlideY, modeSlideOpacity]);
 
   const handleNoteTogglePlay = useCallback(() => {

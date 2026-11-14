@@ -35,10 +35,10 @@ jest.mock("react-native", () => {
     ...actual,
     KeyboardAvoidingView: actual.View,
     FlatList,
-    Pressable: React.forwardRef(({
+    Pressable: React.forwardRef(function MockPressable({
       children, testID, onPress, onPressIn, onPressOut, onLongPress, disabled,
       accessibilityLabel,
-    }: any, ref: React.Ref<HTMLButtonElement>) => React.createElement("button", {
+    }: any, ref: React.Ref<HTMLButtonElement>) { return React.createElement("button", {
       ref,
       "data-testid": testID,
       "aria-label": accessibilityLabel,
@@ -47,8 +47,8 @@ jest.mock("react-native", () => {
       onMouseDown: onPressIn,
       onMouseUp: onPressOut,
       onContextMenu: (event: React.MouseEvent) => { event.preventDefault(); onLongPress?.(); },
-    }, typeof children === "function" ? children({ pressed: false }) : children)),
-    TextInput: React.forwardRef(({
+    }, typeof children === "function" ? children({ pressed: false }) : children); }),
+    TextInput: React.forwardRef(function MockTextInput({
       value, onChangeText, onBlur, onSubmitEditing, testID,
     }: {
       value: string;
@@ -56,7 +56,7 @@ jest.mock("react-native", () => {
       onBlur?: () => void;
       onSubmitEditing?: (event: { nativeEvent: { text: string } }) => void;
       testID?: string;
-    }, ref: React.Ref<HTMLInputElement>) => React.createElement("input", {
+    }, ref: React.Ref<HTMLInputElement>) { return React.createElement("input", {
       ref,
       value,
       "data-testid": testID,
@@ -65,7 +65,7 @@ jest.mock("react-native", () => {
       onKeyDown: (event: React.KeyboardEvent<HTMLInputElement>) => {
         if (event.key === "Enter") onSubmitEditing?.({ nativeEvent: { text: event.currentTarget.value } });
       },
-    })),
+    }); }),
   };
 });
 

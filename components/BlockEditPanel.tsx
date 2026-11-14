@@ -32,7 +32,7 @@ export interface BlockEditPanelProps {
   onLoopBlocksChange: (blocks: LoopBlock[]) => void;
 }
 
-const SOUND_SETS: ReadonlyArray<SoundSet> = ["classic", "woodblock", "cowbell", "digital", "jamblock", "sine", "blip", "clave", "cajon", "marimba", "stick"] as const;
+const SOUND_SETS: readonly SoundSet[] = ["classic", "woodblock", "cowbell", "digital", "jamblock", "sine", "blip", "clave", "cajon", "marimba", "stick"] as const;
 
 export function BlockEditPanel({
   editingBlockIndex,

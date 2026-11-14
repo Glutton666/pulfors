@@ -165,7 +165,7 @@ export function DrumKitModal({ visible, onClose }: DrumKitModalProps) {
   const [assignSlot, setAssignSlot] = useState<number | null>(null);
   const [showBuiltinPicker, setShowBuiltinPicker] = useState(false);
 
-  const padRefs = useRef<Array<{ current: DrumPadHandle | null }>>(
+  const padRefs = useRef<{ current: DrumPadHandle | null }[]>(
     Array.from({ length: DRUM_PAD_COUNT }, () => ({ current: null }))
   );
   const activeTouches = useRef<Map<string, number>>(new Map());

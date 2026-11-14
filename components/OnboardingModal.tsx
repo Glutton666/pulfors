@@ -11,23 +11,21 @@ import {
   ScrollView,
   useWindowDimensions,
   PanResponder,
-} from "react-native";
+ Switch } from "react-native";
 import { AnimatedModal } from "@/components/AnimatedModal";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import Colors from "@/constants/colors";
+import Colors, { ACCENT_PRESETS } from "@/constants/colors";
 import { Radius, FontSize, Spacing } from "@/constants/tokens";
 import { useTheme } from "@/contexts/ThemeContext";
 import { onAccentColor } from "@/lib/color-contrast";
-import { ACCENT_PRESETS } from "@/constants/colors";
 import type { ThemeColor } from "@/constants/colors";
 import type { FlashMode, HapticMode } from "@/lib/storage";
 import type { BeatType } from "@/lib/metronome-engine";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { LANGUAGE_OPTIONS, type Language } from "@/lib/i18n";
-import { Switch } from "react-native";
 import { AssistantShortcutsGuide } from "@/components/AssistantShortcutsGuide";
 import { createAudioPlayer } from "expo-audio";
 import type { AudioPlayer as ExpoAudioPlayer } from "expo-audio";
@@ -468,7 +466,7 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
     setSoundTestError(false);
     const result = playOnboardingTestSound(soundRef.current, () =>
       createAudioPlayer(
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
+
         require("@/assets/sounds/click-strong.wav"),
       ),
     );

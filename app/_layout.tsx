@@ -149,7 +149,7 @@ export default function RootLayout() {
   //   → 'inactive' = 인터럽션 시작, 'active' 복귀 = 인터럽션 종료 (iOS/Android 동일).
   useEffect(() => {
     if (Platform.OS === "web") return;
-    const interruptStates: ReadonlyArray<string> = ["inactive"];
+    const interruptStates: readonly string[] = ["inactive"];
     const sub = AppState.addEventListener("change", (next) => {
       logger.info(`[appState] → ${next} (interruption states: ${interruptStates.join(",")})`);
       if (interruptStates.includes(next)) {

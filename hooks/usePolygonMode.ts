@@ -426,7 +426,7 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
     };
   // enabled가 변경될 때만 핸들러를 재등록한다.
    // layers/bpm/beatsPerMeasure/requestClickPCM은 ref로 읽으므로 의존성 불필요.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+
   }, [p.enabled, playbackActive, p.engineBeatCallbackRef]);
 
   // ── 레이어 관리 ─────────────────────────────────────────────────────────

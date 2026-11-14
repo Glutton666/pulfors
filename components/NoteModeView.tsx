@@ -20,7 +20,7 @@ import { Spacing, Radius } from "@/constants/tokens";
 import { useTheme } from "@/contexts/ThemeContext";
 import { usePlaybackVisual } from "@/contexts/PlaybackVisualContext";
 import { useLanguage } from "@/contexts/LanguageContext";
-import type { PracticeEntry } from "@/lib/storage";
+import type { PracticeEntry , NoteImageCrop } from "@/lib/storage";
 import type { BeatType } from "@/lib/metronome-engine";
 import { useScale } from "@/lib/scale";
 import type { ScaleValues } from "@/lib/scale";
@@ -31,7 +31,6 @@ import { ScoreRenderer } from "@/components/ScoreRenderer";
 import { ImageFramingModal, PracticeSourcePickerModal } from "@/components/NoteModeModals";
 import { reconcileNoteSources } from "@/lib/note-mode-sources";
 import { clampNoteImageCropToFrame, fitNoteImageFrame, normalizeNoteImageCrop } from "@/lib/note-image-crop";
-import type { NoteImageCrop } from "@/lib/storage";
 import { BarPlayButton } from "@/components/BarPlayButton";
 
 interface NoteModeViewProps {

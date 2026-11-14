@@ -1,6 +1,21 @@
 import { test, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
 
+import {
+  addNotificationActionListener,
+  buildNotificationActions,
+  setPlaybackNotificationsEnabled,
+  setSparseNotificationMode,
+  setSparsePlaybackActive,
+  isSparsePlaybackActive,
+  registerSparsePlaybackStopper,
+  stopActiveSparsePlayback,
+  showPausedNotification,
+  showPlayingNotification,
+  setupNotificationControls,
+} from "../lib/notification-controls";
+import * as androidForegroundService from "../lib/android-foreground-service";
+
 const mockSetNotificationHandler = jest.fn();
 const mockRequestPermissionsAsync = jest.fn();
 const mockSetNotificationChannelAsync = jest.fn();
@@ -33,21 +48,6 @@ jest.mock("expo-notifications", () => ({
   AndroidImportance: { MAX: "max" },
   AndroidNotificationVisibility: { PUBLIC: "public" },
 }));
-
-import {
-  addNotificationActionListener,
-  buildNotificationActions,
-  setPlaybackNotificationsEnabled,
-  setSparseNotificationMode,
-  setSparsePlaybackActive,
-  isSparsePlaybackActive,
-  registerSparsePlaybackStopper,
-  stopActiveSparsePlayback,
-  showPausedNotification,
-  showPlayingNotification,
-  setupNotificationControls,
-} from "../lib/notification-controls";
-import * as androidForegroundService from "../lib/android-foreground-service";
 
 let liveResponseListener: ((response: { actionIdentifier: string }) => void) | null = null;
 

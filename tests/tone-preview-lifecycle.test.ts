@@ -1,6 +1,5 @@
 /** @jest-environment jsdom */
-import { act, renderHook } from "@testing-library/react";
-import { fireEvent, render } from "@testing-library/react";
+import { act, renderHook, fireEvent, render } from "@testing-library/react";
 import React, { useRef, useState } from "react";
 import { Platform } from "react-native";
 import { useTonePreview } from "@/hooks/useTonePreview";

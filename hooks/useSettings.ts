@@ -18,7 +18,7 @@
  */
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { DEFAULT_STAGE_SETTINGS, loadSettings, saveSettings } from "@/lib/storage";
+import { DEFAULT_STAGE_SETTINGS, loadSettings, saveSettings , BUILTIN_SOUND_SETS, CUSTOM_SOUND_SET_SLOTS } from "@/lib/storage";
 import type { MetronomeSettings, ModeSettings, MetronomeMode, FlashMode, HapticMode, SoundSet, StageSettings } from "@/lib/storage";
 import {
   createDebouncedPersister,
@@ -36,7 +36,6 @@ import type { BarRandomStrategy } from "@/lib/bar-random-session";
 import { NEUTRAL, sanitizeTonePosition, type TonePosition } from "@/lib/metronome-tone-dsp";
 import { sanitizeVoiceCountLanguage, sanitizeVoiceCountOutput, sanitizeVoiceCountSpeaker, type VoiceCountLanguage, type VoiceCountOutput, type VoiceCountSpeaker } from "@/lib/voice-count";
 import { sanitizeSoundSetOverlays, type SoundSetOverlays } from "@/lib/sound-overlays";
-import { BUILTIN_SOUND_SETS, CUSTOM_SOUND_SET_SLOTS } from "@/lib/storage";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -724,7 +723,7 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
       flashModeRef.current = value;
       persistSettings({ flashMode: value });
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
     [persistSettings],
   );
 

@@ -890,7 +890,7 @@ export function remapDataImageUris(
     result["practice_book"] = JSON.stringify(entries.map((entry) => remapEntryImageUris(entry, uriMapping)));
   } catch {}
   try {
-    const images: Array<Record<string, unknown>> = JSON.parse(result["metronome_hub_images"] ?? "[]");
+    const images: Record<string, unknown>[] = JSON.parse(result["metronome_hub_images"] ?? "[]");
     result["metronome_hub_images"] = JSON.stringify(images.map((image) => ({
       ...image,
       uri: typeof image.uri === "string" ? remapImageUri(image.uri, uriMapping) : image.uri,

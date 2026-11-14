@@ -1,8 +1,7 @@
-import type { StaffNotebook, StaffPage, StaffPoint, StaffStamp, StaffStroke } from "./staff-notebook";
+import type { StaffNotebook, StaffPage, StaffPoint, StaffStamp, StaffStroke , NotebookSettings } from "./staff-notebook";
 import { ROW_HEIGHT, snapStaffY, inkInRow, rowAt } from "./staff-notebook-layout";
 import { erasedAt } from "./notebook-ink";
 import { naturalPaperWidth, notebookMeasureRegions, standardTupletRatio } from "./notebook-music-layout";
-import type { NotebookSettings } from "./staff-notebook";
 
 export type NotebookSelection = { strokeIds: string[]; stampIds: string[] };
 export type NotebookBounds = { x: number; y: number; width: number; height: number };

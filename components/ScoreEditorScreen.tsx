@@ -703,7 +703,7 @@ export function ScoreEditorScreen({
   );
 
   const handleEraseMultiple = useCallback(
-    (elements: Array<{ elementId: string; measureIdx: number }>) => {
+    (elements: { elementId: string; measureIdx: number }[]) => {
       const byMeasure = new Map<number, Set<string>>();
       for (const { elementId, measureIdx } of elements) {
         if (!byMeasure.has(measureIdx)) byMeasure.set(measureIdx, new Set());
@@ -1239,8 +1239,8 @@ export function ScoreEditorScreen({
   // ── 다중 선택 정렬 ────────────────────────────────────────────
   const multiSelectSortedNotes = useMemo(() => {
     const part = doc.parts[selectedPartIdx];
-    if (!part) return [] as Array<{ id: string; measureIdx: number; elemIdx: number; note: ScoreNote }>;
-    const found: Array<{ id: string; measureIdx: number; elemIdx: number; note: ScoreNote }> = [];
+    if (!part) return [] as { id: string; measureIdx: number; elemIdx: number; note: ScoreNote }[];
+    const found: { id: string; measureIdx: number; elemIdx: number; note: ScoreNote }[] = [];
     for (const id of multiSelectIds) {
       for (let mi = 0; mi < part.measures.length; mi++) {
         const ei = part.measures[mi].elements.findIndex((e) => e.id === id);
@@ -1257,8 +1257,8 @@ export function ScoreEditorScreen({
 
   const multiSelectSortedElements = useMemo(() => {
     const part = doc.parts[selectedPartIdx];
-    if (!part) return [] as Array<{ id: string; measureIdx: number; elemIdx: number }>;
-    const found: Array<{ id: string; measureIdx: number; elemIdx: number }> = [];
+    if (!part) return [] as { id: string; measureIdx: number; elemIdx: number }[];
+    const found: { id: string; measureIdx: number; elemIdx: number }[] = [];
     for (const id of multiSelectIds) {
       for (let mi = 0; mi < part.measures.length; mi++) {
         const ei = part.measures[mi].elements.findIndex((e) => e.id === id);

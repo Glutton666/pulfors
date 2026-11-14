@@ -9,6 +9,9 @@
 
 import { renderHook, act } from "@testing-library/react";
 
+import { useAudioPlayers } from "../hooks/useAudioPlayers";
+import { createAudioOutputOwner } from "@/lib/audio-output-owner";
+
 // ── expo-audio stub ──────────────────────────────────────────────────────────
 // Variable name must start with "mock" to be accessible inside jest.mock factories.
 function mockMakePlayer() {
@@ -25,9 +28,6 @@ jest.mock("@/lib/metronome-engine", () => ({
     woodblock: { high: "h2", low: "l2", strong: "s2" },
   },
 }));
-
-import { useAudioPlayers } from "../hooks/useAudioPlayers";
-import { createAudioOutputOwner } from "@/lib/audio-output-owner";
 
 // ── helper ───────────────────────────────────────────────────────────────────
 function poolVolumes(allPlayersRef: React.MutableRefObject<any>, key: string): number[] {

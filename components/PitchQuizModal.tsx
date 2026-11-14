@@ -31,7 +31,7 @@ export interface PitchQuizModalProps {
 }
 
 const RELATIVE_INTERVALS = Array.from({ length: 12 }, (_, index) => index + 1);
-const CHORD_KINDS = Object.keys(CHORD_DEFINITIONS) as Array<keyof typeof CHORD_DEFINITIONS>;
+const CHORD_KINDS = Object.keys(CHORD_DEFINITIONS) as (keyof typeof CHORD_DEFINITIONS)[];
 
 export function PitchQuizModal({ visible, initialMode = null, onClose }: PitchQuizModalProps) {
   const { colors: C } = useTheme();

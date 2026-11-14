@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs";
  * EAS 클라우드 빌드는 이 호스트에 접근할 수 없어 `yarn install`이
  * `getaddrinfo ENOTFOUND`로 실패한다. 커밋 전에 이 테스트가 잡도록 한다.
  *
- * 복구: sed -i -E 's#http://package-firewall\.replit\.(local|internal)/npm/#https://registry.npmjs.org/#g' yarn.lock
+ * 복구: node scripts/normalize-yarn-registry.cjs --registry https://registry.npmjs.org --write
  */
 
 const SANDBOX_HOST = /replit\.(local|internal)|package-firewall/i;

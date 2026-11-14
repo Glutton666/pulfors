@@ -28,7 +28,7 @@ export const LANGUAGE_LABELS: Record<LanguageCode, string> = {
   en: "English",
 };
 
-export const LANGUAGE_OPTIONS: ReadonlyArray<{ value: LanguageCode; label: string }> =
+export const LANGUAGE_OPTIONS: readonly { value: LanguageCode; label: string }[] =
   SUPPORTED_LANGUAGES.map((code) => ({ value: code, label: LANGUAGE_LABELS[code] }));
 
 export const translations = {

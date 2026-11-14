@@ -9,7 +9,7 @@ const mockEnsureBackgroundPlaybackAudioMode = jest.fn(async () => {});
 const mockIsBackgroundPlaybackEnabled = jest.fn(() => true);
 const mockRequestForegroundPlayback = jest.fn(async (_owner?: string) => {});
 const mockRelinquishForegroundPlayback = jest.fn((_owner?: string) => {});
-const createdPlayers: Array<{
+const createdPlayers: {
   loop: boolean;
   volume: number;
   play: jest.Mock;
@@ -19,7 +19,7 @@ const createdPlayers: Array<{
   clearLockScreenControls: jest.Mock;
   addListener: jest.Mock;
   emitStatus: (playing: boolean) => void;
-}> = [];
+}[] = [];
 
 jest.mock("@/lib/audio-session", () => ({
   ensureBackgroundPlaybackAudioMode: () => mockEnsureBackgroundPlaybackAudioMode(),
