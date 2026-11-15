@@ -3,13 +3,17 @@ name: Deployment npm peer resolution
 description: Why local Yarn installs can pass while Replit publishing fails during npm dependency resolution.
 ---
 
-Replit publishing resolves this project with `npm install`, even though the repository keeps `yarn.lock`. Direct dependencies therefore need an npm-resolvable peer graph; a Yarn installation already present in the workspace is not proof that publishing can install from scratch.
+Use npm as the root application's installation contract. A working pre-existing dependency directory is not proof that a clean checkout can install.
+
+**Why:** CI used `npm ci` while the root npm lock was ignored and Yarn/pnpm locks were saved instead. Consolidating the root contract prevents local, CI and native build graphs from diverging. The mockup sandbox remains a separate package.
+
+**How to apply:** Preserve the committed npm lock, validate a fresh installation, and retain security/compatibility constraints when changing package-management settings. Do not recreate root Yarn/pnpm locks.
 
 **Why:** A publish failed before the build command because the native audio API required a newer optional worklets peer than the project pinned. The compatible worklets release also remained inside Reanimated's declared peer range, so aligning the direct dependency fixed npm resolution without using `--legacy-peer-deps`.
 
-**How to apply:** After changing native React dependencies, run an npm resolution check as well as the normal Yarn lock update. Regenerate `yarn.lock` explicitly against the npm registry, verify the direct peer tree with `npm ls`, and run the exact production build command.
+**How to apply:** After changing native React dependencies, verify the npm peer tree and a fresh locked install, then run the relevant build. Do not use legacy peer bypasses.
 
-Yarn-only security resolutions do not protect npm publishing from a transitive dependency pinned by its parent. Check the failed build's installation log and update the parent dependency; do not bypass the package firewall.
+Package-manager-specific security settings do not protect another install path. Check actual resolved versions and the parent dependency; do not bypass the package firewall.
 
 **Why:** A vulnerable archive dependency was already upgraded by Yarn locally, but npm publishing still downloaded the old version pinned by the native build CLI. Local installation success did not establish fresh npm compatibility.
 

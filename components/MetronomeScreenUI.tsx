@@ -112,7 +112,7 @@ export function MetronomeScreenUI(props: Props) {
   const {
     styles, C, S, t, themeMode, language, insets, webTopInset, webBottomInset,
     isLandscape, windowWidth,
-    rootViewRef, barAreaRef, handleBarAreaLayout, dialRef, stopwatchTimerRef, stopwatchTimerLandscapeRef,
+    rootViewRef, barAreaRef, handleBarAreaLayout, dialRef, stopwatchTimerRef, stopwatchTimerLandscapeRef, tempoTrainer,
     barScrollOffsetRef, beatStaffCellRectsRef, engineRef, togglePlayPauseRef, updateBpmRef, beatDenominatorRef,
     seamlessNextEntryRef, tuningGuideOnSelectRef, reopenSignalGenAfterTuningGuideRef,
     settingsReturnModalRef, featureStartRef, practiceStartRef, discardPracticeSession, startOrResumePracticeSession,
@@ -760,7 +760,9 @@ export function MetronomeScreenUI(props: Props) {
             gap: 8,
           }}
           accessibilityRole="button"
-          accessibilityLabel={t("switcher", "openDial")}
+          accessibilityLabel={Platform.OS === "web"
+            ? `${t("switcher", "openDial")}: ${t("switcher", currentMode as "beat" | "bar" | "score" | "note" | "practice" | "stage" | "menu")}`
+            : t("switcher", "openDial")}
           accessibilityHint={t("switcher", "triggerHint")}
           accessibilityState={{ expanded: isModeDialOpen }}
           accessibilityValue={{ text: t("switcher", currentMode as "beat" | "bar" | "score" | "note" | "practice" | "stage" | "menu") }}
@@ -1834,6 +1836,7 @@ export function MetronomeScreenUI(props: Props) {
                 )}
                 <StopwatchTimer
                   ref={stopwatchTimerLandscapeRef}
+                  tempoTrainer={tempoTrainer}
                   onTimerExpired={handleTimerExpired}
                   onStopRequested={handleTimerExpired}
                   onStartMetronome={startMetronome}
@@ -1927,6 +1930,7 @@ export function MetronomeScreenUI(props: Props) {
       {!barMode && !noteMode && !isLandscape && (
         <StopwatchTimer
           ref={stopwatchTimerRef}
+          tempoTrainer={tempoTrainer}
           onTimerExpired={handleTimerExpired}
           onStopRequested={handleTimerExpired}
           onStartMetronome={startMetronome}

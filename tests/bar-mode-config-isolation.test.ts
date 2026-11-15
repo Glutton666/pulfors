@@ -1,31 +1,16 @@
-import fs from "node:fs";
-import path from "node:path";
+import { readRepoSource } from "./helpers/source-contract";
 
 describe("Beat and Bar rhythm profile isolation", () => {
-  const screenSource = fs.readFileSync(
-    path.join(process.cwd(), "hooks/useMetronomeScreen.ts"),
-    "utf8",
-  );
-  const navigationSource = fs.readFileSync(
-    path.join(process.cwd(), "hooks/useScreenNavigation.ts"),
-    "utf8",
-  );
-  const uiSource = fs.readFileSync(
-    path.join(process.cwd(), "components/MetronomeScreenUI.tsx"),
-    "utf8",
-  );
-  const keyboardSource = fs.readFileSync(
-    path.join(process.cwd(), "hooks/useKeyboardShortcuts.ts"),
-    "utf8",
-  );
-  const barModeSource = fs.readFileSync(
-    path.join(process.cwd(), "hooks/useBarMode.ts"),
-    "utf8",
-  );
-  const practiceLoadSource = fs.readFileSync(
-    path.join(process.cwd(), "hooks/usePracticeBookLoad.ts"),
-    "utf8",
-  );
+  // Transitional parent-wiring guards: these do NOT establish runtime behavior.
+  // Actual profile transitions, canonical refs and mode setters are covered in
+  // bar-profile-behavior.test.ts; keep remaining parent contracts until their
+  // orchestration-level harness covers hydration, Stage, keyboard and drags.
+  const screenSource = readRepoSource("hooks/useMetronomeScreen.ts");
+  const navigationSource = readRepoSource("hooks/useScreenNavigation.ts");
+  const uiSource = readRepoSource("components/MetronomeScreenUI.tsx");
+  const keyboardSource = readRepoSource("hooks/useKeyboardShortcuts.ts");
+  const barModeSource = readRepoSource("hooks/useBarMode.ts");
+  const practiceLoadSource = readRepoSource("hooks/usePracticeBookLoad.ts");
 
   test("active Bar config is selected from barConfigRef rather than shared Beat state", () => {
     expect(screenSource).toContain(
@@ -95,21 +80,6 @@ describe("Beat and Bar rhythm profile isolation", () => {
     expect(screenSource).toContain("hasBeenConfigured: true,");
   });
 
-  test("Beat and Bar transitions restore each profile's strong-beat positions in both UI and engine", () => {
-    expect(barModeSource).toContain(
-      "p.setBeatTypes([...savedBarConfig.beatTypes]);",
-    );
-    expect(barModeSource).toContain(
-      "engine.setBeatTypes([...savedBarConfig.beatTypes]);",
-    );
-    expect(barModeSource).toContain(
-      "p.setBeatTypes([...dc.beatTypes]);",
-    );
-    expect(barModeSource).toContain(
-      "applyDialConfigToEngine(engine, dc);",
-    );
-  });
-
   test("Bar drag edits never persist into the Beat settings profile", () => {
     expect(screenSource).toContain(
       "dialConfigRef.current.beatSubdivisions = newSubs;\n        persistSettings({ beatSubdivisions: newSubs });",
@@ -140,35 +110,10 @@ describe("Beat and Bar rhythm profile isolation", () => {
     expect(keyboardSource).toContain("applyActiveBpm(tapBpm);");
   });
 
-  test("Bar loop and block mode setters synchronously update the canonical snapshot", () => {
-    expect(barModeSource).toContain(
-      "barConfigRef.current.barLoopMode = next;",
-    );
-    expect(barModeSource).toContain(
-      "barConfigRef.current.blockPlayMode = next;",
-    );
-    expect(barModeSource).toContain("blockPlayModeRef.current = next;");
-    expect(barModeSource).toContain(
-      "p.engineRef.current?.setBlockPlayMode(next);",
-    );
-  });
-
   test("practice-book mode changes use the profile-aware transition callback", () => {
     expect(screenSource).toContain("setBarMode: handleBarModeChange, setNoteMode");
     expect(practiceLoadSource).not.toContain(
       "beatsPerMeasure,\n          beatTypes: [...beatTypes],\n          beatSubdivisions: { ...beatSubdivisions }",
-    );
-  });
-
-  test("mode switches preserve canonical refs instead of rebuilding from render state", () => {
-    expect(barModeSource).toContain(
-      "Do not rebuild it from React state here",
-    );
-    expect(barModeSource).toContain(
-      "Bar editors update barConfigRef synchronously",
-    );
-    expect(barModeSource).not.toContain(
-      "beatsPerMeasure: p.beatsPerMeasure,\n          beatTypes: [...p.beatTypes]",
     );
   });
 

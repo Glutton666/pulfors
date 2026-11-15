@@ -219,6 +219,12 @@ export class MetronomeEngine {
     this.playStrongClick = playStrong || null;
   }
 
+  /** One-shot trainer cue; does not alter the user's beat pattern. */
+  playTempoChangeAccent() {
+    if (!this.isRunning || this.baseClickMuted) return;
+    (this.playStrongClick ?? this.playHighClick)?.();
+  }
+
   private playLayerClick: ((layerIndex: number, role: "high" | "low" | "strong", soundSet?: string) => void) | null = null;
   private playBlockClick: ((blockIndex: number, role: "high" | "low" | "strong") => void) | null = null;
   private onClickEmitted: ((at: number) => void) | null = null;

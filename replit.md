@@ -62,6 +62,9 @@ Preferred communication style: Simple, everyday language.
 - **Not implemented**: There is no active database connection. The server is stateless — no ORM, no schema, no migrations. If server-side persistence is needed in the future (e.g. user accounts, cloud sync), add Drizzle ORM + PostgreSQL at that point.
 
 ### Build & Deployment
+- **Install contract**: The root app uses npm 10 and committed `package-lock.json`; use `npm ci` in CI, EAS and post-merge setup. Preserve npm overrides and native peer compatibility. The mockup sandbox is a separate package.
+- **Portable tests**: Text uses LF via `.gitattributes`. Test user-visible behavior through actual hooks/components/browser interactions, not implementation strings. Keep intentional asset/config/security/module-boundary guards with reasons. See `docs/test-portability-and-installation.md`.
+- **Generated captures**: Use ignored `/generated-artifacts/` or `test-results/`; historical screenshots are preserved under `docs/reference-screenshots/`. Future human-written change summaries should name the behavior changed rather than only memory updates; do not rewrite old history.
 - **Development**: Separate processes for client (`expo:dev`) and server (`server:dev`).
 - **Production**: Custom build scripts (`scripts/build.js`) for bundling, `esbuild` for server compilation. Single Express server for static assets and API.
 - **Path Aliases**: `@/*` for project root, `@shared/*` for shared client/server code.

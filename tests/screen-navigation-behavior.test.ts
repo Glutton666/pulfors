@@ -40,6 +40,28 @@ function makeParams(): UseScreenNavigationParams {
 
 beforeEach(() => { jest.clearAllMocks(); });
 
+it.each([
+  "showSettings", "showProfile", "showAssistant", "showSignalGen",
+  "showPracticeBook", "showWorkUp", "showFadeOut", "showScheduledStart",
+  "showDrumKit", "showPolygon", "showMenu", "showOnboarding",
+] as const)("Android Back closes %s through the installed callback", flag => {
+  const params = { ...makeParams(), [flag]: true };
+  renderHook(() => useScreenNavigation(params));
+  act(() => { expect(jest.mocked(BackHandler.addEventListener).mock.calls[0][1]()).toBe(true); });
+  expect(params.setActiveModal).toHaveBeenLastCalledWith(null);
+});
+
+it("Android Back closes reboot and exits Bar through the profile-aware callback", () => {
+  const params = { ...makeParams(), showReboot: true };
+  const { rerender } = renderHook(p => useScreenNavigation(p), { initialProps: params });
+  act(() => { jest.mocked(BackHandler.addEventListener).mock.calls[0][1](); });
+  expect(params.setShowReboot).toHaveBeenCalledWith(false);
+  params.barModeRef.current = true;
+  rerender({ ...params, showReboot: false });
+  act(() => { jest.mocked(BackHandler.addEventListener).mock.calls.at(-1)![1](); });
+  expect(params.handleBarModeChangeRef.current).toHaveBeenCalledWith(false);
+});
+
 it("does not reinstall Android back handling for an unrelated parent render", () => {
   const params = makeParams();
   const { rerender, unmount } = renderHook(p => useScreenNavigation(p), { initialProps: params });

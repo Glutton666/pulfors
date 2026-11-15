@@ -116,60 +116,10 @@ test("modal-routing: 어떤 activeModal 값이든 visible 모달은 최대 1개"
   }
 });
 
-test("Android BackHandler가 모든 active modal 종료 경로를 가진다", () => {
-  const src = readFileSync(join(process.cwd(), "hooks/useScreenNavigation.ts"), "utf-8");
-  const backStart = src.indexOf("const onBack = () => {");
-  const backEnd = src.indexOf('BackHandler.addEventListener("hardwareBackPress"', backStart);
-  assert.ok(backStart >= 0 && backEnd > backStart, "Android BackHandler 본문을 찾을 수 없다");
-  const onBack = src.slice(backStart, backEnd);
-
-  const expectedClosers: Record<string, RegExp> = {
-    showSettings: /setActiveModal\(null\)/,
-    showTuningGuide: /setActiveModal\(/,
-    showSignalGen: /closeMenuItem\(\)/,
-    showPracticeBook: /closeMenuItem\(\)/,
-    showWorkUp: /closeMenuItem\(\)/,
-    showFadeOut: /setActiveModal\(null\)/,
-    showScheduledStart: /setActiveModal\(null\)/,
-    showDrumKit: /closeMenuItem\(\)/,
-    showPolygon: /closeMenuItem\(\)/,
-    showMenu: /setActiveModal\(null\)/,
-    showOnboarding: /setActiveModal\(null\)/,
-    showReboot: /setShowReboot\(false\)/,
-    'coreMode === "score"': /closeScoreMode\(\)/,
-  };
-  const branches = Object.entries(expectedClosers);
-  for (const [index, [branch, expectedCloser]] of branches.entries()) {
-    const branchIndex = onBack.indexOf(branch);
-    assert.ok(branchIndex >= 0, `Android BackHandler에 ${branch} 종료 분기가 없다`);
-    // A branch may contain nested conditionals (notably TuningGuide's
-    // SignalGen re-open decision). End at the next *top-level modal branch*,
-    // not the first `if` token inside this branch.
-    const nextBranch = branches[index + 1]?.[0];
-    const nextBranchIndex = nextBranch ? onBack.indexOf(nextBranch, branchIndex + branch.length) : -1;
-    const branchBody = onBack.slice(branchIndex, nextBranchIndex === -1 ? undefined : nextBranchIndex);
-    assert.match(
-      branchBody,
-      expectedCloser,
-      `Android BackHandler의 ${branch} 분기가 모달을 닫지 않는다`,
-    );
-  }
-});
-
-test("score close: 목록과 편집기의 X는 문서 상태를 비우고 실험실 메뉴로 돌아간다", () => {
-  const ui = readFileSync(join(process.cwd(), "components/MetronomeScreenUI.tsx"), "utf-8");
-  const hook = readFileSync(join(process.cwd(), "hooks/useScreenNavigation.ts"), "utf-8");
-  assert.match(
-    ui,
-    /const closeScoreToLab = useCallback\(\(\) => \{\s*setShowLabMenu\(true\);\s*closeScoreMode\(\);/,
-  );
-  assert.equal((ui.match(/onClose=\{closeScoreToLab\}/g) ?? []).length, 2);
-  assert.match(
-    hook,
-    /const closeScoreMode = useCallback\(\(\) => \{\s*setScoreEditorDoc\(null\);\s*setScoreMode\(null\);[\s\S]*?clearMenuItemReturn\(\);[\s\S]*?setActiveModal\("menu"\);/,
-  );
-  assert.match(hook, /p\.coreMode === "score"\s*\)\s*\{\s*closeScoreMode\(\);/);
-});
+// Android back branches and lifecycle are exercised through the installed
+// listener in screen-navigation-behavior.test.ts. Score list/editor X buttons
+// are exercised in the running app in e2e/score-exit.spec.ts. Do not reinstate
+// textual callback extraction here: it cannot prove those interactions work.
 
 test("menu return: 메뉴 화면의 각 항목 진입이 메뉴 복귀 상태를 기록한다", () => {
   const src = readFileSync(join(process.cwd(), "components/MetronomeScreenUI.tsx"), "utf-8");

@@ -8,8 +8,11 @@ export default defineConfig({
   fullyParallel: false,
   retries: process.env.CI ? 1 : 0,
   workers: 1,
-  reporter: "list",
+  reporter: [["list"], ["html", { open: "never" }]],
   use: {
+    // Test language/time are explicit, independent of the developer's OS.
+    locale: "en-US",
+    timezoneId: "UTC",
     baseURL: "http://localhost:8081",
     trace: process.env.CI ? "retain-on-failure" : "on-first-retry",
     video: process.env.CI ? "retain-on-failure" : "off",

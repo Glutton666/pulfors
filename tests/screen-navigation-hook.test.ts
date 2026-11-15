@@ -1,17 +1,15 @@
 import { readFileSync } from "node:fs";
+import { importedMemberCallCount } from "./helpers/source-contract";
 
 describe("useScreenNavigation extraction", () => {
   const screen = readFileSync("hooks/useMetronomeScreen.ts", "utf8");
   const navigation = readFileSync("hooks/useScreenNavigation.ts", "utf8");
 
   it("owns modal return leases and Android back routing", () => {
-    expect(screen).toContain('from "@/hooks/useScreenNavigation"');
-    expect(navigation).toContain("menuItemReturnGenerationRef");
-    expect(navigation).toContain('hardwareBackPress');
-    expect(navigation).toContain("closeScoreMode");
-    expect(navigation).toContain("openExclusive");
-    expect(navigation).toContain("showTuningGuide");
-    expect(screen).not.toContain('BackHandler.addEventListener("hardwareBackPress"');
+    // Deliberate architecture guard: navigation owns the single native
+    // subscription. Closing behavior is tested through that actual listener.
+    expect(importedMemberCallCount(navigation, "react-native", "BackHandler", "addEventListener")).toBe(1);
+    expect(importedMemberCallCount(screen, "react-native", "BackHandler", "addEventListener")).toBe(0);
   });
 
   it("keeps tutorial lifecycle in the navigation domain without duplicate parent handlers", () => {

@@ -981,7 +981,15 @@ function ModeSwitcherDial({
           testID="mode-dial-touch-frame"
           ref={fanAccessibilityRef}
           {...(Platform.OS === "web"
-            ? ({ tabIndex: -1 } as unknown as React.ComponentProps<typeof Animated.View>)
+            ? ({
+                tabIndex: -1,
+                // RN Web/Reanimated can omit the legacy accessibilityValue
+                // object. A slider needs its actual range/value in the DOM.
+                "aria-valuemin": 1,
+                "aria-valuemax": N_MODES,
+                "aria-valuenow": selectedIndex + 1,
+                "aria-valuetext": t("switcher", MODES[selectedIndex] as "beat"|"bar"|"score"|"note"|"practice"|"stage"|"menu"),
+              } as unknown as React.ComponentProps<typeof Animated.View>)
             : {})}
           accessible
           accessibilityRole="adjustable"

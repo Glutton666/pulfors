@@ -63,7 +63,7 @@
 - [Metronome tone shaping](metronome-boost-path.md) — XY tone shaping requires shared rendered PCM; realtime remains the neutral-tone path.
 - [RN Web ScrollView parent sizing](rn-web-scrollview-parent-sizing.md) — a bounded card is insufficient; the ScrollView's direct parent also needs flex:1/minHeight:0 or short screens cannot scroll.
 - [RN Web editor submit races](rn-web-editor-submit-races.md) — submit the event's text, not potentially stale React state; incidental blur must not destroy a newly focused editor.
-- [Deployment npm compatibility](deployment-npm-peer-resolution.md) — publishing ignores Yarn-only resolutions; verify fresh npm peers and parent-pinned security dependencies.
+- [Npm install compatibility](deployment-npm-peer-resolution.md) — the committed npm lock is canonical; preserve security constraints and verify fresh native peer resolution.
 - [Scheduled playback ownership](scheduled-playback-ownership.md) — preloaded starts need token ownership; modal unmount cleanup must use a latest-callback ref.
 - [Expo web static image URLs](expo-web-static-image-urls.md) — RN Image.resolveAssetSource is unavailable on web; use Expo asset metadata and Metro's unstable_path URL for CSS masks.
 - [Microphone lifecycle test harness](microphone-lifecycle-test-harness.md) — compare Web Audio resource counts to a pre-test baseline; native component tests need RN FlatList and KeyboardAvoidingView stubs.
@@ -108,3 +108,5 @@
 - [Pressable gesture ownership](pressable-gesture-ownership.md) — keep drag responders on a stable View; Pressable's own responder handlers can override them.
 - [Native strong markers](native-strong-marker.md) — Beat/Bar S markers share rendering; preserve vector glyphs and distinguish browser checks from native release verification.
 - [Polygon startup boundary](polygon-startup-boundary.md) — use Polygon’s own audio producer and beat clock, not ordinary rendered output or the underlying Bar transport.
+- [Foreground location permissions](foreground-location-permissions.md) — practice-room GPS stays foreground-only; explicitly disable Expo’s default Always permission descriptions.
+- [Tempo trainer behavior](tempo-trainer-behavior.md) — one time/beat rule in timer and stopwatch; Android training needs tempo-editable audio output.

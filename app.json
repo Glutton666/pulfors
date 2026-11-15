@@ -26,7 +26,6 @@
       "infoPlist": {
         "NSMicrophoneUsageDescription": "마이크를 사용하여 악기 음정을 감지하고 튜닝합니다.",
         "NSLocationWhenInUseUsageDescription": "연습실 위치를 저장하고 가까운 연습실을 찾기 위해 위치를 사용합니다.",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "연습실 위치를 저장하고 가까운 연습실을 찾기 위해 위치를 사용합니다.",
         "NSPhotoLibraryUsageDescription": "프로필 사진과 이미지를 선택하기 위해 사진 라이브러리에 접근합니다.",
         "NSCameraUsageDescription": "프로필 사진을 촬영하기 위해 카메라를 사용합니다.",
         "UIBackgroundModes": [
@@ -103,7 +102,11 @@
         "expo-location",
         {
           "locationWhenInUsePermission": "연습실 위치를 저장하고 가까운 연습실을 찾기 위해 위치를 사용합니다.",
-          "locationAlwaysAndWhenInUsePermission": "연습실 위치를 저장하고 가까운 연습실을 찾기 위해 위치를 사용합니다."
+          "locationAlwaysAndWhenInUsePermission": false,
+          "locationAlwaysPermission": false,
+          "isIosBackgroundLocationEnabled": false,
+          "isAndroidBackgroundLocationEnabled": false,
+          "isAndroidForegroundServiceEnabled": false
         }
       ],
       [

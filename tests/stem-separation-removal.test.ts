@@ -11,14 +11,18 @@ test("stem separation removal: package, model, and native decoder residue is abs
   const packageJson = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as {
     dependencies?: Record<string, unknown>;
   };
-  const packageLock = readFileSync(join(root, "yarn.lock"), "utf8");
+  const packageLock = JSON.parse(readFileSync(join(root, "package-lock.json"), "utf8")) as {
+    packages: Record<string, unknown>;
+  };
   const metroConfig = readFileSync(join(root, "metro.config.js"), "utf8");
   const jestConfig = readFileSync(join(root, "jest.config.js"), "utf8");
 
   assert.equal(packageJson.dependencies?.[removedNativePackage], undefined);
   assert.equal(packageJson.dependencies?.[removedDecoderPackage], undefined);
-  assert.equal(packageLock.includes(removedNativePackage), false);
-  assert.equal(packageLock.includes(removedDecoderPackage), false);
+  for (const name of [removedNativePackage, removedDecoderPackage]) {
+    assert.equal(Object.keys(packageLock.packages).some(key =>
+      key === `node_modules/${name}` || key.endsWith(`/node_modules/${name}`)), false);
+  }
   assert.equal(/\b["']ort["']/.test(metroConfig), false);
   assert.equal(/\b["']onnx["']/.test(metroConfig), false);
   assert.equal(jestConfig.includes(removedNativePackage), false);

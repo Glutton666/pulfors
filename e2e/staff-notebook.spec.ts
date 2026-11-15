@@ -589,15 +589,23 @@ for (const width of [390, 768, 844]) test(`musical-layout settings, group edit a
 });
 
 async function enterNotebook(page: Page) {
-  const vp = page.viewportSize()!;
-  await page.getByTestId("mode-cycle-label").click();
-  await page.waitForTimeout(400);
-  await page.mouse.click(vp.width / 2 - 58, 86);
-  await page.waitForTimeout(350);
-  await page.mouse.click(vp.width / 2, vp.height * 0.7);
-  await page.getByTestId("menu-lab").click();
-  await page.getByTestId("menu-staff-notebook").click();
-  await expect(page.getByTestId("notebook-drawing")).toBeVisible();
+  await test.step("Open Lab through the keyboard-owned mode dial", async () => {
+    await page.getByTestId("mode-cycle-label").click();
+    const dial = page.getByTestId("mode-dial-touch-frame");
+    await expect(dial).toBeVisible();
+    // Pick by the public accessibility value, not animation timing or pixels.
+    for (let step = 0; step < 5 && !/^(Menu|메뉴)$/.test(await dial.getAttribute("aria-valuetext") ?? ""); step += 1) {
+      await page.keyboard.press("ArrowLeft");
+    }
+    await expect(dial).toHaveAttribute("aria-valuetext", /^(Menu|메뉴)$/);
+    await page.keyboard.press("Enter");
+    await expect(dial).toHaveCount(0);
+    await page.getByTestId("menu-lab").click();
+  });
+  await test.step("Open the notebook and wait for its drawing surface", async () => {
+    await page.getByTestId("menu-staff-notebook").click();
+    await expect(page.getByTestId("notebook-drawing")).toBeVisible();
+  });
 }
 async function closeNotice(page: Page) {
   const ok = page.getByText(/^OK$|^확인$/).last();

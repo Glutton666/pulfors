@@ -77,6 +77,8 @@ import {
 type Ref<T> = { current: T };
 
 export interface UsePlaybackControlParams {
+  /** Tempo training needs live tempo changes; sparse native periods are immutable. */
+  forceRenderedBeatPlayback?: boolean;
   engineRef: Ref<MetronomeEngine | null>;
   isPlaying: boolean;
   isPreparing: boolean;
@@ -211,6 +213,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
 
   const playbackMode = p.getPlaybackContext().mode;
   const sparseNotificationSelected = Platform.OS === "android" &&
+    !(playbackMode === "beat" && p.forceRenderedBeatPlayback) &&
     (playbackMode === "beat" || playbackMode === "bar") &&
     process.env.EXPO_PUBLIC_ENABLE_ANDROID_SPARSE_AUDIO === "1";
   useEffect(() => {
@@ -688,6 +691,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
     );
     const useSparseAndroid =
       Platform.OS === "android" &&
+      !(plan.mode === "beat" && p.forceRenderedBeatPlayback) &&
       !polygonPlayback &&
       (plan.mode === "beat" || plan.mode === "bar") &&
       !Object.values(plan.audio.tone.overlays ?? {}).some(Boolean) &&

@@ -2495,6 +2495,23 @@ describe("pre-rendered playback reliability", () => {
     expect(mockSetSparseNotificationMode).not.toHaveBeenCalledWith(true);
   });
 
+  it("selects tempo-editable rendered Beat playback for training even when sparse audio is opted in", async () => {
+    (Platform as unknown as { OS: string }).OS = "android";
+    const engine = makeEngine();
+    const player = { ...mockPlayer, play: jest.fn() };
+    const params = makePlaybackParams(engine, player);
+    const { result } = renderHook(() => usePlaybackControl({
+      ...params, forceRenderedBeatPlayback: true,
+    } as any));
+    await act(async () => { await result.current.togglePlayPause(); });
+    expect(params.prepareRenderedPlayer).toHaveBeenCalledTimes(1);
+    expect(player.play).toHaveBeenCalledTimes(1);
+    expect(mockSparsePrepare).not.toHaveBeenCalled();
+    expect(mockSparseStart).not.toHaveBeenCalled();
+    expect(mockBeginBackgroundPlaybackLease).toHaveBeenCalledTimes(1);
+    expect(mockSetSparseNotificationMode).not.toHaveBeenCalledWith(true);
+  });
+
   it("does not start Android audio if its no-MediaSession background service fails", async () => {
     delete process.env.EXPO_PUBLIC_ENABLE_ANDROID_SPARSE_AUDIO;
     (Platform as unknown as { OS: string }).OS = "android";

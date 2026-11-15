@@ -1,0 +1,18 @@
+* text=auto eol=lf
+
+# Explicitly preserve binary assets, including future Git LFS content.
+*.png -text
+*.jpg -text
+*.jpeg -text
+*.webp -text
+*.gif -text
+*.ico -text
+*.wav -text
+*.mp3 -text
+*.m4a -text
+*.mp4 -text
+*.ttf -text
+*.otf -text
+*.pdf -text
+*.bat text eol=crlf
+*.cmd text eol=crlf

@@ -11,6 +11,8 @@ import {
   GestureResponderEvent,
   PanResponderGestureState,
   AppState,
+  ScrollView,
+  useWindowDimensions,
 } from "react-native";
 import {
   computeStopwatchElapsedMs,
@@ -37,6 +39,9 @@ import { onAccentColor } from "@/lib/color-contrast";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useScale } from "@/lib/scale";
 import type { ScaleValues } from "@/lib/scale";
+import { TempoTrainerControls } from "@/components/TempoTrainerControls";
+import { useTempoTrainer } from "@/hooks/useTempoTrainer";
+import type { TempoTrainerBindings } from "@/lib/tempo-trainer";
 type Mode = "stopwatch" | "timer";
 type TimerState = "idle" | "running" | "paused" | "finishing" | "countdown";
 
@@ -69,6 +74,7 @@ function formatCountdown(totalSeconds: number): string {
 }
 
 interface StopwatchTimerProps {
+  tempoTrainer?: TempoTrainerBindings;
   onTimerExpired: () => void;
   onStopRequested: () => void;
   onStartMetronome: () => void;
@@ -89,6 +95,7 @@ export interface StopwatchTimerHandle {
 
 export const StopwatchTimer = React.forwardRef<StopwatchTimerHandle, StopwatchTimerProps>(
 function StopwatchTimer({
+  tempoTrainer,
   onTimerExpired,
   onStopRequested,
   onStartMetronome,
@@ -98,11 +105,13 @@ function StopwatchTimer({
   isLandscape = false,
 }: StopwatchTimerProps, ref) {
   const { t } = useLanguage();
+  const { height: screenHeight } = useWindowDimensions();
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<Mode>("stopwatch");
   const [state, setState] = useState<TimerState>("idle");
   const [, setTick] = useState(0);
   const [timerDuration, setTimerDuration] = useState(180);
+  const [trainerInputsValid, setTrainerInputsValid] = useState(true);
   const [editingTimer, setEditingTimer] = useState(false);
   const [timerMinInput, setTimerMinInput] = useState("");
   const [timerSecInput, setTimerSecInput] = useState("");
@@ -122,6 +131,14 @@ function StopwatchTimer({
   const timerSecInputRef = useRef("");
   const startTimerRef = useRef<(() => void) | null>(null);
   const bumpTick = useCallback(() => setTick((t) => (t + 1) | 0), []);
+  useTempoTrainer({
+    trainer: tempoTrainer,
+    running: state === "running",
+    isPlaying: isMetronomePlaying,
+    reset: state === "idle",
+    endsAt: mode === "timer" && state === "running"
+      ? startTimeRef.current + startRemainingRef.current * 1000 : undefined,
+  });
 
   const { colors: C } = useTheme();
   const S = useScale();
@@ -444,11 +461,12 @@ function StopwatchTimer({
   );
 
   const startStopwatch = useCallback(() => {
+    if (!trainerInputsValid) return;
     hapticFeedback();
     setState("countdown");
     setOpen(false);
     runCountdown(actualStartStopwatch);
-  }, [hapticFeedback, runCountdown, actualStartStopwatch]);
+  }, [hapticFeedback, runCountdown, actualStartStopwatch, trainerInputsValid]);
 
   const pauseStopwatch = useCallback(() => {
     hapticFeedback();
@@ -512,11 +530,12 @@ function StopwatchTimer({
   }, [timerDuration, remaining, onTimerExpired, bumpTick]);
 
   const startTimer = useCallback(() => {
+    if (!trainerInputsValid) return;
     hapticFeedback();
     setState("countdown");
     setOpen(false);
     runCountdown(actualStartTimer);
-  }, [hapticFeedback, runCountdown, actualStartTimer]);
+  }, [hapticFeedback, runCountdown, actualStartTimer, trainerInputsValid]);
 
   const pauseTimer = useCallback(() => {
     hapticFeedback();
@@ -638,6 +657,18 @@ function StopwatchTimer({
   const finishingStyle = useAnimatedStyle(() => ({
     opacity: finishingPulse.value,
   }));
+
+  function renderTrainerControls() {
+    if (!tempoTrainer) return null;
+    return (
+      <TempoTrainerControls
+        value={tempoTrainer.config}
+        onChange={tempoTrainer.onConfigChange}
+        onValidityChange={setTrainerInputsValid}
+        disabled={state !== "idle" && state !== "paused"}
+      />
+    );
+  }
 
   const panelStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: slideX.value }],
@@ -812,6 +843,8 @@ function StopwatchTimer({
           {state === "idle" && (
             <Pressable
               onPress={mode === "stopwatch" ? startStopwatch : startTimer}
+              testID={mode === "stopwatch" ? "stopwatch-start" : "timer-start"}
+              disabled={!trainerInputsValid}
               style={[styles.landscapeBtn, { backgroundColor: C.accentDim, borderColor: C.accent, width: S.ms(28, 0.4), height: S.ms(20, 0.4), borderRadius: S.ms(6, 0.3) }]}
             >
               <Ionicons name="play" size={S.ms(10, 0.3)} color={C.accent} />
@@ -820,6 +853,7 @@ function StopwatchTimer({
           {state === "running" && (
             <Pressable
               onPress={mode === "stopwatch" ? pauseStopwatch : pauseTimer}
+              testID={mode === "stopwatch" ? "stopwatch-pause" : "timer-pause"}
               style={[styles.landscapeBtn, { backgroundColor: C.surfaceLight, borderColor: C.border, width: S.ms(28, 0.4), height: S.ms(20, 0.4), borderRadius: S.ms(6, 0.3) }]}
             >
               <Ionicons name="pause" size={S.ms(10, 0.3)} color={C.textSecondary} />
@@ -858,6 +892,7 @@ function StopwatchTimer({
             </Pressable>
           )}
         </View>
+        {renderTrainerControls()}
       </View>
     );
   }
@@ -878,7 +913,12 @@ function StopwatchTimer({
           style={[styles.drawerWrapper, panelStyle]}
           {...drawerPanResponder.panHandlers}
         >
-          <View style={[styles.panel, { backgroundColor: C.surface, borderColor: C.border }]}>
+          <ScrollView
+            style={{ width: panelWidth, maxHeight: Math.max(160, screenHeight - topInset - 80) }}
+            contentContainerStyle={[styles.panel, { backgroundColor: C.surface, borderColor: C.border }]}
+            keyboardShouldPersistTaps="handled"
+            testID="stopwatch-timer-panel"
+          >
             <View style={styles.tabRow}>
               <Pressable
                 onPress={() => switchMode("stopwatch")}
@@ -923,7 +963,7 @@ function StopwatchTimer({
             {mode === "stopwatch"
               ? renderStopwatchContent()
               : renderTimerContent()}
-          </View>
+          </ScrollView>
 
           <Pressable
             onPress={togglePanel}
@@ -1052,6 +1092,7 @@ function StopwatchTimer({
           {state === "idle" && (
             <Pressable
               onPress={startStopwatch}
+              disabled={!trainerInputsValid}
               style={({ pressed }) => [styles.controlButton, styles.startButton, { backgroundColor: C.accent }, pressed && styles.buttonPressed]}
               testID="stopwatch-start"
             >
@@ -1078,6 +1119,7 @@ function StopwatchTimer({
               </Pressable>
               <Pressable
                 onPress={startStopwatch}
+                disabled={!trainerInputsValid}
                 style={({ pressed }) => [styles.controlButton, styles.startButton, { backgroundColor: C.accent }, pressed && styles.buttonPressed]}
                 testID="stopwatch-resume"
               >
@@ -1086,6 +1128,7 @@ function StopwatchTimer({
             </>
           )}
         </View>
+        {renderTrainerControls()}
       </View>
     );
   }
@@ -1240,6 +1283,7 @@ function StopwatchTimer({
           {state === "idle" && (
             <Pressable
               onPress={startTimer}
+              disabled={!trainerInputsValid}
               style={({ pressed }) => [styles.controlButton, styles.startButton, { backgroundColor: C.accent }, pressed && styles.buttonPressed]}
               testID="timer-start"
             >
@@ -1266,6 +1310,7 @@ function StopwatchTimer({
               </Pressable>
               <Pressable
                 onPress={startTimer}
+                disabled={!trainerInputsValid}
                 style={({ pressed }) => [styles.controlButton, styles.startButton, { backgroundColor: C.accent }, pressed && styles.buttonPressed]}
                 testID="timer-resume"
               >
@@ -1274,6 +1319,7 @@ function StopwatchTimer({
             </>
           )}
         </View>
+        {renderTrainerControls()}
       </View>
     );
   }

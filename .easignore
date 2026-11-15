@@ -68,11 +68,9 @@ test-results/
 playwright-report/
 .cache/ms-playwright/
 
-# .gitignore와 동기화 (.easignore가 있으면 .gitignore는 업로드에 쓰이지 않는다).
-# package-lock.json: 로컬에 남은 npm lockfile이 업로드되면 EAS 서버의
-# yarn install / expo doctor에서 "multiple lock files" 경고가 난다.
-package-lock.json
+# Include package-lock.json so EAS and CI install the same npm dependency graph.
 static-build/
 /generated-artifacts/
+/docs/reference-screenshots/
 # 개발용 참고 자료(녹음/스크린샷, 약 50MB). 앱 코드는 참조하지 않으므로 업로드 제외.
 attached_assets/
