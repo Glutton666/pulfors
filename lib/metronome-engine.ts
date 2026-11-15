@@ -219,10 +219,13 @@ export class MetronomeEngine {
     this.playStrongClick = playStrong || null;
   }
 
-  /** One-shot trainer cue; does not alter the user's beat pattern. */
-  playTempoChangeAccent() {
-    if (!this.isRunning || this.baseClickMuted) return;
-    (this.playStrongClick ?? this.playHighClick)?.();
+  private externalBeatClock: (() => { measure: number; bpm: number; elapsed: number } | null) | null = null;
+  private externalMeasure = -1;
+
+  /** Output drives display only; it has already scheduled/mixed the clicks. */
+  setExternalBeatClock(provider: (() => { measure: number; bpm: number; elapsed: number } | null) | null) {
+    this.externalBeatClock = provider;
+    this.externalMeasure = -1;
   }
 
   private playLayerClick: ((layerIndex: number, role: "high" | "low" | "strong", soundSet?: string) => void) | null = null;
@@ -1430,6 +1433,27 @@ export class MetronomeEngine {
   private loop = () => {
     if (!this.isRunning) return;
 
+    const external = this.externalBeatClock?.();
+    if (external && external.measure !== this.externalMeasure) {
+      if (this.externalMeasure >= 0 && this.shouldStopAtMeasureBoundary()) {
+        this.finishMeasureBoundaryStop();
+        return;
+      }
+      const completed = this.externalMeasure >= 0;
+      this.externalMeasure = external.measure;
+      if (this.bpm !== external.bpm) {
+        this.bpm = external.bpm;
+        this.invalidateScheduleCache();
+        this.schedule = this.buildScheduleMemoized();
+      }
+      this.measureStartTime = performance.now() - external.elapsed * 1000;
+      this.anchorWallTime = this.measureStartTime;
+      this.anchorMeasureCount = this.measureCount;
+      this.anchorMeasureDurationMs = this.measureDurationMs;
+      this.scheduleIndex = 0;
+      if (completed) { this.measureCount++; this.onMeasureComplete?.(); }
+      if (!this.isRunning) return;
+    }
     if (this.pendingMeasureStartAction && this.scheduleIndex === 0) {
       const action = this.pendingMeasureStartAction;
       this.pendingMeasureStartAction = null;
@@ -1438,7 +1462,7 @@ export class MetronomeEngine {
 
     const now = performance.now();
     this.fillRealtimeAudioLookAhead(now);
-    const elapsed = this.getElapsed();
+    const elapsed = external ? external.elapsed * 1000 : this.getElapsed();
 
     // The last scheduled tick is an onset, not the end of the measure. A
     // finite playback must keep the scheduler alive until the true boundary
@@ -1468,7 +1492,7 @@ export class MetronomeEngine {
       }
 
       if (this.scheduleIndex >= this.schedule.length) {
-        if (this.shouldStopAtMeasureBoundary()) {
+        if (this.externalBeatClock || this.shouldStopAtMeasureBoundary()) {
           // scheduleNext() will wake the loop at the actual measure boundary.
           break;
         }
@@ -1512,7 +1536,7 @@ export class MetronomeEngine {
   private scheduleNext() {
     const nextTick = this.schedule[this.scheduleIndex];
     if (!nextTick) {
-      if (this.shouldStopAtMeasureBoundary()) {
+      if (this.externalBeatClock || this.shouldStopAtMeasureBoundary()) {
         const wait = Math.max(0, this.measureDurationMs - this.getElapsed());
         this.timerId = setTimeout(this.loop, wait);
       }
@@ -1636,6 +1660,7 @@ export class MetronomeEngine {
   }
 
   stop() {
+    this.setExternalBeatClock(null);
     this.isRunning = false;
     this.stopAfterMeasure = false;
     this.upcomingRandomSchedule = null;

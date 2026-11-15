@@ -34,6 +34,8 @@ type PrepareSparseEventsOptions = {
   signal?: AbortSignal;
   /** Additional render-lifecycle cancellation check. */
   shouldAbort?: () => boolean;
+  /** In-memory trainer preparation; never creates temporary WAVs. */
+  storePCM?: (pcm: Float32Array | { left: Float32Array; right: Float32Array }) => string;
 };
 
 export type PreparedSparseEvents = {
@@ -170,7 +172,7 @@ export async function prepareSparseEvents(
   const dispose = () => {
     if (disposed) return;
     disposed = true;
-    for (const uri of ownedUris) releaseRenderedWav(uri);
+    if (!options.storePCM) for (const uri of ownedUris) releaseRenderedWav(uri);
     ownedUris.length = 0;
     retainedWavBytes -= reservedBytes;
     reservedBytes = 0;
@@ -214,13 +216,13 @@ export async function prepareSparseEvents(
     retainedWavBytes += wavBytes;
     try {
       checkAborted(options);
-      const uri = await saveRenderedWav(
+      const uri = options.storePCM ? options.storePCM(routed) : await saveRenderedWav(
         routed,
         `sparse_event_${fileToken}_${voices.size}.wav`,
       );
       ownedUris.push(uri);
       checkAborted(options);
-      if (!uri.startsWith("file://")) {
+      if (!options.storePCM && !uri.startsWith("file://")) {
         throw new Error("Sparse event WAVs must be app-private local files.");
       }
       const voice = { uri, durationFrames, wavBytes };

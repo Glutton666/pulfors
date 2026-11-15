@@ -68,6 +68,9 @@ import {
   addSparseMetronomeTimingOverrunListener,
 } from "@/modules/sparse-metronome/src";
 import { prepareSparseEvents, type PreparedSparseEvents } from "@/lib/audio-sparse-event-preparation";
+import { prepareTrainerTemplates } from "@/lib/tempo-trainer-templates";
+import { createTrainerOutput, type TrainerController } from "@/lib/tempo-trainer-output";
+import type { TempoTrainerConfig } from "@/lib/tempo-trainer";
 import {
   registerSparsePlaybackStopper,
   setSparseNotificationMode,
@@ -77,7 +80,8 @@ import {
 type Ref<T> = { current: T };
 
 export interface UsePlaybackControlParams {
-  /** Tempo training needs live tempo changes; sparse native periods are immutable. */
+  trainer?: { config: TempoTrainerConfig; controller: TrainerController; onBpm: (bpm: number) => void };
+  /** Reserve Beat training for its clocked output, not experimental sparse loops. */
   forceRenderedBeatPlayback?: boolean;
   engineRef: Ref<MetronomeEngine | null>;
   isPlaying: boolean;
@@ -696,6 +700,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
       (plan.mode === "beat" || plan.mode === "bar") &&
       !Object.values(plan.audio.tone.overlays ?? {}).some(Boolean) &&
       process.env.EXPO_PUBLIC_ENABLE_ANDROID_SPARSE_AUDIO === "1";
+    const useTrainer = plan.mode === "beat" && !polygonPlayback && !!p.trainer?.config.enabled;
     // Select notification ownership before any preparation/start await.
     // Failed starts must never leave the legacy MediaSession selected.
     setSparseNotificationMode(useSparseAndroid);
@@ -794,7 +799,47 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
       // first. A render failure still falls back to the realtime callbacks below.
       const useRenderedLoop = !polygonPlayback && plan.output.strategy === "prerender";
 
-      if (Platform.OS === "web") {
+      if (useTrainer) {
+        const session = p.audioRenderLifecycle.start();
+        const signal = session.signal;
+        const ticks = engine.getScheduleInfo().ticks as TickInfo[];
+        const voiceCountLanguage = resolveLabGatedVoiceCountLanguage(p.labUnlockedRef?.current !== false, plan.audio.tone.voiceCountLanguage ?? "off");
+        const [clickPCMs, layerClickPCMs, samplePCMs, voiceCountPCMs] = await awaitWithin(Promise.all([
+          p.getClickPCMs(plan.audio.soundSet, signal, plan.audio.tone, plan.audio.customSoundSets[plan.audio.soundSet] ?? null, plan.audio.customSoundSets),
+          p.getLayerClickPCMsForSchedule(ticks, signal, { defaultSoundSet: plan.audio.soundSet, layerSoundSets: plan.audio.layerSoundSets, tone: plan.audio.tone, customSoundSets: plan.audio.customSoundSets }),
+          p.getSamplePCMs(plan.audio.noteSamples, signal),
+          prepareVoiceCountPCMs(ticks, voiceCountLanguage, signal, plan.audio.tone.voiceCountSpeaker),
+        ]), "Trainer audio preparation");
+        const templates = await awaitWithin(prepareTrainerTemplates({
+          schedule: ticks, measureDurationMs: engine.getScheduleInfo().durationMs,
+          clickPCMs, layerClickPCMs, samplePCMs, voiceCountPCMs, voiceCountLanguage,
+          voiceCountOutput: plan.audio.tone.voiceCountOutput,
+          clickVolume: plan.audio.tone.renderGain * plan.audio.tone.outputGain,
+          sampleVolume: plan.audio.sampleVolume * plan.audio.tone.outputGain,
+          sampleVolumes: plan.audio.noteSampleVolumes, sampleSpeeds: plan.audio.noteSampleSpeeds,
+          sampleChannels: plan.audio.noteSampleChannels, metronomeChannel: plan.audio.metronomeChannel,
+        }, plan.bpm, signal), "Trainer template preparation");
+        if (cancelled() || !session.isCurrent()) return false;
+        const output = await createTrainerOutput(templates, p.trainer!.config, p.trainer!.controller);
+        if (cancelled() || !session.isCurrent()) { output.release(); return false; }
+        if (!publishAudioOutput(p.outputOwner, output)) return false;
+        engine.setPreRenderedAudio(true);
+        let displayedBpm = plan.bpm;
+        engine.setExternalBeatClock(() => {
+          const clock = p.outputOwner.active()?.tempoTrainer?.clock();
+          if (!clock) return null;
+          if (clock.bpm !== displayedBpm) {
+            displayedBpm = clock.bpm;
+            p.trainer?.onBpm(clock.bpm);
+          }
+          return { ...clock, bpm: clock.bpm * 4 / p.beatDenominatorRef.current };
+        });
+        await waitForScheduledStart();
+        if (cancelled()) return false;
+        const accepted = await output.playAndConfirm!();
+        if (!accepted) throw new Error("Trainer audio output rejected playback.");
+        startEngine();
+      } else if (Platform.OS === "web") {
         const context = getWebAudioContext();
         if (context?.state === "suspended") {
           await awaitWithin(context.resume(), "Web AudioContext resume");

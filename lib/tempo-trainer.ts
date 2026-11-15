@@ -1,8 +1,8 @@
 export interface TempoTrainerConfig {
   enabled: boolean;
-  basis: "time" | "beats";
+  basis: "time" | "measures";
   intervalSeconds: number;
-  intervalBeats: number;
+  intervalMeasures: number;
   bpmDelta: number;
   accentOnIncrease: boolean;
 }
@@ -10,17 +10,20 @@ export interface TempoTrainerConfig {
 export interface TempoTrainerBindings {
   config: TempoTrainerConfig;
   onConfigChange: (config: TempoTrainerConfig) => void;
-  getBpm: () => number;
-  changeBpm: (bpm: number) => void;
-  playAccent: () => void;
-  subscribeBeat: (listener: () => void) => () => void;
+  setActivity: (owner: object, activity: TrainerActivity | null) => void;
+}
+
+export interface TrainerActivity {
+  running: boolean;
+  reset: boolean;
+  endsAt?: number;
 }
 
 export const DEFAULT_TEMPO_TRAINER: TempoTrainerConfig = {
   enabled: false,
   basis: "time",
   intervalSeconds: 30,
-  intervalBeats: 16,
+  intervalMeasures: 4,
   bpmDelta: 2,
   accentOnIncrease: true,
 };
@@ -34,9 +37,11 @@ export function normalizeTempoTrainer(value: unknown): TempoTrainerConfig {
   const delta = integer(config.bpmDelta, 2, -50, 50);
   return {
     enabled: config.enabled === true,
-    basis: config.basis === "beats" ? "beats" : "time",
+    // A legacy beat-count rule must not silently become N measures.
+    // Migrate to the new four-measure default, independent of current meter.
+    basis: config.basis === "measures" || (config as { basis?: string }).basis === "beats" ? "measures" : "time",
     intervalSeconds: integer(config.intervalSeconds, 30, 1, 5999),
-    intervalBeats: integer(config.intervalBeats, 16, 1, 9999),
+    intervalMeasures: integer(config.intervalMeasures, 4, 1, 9999),
     bpmDelta: delta === 0 ? 1 : delta,
     accentOnIncrease: typeof config.accentOnIncrease === "boolean"
       ? config.accentOnIncrease : DEFAULT_TEMPO_TRAINER.accentOnIncrease,

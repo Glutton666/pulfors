@@ -63,6 +63,7 @@ import type { BarRepeat, LoopBlock } from "@/components/BeatIndicator";
 import { clampLoopBlocksToMeter } from "@/lib/bar-config-helpers";
 import type { StopwatchTimerHandle } from "@/components/StopwatchTimer";
 import { type TempoTrainerBindings } from "@/lib/tempo-trainer";
+import { createTrainerController } from "@/lib/tempo-trainer-output";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useDeepLink } from "@/contexts/DeepLinkContext";
 import { useVoiceAssistant } from "@/contexts/VoiceAssistantContext";
@@ -290,13 +291,7 @@ export function useMetronomeScreen() {
   useEffect(() => { showNativeKbHintRef.current = showNativeKbHint; }, [showNativeKbHint]);
   const stopwatchTimerRef = useRef<StopwatchTimerHandle>(null);
   const stopwatchTimerLandscapeRef = useRef<StopwatchTimerHandle>(null);
-  const tempoTrainerBeatRef = useRef<(() => void) | null>(null);
-  const subscribeTempoTrainerBeat = useCallback((listener: () => void) => {
-    tempoTrainerBeatRef.current = listener;
-    return () => {
-      if (tempoTrainerBeatRef.current === listener) tempoTrainerBeatRef.current = null;
-    };
-  }, []);
+  const [trainerController] = useState(createTrainerController);
   const barAreaRef = useRef<View>(null);
   const beatStaffCellRectsRef = useRef<BeatStaffCellRects>({});
 
@@ -1471,7 +1466,6 @@ export function useMetronomeScreen() {
     });
 
     engine.setOnBeat((beat: number, isAccent: boolean) => {
-      tempoTrainerBeatRef.current?.();
       // 폴리곤 모드: 메인 비트에서만 트리거 (서브비트·레이어비트 제외)
       polygonOnBeatRef.current?.();
       pendingBeat = beat;
@@ -1750,6 +1744,7 @@ export function useMetronomeScreen() {
     cancelSettingsPersistence,
     discardRoomTracking,
     invalidateSettingsLoad,
+    resetTempoTrainerConfig,
     releaseNoteSampleResources,
     resetLabUnlock,
     setThemeColor,
@@ -1936,6 +1931,15 @@ export function useMetronomeScreen() {
     seamlessNextEntryRef,
   } = usePlaybackControl({
     forceRenderedBeatPlayback: tempoTrainerConfig.enabled,
+    trainer: {
+      config: tempoTrainerConfig,
+      controller: trainerController,
+      onBpm: next => {
+        bpmRef.current = next;
+        setBpm(next);
+        persistSettings({ bpm: next });
+      },
+    },
     engineRef,
     isPlaying,
     isPreparing,
@@ -2075,18 +2079,18 @@ export function useMetronomeScreen() {
   const tempoTrainer: TempoTrainerBindings = {
     config: tempoTrainerConfig,
     onConfigChange: (config) => {
-      // Select the existing tempo-editable backend before the next trainer run.
-      // Never leave an immutable sparse period playing at the old audible BPM.
-      if (config.enabled && isSparsePlaybackActive()) stopMetronomeRef.current();
+      if (isPlayingRef.current || isPreparingRef.current) stopMetronomeRef.current();
       updateTempoTrainerConfig(config);
     },
-    getBpm: () => bpmRef.current,
-    changeBpm: (next) => {
-      if (barModeRef.current || noteModeRef.current || !engineRef.current?.getIsRunning()) return;
-      updateBpmRef.current(next);
-    },
-    playAccent: () => engineRef.current?.playTempoChangeAccent(),
-    subscribeBeat: subscribeTempoTrainerBeat,
+    setActivity: trainerController.setActivity,
+  };
+  // A manual meter/sound/tempo edit replaces the snapshot and its reservations.
+  // The trainer's own output BPM commits intentionally do not call this path.
+  scheduleReRenderCallbackRef.current = () => {
+    if (outputOwner.active()?.tempoTrainer) {
+      stopMetronome();
+      void startMetronome();
+    } else scheduleReRender();
   };
   // bpmRef sync는 useSettings 내부에서 처리
 

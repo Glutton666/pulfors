@@ -7,7 +7,7 @@ test.beforeEach(async ({ page }) => {
     localStorage.setItem("metronome_onboarding_done", "1");
     localStorage.setItem("metronome_onboarding_lang_done", "1");
     localStorage.setItem("metronome_language", "en");
-    localStorage.setItem("metronome_settings", JSON.stringify({ bpm: 100 }));
+    if (!localStorage.getItem("metronome_settings")) localStorage.setItem("metronome_settings", JSON.stringify({ bpm: 100 }));
   });
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await expect(page.getByTestId("bpm-display")).toBeVisible({ timeout: 60000 });
@@ -28,9 +28,9 @@ for (const mode of ["stopwatch", "timer"] as const) {
     await time.fill("00:01");
     await time.blur();
     await expect(page.getByRole("alert")).toHaveCount(0);
-    await page.getByTestId("trainer-basis-beats").click();
-    await page.getByTestId("trainer-interval-beats").fill("4");
-    await page.getByTestId("trainer-interval-beats").blur();
+    await page.getByTestId("trainer-basis-measures").click();
+    await page.getByTestId("trainer-interval-measures").fill("4");
+    await page.getByTestId("trainer-interval-measures").blur();
     await page.getByTestId("trainer-basis-time").click();
     await expect(time).toHaveValue("00:01");
     await expect(page.getByTestId("trainer-toggle")).toHaveCount(1);
@@ -57,15 +57,15 @@ for (const mode of ["stopwatch", "timer"] as const) {
   });
 }
 
-test("landscape stopwatch applies a beat condition and its decrease has no increase cue", async ({ page }) => {
+test("landscape stopwatch applies a measure condition and its decrease has no increase cue", async ({ page }) => {
   test.setTimeout(90000);
   await page.setViewportSize({ width: 1366, height: 768 });
   const toggle = page.getByTestId("trainer-toggle");
   await expect(toggle).toBeVisible();
   await toggle.click();
-  await page.getByTestId("trainer-basis-beats").click();
-  await page.getByTestId("trainer-interval-beats").fill("2");
-  await page.getByTestId("trainer-interval-beats").blur();
+  await page.getByTestId("trainer-basis-measures").click();
+  await page.getByTestId("trainer-interval-measures").fill("2");
+  await page.getByTestId("trainer-interval-measures").blur();
   await page.getByTestId("trainer-direction-down").click();
   // Landscape transport shares the same drawer component, rendered inline.
   const trainer = toggle.locator("..");
@@ -75,4 +75,20 @@ test("landscape stopwatch applies a beat condition and its decrease has no incre
   await page.screenshot({ path: "/tmp/tempo-trainer-landscape.png" });
   await page.getByTestId("stopwatch-start").click();
   await expect(page.getByTestId("bpm-display")).toHaveText("98", { timeout: 15000 });
+});
+
+test("a shared rule survives reload without starting the transport", async ({ page }) => {
+  await page.getByTestId("panel-toggle").click();
+  await page.getByTestId("trainer-toggle").click();
+  await page.getByTestId("trainer-basis-measures").click();
+  await page.getByTestId("trainer-interval-measures").fill("7");
+  await page.getByTestId("trainer-interval-measures").blur();
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("metronome_settings") || "{}").tempoTrainer?.intervalMeasures)).toBe(7);
+  await page.reload();
+  await expect(page.getByTestId("bpm-display")).toHaveText("100");
+  await page.getByTestId("panel-toggle").click();
+  await expect(page.getByTestId("trainer-interval-measures")).toHaveValue("7");
+  await page.getByTestId("tab-timer").click();
+  await expect(page.getByTestId("trainer-interval-measures")).toHaveValue("7");
+  await expect(page.getByTestId("timer-start")).toBeVisible();
 });

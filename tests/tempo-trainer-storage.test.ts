@@ -22,7 +22,7 @@ test.each([null, [], "invalid", 4])("malformed persisted trainer %j receives saf
 
 test("invalid fields are normalized on save and unknown runtime fields are excluded", async () => {
   const raw = {
-    enabled: "true", basis: "unknown", intervalSeconds: -20, intervalBeats: "16",
+    enabled: "true", basis: "unknown", intervalSeconds: -20, intervalMeasures: "4",
     bpmDelta: 0, accentOnIncrease: false, isPlaying: true, pending: 7,
   };
   await saveSettings({

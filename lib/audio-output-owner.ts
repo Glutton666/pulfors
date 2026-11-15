@@ -4,6 +4,7 @@ import { createNativeAudioOutput, type NativeAudioOutput, type NativePool } from
 import type { SampleChannel, MetroChannel } from "./stereo-channel";
 
 export type AudioOutputResource = {
+  tempoTrainer?: import("./tempo-trainer-output").TrainerOutputControl;
   stop?: (atAudioTime?: number) => void;
   release: (atAudioTime?: number) => void;
   setVolume?: (volume: number, atAudioTime?: number) => void;

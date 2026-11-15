@@ -42,7 +42,7 @@ export function TempoTrainerControls({
   const { language } = useLanguage();
   const ko = language === "ko";
   const [timeDraft, setTimeDraft] = useState(formatTime(value.intervalSeconds));
-  const [beatsDraft, setBeatsDraft] = useState(String(value.intervalBeats));
+  const [beatsDraft, setBeatsDraft] = useState(String(value.intervalMeasures));
   const [deltaDraft, setDeltaDraft] = useState(String(Math.abs(value.bpmDelta)));
   const [timeError, setTimeError] = useState("");
   const [beatsError, setBeatsError] = useState("");
@@ -61,9 +61,9 @@ export function TempoTrainerControls({
   }, [value.intervalSeconds]);
 
   useEffect(() => {
-    setBeatsDraft(String(value.intervalBeats));
+    setBeatsDraft(String(value.intervalMeasures));
     setBeatsError("");
-  }, [value.intervalBeats]);
+  }, [value.intervalMeasures]);
 
   useEffect(() => {
     setDeltaDraft(String(Math.max(1, Math.abs(value.bpmDelta))));
@@ -91,7 +91,7 @@ export function TempoTrainerControls({
     }
     setBeatsError("");
     setBeatsDraft(String(beats));
-    if (beats !== value.intervalBeats) patch({ intervalBeats: beats });
+    if (beats !== value.intervalMeasures) patch({ intervalMeasures: beats });
   };
 
   const commitDelta = () => {
@@ -153,14 +153,17 @@ export function TempoTrainerControls({
               onPress={() => patch({ basis: "time" })}
             />
             <BasisButton
-              label={ko ? "박 수" : "Beats"}
-              selected={value.basis === "beats"}
+              label={ko ? "마디 수" : "Measures"}
+              selected={value.basis === "measures"}
               disabled={disabled}
-              testID="trainer-basis-beats"
+              testID="trainer-basis-measures"
               styles={styles}
-              onPress={() => patch({ basis: "beats" })}
+              onPress={() => patch({ basis: "measures" })}
             />
           </View>
+          <Text style={styles.subtitle}>
+            {ko ? "완성된 마디를 셉니다. 시간 조건도 다음 마디 첫 박에 적용됩니다." : "Counts complete measures. Time changes wait for the next measure."}
+          </Text>
 
           {value.basis === "time" ? (
             <View>
@@ -188,7 +191,7 @@ export function TempoTrainerControls({
               <Text style={styles.fieldLabel}>{ko ? "변경 간격" : "Change every"}</Text>
               <View style={styles.inlineField}>
                 <TextInput
-                  accessibilityLabel={ko ? "간격 박 수" : "Interval in beats"}
+                  accessibilityLabel={ko ? "간격 마디 수" : "Interval in measures"}
                   editable={!disabled}
                   keyboardType="number-pad"
                   value={beatsDraft}
@@ -200,10 +203,10 @@ export function TempoTrainerControls({
                   onSubmitEditing={commitBeats}
                   returnKeyType="done"
                   selectTextOnFocus
-                  testID="trainer-interval-beats"
+                  testID="trainer-interval-measures"
                   style={[styles.input, styles.flexInput, beatsError ? styles.inputError : null, disabled && styles.dimmed]}
                 />
-                <Text style={styles.unit}>{ko ? "박" : "beats"}</Text>
+                <Text style={styles.unit}>{ko ? "마디" : "measures"}</Text>
               </View>
               {beatsError ? <Text accessibilityRole="alert" style={styles.error}>{beatsError}</Text> : null}
             </View>
