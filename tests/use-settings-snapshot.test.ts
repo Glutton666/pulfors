@@ -14,6 +14,8 @@ import { renderHook, act, waitFor } from "@testing-library/react";
 import { useRef, act as reactAct } from "react";
 import { useSettings } from "../hooks/useSettings";
 import type { UseSettingsParams } from "../hooks/useSettings";
+import { DEFAULT_TEMPO_TRAINER } from "../lib/tempo-trainer";
+import type { MetronomeSettings } from "../lib/storage";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Stubs
@@ -122,6 +124,59 @@ function buildParams(): UseSettingsParams {
     applyAudioSettingsCallbackRef: { current: () => {} },
   };
 }
+
+test("trainer configuration survives a saved settings remount without persisting run state", async () => {
+  const { loadSettings } = require("@/lib/storage");
+  const first = renderHook(() => useSettings(buildParams()));
+  await act(async () => {});
+  const rule = { ...DEFAULT_TEMPO_TRAINER, enabled: true, intervalSeconds: 45, bpmDelta: -3 };
+  act(() => first.result.current.updateTempoTrainerConfig(rule));
+  const saved = savedSettings[savedSettings.length - 1];
+  expect(saved.tempoTrainer).toEqual(rule);
+  expect(Object.keys(saved.tempoTrainer as object).sort()).toEqual(Object.keys(DEFAULT_TEMPO_TRAINER).sort());
+  first.unmount();
+  loadSettings.mockResolvedValueOnce(saved);
+  const second = renderHook(() => useSettings(buildParams()));
+  await waitFor(() => expect(second.result.current.tempoTrainerConfig).toEqual(rule));
+  second.unmount();
+});
+
+test("an edit made before the initial load resolves survives hydration and later saves", async () => {
+  const { loadSettings } = require("@/lib/storage");
+  let resolve!: (settings: MetronomeSettings) => void;
+  loadSettings.mockReturnValueOnce(new Promise<MetronomeSettings>(r => { resolve = r; }));
+  const { result, unmount } = renderHook(() => useSettings(buildParams()));
+  const rule = { ...DEFAULT_TEMPO_TRAINER, enabled: true, intervalSeconds: 12 };
+  act(() => result.current.updateTempoTrainerConfig(rule));
+  await act(async () => resolve({
+    bpm: 120, beatsPerMeasure: 4, subdivisions: 1,
+    tempoTrainer: { ...DEFAULT_TEMPO_TRAINER, intervalSeconds: 99 },
+  }));
+  expect(result.current.tempoTrainerConfig).toEqual(rule);
+  act(() => result.current.updateVolume(0.5));
+  expect(savedSettings[savedSettings.length - 1].tempoTrainer).toEqual(rule);
+  unmount();
+});
+
+test("full reset invalidates an old trainer load and clears the in-memory rule without saving it", async () => {
+  const { loadSettings } = require("@/lib/storage");
+  let resolve!: (settings: MetronomeSettings) => void;
+  loadSettings.mockReturnValueOnce(new Promise<MetronomeSettings>(r => { resolve = r; }));
+  const { result, unmount } = renderHook(() => useSettings(buildParams()));
+  act(() => result.current.updateTempoTrainerConfig({ ...DEFAULT_TEMPO_TRAINER, enabled: true }));
+  const before = savedSettings.length;
+  act(() => {
+    result.current.invalidateSettingsLoad();
+    result.current.resetTempoTrainerConfig();
+  });
+  await act(async () => resolve({
+    bpm: 120, beatsPerMeasure: 4, subdivisions: 1,
+    tempoTrainer: { ...DEFAULT_TEMPO_TRAINER, enabled: true },
+  }));
+  expect(result.current.tempoTrainerConfig).toEqual(DEFAULT_TEMPO_TRAINER);
+  expect(savedSettings).toHaveLength(before);
+  unmount();
+});
 test("voice count choices restore, persist independently, and reset their state and refs", async () => {
   const { loadSettings } = require("@/lib/storage");
   loadSettings.mockResolvedValueOnce({

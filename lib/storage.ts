@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { DEFAULT_TEMPO_TRAINER, normalizeTempoTrainer, type TempoTrainerConfig } from "./tempo-trainer";
 import * as Crypto from "expo-crypto";
 import type { BeatType } from "./metronome-engine";
 import type { ThemeColor } from "@/constants/colors";
@@ -311,6 +312,7 @@ function sanitizeTonePositions(value: unknown): Partial<Record<SoundSet, TonePos
 }
 
 export interface MetronomeSettings {
+  tempoTrainer?: TempoTrainerConfig;
   bpm: number;
   beatTypes?: BeatType[];
   /** Legacy compatibility field. Circular writing is now always available. */
@@ -419,6 +421,7 @@ function sanitizeStageSettings(value: unknown): Partial<StageSettings> {
 }
 
 const DEFAULT_SETTINGS: MetronomeSettings = {
+  tempoTrainer: DEFAULT_TEMPO_TRAINER,
   bpm: 120,
   beatsPerMeasure: 4,
   subdivisions: 1,
@@ -466,7 +469,9 @@ function isOutOfRangeMetronomeVolume(value: unknown): boolean {
 }
 
 function normalizeSettingsVolumes(settings: MetronomeSettings): MetronomeSettings {
-  const normalized: MetronomeSettings = { ...settings };
+  const normalized: MetronomeSettings = {
+    ...settings, tempoTrainer: normalizeTempoTrainer(settings.tempoTrainer),
+  };
   const volume = clampMetronomeVolume(settings.volume);
   if (volume !== undefined) normalized.volume = volume;
   if (isPlainObject(settings.modeSettings)) {
@@ -497,6 +502,7 @@ export async function loadSettings(): Promise<MetronomeSettings> {
           (profile) => isPlainObject(profile) && isOutOfRangeMetronomeVolume(profile.volume),
         );
       const merged: MetronomeSettings = { ...DEFAULT_SETTINGS, ...parsed } as MetronomeSettings;
+      merged.tempoTrainer = normalizeTempoTrainer(parsed.tempoTrainer);
       merged.volume = clampMetronomeVolume(merged.volume) ?? DEFAULT_SETTINGS.volume;
       // Ignore legacy opt-out values, including ones restored from old backups.
       merged.circularSubdivisionEnabled = true;

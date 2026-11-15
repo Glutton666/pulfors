@@ -62,7 +62,7 @@ import { NEUTRAL, type TonePosition } from "@/lib/metronome-tone-dsp";
 import type { BarRepeat, LoopBlock } from "@/components/BeatIndicator";
 import { clampLoopBlocksToMeter } from "@/lib/bar-config-helpers";
 import type { StopwatchTimerHandle } from "@/components/StopwatchTimer";
-import { DEFAULT_TEMPO_TRAINER, normalizeTempoTrainer, type TempoTrainerBindings } from "@/lib/tempo-trainer";
+import { type TempoTrainerBindings } from "@/lib/tempo-trainer";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useDeepLink } from "@/contexts/DeepLinkContext";
 import { useVoiceAssistant } from "@/contexts/VoiceAssistantContext";
@@ -290,7 +290,6 @@ export function useMetronomeScreen() {
   useEffect(() => { showNativeKbHintRef.current = showNativeKbHint; }, [showNativeKbHint]);
   const stopwatchTimerRef = useRef<StopwatchTimerHandle>(null);
   const stopwatchTimerLandscapeRef = useRef<StopwatchTimerHandle>(null);
-  const [tempoTrainerConfig, setTempoTrainerConfig] = useState(DEFAULT_TEMPO_TRAINER);
   const tempoTrainerBeatRef = useRef<(() => void) | null>(null);
   const subscribeTempoTrainerBeat = useCallback((listener: () => void) => {
     tempoTrainerBeatRef.current = listener;
@@ -535,6 +534,7 @@ export function useMetronomeScreen() {
 
   // ── Settings (persistent state + load effect + update callbacks) ──────────────
   const {
+    tempoTrainerConfig, updateTempoTrainerConfig, resetTempoTrainerConfig,
     bpm, setBpm, bpmRef,
     halfTime, setHalfTime,
     beatDenominator, setBeatDenominator,
@@ -1635,6 +1635,7 @@ export function useMetronomeScreen() {
       tuningGuideOnSelectRef.current = null;
 
       setBpm(120);
+      resetTempoTrainerConfig();
       bpmRef.current = 120;
       setHalfTime(false);
       setBeatDenominator(4);
@@ -2077,7 +2078,7 @@ export function useMetronomeScreen() {
       // Select the existing tempo-editable backend before the next trainer run.
       // Never leave an immutable sparse period playing at the old audible BPM.
       if (config.enabled && isSparsePlaybackActive()) stopMetronomeRef.current();
-      setTempoTrainerConfig(normalizeTempoTrainer(config));
+      updateTempoTrainerConfig(config);
     },
     getBpm: () => bpmRef.current,
     changeBpm: (next) => {

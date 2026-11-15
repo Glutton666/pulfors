@@ -25,9 +25,12 @@ export const DEFAULT_TEMPO_TRAINER: TempoTrainerConfig = {
   accentOnIncrease: true,
 };
 
-export function normalizeTempoTrainer(config: TempoTrainerConfig): TempoTrainerConfig {
-  const integer = (value: number, fallback: number, min: number, max: number) =>
-    Number.isFinite(value) ? Math.min(max, Math.max(min, Math.round(value))) : fallback;
+export function normalizeTempoTrainer(value: unknown): TempoTrainerConfig {
+  const config = value !== null && typeof value === "object" && !Array.isArray(value)
+    ? value as Partial<TempoTrainerConfig> : {};
+  const integer = (value: unknown, fallback: number, min: number, max: number) =>
+    typeof value === "number" && Number.isFinite(value)
+      ? Math.min(max, Math.max(min, Math.round(value))) : fallback;
   const delta = integer(config.bpmDelta, 2, -50, 50);
   return {
     enabled: config.enabled === true,
@@ -35,7 +38,8 @@ export function normalizeTempoTrainer(config: TempoTrainerConfig): TempoTrainerC
     intervalSeconds: integer(config.intervalSeconds, 30, 1, 5999),
     intervalBeats: integer(config.intervalBeats, 16, 1, 9999),
     bpmDelta: delta === 0 ? 1 : delta,
-    accentOnIncrease: config.accentOnIncrease === true,
+    accentOnIncrease: typeof config.accentOnIncrease === "boolean"
+      ? config.accentOnIncrease : DEFAULT_TEMPO_TRAINER.accentOnIncrease,
   };
 }
 

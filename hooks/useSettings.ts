@@ -18,6 +18,7 @@
  */
 
 import { useState, useRef, useEffect, useCallback } from "react";
+import { DEFAULT_TEMPO_TRAINER, normalizeTempoTrainer, type TempoTrainerConfig } from "@/lib/tempo-trainer";
 import { DEFAULT_STAGE_SETTINGS, loadSettings, saveSettings , BUILTIN_SOUND_SETS, CUSTOM_SOUND_SET_SLOTS } from "@/lib/storage";
 import type { MetronomeSettings, ModeSettings, MetronomeMode, FlashMode, HapticMode, SoundSet, StageSettings } from "@/lib/storage";
 import {
@@ -90,6 +91,9 @@ export interface UseSettingsParams {
 }
 
 export interface UseSettingsResult {
+  tempoTrainerConfig: TempoTrainerConfig;
+  updateTempoTrainerConfig: (config: TempoTrainerConfig) => void;
+  resetTempoTrainerConfig: () => void;
   // ── Core playback ──────────────────────────────────────────────────────────
   bpm: number;
   setBpm: React.Dispatch<React.SetStateAction<number>>;
@@ -224,6 +228,9 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
   // ── Settings state ──────────────────────────────────────────────────────────
 
   const [bpm, setBpm] = useState(120);
+  const [tempoTrainerConfig, setTempoTrainerConfig] = useState(() => normalizeTempoTrainer(DEFAULT_TEMPO_TRAINER));
+  const tempoTrainerConfigRef = useRef(tempoTrainerConfig);
+  const tempoTrainerRevisionRef = useRef(0);
   const bpmRef = useRef(120);
   useEffect(() => { bpmRef.current = bpm; }, [bpm]);
 
@@ -312,6 +319,7 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
   const loadedSettingsRef = useRef<MetronomeSettings | null>(null);
   const snapshotModeRef = useRef(mode);
   const persistSnapshotRef = useRef<MetronomeSettings>({
+    tempoTrainer: tempoTrainerConfig,
     circularSubdivisionEnabled: true, beatTypes,
     bpm, beatsPerMeasure, beatDenominator, subdivisions: 1, subdivisionPattern, beatSubdivisions,
     volume, sampleVolume, soundSet, soundSetTonePositions, layerSoundSets, flashMode, hapticMode,
@@ -331,6 +339,7 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
   // Inline update — runs on every render of useMetronomeScreen.
   const modeChangedThisRender = snapshotModeRef.current !== mode;
   persistSnapshotRef.current = {
+    tempoTrainer: tempoTrainerConfig,
     circularSubdivisionEnabled: true,
     beatTypes: mode === "beat" && !modeChangedThisRender ? beatTypes : persistSnapshotRef.current.beatTypes,
     bpm, beatsPerMeasure, beatDenominator, subdivisions: 1, subdivisionPattern, beatSubdivisions,
@@ -381,6 +390,21 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
     );
   }
   const persistSettings = persistSettingsRef.current;
+  const resetTempoTrainerConfig = useCallback(() => {
+    tempoTrainerRevisionRef.current += 1;
+    const safe = normalizeTempoTrainer(DEFAULT_TEMPO_TRAINER);
+    tempoTrainerConfigRef.current = safe;
+    setTempoTrainerConfig(safe);
+    persistSnapshotRef.current = { ...persistSnapshotRef.current, tempoTrainer: safe };
+  }, []);
+  const updateTempoTrainerConfig = useCallback((config: TempoTrainerConfig) => {
+    tempoTrainerRevisionRef.current += 1;
+    const safe = normalizeTempoTrainer(config);
+    tempoTrainerConfigRef.current = safe;
+    setTempoTrainerConfig(safe);
+    persistSnapshotRef.current = { ...persistSnapshotRef.current, tempoTrainer: safe };
+    persistSettings({ tempoTrainer: safe });
+  }, [persistSettings]);
   const settingsLoadGenerationRef = useRef(0);
   const invalidateSettingsLoad = useCallback(() => {
     settingsLoadGenerationRef.current += 1;
@@ -434,8 +458,14 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
   useEffect(() => {
     settingsLoadGenerationRef.current += 1;
     const loadGeneration = settingsLoadGenerationRef.current;
-    loadSettings().then((loadedSettings) => {
+    loadSettings().then((loaded) => {
       if (loadGeneration !== settingsLoadGenerationRef.current) return;
+      // A slow startup/retry must not overwrite a rule edited in the meantime.
+      const safeTrainer = tempoTrainerRevisionRef.current > 0
+        ? tempoTrainerConfigRef.current : normalizeTempoTrainer(loaded.tempoTrainer);
+      const loadedSettings = { ...loaded, tempoTrainer: safeTrainer };
+      tempoTrainerConfigRef.current = safeTrainer;
+      setTempoTrainerConfig(safeTrainer);
       loadedSettingsRef.current = loadedSettings;
       persistSnapshotRef.current = {
         ...persistSnapshotRef.current,
@@ -809,6 +839,7 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
   // ── Return ────────────────────────────────────────────────────────────────────
 
   return {
+    tempoTrainerConfig, updateTempoTrainerConfig, resetTempoTrainerConfig,
     bpm, setBpm, bpmRef,
     halfTime, setHalfTime,
     beatDenominator, setBeatDenominator,
