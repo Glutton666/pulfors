@@ -110,3 +110,4 @@
 - [Polygon startup boundary](polygon-startup-boundary.md) — use Polygon’s own audio producer and beat clock, not ordinary rendered output or the underlying Bar transport.
 - [Foreground location permissions](foreground-location-permissions.md) — practice-room GPS stays foreground-only; explicitly disable Expo’s default Always permission descriptions.
 - [Tempo trainer behavior](tempo-trainer-behavior.md) — one saved time/measure rule; use audio measure boundaries, not extra post-click cues; retain Android tempo-editable output.
+- [GitHub workflow restriction](github-workflows-policy.md) — 이 프로젝트에서는 앞으로 .github/workflows 파일을 수정하지 않는다.
