@@ -1,0 +1,44 @@
+name: Windows test portability
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        timezone: [UTC, Asia/Seoul]
+    env:
+      CI: "true"
+      TZ: ${{ matrix.timezone }}
+    defaults:
+      run:
+        working-directory: workspace with spaces
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: workspace with spaces
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: workspace with spaces/package-lock.json
+      - run: npm ci
+      - run: npm test -- --runInBand
+      - run: npm run typecheck
+      - run: npm run typecheck:server
+      - run: npx playwright install chromium
+      - name: Run navigation and notebook readiness checks
+        run: npx playwright test e2e/mode-dial-accessibility.spec.ts e2e/score-exit.spec.ts e2e/staff-notebook.spec.ts --grep "dial reports|Note controls|score list and editor|compact ink toolbar|isolated notation pickers" --workers=1 --retries=0
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-portability-${{ strategy.job-index }}
+          path: |
+            workspace with spaces/playwright-report/
+            workspace with spaces/test-results/
+          if-no-files-found: ignore
