@@ -6,9 +6,11 @@ import * as Crypto from "expo-crypto";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import {
-  createProfile, getActiveProfileId, listProfiles, switchProfile, updateProfile,
+  cleanupLegacyOriginals, createProfile, deleteProfile, getActiveProfileId,
+  getLegacyCleanupCount, listProfiles, repairProfile, switchProfile, updateProfile,
   type LocalProfile,
 } from "@/lib/profiles";
+import { exportProfileRecoveryData } from "@/lib/profile-recovery";
 import { filterPrimaryInstrumentCategories } from "@/lib/primary-instrument-search";
 import { getCurrentLocation, requestLocationPermission, type PracticeRoom } from "@/lib/practice-room";
 import { exportBackup, importBackup } from "@/lib/backup";
@@ -33,8 +35,14 @@ export function ProfileManager({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [cleanupCount, setCleanupCount] = useState(0);
+  const [confirmation, setConfirmation] = useState<{ kind: "repair" | "delete" | "cleanup"; profile?: LocalProfile } | null>(null);
   useEffect(() => { onExitStateChange?.(draft !== null, busy); }, [draft, busy, onExitStateChange]);
-  const refresh = async () => setProfiles(await listProfiles());
+  const refresh = async () => {
+    const [nextProfiles, count] = await Promise.all([listProfiles(), getLegacyCleanupCount()]);
+    setProfiles(nextProfiles);
+    setCleanupCount(count);
+  };
   useEffect(() => { void refresh().catch(e => setError(String(e))); }, []);
   const run = async (action: () => Promise<void>) => {
     if (busy) return;
@@ -49,6 +57,16 @@ export function ProfileManager({
       style={{ minHeight: 44, justifyContent: "center", padding: 12, borderWidth: 1, borderColor: C.accentMuted, borderRadius: 10, opacity: busy ? 0.5 : 1 }}>
       <Text style={{ color: C.accent, fontSize: 14 }}>{label}</Text>
     </Pressable>
+  );
+  const inlineConfirm = (title: string, detail: string, confirmLabel: string, onConfirm: () => void, testID: string) => (
+    <View accessibilityRole="alert" testID={`${testID}-confirmation`} style={{ gap: 8, padding: 12, borderRadius: 10, borderWidth: 1, borderColor: C.accentMuted }}>
+      <Text style={{ color: C.text, fontWeight: "600" }}>{title}</Text>
+      <Text style={{ color: C.textSecondary, lineHeight: 20 }}>{detail}</Text>
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+        {button(confirmLabel, onConfirm, `${testID}-confirm`)}
+        {button(ko ? "취소" : "Cancel", () => setConfirmation(null), `${testID}-cancel`)}
+      </View>
+    </View>
   );
   const inputStyle = { color: C.text, borderWidth: 1, borderColor: C.border, borderRadius: 10, padding: 12, minHeight: 44 };
   const pickPhoto = () => run(async () => {
@@ -148,15 +166,73 @@ export function ProfileManager({
               {profile.id === getActiveProfileId() && <Text style={{ color: C.accent }}>{ko ? "현재 선택됨" : "Currently selected"}</Text>}
             </View>
           </View>
+          {!!profile.issue && <View testID={`profile-issue-${profile.id}`} style={{ gap: 6 }}>
+            <Text accessibilityRole="alert" style={{ color: C.danger }}>{profile.issue}</Text>
+            <Text style={{ color: C.textSecondary }}>{ko ? "손상된 프로필은 복구 전까지 선택하거나 편집할 수 없습니다." : "This damaged profile cannot be selected or edited until repaired."}</Text>
+          </View>}
+          {profile.id === getActiveProfileId() && <Text testID={`profile-delete-protection-${profile.id}`} style={{ color: C.textSecondary }}>
+            {ko ? "현재 또는 마지막 프로필은 삭제할 수 없습니다. 먼저 다른 프로필로 전환하세요." : "The active or last profile cannot be deleted. Switch to another profile first."}
+          </Text>}
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-            {profile.id !== getActiveProfileId() && button(ko ? "선택" : "Select", () => void run(() => switchProfile(profile.id)), `profile-select-${profile.id}`)}
-            {button(ko ? "편집" : "Edit", () => startEdit(profile), `profile-edit-${profile.id}`)}
+            {!profile.issue && profile.id !== getActiveProfileId() && button(ko ? "선택" : "Select", () => void run(() => switchProfile(profile.id)), `profile-select-${profile.id}`)}
+            {!profile.issue && button(ko ? "편집" : "Edit", () => startEdit(profile), `profile-edit-${profile.id}`)}
             {button(ko ? "백업" : "Back up", () => void run(async () => {
               if (!(await exportBackup(profile.id))) throw new Error(ko ? "백업 파일을 만들지 못했습니다." : "Backup failed");
               setNotice(ko ? "프로필 백업을 만들었습니다." : "Profile backup created.");
             }), `profile-export-${profile.id}`)}
+            {!!profile.issue && button(ko ? "손상 데이터 복구 파일 내보내기" : "Export raw recovery data", () => void run(async () => {
+              if (!(await exportProfileRecoveryData())) throw new Error(ko ? "복구 파일을 만들지 못했습니다." : "Could not export recovery data.");
+              setNotice(ko ? "기기 복구 데이터를 내보냈습니다." : "Raw device recovery data exported.");
+            }), `profile-recovery-export-${profile.id}`)}
+            {!!profile.issue && confirmation?.kind !== "repair" && button(ko ? "복구…" : "Repair…", () => { setConfirmation({ kind: "repair", profile }); setError(""); }, `profile-repair-${profile.id}`)}
+            {!!profile.issue && confirmation?.kind === "repair" && confirmation.profile?.id === profile.id && inlineConfirm(
+              ko ? `${profile.name || "이름 없는 프로필"} 복구` : `Repair ${profile.name || "Unnamed profile"}`,
+              ko ? "손상된 원본 값은 보존됩니다. 잘못된 형식의 설정과 연습실만 초기화하며 악보와 연습 데이터는 유지됩니다." : "Raw damaged values are preserved. Only malformed settings and rooms are reset; scores and practice data remain.",
+              ko ? "복구 진행" : "Repair profile",
+              () => void run(async () => { await repairProfile(profile.id); setConfirmation(null); await refresh(); setNotice(ko ? "프로필을 복구했습니다." : "Profile repaired."); }),
+              `profile-repair-${profile.id}`,
+            )}
+            {profile.id !== getActiveProfileId() && button(ko ? "삭제…" : "Delete…", () => { setConfirmation({ kind: "delete", profile }); setError(""); }, `profile-delete-${profile.id}`)}
           </View>
+          {confirmation?.kind === "delete" && confirmation.profile?.id === profile.id && (
+            <View accessibilityRole="alert" testID={`profile-delete-${profile.id}-confirmation`} style={{ gap: 8, padding: 12, borderRadius: 10, borderWidth: 1, borderColor: C.danger }}>
+              <Text style={{ color: C.text, fontWeight: "600" }}>{ko ? `${profile.name || "이름 없는 프로필"}을(를) 영구 삭제할까요?` : `Permanently delete ${profile.name || "Unnamed profile"}?`}</Text>
+              <Text style={{ color: C.textSecondary, lineHeight: 20 }}>{ko ? "이 프로필의 설정과 연습 데이터가 영구 삭제됩니다. 현재 프로필과 마지막 프로필은 삭제할 수 없습니다." : "This permanently deletes this profile’s settings and practice data. The active or last profile cannot be deleted."}</Text>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                {button(ko ? "먼저 백업 후 삭제" : "Back up, then delete", () => void run(async () => {
+                  if (!(await exportBackup(profile.id))) throw new Error(ko ? "백업 파일을 만들지 못했습니다. 프로필은 삭제되지 않았습니다." : "Backup failed; the profile was not deleted.");
+                  await deleteProfile(profile.id); setConfirmation(null); await refresh();
+                  setNotice(ko ? "백업 후 프로필을 삭제했습니다." : "Profile backed up and deleted.");
+                }), `profile-delete-export-${profile.id}`)}
+                {button(ko ? "영구 삭제" : "Delete permanently", () => void run(async () => {
+                  await deleteProfile(profile.id); setConfirmation(null); await refresh();
+                  setNotice(ko ? "프로필을 삭제했습니다." : "Profile deleted.");
+                }), `profile-delete-confirm-${profile.id}`)}
+                {button(ko ? "취소" : "Cancel", () => setConfirmation(null), `profile-delete-cancel-${profile.id}`)}
+              </View>
+            </View>
+          )}
         </View>)}
+        {cleanupCount > 0 && <>
+          <Text style={{ color: C.textSecondary }}>{ko ? `확인된 동일 원본 ${cleanupCount}개가 보관되어 있습니다.` : `${cleanupCount} verified identical original${cleanupCount === 1 ? "" : "s"} retained.`}</Text>
+          {confirmation?.kind !== "cleanup" && button(ko ? "동일 원본 정리…" : "Clean up identical originals…", () => { setConfirmation({ kind: "cleanup" }); setError(""); }, "profile-cleanup")}
+          {confirmation?.kind === "cleanup" && inlineConfirm(
+            ko ? "보관된 원본만 정리할까요?" : "Remove retained originals?",
+            ko ? "검증된 동일 원본만 삭제합니다. 현재 프로필 데이터는 변경되지 않습니다." : "This deletes only verified identical retained originals. Current profile data is not changed.",
+            ko ? "원본 정리" : "Clean originals",
+            () => void run(async () => {
+              const cleaned = await cleanupLegacyOriginals();
+              setConfirmation(null); await refresh();
+              setNotice(ko ? `동일 원본 ${cleaned}개를 정리했습니다.` : `Cleaned ${cleaned} identical original${cleaned === 1 ? "" : "s"}.`);
+            }),
+            "profile-cleanup",
+          )}
+        </>}
+        {profiles.length > 0 && profiles.every(profile => profile.id === getActiveProfileId()) && (
+          <Text testID="profile-delete-protection" style={{ color: C.textSecondary }}>
+            {ko ? "현재 또는 마지막 프로필은 삭제할 수 없습니다. 먼저 다른 프로필로 전환하세요." : "The active or last profile cannot be deleted. Switch to another profile first."}
+          </Text>
+        )}
         {button(ko ? "프로필 추가" : "Add profile", () => startEdit({ id: "", name: "", primaryInstrumentId: null, rooms: [] }), "profile-add")}
         {button(ko ? "백업을 새 프로필로 불러오기" : "Import backup as new profile", () => void run(async () => {
           const result = await importBackup();

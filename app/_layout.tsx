@@ -2,7 +2,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect, useState, useCallback } from "react";
-import { AppState, Platform } from "react-native";
+import { AppState, Platform, ScrollView, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import {
   configureReanimatedLogger,
@@ -44,6 +44,7 @@ import {
 
 import { Ionicons, Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import { AppPreparationScreen, type PreparationStage } from "@/components/AppPreparationScreen";
+import { ProfileRecoveryPanel } from "@/components/ProfileRecoveryPanel";
 import { PlatformKeyboardProvider } from "@/components/PlatformKeyboardProvider";
 
 // Reanimated Logger 설정 (한 번만 실행)
@@ -177,6 +178,7 @@ export default function RootLayout() {
         await loadIconFonts();
         setPreparationStage("audio");
         await configureAudio();
+        setPreparationStage("settings");
         await rollbackPendingRestoreIfAny();
         await initializeProfiles();
         setAppIsReady(true);
@@ -194,35 +196,43 @@ export default function RootLayout() {
   }, [fontsLoaded, fontError, loadIconFonts, configureAudio]);
 
   if (!appIsReady) {
-    return (
+    const retryPreparation = async () => {
+      preparationRunRef.current = true;
+      setPreparationError(null);
+      try {
+        setPreparationStage("icons");
+        await loadIconFonts();
+        setPreparationStage("audio");
+        await configureAudio();
+        setPreparationStage("settings");
+        await rollbackPendingRestoreIfAny();
+        await initializeProfiles();
+        setAppIsReady(true);
+      } catch (e) {
+        logger.warn("App preparation retry failed:", e);
+        setPreparationError(e instanceof Error ? e.message : String(e));
+        throw e;
+      }
+    };
+    const preparation = (
       <AppPreparationScreen
+        language={typeof navigator !== "undefined" && navigator.language?.startsWith("ko") ? "ko" : "en"}
         stage={preparationError ? "error" : preparationStage}
         error={preparationError}
         onRetry={
           preparationError
-            ? () => {
-                preparationRunRef.current = false;
-                setPreparationError(null);
-                void (async () => {
-                  preparationRunRef.current = true;
-                  try {
-                    setPreparationStage("icons");
-                    await loadIconFonts();
-                    setPreparationStage("audio");
-                    await configureAudio();
-                    await rollbackPendingRestoreIfAny();
-                    await initializeProfiles();
-                    setAppIsReady(true);
-                  } catch (e) {
-                    logger.warn("App preparation retry failed:", e);
-                    setPreparationError(e instanceof Error ? e.message : String(e));
-                  }
-                })();
-              }
+            ? () => { void retryPreparation().catch(() => { /* Error is shown above. */ }); }
             : undefined
         }
       />
     );
+    return preparationError && preparationStage === "settings" ? (
+      <ScrollView style={{ flex: 1, backgroundColor: "#0B0F15" }} contentContainerStyle={{ flexGrow: 1 }}>
+        <View style={{ minHeight: 330 }}>{preparation}</View>
+        <ProfileRecoveryPanel onRecovered={retryPreparation}
+          language={typeof navigator !== "undefined" && navigator.language?.startsWith("ko") ? "ko" : "en"} />
+      </ScrollView>
+    ) : preparation;
   }
 
   return (

@@ -18,6 +18,7 @@
  */
 
 import { useState, useRef, useEffect, useCallback } from "react";
+import { subscribeProfileIdentity } from "@/lib/profile-identity";
 import { DEFAULT_TEMPO_TRAINER, normalizeTempoTrainer, type TempoTrainerConfig } from "@/lib/tempo-trainer";
 import { DEFAULT_STAGE_SETTINGS, loadSettings, saveSettings , BUILTIN_SOUND_SETS, CUSTOM_SOUND_SET_SLOTS } from "@/lib/storage";
 import type { MetronomeSettings, ModeSettings, MetronomeMode, FlashMode, HapticMode, SoundSet, StageSettings } from "@/lib/storage";
@@ -279,6 +280,7 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
   const [landscapeReversed, setLandscapeReversed] = useState(false);
   const [beatDirection, setBeatDirection] = useState<"cw" | "ccw">("cw");
   const [username, setUsername] = useState("");
+  const identityRevisionRef = useRef<string | undefined>(undefined);
   const [primaryInstrumentId, setPrimaryInstrumentId] = useState<string | null>(null);
 
   const [barMetronomeChannel, setBarMetronomeChannel] = useState<SampleChannel>("both");
@@ -339,6 +341,7 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
   // Inline update — runs on every render of useMetronomeScreen.
   const modeChangedThisRender = snapshotModeRef.current !== mode;
   persistSnapshotRef.current = {
+    profileIdentityRevision: identityRevisionRef.current,
     tempoTrainer: tempoTrainerConfig,
     circularSubdivisionEnabled: true,
     beatTypes: mode === "beat" && !modeChangedThisRender ? beatTypes : persistSnapshotRef.current.beatTypes,
@@ -577,6 +580,7 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
         setUsername(settings.username);
       }
       setPrimaryInstrumentId(settings.primaryInstrumentId ?? null);
+      identityRevisionRef.current = settings.profileIdentityRevision;
 
       // Delegate extra init (setIsLoaded, loadCustomSoundSets, PCM warmup, …)
       // to useMetronomeScreen — these are not settings concerns.
@@ -805,6 +809,14 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
     },
     [persistSettings],
   );
+  useEffect(() => subscribeProfileIdentity(identity => {
+    identityRevisionRef.current = identity.profileIdentityRevision;
+    persistSnapshotRef.current = { ...persistSnapshotRef.current, ...identity };
+    setUsername(identity.username);
+    setPrimaryInstrumentId(identity.primaryInstrumentId ?? null);
+    // Replace stale identity deltas too, without dropping pending tempo/audio edits.
+    persistSettings(identity);
+  }), [persistSettings]);
 
   const updatePrimaryInstrumentId = useCallback(
     (instrumentId: string | null) => {

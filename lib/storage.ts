@@ -1,3 +1,4 @@
+import { enqueueSettingsStorageOperation } from "./profile-identity";
 import AsyncStorage from "@/lib/profile-storage";
 import { DEFAULT_TEMPO_TRAINER, normalizeTempoTrainer, type TempoTrainerConfig } from "./tempo-trainer";
 import * as Crypto from "expo-crypto";
@@ -339,6 +340,7 @@ export interface MetronomeSettings {
   username?: string;
   primaryInstrumentId?: string;
   profilePhoto?: string | null;
+  profileIdentityRevision?: string;
   profileRooms?: import("./practice-room").PracticeRoom[];
   landscapeReversed?: boolean;
   showLandscapeImage?: boolean;
@@ -610,16 +612,10 @@ export interface SaveSettingsOptions {
 // Settings writes and a full storage reset must use one queue.  Otherwise an
 // already-started write can finish after AsyncStorage.clear() and resurrect a
 // stale metronome_settings value.
-let settingsStorageQueue: Promise<void> = Promise.resolve();
 let pendingSettings: MetronomeSettings | null = null;
 let settingsDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 const SETTINGS_DEBOUNCE_MS = 400;
 
-function enqueueSettingsStorageOperation(operation: () => Promise<void>): Promise<void> {
-  const result = settingsStorageQueue.then(operation, operation);
-  settingsStorageQueue = result.catch(() => {});
-  return result;
-}
 
 export async function saveSettings(
   settings: MetronomeSettings,
@@ -631,6 +627,9 @@ export async function saveSettings(
       const previous = raw ? JSON.parse(raw) : {};
       await AsyncStorage.setItem(SETTINGS_KEY, JSON.stringify(normalizeSettingsVolumes({
         ...settings,
+        ...(previous.profileIdentityRevision && previous.profileIdentityRevision !== settings.profileIdentityRevision
+          ? { username: previous.username, primaryInstrumentId: previous.primaryInstrumentId,
+            profileIdentityRevision: previous.profileIdentityRevision } : {}),
         profilePhoto: Object.hasOwn(previous, "profilePhoto") ? previous.profilePhoto : settings.profilePhoto,
         profileRooms: previous.profileRooms ?? settings.profileRooms,
       })));

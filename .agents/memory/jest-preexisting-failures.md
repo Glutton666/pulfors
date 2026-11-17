@@ -8,3 +8,10 @@ Do not dismiss a Jest failure as pre-existing solely because older memory listed
 **Why:** Test tooling and mocks evolve; historical failure counts became stale and could hide new regressions.
 
 **How to apply:** Use the project's current Jest command, keep Playwright specs out of Jest, and investigate current failures against a verified baseline. Use scoped checks during edits and a request-level verification pass before delivery.
+
+An isolated Jest module registry can instantiate a fresh AsyncStorage mock with
+its own empty Map. Seed and inspect the mock inside that isolated registry when
+simulating a fresh app runtime; outer mock fixtures are not necessarily shared.
+
+**Why:** A correct in-place profile read appeared empty because the simulated
+runtime was reading a different mock store, not because migration had lost data.

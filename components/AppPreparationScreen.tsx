@@ -65,6 +65,7 @@ const copy = {
     },
     errorTitle: "준비 중 문제가 발생했습니다",
     errorBody: "다시 시도하거나 기본 설정으로 계속할 수 있습니다.",
+    retryOnlyBody: "저장된 데이터는 초기화하지 않았습니다. 다시 시도해 주세요.",
     retry: "다시 시도",
     continue: "계속 진행",
   },
@@ -77,6 +78,7 @@ const copy = {
     },
     errorTitle: "We couldn't finish preparing the app",
     errorBody: "Try again, or continue with the default settings.",
+    retryOnlyBody: "Your saved data has not been reset. Please try again.",
     retry: "Try again",
     continue: "Continue",
   },
@@ -119,7 +121,7 @@ export function AppPreparationScreen({
       {isError ? (
         <View style={styles.errorContent}>
           <Text style={styles.errorTitle}>{labels.errorTitle}</Text>
-          <Text style={styles.errorBody}>{labels.errorBody}</Text>
+          <Text style={styles.errorBody}>{onContinue ? labels.errorBody : labels.retryOnlyBody}</Text>
           {error ? <Text style={styles.errorDetail}>{error}</Text> : null}
           <View style={styles.actions}>
             {onRetry && (
