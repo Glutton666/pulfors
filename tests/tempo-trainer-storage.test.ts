@@ -31,7 +31,13 @@ test("invalid fields are normalized on save and unknown runtime fields are exclu
   });
   const stored = JSON.parse((await AsyncStorage.getItem("metronome_settings"))!);
   expect(stored.tempoTrainer).toEqual({
-    ...DEFAULT_TEMPO_TRAINER, intervalSeconds: 1, bpmDelta: 1, accentOnIncrease: false,
+    ...DEFAULT_TEMPO_TRAINER, intervalSeconds: 1, bpmDelta: 0, accentOnIncrease: false,
   });
   expect(normalizeTempoTrainer(undefined)).toEqual(DEFAULT_TEMPO_TRAINER);
+});
+
+test("zero BPM change survives saving and loading", async () => {
+  const tempoTrainer = { ...DEFAULT_TEMPO_TRAINER, enabled: true, bpmDelta: 0 };
+  await saveSettings({ bpm: 100, beatsPerMeasure: 4, subdivisions: 1, tempoTrainer });
+  expect((await loadSettings()).tempoTrainer).toEqual(tempoTrainer);
 });

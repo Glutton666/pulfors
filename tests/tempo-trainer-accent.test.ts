@@ -51,6 +51,7 @@ test("time threshold waits for the next first beat and resets the interval at ac
 });
 
 test.each([
+  { bpmDelta: 0, accentOnIncrease: false, bpm: 120, next: 120 },
   { bpmDelta: -2, accentOnIncrease: true, bpm: 120, next: 118 },
   { bpmDelta: 2, accentOnIncrease: false, bpm: 120, next: 122 },
   { bpmDelta: 2, accentOnIncrease: true, bpm: 300, next: 300 },
@@ -60,6 +61,19 @@ test.each([
   const boundary = f.render(0.02);
   expect(f.state.position.bpm).toBe(next);
   expect(boundary[0]).toBeCloseTo(0.1);
+});
+
+test.each(["time", "measures"] as const)("zero change keeps tempo and accents only each configured %s interval", basis => {
+  const f = fixture(4, { basis, bpmDelta: 0, intervalSeconds: 3, intervalMeasures: 2 });
+  const before = f.render(4);
+  expect(before.filter(v => v > 0.5)).toHaveLength(0);
+  const first = f.render(0.001);
+  expect(first[0]).toBeCloseTo(0.7);
+  const between = f.render(3.999);
+  expect(between.filter(v => v > 0.5)).toHaveLength(0);
+  const second = f.render(0.001);
+  expect(second[0]).toBeCloseTo(0.7);
+  expect(f.state.position.bpm).toBe(120);
 });
 
 test("the time-zero click and partially active first measure do not count as elapsed measures", () => {

@@ -67,7 +67,7 @@ export function renderTrainerFrames(
           : state.measures >= command.rule.intervalMeasures
       );
       const next = due ? Math.min(300, Math.max(20, bpm + command.rule.bpmDelta)) : bpm;
-      state.accent = next > bpm && command.rule.accentOnIncrease;
+      state.accent = due && (next > bpm || command.rule.bpmDelta === 0) && command.rule.accentOnIncrease;
       if (due) {
         state.elapsed = 0;
         state.since = seconds;

@@ -92,3 +92,24 @@ test("a shared rule survives reload without starting the transport", async ({ pa
   await expect(page.getByTestId("trainer-interval-measures")).toHaveValue("7");
   await expect(page.getByTestId("timer-start")).toBeVisible();
 });
+
+test("zero BPM change is valid, stays zero after direction changes and survives reload", async ({ page }) => {
+  await page.getByTestId("panel-toggle").click();
+  await page.getByTestId("trainer-toggle").click();
+  const delta = page.getByTestId("trainer-delta");
+  await delta.fill("0");
+  await delta.blur();
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await page.getByTestId("trainer-direction-down").click();
+  await expect(delta).toHaveValue("0");
+  await page.getByTestId("trainer-direction-up").click();
+  await expect(delta).toHaveValue("0");
+  await expect(page.getByTestId("stopwatch-start")).toBeEnabled();
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("metronome_settings") || "{}").tempoTrainer?.bpmDelta)).toBe(0);
+  await page.reload();
+  await expect(page.getByTestId("bpm-display")).toHaveText("100");
+  await page.getByTestId("panel-toggle").click();
+  await expect(page.getByTestId("trainer-delta")).toHaveValue("0");
+  await page.getByTestId("tab-timer").click();
+  await expect(page.getByTestId("trainer-delta")).toHaveValue("0");
+});

@@ -51,7 +51,7 @@ test("invalid data and legacy beats receive explicit safe measure defaults", () 
   expect(normalizeTempoTrainer({ basis: "beats", intervalBeats: 16 }).intervalMeasures).toBe(4);
   expect(normalizeTempoTrainer({ basis: "beats" }).basis).toBe("measures");
   expect(normalizeTempoTrainer({ intervalSeconds: 0, intervalMeasures: NaN, bpmDelta: 0 }))
-    .toEqual({ ...DEFAULT_TEMPO_TRAINER, intervalSeconds: 1, bpmDelta: 1 });
+    .toEqual({ ...DEFAULT_TEMPO_TRAINER, intervalSeconds: 1, bpmDelta: 0 });
   expect(steppedTrainerBpm(299, 10)).toBe(300);
   expect(steppedTrainerBpm(21, -10)).toBe(20);
 });

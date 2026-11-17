@@ -42,7 +42,7 @@ export function normalizeTempoTrainer(value: unknown): TempoTrainerConfig {
     basis: config.basis === "measures" || (config as { basis?: string }).basis === "beats" ? "measures" : "time",
     intervalSeconds: integer(config.intervalSeconds, 30, 1, 5999),
     intervalMeasures: integer(config.intervalMeasures, 4, 1, 9999),
-    bpmDelta: delta === 0 ? 1 : delta,
+    bpmDelta: delta,
     accentOnIncrease: typeof config.accentOnIncrease === "boolean"
       ? config.accentOnIncrease : DEFAULT_TEMPO_TRAINER.accentOnIncrease,
   };

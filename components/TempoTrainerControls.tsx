@@ -51,7 +51,7 @@ export function TempoTrainerControls({
   const styles = useMemo(() => makeStyles(C, S), [C, S]);
   const validInterval = value.basis === "time" ? parseTime(timeDraft) !== null
     : /^\d+$/.test(beatsDraft.trim()) && Number(beatsDraft) >= 1 && Number(beatsDraft) <= 9999;
-  const validDelta = /^\d+$/.test(deltaDraft.trim()) && Number(deltaDraft) >= 1 && Number(deltaDraft) <= 50;
+  const validDelta = /^\d+$/.test(deltaDraft.trim()) && Number(deltaDraft) >= 0 && Number(deltaDraft) <= 50;
   const valid = !value.enabled || (validInterval && validDelta);
   useEffect(() => { onValidityChange?.(valid); }, [onValidityChange, valid]);
 
@@ -66,7 +66,7 @@ export function TempoTrainerControls({
   }, [value.intervalMeasures]);
 
   useEffect(() => {
-    setDeltaDraft(String(Math.max(1, Math.abs(value.bpmDelta))));
+    setDeltaDraft(String(Math.abs(value.bpmDelta)));
     setDeltaError("");
   }, [value.bpmDelta]);
 
@@ -96,8 +96,8 @@ export function TempoTrainerControls({
 
   const commitDelta = () => {
     const magnitude = /^\d+$/.test(deltaDraft.trim()) ? Number(deltaDraft) : NaN;
-    if (!Number.isInteger(magnitude) || magnitude < 1 || magnitude > 50) {
-      setDeltaError(ko ? "1–50 사이의 BPM을 입력하세요." : "Enter a BPM amount from 1 to 50.");
+    if (!Number.isInteger(magnitude) || magnitude < 0 || magnitude > 50) {
+      setDeltaError(ko ? "0–50 사이의 BPM을 입력하세요." : "Enter a BPM amount from 0 to 50.");
       return;
     }
     setDeltaError("");
@@ -107,7 +107,7 @@ export function TempoTrainerControls({
   };
 
   const changeDirection = (direction: 1 | -1) => {
-    const magnitude = Math.min(50, Math.max(1, Math.abs(value.bpmDelta)));
+    const magnitude = Math.min(50, Math.abs(value.bpmDelta));
     setDeltaDraft(String(magnitude));
     setDeltaError("");
     patch({ bpmDelta: direction * magnitude });
@@ -259,13 +259,13 @@ export function TempoTrainerControls({
           <Pressable
             accessibilityRole="switch"
             accessibilityState={{ checked: value.accentOnIncrease, disabled }}
-            accessibilityLabel={ko ? "BPM 증가 시 강세" : "Accent on BPM increase"}
+            accessibilityLabel={ko ? "BPM 상승 또는 변화량 0일 때 강조음" : "Accent on BPM increase or zero change"}
             disabled={disabled}
             onPress={() => patch({ accentOnIncrease: !value.accentOnIncrease })}
             testID="trainer-accent-toggle"
             style={({ pressed }) => [styles.accentRow, pressed && !disabled && styles.pressed]}
           >
-            <Text style={styles.accentLabel}>{ko ? "BPM 상승 시 강조음" : "Accent on BPM increase"}</Text>
+            <Text style={styles.accentLabel}>{ko ? "강조음 (상승·변화량 0)" : "Accent (increase or zero change)"}</Text>
             <View style={[styles.check, value.accentOnIncrease && styles.checkOn, disabled && styles.dimmed]}>
               {value.accentOnIncrease ? <Text style={styles.checkMark}>✓</Text> : null}
             </View>
