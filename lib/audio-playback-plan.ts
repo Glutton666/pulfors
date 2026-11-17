@@ -1,12 +1,13 @@
 import type { PolygonLayer } from "@/components/polygon-mode/PolygonTypes";
 import { applyDialConfigToEngine } from "@/lib/dial-engine-boundary";
 import type { BarConfig, DialConfig } from "@/lib/index.helpers";
-import type { BeatType, MetronomeEngine } from "@/lib/metronome-engine";
+import type { MetronomeEngine } from "@/lib/metronome-engine";
 import { toEngineBpm } from "@/lib/metronome-engine-pure";
 import type { NoteSampleChannelMap, NoteSampleMap, NoteSampleMetroChannelMap, NoteSampleSpeedMap, NoteSampleVolumeMap } from "@/lib/note-samples";
 import type { PlayEvent } from "@/lib/score-playback";
 import type { SampleChannel } from "@/lib/stereo-channel";
 import type { CustomSoundSetConfig, SoundSet } from "@/lib/storage";
+import { polygonEffectiveBpm, type PolygonPlaybackRate } from "@/lib/polygon-clock";
 import {
   readAudioToneSnapshot,
   type AudioToneSnapshot,
@@ -83,6 +84,8 @@ export interface ScorePlaybackPlan extends PlaybackPlanHeader {
 
 export interface PolygonPlaybackPlan extends PlaybackPlanHeader {
   readonly mode: "polygon";
+  readonly playbackRate: PolygonPlaybackRate;
+  readonly effectiveBpm: number;
   readonly tone: AudioToneSnapshot;
   readonly unit: Readonly<{
     kind: "polygon-layers";
@@ -290,6 +293,7 @@ export function buildScorePlaybackPlan(input: {
 
 export function buildPolygonPlaybackPlan(input: {
   bpm: number;
+  playbackRate?: PolygonPlaybackRate;
   platform: PlaybackPlatform;
   beatsPerMeasure: number;
   layers: readonly PolygonLayer[];
@@ -301,6 +305,8 @@ export function buildPolygonPlaybackPlan(input: {
     createdAtMs: input.createdAtMs ?? Date.now(),
     platform: input.platform,
     bpm: input.bpm,
+    playbackRate: input.playbackRate ?? 1,
+    effectiveBpm: polygonEffectiveBpm(input.bpm, input.playbackRate ?? 1),
     output: {
       strategy: "polygon-realtime",
       boosted: input.tone.boosted,

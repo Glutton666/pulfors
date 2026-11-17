@@ -31,13 +31,15 @@ interface BpmSliderProps {
   onTapTempo: () => void;
   onDenominatorCycle?: () => void;
   isLandscape?: boolean;
+  /** Blend into an existing controller surface instead of drawing a second card. */
+  embedded?: boolean;
   /** 무대모드 전용: 앱 테마와 무관하게 다크/라이트 색상을 강제 적용 */
   isDark?: boolean;
 }
 
 type Zone = "left" | "center" | "right";
 
-export function BpmSlider({ bpm, onBpmChange, onTapTempo, onDenominatorCycle, isLandscape = false, isDark }: BpmSliderProps) {
+export function BpmSlider({ bpm, onBpmChange, onTapTempo, onDenominatorCycle, isLandscape = false, embedded = false, isDark }: BpmSliderProps) {
   const { colors: themeC } = useTheme();
   const C = isDark === undefined ? themeC : {
     ...themeC,
@@ -269,6 +271,7 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo, onDenominatorCycle, is
           style={[
             styles.card,
             { backgroundColor: C.surface, borderColor: isFocused ? C.accent : C.border },
+            embedded && { backgroundColor: "transparent", borderWidth: 0, borderRadius: 0 },
             isFocused && styles.focusedCard,
             bodyStyle,
             isLandscape && { paddingTop: S.ms(8, 0.3), paddingBottom: S.ms(6, 0.3) },

@@ -424,6 +424,7 @@ export function MetronomeScreenUI(props: Props) {
     isPreparing,
     engineBeatCallbackRef: polygonOnBeatRef,
     bpm,
+    getClockBpm: () => engineRef.current?.getBpm() ?? bpm,
     beatsPerMeasure: Math.max(1, Math.min(16, Math.floor(beatsPerMeasure || 4))),
     allPlayersRef,
     getClickPCMs,

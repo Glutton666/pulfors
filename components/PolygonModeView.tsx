@@ -9,9 +9,9 @@
  *   5. 오프셋 팝업 (overlay)
  */
 
-import React, { useCallback } from "react";
+import React, { useCallback, useState } from "react";
 import {
-  View, Text, Pressable, StyleSheet, useWindowDimensions, ScrollView,
+  View, Text, Pressable, StyleSheet, useWindowDimensions,
   Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -38,10 +38,11 @@ interface PolygonModeViewProps {
 
 export function PolygonModeView({ polygonMode, isPlaying, onClose, onTogglePlay, bpm, onBpmChange }: PolygonModeViewProps) {
   const { colors: C } = useTheme();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const S = useScale();
   const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
+  const [canvasArea, setCanvasArea] = useState({ width: 0, height: 0 });
 
   const {
     layers, editingLayerId, setEditingLayerId,
@@ -50,8 +51,16 @@ export function PolygonModeView({ polygonMode, isPlaying, onClose, onTogglePlay,
     handleVertexBeatTypeCycle, setLayerCustomSound,
   } = polygonMode;
 
-  // 캔버스 크기: 화면 너비 기반 (정사각형)
-  const canvasSize = Math.min(width - 32, 400);
+  // Keep the drawing inside the actual space left by the controller, including
+  // short landscape layouts where width alone would make it overflow.
+  const canvasSize = Math.max(0, Math.min(
+    canvasArea.width - S.ms(32, 0.3),
+    canvasArea.height - S.ms(46, 0.3),
+    width - S.ms(32, 0.3),
+    400,
+  ));
+  const isCompactHeight = height < 520;
+  const isShortLandscape = isCompactHeight && width > height;
 
   const handleLayerSelect = useCallback((id: string) => {
     setEditingLayerId(id === editingLayerId ? null : id);
@@ -107,7 +116,7 @@ export function PolygonModeView({ polygonMode, isPlaying, onClose, onTogglePlay,
   }, [setLayerCustomSound]);
 
   return (
-    <View style={[StyleSheet.absoluteFillObject, { backgroundColor: C.background }]}>
+    <View testID="polygon-screen" style={[StyleSheet.absoluteFillObject, { backgroundColor: C.background }]}>
       {/* ── 헤더 ── */}
       <View style={{
         flexDirection: "row",
@@ -120,6 +129,9 @@ export function PolygonModeView({ polygonMode, isPlaying, onClose, onTogglePlay,
       }}>
         <Pressable
           onPress={onClose}
+          testID="polygon-close"
+          accessibilityRole="button"
+          accessibilityLabel={language === "ko" ? "폴리곤 닫기" : "Close Polygon"}
           style={({ pressed }) => ({ padding: 8, opacity: pressed ? 0.6 : 1 })}
           hitSlop={8}
         >
@@ -138,6 +150,9 @@ export function PolygonModeView({ polygonMode, isPlaying, onClose, onTogglePlay,
         {/* 재생/정지 표시 */}
         <Pressable
           onPress={onTogglePlay}
+          testID="polygon-play-toggle"
+          accessibilityRole="button"
+          accessibilityLabel={isPlaying ? (t("polygon", "playing")) : (t("polygon", "stopped"))}
           disabled={!onTogglePlay}
           style={({ pressed }) => ({
             flexDirection: "row",
@@ -165,80 +180,144 @@ export function PolygonModeView({ polygonMode, isPlaying, onClose, onTogglePlay,
         </Pressable>
       </View>
 
-      {/* ── 캔버스 영역 ── */}
-      <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={{
-          flexGrow: 1,
-          alignItems: "center",
-          justifyContent: "center",
-          paddingVertical: S.ms(16, 0.3),
-        }}
-        scrollEnabled={false}
-      >
-        {layers.length === 0 ? (
-          <View style={{ alignItems: "center", gap: 12 }}>
-            <Text style={{
-              fontFamily: "SpaceGrotesk_500Medium",
-              fontSize: S.ms(15, 0.4),
-              color: C.textSecondary,
-              textAlign: "center",
-            }}>
-              {t("polygon", "emptyHint")}
-            </Text>
+      <View style={{
+        flex: 1,
+        minHeight: 0,
+        flexDirection: isShortLandscape ? "row" : "column",
+        alignItems: "stretch",
+      }}>
+        {/* ── 캔버스 영역 ── */}
+        <View
+          style={{
+            flex: 1,
+            minWidth: 0,
+            minHeight: 0,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+          onLayout={(event) => setCanvasArea({
+            width: event.nativeEvent.layout.width,
+            height: event.nativeEvent.layout.height,
+          })}
+        >
+          {layers.length === 0 ? (
+            <View style={{ alignItems: "center", gap: 12 }}>
+              <Text style={{
+                fontFamily: "SpaceGrotesk_500Medium",
+                fontSize: S.ms(15, 0.4),
+                color: C.textSecondary,
+                textAlign: "center",
+              }}>
+                {t("polygon", "emptyHint")}
+              </Text>
+            </View>
+        ) : canvasSize > 0 ? (
+          <View testID="polygon-canvas" style={{ width: canvasSize, height: canvasSize }}>
+            <PolygonCanvas
+              layers={layers}
+              activeVertices={activeVertices}
+              editingLayerId={editingLayerId}
+              onVertexPress={handleVertexBeatTypeCycle}
+              onVertexLongPress={handleVertexLongPress}
+              size={canvasSize}
+            />
           </View>
-        ) : (
-          <PolygonCanvas
-            layers={layers}
-            activeVertices={activeVertices}
-            editingLayerId={editingLayerId}
-            onVertexPress={handleVertexBeatTypeCycle}
-            onVertexLongPress={handleVertexLongPress}
-            size={canvasSize}
-          />
-        )}
+        ) : null}
 
-        {/* 편집 힌트 */}
-        {editingLayerId && layers.length > 0 && (
-          <Text style={{
-            fontFamily: "SpaceGrotesk_400Regular",
-            fontSize: S.ms(11, 0.3),
-            color: C.textTertiary,
-            textAlign: "center",
-            marginTop: 8,
-          }}>
-            {t("polygon", "muteVertex")}
-          </Text>
-        )}
-      </ScrollView>
-
-      {/* ── 레이어 편집 패널 ── */}
-      <PolygonLayerEditor
-        layers={layers}
-        editingLayerId={editingLayerId}
-        onSelectLayer={handleLayerSelect}
-        onUpdateLayer={handleUpdateLayer}
-        onDeleteLayer={handleDeleteLayer}
-        onAddLayer={handleAddLayer}
-        onPickCustomSound={handlePickCustomSound}
-      />
-
-      {/* ── BPM 컨트롤: 비트 모드와 동일한 디자인, 화면 최하단 ── */}
-      {bpm !== undefined && onBpmChange && (
-        <View style={{
-          paddingHorizontal: S.ms(16, 0.3),
-          paddingTop: S.ms(8, 0.3),
-          paddingBottom: insets.bottom + S.ms(8, 0.3),
-          borderTopWidth: 1,
-          borderTopColor: C.border,
-        }}>
-          <BpmSlider
-            bpm={bpm}
-            onBpmChange={onBpmChange}
-            onTapTempo={() => onTogglePlay?.()}
-          />
+          {/* 편집 힌트 */}
+          {editingLayerId && layers.length > 0 && (
+            <Text style={{
+              fontFamily: "SpaceGrotesk_400Regular",
+              fontSize: S.ms(11, 0.3),
+              color: C.textTertiary,
+              textAlign: "center",
+              marginTop: 8,
+            }}>
+              {t("polygon", "muteVertex")}
+            </Text>
+          )}
         </View>
-      )}
+
+        {/* One continuous controller surface: layers, shared playback rate, BPM. */}
+        <View
+          testID="polygon-controls"
+          style={{
+            flexShrink: isShortLandscape ? 1 : 0,
+            minWidth: 0,
+            backgroundColor: C.surface,
+            paddingBottom: insets.bottom + S.ms(8, 0.3),
+            ...(isShortLandscape ? { width: "48%", maxWidth: 460 } : {}),
+          }}
+        >
+        <PolygonLayerEditor
+          layers={layers}
+          editingLayerId={editingLayerId}
+          onSelectLayer={handleLayerSelect}
+          onUpdateLayer={handleUpdateLayer}
+          onDeleteLayer={handleDeleteLayer}
+          onAddLayer={handleAddLayer}
+          onPickCustomSound={handlePickCustomSound}
+          compactHeight={isCompactHeight}
+        />
+        <View style={{ paddingHorizontal: S.ms(16, 0.3), paddingTop: S.ms(5, 0.3) }}>
+          <Text style={{
+            fontFamily: "SpaceGrotesk_500Medium",
+            fontSize: S.ms(11, 0.3),
+            color: C.textSecondary,
+            marginBottom: S.ms(5, 0.3),
+          }}>
+            {language === "ko" ? "공통 속도" : "Shared speed"}
+          </Text>
+          <View style={{ flexDirection: "row", gap: S.ms(7, 0.3) }}>
+            {([
+              { rate: 2, label: "1/2 · ×2", id: "polygon-speed-2" },
+              { rate: 1, label: "1/4 · ×1", id: "polygon-speed-1" },
+              { rate: 0.5, label: "1/8 · ×0.5", id: "polygon-speed-0.5" },
+            ] as const).map(({ rate, label, id }) => {
+              const selected = polygonMode.playbackRate === rate;
+              return (
+                <Pressable
+                  key={rate}
+                  testID={id}
+                  onPress={() => polygonMode.setPlaybackRate(rate)}
+                  accessibilityRole="radio"
+                  accessibilityLabel={`${language === "ko" ? "공통 속도" : "Shared speed"} ${label}`}
+                  accessibilityState={{ checked: selected, selected }}
+                  {...(Platform.OS === "web" ? ({ "aria-checked": selected } as any) : {})}
+                  style={({ pressed }) => ({
+                    flex: 1,
+                    minHeight: S.ms(34, 0.3),
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderRadius: S.ms(10, 0.3),
+                    borderWidth: 1,
+                    borderColor: selected ? C.accent : C.border,
+                    backgroundColor: selected ? C.accent + "20" : pressed ? C.background : "transparent",
+                  })}
+                >
+                  <Text style={{
+                    fontFamily: selected ? "SpaceGrotesk_600SemiBold" : "SpaceGrotesk_500Medium",
+                    fontSize: S.ms(11, 0.3),
+                    color: selected ? C.accent : C.textSecondary,
+                  }}>{label}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+        {bpm !== undefined && onBpmChange && (
+          <View style={{ paddingHorizontal: S.ms(16, 0.3), paddingTop: S.ms(5, 0.3) }}>
+            <BpmSlider
+              embedded
+              bpm={bpm}
+              onBpmChange={onBpmChange}
+              onTapTempo={() => onTogglePlay?.()}
+              isLandscape={isCompactHeight}
+            />
+          </View>
+        )}
+        </View>
+      </View>
 
       {/* ── 오프셋 팝업 ── */}
       {offsetPopup && (

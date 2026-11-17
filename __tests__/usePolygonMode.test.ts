@@ -75,6 +75,7 @@ function makeParams(
     isPreparing: false,
     engineBeatCallbackRef,
     bpm: 120,
+    getClockBpm: () => overrides?.bpm ?? 120,
     beatsPerMeasure: 4,
     allPlayersRef: { current: {} as any },
     getClickPCMs: jest.fn().mockResolvedValue({ strong: new Float32Array(), high: new Float32Array(), low: new Float32Array() }),
@@ -148,6 +149,77 @@ describe("usePolygonMode — engine callback driven", () => {
 
     fireBeat(params.engineBeatCallbackRef);
     expect(params.recordAudioActivity).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([0.5, 1, 2] as const)("plays and animates the complete quad at shared rate %s", rate => {
+    Platform.OS = "web";
+    const { playWebClick } = jest.requireMock("@/lib/audio-renderer");
+    playWebClick.mockReturnValue(true);
+    const params = makeParams();
+    const { result } = renderHook(() => usePolygonMode(params));
+    const id = result.current.layers[0].id;
+    act(() => { result.current.setPlaybackRate(rate); });
+    const period = 2000 / rate;
+    for (let at = 0; at < period; at += 500) {
+      fireBeat(params.engineBeatCallbackRef);
+      advanceMs(500);
+    }
+    expect(playWebClick).toHaveBeenCalledTimes(4);
+    expect(params.recordAudioActivity).toHaveBeenCalledTimes(4);
+    expect(result.current.activeVertices[id]).toBe(3);
+    expect(result.current.playbackRate).toBe(rate);
+    expect(params.bpm).toBe(120);
+  });
+
+  it("uses only the last rapid selection at the next common engine boundary", () => {
+    Platform.OS = "web";
+    const { playWebClick } = jest.requireMock("@/lib/audio-renderer");
+    playWebClick.mockReturnValue(true);
+    const params = makeParams();
+    const { result } = renderHook(() => usePolygonMode(params));
+    fireBeat(params.engineBeatCallbackRef);
+    advanceMs(500);
+    act(() => {
+      result.current.setPlaybackRate(2);
+      result.current.setPlaybackRate(1);
+      result.current.setPlaybackRate(0.5);
+    });
+    expect(playWebClick).toHaveBeenCalledTimes(1);
+    fireBeat(params.engineBeatCallbackRef);
+    advanceMs(500);
+    fireBeat(params.engineBeatCallbackRef);
+    expect(playWebClick).toHaveBeenCalledTimes(2);
+    advanceMs(500);
+    fireBeat(params.engineBeatCallbackRef);
+    expect(playWebClick).toHaveBeenCalledTimes(3);
+  });
+
+  it("cancels double-speed half-beats on stop and rejects a retained old handler", () => {
+    Platform.OS = "web";
+    const { playWebClick } = jest.requireMock("@/lib/audio-renderer");
+    playWebClick.mockReturnValue(true);
+    const params = makeParams();
+    const { result, rerender, unmount } = renderHook(
+      (next: UsePolygonModeParams) => usePolygonMode(next), { initialProps: params },
+    );
+    act(() => { result.current.setPlaybackRate(2); });
+    const oldHandler = params.engineBeatCallbackRef.current!;
+    fireBeat(params.engineBeatCallbackRef);
+    rerender({ ...params, isPlaying: false });
+    advanceMs(1000);
+    expect(playWebClick).toHaveBeenCalledTimes(1);
+    rerender(params);
+    act(() => { oldHandler(); });
+    expect(playWebClick).toHaveBeenCalledTimes(1);
+    fireBeat(params.engineBeatCallbackRef);
+    advanceMs(250);
+    expect(playWebClick).toHaveBeenCalledTimes(3);
+    rerender({ ...params, enabled: false });
+    expect(params.engineBeatCallbackRef.current).toBeNull();
+    expect(result.current.activeVertices).toEqual({});
+    advanceMs(2000);
+    expect(playWebClick).toHaveBeenCalledTimes(3);
+    unmount();
   });
 
   // bpm=120, beatsPerMeasure=4 → 마디 2000ms. 4각형 슬롯 간격 500ms = 비트 간격.
@@ -474,7 +546,7 @@ describe("usePolygonMode — engine callback driven", () => {
     expect(result.current.activeVertices[layerId]).toBe(1);
 
     // BPM 120→60: beat 1000ms, 마디 4000ms, 슬롯 1333.33ms.
-    rerender({ ...params, bpm: 60 });
+    rerender({ ...params, bpm: 60, getClockBpm: () => 60 });
 
     setTimeoutSpy.mockClear();
     fireBeat(params.engineBeatCallbackRef); // beat 2 → k=2 slot 2666.67, beatStart 2000 → delay 666.67

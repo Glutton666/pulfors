@@ -8,10 +8,9 @@
 
 import React, { useCallback, useEffect, useRef } from "react";
 import {
-  View, Text, Pressable, ScrollView, PanResponder,
+  View, Text, Pressable, ScrollView, PanResponder, useWindowDimensions,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useScale } from "@/lib/scale";
@@ -39,6 +38,7 @@ interface PolygonLayerEditorProps {
   onAddLayer: () => void;
   /** 커스텀 사운드 가져오기 버튼을 탭했을 때 (실제 파일 피킹은 부모가 담당) */
   onPickCustomSound?: (layerId: string) => void;
+  compactHeight?: boolean;
 }
 
 // ── 볼륨 슬라이더 ─────────────────────────────────────────────────────────────
@@ -123,12 +123,12 @@ function VolumeSlider({
 
 export function PolygonLayerEditor({
   layers, editingLayerId, onSelectLayer, onUpdateLayer, onDeleteLayer, onAddLayer,
-  onPickCustomSound,
+  onPickCustomSound, compactHeight = false,
 }: PolygonLayerEditorProps) {
   const { colors: C } = useTheme();
   const { t } = useLanguage();
   const S = useScale();
-  const insets = useSafeAreaInsets();
+  const { height } = useWindowDimensions();
 
   const editingLayer = layers.find(l => l.id === editingLayerId) ?? null;
 
@@ -149,10 +149,7 @@ export function PolygonLayerEditor({
 
   return (
     <View style={{
-      backgroundColor: C.surface,
-      borderTopWidth: 1,
-      borderTopColor: C.border,
-      paddingBottom: !editingLayer && layers.length > 0 ? insets.bottom : 0,
+      backgroundColor: "transparent",
     }}>
       {/* ── 레이어 탭 목록 ── */}
       <ScrollView
@@ -160,8 +157,8 @@ export function PolygonLayerEditor({
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={{
           paddingHorizontal: S.ms(12, 0.3),
-          paddingVertical: S.ms(8, 0.3),
-          gap: S.ms(8, 0.3),
+          paddingVertical: S.ms(5, 0.3),
+          gap: S.ms(7, 0.3),
           alignItems: "center",
         }}
       >
@@ -170,7 +167,10 @@ export function PolygonLayerEditor({
           return (
             <Pressable
               key={layer.id}
+              testID={`polygon-layer-${layer.id}`}
               onPress={() => onSelectLayer(layer.id)}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: isEditing }}
               style={({ pressed }) => ({
                 flexDirection: "row",
                 alignItems: "center",
@@ -204,6 +204,8 @@ export function PolygonLayerEditor({
         {layers.length < 8 && (
           <Pressable
             onPress={onAddLayer}
+            testID="polygon-layer-add"
+            accessibilityRole="button"
             style={({ pressed }) => ({
               flexDirection: "row",
               alignItems: "center",
@@ -231,13 +233,19 @@ export function PolygonLayerEditor({
 
       {/* ── 편집 패널 ── */}
       {editingLayer && (
-        <View style={{
+        <ScrollView
+          style={{
+            maxHeight: Math.max(S.ms(42, 0.3), Math.min(height * (compactHeight ? 0.26 : 0.28), S.ms(compactHeight ? 150 : 210, 0.3))),
+          }}
+          contentContainerStyle={{
           paddingHorizontal: S.ms(16, 0.3),
-          paddingBottom: S.ms(16, 0.3) + insets.bottom,
-          gap: S.ms(12, 0.3),
-          borderTopWidth: 1,
-          borderTopColor: C.border + "55",
-        }}>
+          paddingTop: S.ms(3, 0.3),
+          paddingBottom: S.ms(6, 0.3),
+          gap: S.ms(compactHeight ? 7 : 10, 0.3),
+          }}
+          showsVerticalScrollIndicator={false}
+          nestedScrollEnabled
+        >
           {/* 변 수 스텝 */}
           <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
             <Text style={{
@@ -287,7 +295,9 @@ export function PolygonLayerEditor({
               fontFamily: "SpaceGrotesk_500Medium",
               fontSize: S.ms(13, 0.3),
               color: C.textSecondary,
-              width: 40,
+              width: S.ms(58, 0.3),
+              minWidth: S.ms(58, 0.3),
+              flexShrink: 0,
             }}>
               {t("polygon", "volume")}
             </Text>
@@ -304,7 +314,9 @@ export function PolygonLayerEditor({
               fontFamily: "SpaceGrotesk_500Medium",
               fontSize: S.ms(13, 0.3),
               color: C.textSecondary,
-              width: 40,
+              width: S.ms(58, 0.3),
+              minWidth: S.ms(58, 0.3),
+              flexShrink: 0,
             }}>
               {t("polygon", "soundSet")}
             </Text>
@@ -411,14 +423,16 @@ export function PolygonLayerEditor({
               {t("polygon", "deleteLayer")}
             </Text>
           </Pressable>
-        </View>
+        </ScrollView>
       )}
 
       {/* 레이어 없을 때 힌트 */}
       {layers.length === 0 && (
-        <View style={{ paddingHorizontal: 16, paddingBottom: 16 + insets.bottom, alignItems: "center" }}>
+        <View style={{ paddingHorizontal: 16, paddingBottom: S.ms(5, 0.3), alignItems: "center" }}>
           <Pressable
             onPress={onAddLayer}
+            testID="polygon-layer-add"
+            accessibilityRole="button"
             style={({ pressed }) => ({
               paddingHorizontal: 20, paddingVertical: 10,
               borderRadius: 10,

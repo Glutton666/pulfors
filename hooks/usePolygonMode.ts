@@ -25,6 +25,7 @@ import {
   setPCM,
 } from "@/lib/pcm-cache";
 import { buildPolygonPlaybackPlan, type PolygonPlaybackPlan } from "@/lib/audio-playback-plan";
+import { createPolygonClock, type PolygonPlaybackRate } from "@/lib/polygon-clock";
 import {
   buildPolygonSchedule,
   createPolygonScheduleRunner,
@@ -75,6 +76,8 @@ export interface UsePolygonModeParams {
   engineBeatCallbackRef: React.MutableRefObject<(() => void) | null>;
   /** BPM (마디·오프셋 타이밍 계산용) */
   bpm: number;
+  /** Actual engine pulse tempo; may differ from the displayed BPM. */
+  getClockBpm: () => number;
   /** 한 마디의 박 수 — N각형은 이 마디를 N등분해 발화한다 (폴리리듬) */
   beatsPerMeasure: number;
   /** 내장 오디오 플레이어 ref (native) */
@@ -92,6 +95,8 @@ export interface UsePolygonModeParams {
 }
 
 export interface UsePolygonModeResult {
+  playbackRate: PolygonPlaybackRate;
+  setPlaybackRate: (rate: PolygonPlaybackRate) => void;
   layers: PolygonLayer[];
   editingLayerId: string | null;
   setEditingLayerId: (id: string | null) => void;
@@ -152,6 +157,16 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
     ]),
   ].join(":");
   const [layers, setLayers] = useState<PolygonLayer[]>(INITIAL_LAYERS);
+  const [playbackRate, setPlaybackRateState] = useState<PolygonPlaybackRate>(1);
+  const requestedRateRef = useRef<PolygonPlaybackRate>(1);
+  const clockRef = useRef<ReturnType<typeof createPolygonClock> | null>(null);
+  const getClockBpmRef = useRef(p.getClockBpm);
+  getClockBpmRef.current = p.getClockBpm;
+  const setPlaybackRate = useCallback((rate: PolygonPlaybackRate) => {
+    if (rate !== 0.5 && rate !== 1 && rate !== 2) return;
+    requestedRateRef.current = rate;
+    setPlaybackRateState(rate);
+  }, []);
   const [editingLayerId, setEditingLayerId] = useState<string | null>(null);
   const [activeVertices, setActiveVertices] = useState<Record<string, number>>({});
   const [offsetPopup, setOffsetPopup] = useState<{
@@ -191,11 +206,13 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
     nextBpm = bpmRef.current,
     nextBeatsPerMeasure = beatsPerMeasureRef.current,
     nextTone = activePlaybackPlanRef.current?.tone ?? toneAtRender,
+    nextRate = activePlaybackPlanRef.current?.playbackRate ?? requestedRateRef.current,
   ) => {
     if (!activePlaybackPlanRef.current) return;
     activePlaybackPlanRef.current = buildPolygonPlaybackPlan({
       platform: Platform.OS === "web" ? "web" : "native",
       bpm: nextBpm,
+      playbackRate: nextRate,
       beatsPerMeasure: nextBeatsPerMeasure,
       layers: nextLayers,
       tone: nextTone,
@@ -205,15 +222,18 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
       beatsPerMeasure: nextBeatsPerMeasure,
     });
   }, [toneAtRender]);
+  const replaceActivePlaybackPlanRef = useRef(replaceActivePlaybackPlan);
+  replaceActivePlaybackPlanRef.current = replaceActivePlaybackPlan;
 
   useEffect(() => {
     runnerRef.current?.cancelSession(sessionIdRef.current);
     sessionIdRef.current += 1;
-    absoluteBeatRef.current = 0;
+    clockRef.current?.reset();
     activePlaybackPlanRef.current = playbackActive
       ? buildPolygonPlaybackPlan({
           platform: Platform.OS === "web" ? "web" : "native",
           bpm: p.bpm,
+          playbackRate: requestedRateRef.current,
           beatsPerMeasure: p.beatsPerMeasure,
           layers,
           tone: toneAtRender,
@@ -242,12 +262,9 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [toneVersion]);
 
-  // ── 절대 비트 카운터 (엔진 콜백 내에서만 변경) ──────────────────────────
-  const absoluteBeatRef = useRef(0);
   const requestClickPCM = useCallback(
     (soundSet: string, toneSnapshot = toneAtRender): ClickPCMs | undefined => {
       if (Platform.OS !== "web") return undefined;
-      const tone = readAudioToneSnapshot(toneSnapshot, soundSet);
       const cacheKey = `polygon:${soundSet}:${JSON.stringify(toneSnapshot)}`;
       const ready = peekPCM<ClickPCMs>(cacheKey);
       if (ready) return ready;
@@ -276,6 +293,7 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
 
   if (!runnerRef.current) {
     runnerRef.current = createPolygonScheduleRunner((event: PolygonScheduleEvent) => {
+      if (!enabledRef.current || !isPlayingRef.current) return;
       if (event.type === "mute") {
         setActiveVertices((prev) => {
           if (!(event.layerId in prev)) return prev;
@@ -323,7 +341,7 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
   // enabled=true 시 / 레이어 사운드셋 변경 시 PCM 선제 로드
   useEffect(() => {
     if (!p.enabled || Platform.OS !== "web") return;
-    layers.forEach((l) => requestClickPCM(l.soundSet, toneAtRender));
+    layers.forEach((l) => requestClickPCM(l.soundSet));
   }, [p.enabled, layers, requestClickPCM, toneVersion]);
 
   // ── 재생 중단 → absoluteBeat 리셋 ──────────────────────────────────────
@@ -335,7 +353,7 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
       sessionIdRef.current += 1;
       activePlaybackPlanRef.current = null;
       activeScheduleRef.current = null;
-      absoluteBeatRef.current = 0;
+      clockRef.current?.reset();
     }
   }, [playbackActive]);
 
@@ -347,6 +365,7 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
     if (prevBpmRef.current !== p.bpm) {
       prevBpmRef.current = p.bpm;
       bpmRef.current = p.bpm;
+      clockRef.current?.reanchor();
       runnerRef.current?.cancelSession(sessionIdRef.current);
       sessionIdRef.current += 1;
       replaceActivePlaybackPlan(layersRef.current, p.bpm, beatsPerMeasureRef.current);
@@ -364,7 +383,7 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
       beatsPerMeasureRef.current = p.beatsPerMeasure;
       runnerRef.current?.cancelSession(sessionIdRef.current);
       sessionIdRef.current += 1;
-      absoluteBeatRef.current = 0;
+      clockRef.current?.reset();
       replaceActivePlaybackPlan(layersRef.current, bpmRef.current, p.beatsPerMeasure);
     }
   }, [p.beatsPerMeasure, replaceActivePlaybackPlan]);
@@ -385,7 +404,7 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
       sessionIdRef.current += 1;
       activePlaybackPlanRef.current = null;
       activeScheduleRef.current = null;
-      absoluteBeatRef.current = 0;
+      clockRef.current?.reset();
       if (!p.enabled) {
         setOffsetPopup(null);
         setActiveVertices({});
@@ -393,29 +412,50 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
       return;
     }
 
+    const clock = createPolygonClock({
+      onBoundary: ({ bpm: nextBpm, playbackRate: nextRate }) => {
+        runnerRef.current?.cancelSession(sessionIdRef.current);
+        sessionIdRef.current += 1;
+        replaceActivePlaybackPlanRef.current(
+          layersRef.current, nextBpm, beatsPerMeasureRef.current,
+          undefined, nextRate,
+        );
+        setActiveVertices({});
+      },
+      onBeat: (absoluteBeat, effectiveBpm) => {
+        if (
+          producerGeneration !== producerGenerationRef.current
+          || !enabledRef.current || !isPlayingRef.current
+        ) return;
+        const schedule = activeScheduleRef.current ?? buildPolygonSchedule({
+          layers: layersRef.current,
+          beatsPerMeasure: beatsPerMeasureRef.current,
+        });
+        activeScheduleRef.current = schedule;
+        runnerRef.current?.scheduleBeat({
+          sessionId: sessionIdRef.current, schedule, absoluteBeat, bpm: effectiveBpm,
+        });
+      },
+    });
+    clockRef.current = clock;
     p.engineBeatCallbackRef.current = () => {
       if (
         producerGeneration !== producerGenerationRef.current
         || !enabledRef.current
         || !isPlayingRef.current
       ) return;
-      const schedule = activeScheduleRef.current ?? buildPolygonSchedule({
-        layers: layersRef.current,
-        beatsPerMeasure: beatsPerMeasureRef.current,
-      });
-      activeScheduleRef.current = schedule;
-      const absbeat = absoluteBeatRef.current++;
-      runnerRef.current?.scheduleBeat({
-        sessionId: sessionIdRef.current,
-        schedule,
-        absoluteBeat: absbeat,
+      clock.pulse({
         bpm: bpmRef.current,
+        clockBpm: getClockBpmRef.current(),
+        playbackRate: requestedRateRef.current,
       });
     };
 
     return () => {
       // enabled가 false로 바뀌거나 unmount 시 핸들러 해제 + 대기 타이머 정리
       p.engineBeatCallbackRef.current = null;
+      clock.dispose();
+      if (clockRef.current === clock) clockRef.current = null;
       runnerRef.current?.cancelSession(sessionIdRef.current);
       sessionIdRef.current += 1;
       if (producerGenerationRef.current === producerGeneration) {
@@ -588,6 +628,8 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
   );
 
   return {
+    playbackRate,
+    setPlaybackRate,
     layers,
     editingLayerId,
     setEditingLayerId,

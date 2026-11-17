@@ -67,6 +67,8 @@ jest.mock("expo-crypto", () => ({
 
 function makePolygonMode(): UsePolygonModeResult {
   return {
+    playbackRate: 1,
+    setPlaybackRate: jest.fn(),
     layers: [],
     editingLayerId: null,
     setEditingLayerId: jest.fn(),
@@ -85,6 +87,23 @@ function makePolygonMode(): UsePolygonModeResult {
 // ── 테스트 ────────────────────────────────────────────────────────────────────
 
 describe("PolygonModeView — beat-mode BPM controller", () => {
+  it("shows all shared speeds and forwards their exact rates without changing BPM", () => {
+    const polygonMode = makePolygonMode();
+    const onBpmChange = jest.fn();
+    const { getByTestId, getByText } = render(
+      <PolygonModeView polygonMode={polygonMode} isPlaying={false}
+        onClose={jest.fn()} bpm={120} onBpmChange={onBpmChange} />,
+    );
+    for (const rate of [2, 1, 0.5]) {
+      fireEvent.click(getByTestId(`polygon-speed-${rate}`));
+      expect(polygonMode.setPlaybackRate).toHaveBeenLastCalledWith(rate);
+    }
+    expect(getByText("1/2 · ×2")).not.toBeNull();
+    expect(getByText("1/4 · ×1")).not.toBeNull();
+    expect(getByText("1/8 · ×0.5")).not.toBeNull();
+    expect(getByTestId("bpm-display").textContent).toBe("120");
+    expect(onBpmChange).not.toHaveBeenCalled();
+  });
   it("renders the shared beat-mode BPM controller with its BPM label", () => {
     const { queryByText } = render(
       <PolygonModeView

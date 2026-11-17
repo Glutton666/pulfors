@@ -108,6 +108,7 @@
 - [Pressable gesture ownership](pressable-gesture-ownership.md) — keep drag responders on a stable View; Pressable's own responder handlers can override them.
 - [Native strong markers](native-strong-marker.md) — Beat/Bar S markers share rendering; preserve vector glyphs and distinguish browser checks from native release verification.
 - [Polygon startup boundary](polygon-startup-boundary.md) — use Polygon’s own audio producer and beat clock, not ordinary rendered output or the underlying Bar transport.
+- [Polygon shared speed](polygon-shared-speed.md) — 사용자가 지정한 공통 배속은 1/2=×2, 1/4=×1, 1/8=×0.5이며 표시 BPM과 구분한다.
 - [Foreground location permissions](foreground-location-permissions.md) — practice-room GPS stays foreground-only; explicitly disable Expo’s default Always permission descriptions.
 - [Tempo trainer behavior](tempo-trainer-behavior.md) — one saved time/measure rule; use audio measure boundaries, not extra post-click cues; retain Android tempo-editable output.
 - [GitHub workflow restriction](github-workflows-policy.md) — 이 프로젝트에서는 앞으로 .github/workflows 파일을 수정하지 않는다.

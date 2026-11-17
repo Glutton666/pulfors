@@ -147,7 +147,10 @@ export function createPolygonScheduleRunner(
         + schedule.beatsPerMeasure) % schedule.beatsPerMeasure;
       const measure = Math.floor(normalizedAbsoluteBeat / schedule.beatsPerMeasure);
       const beatStartTick = beat * schedule.ticksPerBeat;
-      const measureDurationMs = schedule.beatsPerMeasure * 60000 / Math.max(20, bpm);
+      if (!Number.isFinite(bpm) || bpm <= 0) {
+        throw new RangeError("Polygon effective BPM must be positive");
+      }
+      const measureDurationMs = schedule.beatsPerMeasure * 60000 / bpm;
 
       // Delivered occurrence IDs are only useful for the current measure.
       for (const [key, entry] of delivered) {
@@ -161,6 +164,9 @@ export function createPolygonScheduleRunner(
         const deltaTicks = Math.max(0, event.tick - beatStartTick);
         const delayMs = deltaTicks * measureDurationMs / POLYGON_TICKS_PER_MEASURE;
         const deliver = () => {
+          // clearTimeout alone does not reject a callback already queued by a
+          // host. Ownership must still match after cancellation/restart.
+          if (deltaTicks > 0 && pending.get(occurrenceId)?.timer !== timer) return;
           pending.delete(occurrenceId);
           if (disposed || delivered.has(occurrenceId)) return;
           delivered.set(occurrenceId, {
@@ -170,12 +176,12 @@ export function createPolygonScheduleRunner(
           });
           (onEvent ?? defaultOnEvent)(event);
         };
-        if (delayMs <= 0) {
-          deliver();
-          continue;
+        let timer: ReturnType<typeof setTimeout>;
+        if (delayMs <= 0) deliver();
+        else {
+          timer = setTimeout(deliver, delayMs);
+          pending.set(occurrenceId, { timer, sessionId, layerId: event.layerId });
         }
-        const timer = setTimeout(deliver, delayMs);
-        pending.set(occurrenceId, { timer, sessionId, layerId: event.layerId });
       }
     },
     cancelLayer(sessionId, layerId) {

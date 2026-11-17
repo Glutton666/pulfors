@@ -234,6 +234,7 @@ describe("audio playback plans", () => {
 
     expect(score.unit).toMatchObject({ kind: "timeline", documentId: "score-1" });
     expect(polygon.unit).toMatchObject({ kind: "polygon-layers", beatsPerMeasure: 4 });
+    expect(polygon).toMatchObject({ bpm: 120, playbackRate: 1, effectiveBpm: 120 });
     polygonLayers[0].offsets[0] = 0.4;
     expect(polygon.unit.layers[0].offsets[0]).toBe(0);
   });
