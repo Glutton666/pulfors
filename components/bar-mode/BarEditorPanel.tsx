@@ -24,6 +24,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CustomSoundSetEditor } from "@/components/CustomSoundSetEditor";
 import { SubdivisionBar } from "@/components/SubdivisionBar";
 import { BarPlayButton } from "@/components/BarPlayButton";
+import { BarPlaybackPanel } from "./BarPlaybackPanel";
+import { getBarPlaybackInfo } from "@/lib/bar-playback-info";
 import { FontSize, Spacing, Radius } from "@/constants/tokens";
 import type { BeatType, BarRepeat, BarLayer , LoopBlock } from "@/components/beat-indicator.types";
 import type { CustomSoundSetConfig } from "@/lib/storage";
@@ -46,6 +48,7 @@ import {
 export interface BarEditorPanelProps {
   // Bar selection context
   editingBeat: number | null;
+  currentBeat?: number;
   barRepeats: Record<number, BarRepeat>;
   isPlaying: boolean;
   beatsPerMeasure: number;
@@ -96,7 +99,7 @@ export interface BarEditorPanelProps {
 const MAX_LAYERS = 6;
 
 export function BarEditorPanel({
-  editingBeat, barRepeats, isPlaying, beatsPerMeasure, beatSubdivisions,
+  editingBeat, currentBeat = -1, barRepeats, isPlaying, beatsPerMeasure, beatSubdivisions,
   onBarRepeatChange, onBarMeterChange, onDeleteBar, onBarStartBeatSelect, onAddBar, onBarQuickSave, onOpenSettings,
   bpm, onBpmChange, beatDenominator = 4, onDenominatorCycle, isPreparing, onTogglePlay,
   onRandomPlayRequest, barLoopMode, onBarLoopModeChange, blockPlayMode, onBlockPlayModeChange,
@@ -106,6 +109,8 @@ export function BarEditorPanel({
   subdivisionBarElement, colors: C, ms, t, isDragging,
 }: BarEditorPanelProps) {
   const insets = useSafeAreaInsets();
+  const editingLockedRef = useRef(isPlaying || isPreparing);
+  editingLockedRef.current = isPlaying || isPreparing;
 
   // ─── Local state ─────────────────────────────────────────────────────────
 
@@ -236,7 +241,7 @@ export function BarEditorPanel({
     type: "count" | "duration",
     count: number, min: number, sec: number, bpmOverride: number | null,
   ) => {
-    if (isPlaying) return;
+    if (editingLockedRef.current) return;
     const val = type === "count" ? count : min * 60 + sec;
     if (val <= 0) return;
     if (editingBeat === null) return;
@@ -253,7 +258,7 @@ export function BarEditorPanel({
       if (existing.layers) rep.layers = existing.layers;
     }
     onBarRepeatChange(editingBeat, rep);
-  }, [editingBeat, isPlaying, barRepeats, onBarRepeatChange]);
+  }, [editingBeat, barRepeats, onBarRepeatChange]);
 
   const commitRepeatRef = useRef(commitRepeat);
   useEffect(() => { commitRepeatRef.current = commitRepeat; }, [commitRepeat]);
@@ -266,6 +271,7 @@ export function BarEditorPanel({
   useEffect(() => { onBpmChangeRef.current = onBpmChange; }, [onBpmChange]);
 
   const applyRepBpm = useCallback((newBpm: number) => {
+    if (editingLockedRef.current) return;
     if (editingBeatRef.current !== null) {
       // Per-bar override: update local repBpm state and commit to bar repeat
       setRepBpm(newBpm);
@@ -583,6 +589,44 @@ export function BarEditorPanel({
     ]).start();
     onRandomPlayRequest?.();
   }, [onRandomPlayRequest, randomPlayShakeAnim]);
+
+  useEffect(() => {
+    if (!isPlaying && !isPreparing) return;
+    clearBpmTimers();
+    clearCountTimers();
+    setSoundSetPickerTarget(null);
+    setEditingCustomSlot(null);
+  }, [isPlaying, isPreparing, clearBpmTimers, clearCountTimers]);
+
+  useEffect(() => clearBpmTimers, [clearBpmTimers]);
+
+  // Keep this component mounted so playback never overwrites editor drafts,
+  // selected layers, or the parent's selected bar.
+  if (isPlaying || isPreparing) {
+    const info = getBarPlaybackInfo({
+      currentBeat, beatsPerMeasure, isPreparing, barRepeats, beatSubdivisions,
+      bpm, soundSet, loopBlocks,
+    });
+    return (
+      <BarPlaybackPanel
+        {...info}
+        beatDenominator={beatDenominator}
+        layerSoundSets={layerSoundSets}
+        customSoundSets={customSoundSets}
+        colors={C}
+        ms={ms}
+        t={t}
+        isPlaying={isPlaying}
+        isPreparing={isPreparing}
+        barLoopMode={barLoopMode}
+        onTogglePlay={onTogglePlay}
+        onRandomPlayRequest={onRandomPlayRequest}
+        onBarLoopModeChange={onBarLoopModeChange}
+        blockPlayMode={blockPlayMode}
+        onBlockPlayModeChange={onBlockPlayModeChange}
+      />
+    );
+  }
 
   return (
     <>

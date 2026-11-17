@@ -1067,6 +1067,8 @@ export const translations = {
     mainLayer:          { ko: "메인", en: "Main" },
     layerLabel:         { ko: "레이어", en: "Layer" },
     editingBeat:        { ko: "바 {{n}} 편집 중", en: "Editing bar {{n}}" },
+    playingBeat:        { ko: "바 {{n}} 재생 중", en: "Playing bar {{n}}" },
+    preparingPlayback:  { ko: "재생 준비 중", en: "Preparing playback" },
     tapToEdit:          { ko: "바를 탭해 편집", en: "Tap a bar to edit" },
     layerBeatNormal:    { ko: "노멀", en: "Normal" },
     layerBeatAccent:    { ko: "악센트", en: "Accent" },

@@ -111,3 +111,4 @@
 - [Foreground location permissions](foreground-location-permissions.md) — practice-room GPS stays foreground-only; explicitly disable Expo’s default Always permission descriptions.
 - [Tempo trainer behavior](tempo-trainer-behavior.md) — one saved time/measure rule; use audio measure boundaries, not extra post-click cues; retain Android tempo-editable output.
 - [GitHub workflow restriction](github-workflows-policy.md) — 이 프로젝트에서는 앞으로 .github/workflows 파일을 수정하지 않는다.
+- [Bar playback panel](bar-playback-panel-behavior.md) — 재생 중 편집 조작만 숨기고 재생·정지는 유지한다. 정지하면 재생 전 편집 선택으로 돌아간다.

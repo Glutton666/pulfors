@@ -794,6 +794,7 @@ export function BarModeView({
       {/* ── Editor panel ── */}
       <BarEditorPanel
         editingBeat={barStartBeat}
+        currentBeat={currentBeat}
         barRepeats={barRepeats}
         isPlaying={isPlaying}
         beatsPerMeasure={beatsPerMeasure}
