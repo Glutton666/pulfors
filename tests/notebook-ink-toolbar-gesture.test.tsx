@@ -17,7 +17,7 @@ jest.mock("@expo/vector-icons", () => ({ Ionicons: () => null }));
 jest.mock("react-native", () => {
   const React = require("react");
   const native = jest.requireActual("react-native");
-  const TestView = React.forwardRef(({ children, testID, onLayout }: any, ref: any) => {
+  const TestView = React.forwardRef(function TestView({ children, testID, onLayout }: any, ref: any) {
     const assignRef = (node: any) => {
       if (node) {
         node.__onLayout = onLayout;
