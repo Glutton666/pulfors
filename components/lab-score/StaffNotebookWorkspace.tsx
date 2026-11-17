@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { BackHandler, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { BackHandler, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { Alert } from "@/lib/alert";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/contexts/ThemeContext";
@@ -17,11 +17,12 @@ import { NotebookSettingsPanel } from "@/components/lab-score/notebook/NotebookS
 import { NotebookPaper } from "@/components/lab-score/notebook/NotebookPaper";
 import { attachedPosition, captureSelection, emptySelection, hitObject, includeAttached, isAttachedMark, isNotebookNote, isTupletMember, paginateNotebook, rectangle, removeSelection, reorderNotebookRows, selectRectangle, selectNotebookUnits, selectionBounds, selectionCount, selectionDelta, transformSelection, type NotebookClipboard, type NotebookSelection, type NotebookBounds, type NotebookSelectionUnit } from "@/lib/notebook-editing";
 import { eraseNotebookGesture, type NotebookEraserMode } from "@/lib/notebook-erasing";
-import { layoutNotebookMusic, measuresInRow, naturalPaperWidth, standardTupletRatio, isManualBar, isMusic, measureDuration, musicalDuration } from "@/lib/notebook-music-layout";
+import { layoutNotebookMusic, measuresInRow, naturalPaperWidth, notebookMeasureRegions, standardTupletRatio, isManualBar, isMusic, measureDuration, musicalDuration } from "@/lib/notebook-music-layout";
 import { prepareNotebookMeasureEdit } from "@/lib/notebook-measure-edit";
 import { randomizeNotebook } from "@/lib/notebook-random";
 import { insertSelectionBeforeFollowing, notebookWritingTail } from "@/lib/notebook-editing";
 import { NotebookObjectEditor } from "@/components/lab-score/notebook/NotebookObjectEditor";
+import { notebookPortraitPolicy, projectNotebookPortrait } from "@/lib/notebook-portrait-layout";
 
 type Tool = "pen" | "erase" | "move" | "select";
 const id = (prefix: string) => `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -77,6 +78,10 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
   const [patternLoading, setPatternLoading] = useState(false);
   const [patternError, setPatternError] = useState("");
   const [scale, setScale] = useState(1);
+  const windowSize = useWindowDimensions();
+  const portraitPolicy = notebookPortraitPolicy(windowSize.width, windowSize.height, scale);
+  const displayScale = portraitPolicy.zoom;
+  useEffect(() => { if (scale !== portraitPolicy.zoom) setScale(portraitPolicy.zoom); }, [scale, portraitPolicy.zoom]);
   const [offset, setOffset] = useState<StaffPoint>({ x: 0, y: 0 });
   const [selection, setSelection] = useState<NotebookSelection>(emptySelection);
   const [selectionUnit, setSelectionUnit] = useState<NotebookSelectionUnit>("object");
@@ -125,9 +130,15 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
   useEffect(() => { if (pageIndex >= note.pages.length) setPageIndex(Math.max(0, note.pages.length - 1)); }, [pageIndex, note.pages.length]);
   const settings = note.settings!;
   const paperScale = viewport.width > 0 ? viewport.width / PAPER_WIDTH : 1;
+  // A phone must not squeeze a 900-unit sheet and its glyphs down to ~40%.
+  // Fold its measures into readable, screen-sized rows instead.
+  const portraitBoost = portraitPolicy.portrait ? Math.max(1, 1 / paperScale) : 1;
   const editingNote = useMemo(() => fitNotebookPage(note, pageIndex,
     Math.ceil(viewport.height / (ROW_HEIGHT * paperScale * scale))), [note, pageIndex, viewport.height, paperScale, scale]);
   const page = editingNote.pages[pageIndex] ?? editingNote.pages[0];
+  const inputProjection = useMemo(() => portraitPolicy.columns
+    ? projectNotebookPortrait(page, settings, portraitPolicy.columns, portraitPolicy.zoom, portraitBoost) : null,
+  [page, settings, portraitPolicy.columns, portraitPolicy.zoom, portraitBoost]);
   const playback = useNotebookPlayback(editingNote, active);
   const randomized = useMemo(() => {
     try {
@@ -143,7 +154,6 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
   const performanceNote = randomized.note;
   const playbackPage = useMemo(() => playback.running ? materializeRows(performanceNote, playback.rows) : null, [playback.running, playback.rows, performanceNote]);
   const visiblePage = playbackPage ?? (settings.random ? performanceNote.pages[pageIndex] : page) ?? page;
-  const visibleHeight = (visiblePage.staffCount ?? 7) * ROW_HEIGHT;
   const resetTransient = () => {
     setSelection(emptySelection()); setSelectionBox(null); setDragDraft(null); selectionGesture.current = null; setUnitRows(null);
     setDrawing([]); drawingRef.current = []; setTupletIds(null); panStart.current = null;
@@ -275,9 +285,15 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
   }, [t.error]);
   useEffect(() => {
     if (!playback.running || !settings.follow || !playback.position) return;
-    const ratio = paperScale * settings.playbackZoom * (visiblePage.layoutScale ?? 1);
-    paperScroll.current?.scrollTo({ y: (playback.position.row * ROW_HEIGHT + 102) * ratio, animated: false });
-  }, [playback.running, playback.position, settings.follow, settings.playbackZoom, paperScale, viewport.height, visiblePage.layoutScale]);
+    const policy = notebookPortraitPolicy(windowSize.width, windowSize.height, settings.playbackZoom);
+    const view = policy.columns ? projectNotebookPortrait(visiblePage, settings, policy.columns, policy.zoom, portraitBoost) : null;
+    const regions = notebookMeasureRegions(visiblePage, settings).filter((r) => r.row === playback.position.row);
+    const r = regions[Math.min(regions.length - 1, Math.floor(playback.position.progress * regions.length))];
+    const point = { x: r ? (r.left + r.right) / 2 : 38, y: playback.position.row * ROW_HEIGHT + 102 };
+    const y = view ? view.forward(point).y : point.y;
+    const ratio = paperScale * policy.zoom * (view ? portraitBoost : visiblePage.layoutScale ?? 1);
+    paperScroll.current?.scrollTo({ y: y * ratio, animated: false });
+  }, [playback.running, playback.position, settings, paperScale, viewport.height, visiblePage, windowSize.width, windowSize.height, portraitBoost]);
   const confirmReplace = (action: () => void) => {
     const changed = savedSnapshot.current !== JSON.stringify(note);
     const replace = () => { playback.stop(); resetTransient(); setOffset({ x: 0, y: 0 }); action(); };
@@ -332,10 +348,11 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
     }
     if (toolPopup || panel || decision || objectEditor) return;
     if (phase === "start") editSnapshot.current = { selection, draft: dragDraft };
-    const zoom = playback.running && settings.follow ? settings.playbackZoom : scale;
-    const layoutScale = page.layoutScale ?? 1;
-    const doc = screenToPaper({ x: screen.x / paperScale, y: screen.y / paperScale }, offset, zoom);
+    const zoom = playback.running && settings.follow ? settings.playbackZoom : displayScale;
+    const layoutScale = portraitPolicy.portrait ? portraitBoost : page.layoutScale ?? 1;
+    let doc = screenToPaper({ x: screen.x / paperScale, y: screen.y / paperScale }, offset, zoom);
     doc.x /= layoutScale; doc.y /= layoutScale;
+    if (inputProjection) doc = inputProjection.inverse(doc);
     if (tool === "pen" || tool === "erase") {
       doc.x = Math.max(0, Math.min(naturalPaperWidth(page), doc.x));
       doc.y = Math.max(0, Math.min((page.staffCount ?? 7) * ROW_HEIGHT - 1, doc.y));
@@ -635,8 +652,24 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
     setDockMoving(false);
     setDockLayoutVersion((version) => version + 1);
   };
-    const zoom = following ? settings.playbackZoom : scale;
+    const viewPolicy = notebookPortraitPolicy(windowSize.width, windowSize.height, following ? settings.playbackZoom : scale);
+    const zoom = viewPolicy.zoom;
   const draftPage = dragDraft ? transformSelection(dragDraft.base, dragDraft.selection, dragDraft.delta).page : null;
+  const sourcePaper = settings.random || playback.running ? visiblePage : eraseDraft ?? draftPage ?? page;
+  const projection = useMemo(() => viewPolicy.columns
+    ? sourcePaper === page && viewPolicy.zoom === portraitPolicy.zoom ? inputProjection : projectNotebookPortrait(sourcePaper, settings, viewPolicy.columns, viewPolicy.zoom, portraitBoost) : null,
+  [sourcePaper, page, settings, inputProjection, viewPolicy.columns, viewPolicy.zoom, portraitPolicy.zoom, portraitBoost]);
+  const paperPage = projection?.page ?? sourcePaper;
+  const drawingPoints = projection ? drawing.map(projection.forward) : drawing;
+  const displayedSelection = projection ? { ...selection, strokeIds: [...projection.strokeOwners]
+    .filter(([, owner]) => selection.strokeIds.includes(owner)).map(([key]) => key) } : selection;
+  const changeZoom = (value: number) => {
+    if (toolPopup || panel === "menu" || decision || objectEditor) return;
+    playback.stop();
+    resetTransient();
+    setScale(notebookPortraitPolicy(windowSize.width, windowSize.height, value).zoom);
+    setOffset({ x: 0, y: 0 });
+  };
   return (
     <View testID="notebook-workspace" style={[styles.root, { backgroundColor: "#ffffff" }]}>
       <View testID="notebook-paper-stage" ref={paperStageRef} style={styles.paperStage} onLayout={(event) => {
@@ -656,14 +689,19 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
           nestedScrollEnabled showsVerticalScrollIndicator={false}>
           <NotebookPaper
             settings={settings}
-            page={settings.random || playback.running ? visiblePage : eraseDraft ?? draftPage ?? page} width={PAPER_WIDTH * paperScale * zoom} height={visibleHeight * paperScale * zoom * (visiblePage.layoutScale ?? 1)}
-            paperScale={paperScale} zoom={playback.running && settings.follow ? settings.playbackZoom : scale}
+            page={paperPage} width={PAPER_WIDTH * paperScale * (projection ? Math.max(1, zoom) : zoom)} height={(paperPage.staffCount ?? 7) * ROW_HEIGHT * paperScale * zoom * (projection ? portraitBoost : paperPage.layoutScale ?? 1)}
+            paperScale={paperScale} zoom={zoom}
+            layoutScaleOverride={projection ? portraitBoost : undefined}
             offset={offset} tool={playback.running ? "move" : tool} lineWidth={lineWidth} lineColor={lineColor}
-            drawing={drawing} pendingGlyph={null} preview={null}
-            selection={playback.running ? undefined : selection} selectionBox={selectionBox}
+            drawing={drawingPoints} pendingGlyph={null} preview={null}
+            selection={playback.running ? undefined : displayedSelection} selectionBox={projection && selectionBox ? (() => {
+              const a = projection.forward(selectionBox), b = projection.forward({ x: selectionBox.x + selectionBox.width, y: selectionBox.y + selectionBox.height });
+              return rectangle(a, b);
+            })() : selectionBox}
             openTupletIds={tupletIds ?? undefined}
             onTouch={toolPopup || panel || dockMoving || decision || objectEditor ? undefined : onPaperTouch}
             onPan={(delta) => setOffset((old) => ({ x: old.x + delta.x / paperScale, y: old.y + delta.y / paperScale }))}
+            onZoomBy={toolPopup || panel || dockMoving || decision || objectEditor ? undefined : (ratio) => changeZoom(scale * ratio)}
           />
         </ScrollView></ScrollView>
         {panel === "menu" ? (
@@ -699,7 +737,7 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
         <Pressable accessibilityLabel={t.undo} disabled={!undoStack.current.length} onPress={undo} style={{ padding: 10, opacity: undoStack.current.length ? 1 : 0.35 }}><Ionicons name="arrow-undo" size={18} color="#675d50" /></Pressable>
         <Pressable accessibilityLabel={t.redo} disabled={!redoStack.current.length} onPress={redo} style={{ padding: 10, opacity: redoStack.current.length ? 1 : 0.35 }}><Ionicons name="arrow-redo" size={18} color="#675d50" /></Pressable>
       </View>}
-      <NotebookBottomTools ko={ko} mode={mode} tool={tool} lineWidth={lineWidth} scale={scale} pickerTop={paperTop}
+      <NotebookBottomTools ko={ko} mode={mode} tool={tool} lineWidth={lineWidth} scale={portraitPolicy.zoom} pickerTop={paperTop}
         onPreferredWidth={mode === "ink" ? fitInkDock : undefined}
         pickerBottom={paperTop + viewport.height} layoutKey={dockLayoutKey}
         onAutoSpace={autoSpace} autoSpaceDisabled={playback.running || playback.preparing || !!dragDraft}
@@ -707,7 +745,7 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
         toolPopup={toolPopup} onToolPopup={(next) => { resetTransient(); setToolPopup(next); }}
         canUndo={undoStack.current.length > 0} canRedo={redoStack.current.length > 0}
         onTool={(next) => { playback.stop(); setDragDraft(null); setTool(next); }} onWidth={setLineWidth}
-        onZoom={(value) => { playback.stop(); setScale(Math.max(0.35, Math.min(2.5, value))); }} onUndo={undo} onRedo={redo}
+        onZoom={changeZoom} onUndo={undo} onRedo={redo}
         onChoose={beginStamp} onTuplet={closeTuplet} tupletCount={tupletIds?.length ?? null}
         selectionCount={selectionCount(selection) || (unitRows ? unitRows.last - unitRows.first + 1 : 0)} onClearSelection={() => { setSelection(emptySelection()); setDragDraft(null); setSelectionBox(null); setUnitRows(null); }}
         selectionUnit={selectionUnit} onSelectionUnit={(unit) => { setSelectionUnit(unit); setSelection(emptySelection()); setDragDraft(null); setUnitRows(null); setSelectionBox(null); }}
@@ -725,6 +763,7 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
               <Pressable testID="notebook-panel-close" accessibilityLabel={t.close} onPress={closePanel} hitSlop={12} style={styles.closeButton}><Ionicons name="close" size={22} color="#302b25" /></Pressable>
             </View>
             <NotebookSettingsPanel
+              portraitLayout={portraitPolicy.portrait}
               ko={ko} t={t} note={note} settings={settings} patterns={patterns} patternLoading={patternLoading} patternError={patternError}
               notebooks={notebooks} error={error}
               onSettings={updateSettings} onPattern={loadPattern}
@@ -733,7 +772,7 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
               onDelete={(saved) => Alert.alert(t.notes, ko ? "이 노트를 삭제할까요?" : "Delete this notebook?", [{ text: t.cancel, style: "cancel" }, { text: ko ? "삭제" : "Delete", style: "destructive", onPress: () => void remove(saved.id) }])}
               onTitle={(title) => setNote((prev) => ({ ...prev, title }))}
               pageIndex={pageIndex} onPage={(index) => { playback.stop(); resetTransient(); setPageIndex(index); setOffset({ x: 0, y: 0 }); }}
-              onAddPage={addPage} onRows={setRows} onZoom={setScale} scale={scale}
+              onAddPage={addPage} onRows={setRows} onZoom={changeZoom} scale={portraitPolicy.zoom}
               onReshuffle={() => updateSettings({ randomSeed: (settings.randomSeed ?? 1) + 1 })}
             />
           </View>

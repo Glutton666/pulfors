@@ -100,6 +100,14 @@ test("the palette uses the same full note shapes as paper, without clipping flag
   expect(Number(x) + 13 * Number(scale)).toBeLessThan(left + width);
 });
 
+test.each(["clef-treble", "clef-bass", "clef-alto", "clef-tenor", "clef-percussion"])("palette clef %s renders vectors instead of a missing font character", (glyph) => {
+  const view = render(<svg><NotebookGlyph glyph={glyph} x={20} y={60} size={26} /></svg>);
+  expect(view.getByTestId(`notebook-${glyph}`).querySelector("path")).toBeTruthy();
+});
+test("a placed meter renders its numerator and denominator separately", () => {
+  const view = render(<svg><NotebookGlyph glyph="time-6-8" x={20} y={60} size={26} /></svg>);
+  expect([...view.getByTestId("notebook-meter-glyph").querySelectorAll("text")].map((node) => node.textContent)).toEqual(["6", "8"]);
+});
 test("rest notation and Beat/Bar's intentional normal ghost glyph remain unchanged", () => {
   const view = render(<svg>
     <NotebookGlyph glyph="rest-eighth" x={0} y={0} size={26} />

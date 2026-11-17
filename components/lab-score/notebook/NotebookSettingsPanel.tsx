@@ -30,6 +30,7 @@ type Props = {
   onRows: (count: number) => void;
   onZoom: (scale: number) => void;
   scale: number;
+  portraitLayout?: boolean;
 };
 
 export function NotebookSettingsPanel(props: Props) {
@@ -186,6 +187,9 @@ export function NotebookSettingsPanel(props: Props) {
       {toggle(ko ? "자동 크기 조정" : "Automatic scaling", settings.autoScale ?? false, (autoScale) => props.onSettings({ autoScale }), "notebook-auto-scale")}
       {toggle(ko ? "마디선 표시" : "Show barlines", settings.showBarlines ?? false, (showBarlines) => props.onSettings({ showBarlines }), "notebook-show-barlines")}
       <Text style={styles.meta}>{ko ? "마디선을 숨겨도 마디 계산은 계속됩니다." : "Hiding barlines leaves measure calculations intact."}</Text>
+      {props.portraitLayout && <Text style={styles.meta}>{ko
+        ? "휴대폰 세로는 100%에서 한 줄 한 마디, 50%에서 최대 두 마디입니다. 아래 마디 수는 가로 화면·태블릿에 적용되며 저장된 악보의 음악적 길이는 바뀌지 않습니다."
+        : "Phone portrait shows one measure at 100% and up to two at 50%. The count below is retained for landscape and tablets; musical duration is unchanged."}</Text>}
       <View style={styles.fieldGroup}>
         <View style={styles.fieldLabelRow}><Text style={styles.fieldLabel}>{ko ? "한 줄의 마디 수" : "Measures per row"}</Text><Text style={styles.value}>1–32</Text></View>
         <TextInput testID="notebook-measures-per-row" accessibilityLabel={ko ? "한 줄의 마디 수" : "Measures per row"} value={measuresDraft} onChangeText={setMeasuresDraft} onBlur={() => commitMeasures()} onSubmitEditing={(event) => commitMeasures(event.nativeEvent.text)} keyboardType="number-pad" returnKeyType="done" style={styles.numberInput} />

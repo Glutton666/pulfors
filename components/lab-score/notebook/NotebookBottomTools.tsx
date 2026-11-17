@@ -87,6 +87,7 @@ export function NotebookBottomTools(props: Props) {
   const gestureRef = useRef({ active: false, dx: 0, dy: 0, vertical: false, role: "normal" as Choice["role"], duration: "quarter", dotted: false, lastX: 0, lastY: 0 });
   const gestureSnapshot = useRef({ role: "normal" as Choice["role"], duration: "quarter", dotted: false });
   const responderUsed = useRef(false);
+  const responderResetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const callbacks = useRef(props);
   callbacks.current = props;
   const [originLayout, setOriginLayout] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
@@ -94,6 +95,8 @@ export function NotebookBottomTools(props: Props) {
   const dockLeft = useRef(0);
   const [dockPosition, setDockPosition] = useState({ x: 0, y: 0 });
   const [dockWidth, setDockWidth] = useState(0);
+  const dockWidthRef = useRef(dockWidth);
+  dockWidthRef.current = dockWidth;
   const [dockHeight, setDockHeight] = useState(0);
   const [moreActionsOpen, setMoreActionsOpen] = useState(false);
   const pickerActive = gestureActive || restGestureActive;
@@ -143,6 +146,8 @@ export function NotebookBottomTools(props: Props) {
   });
 
   const restoreCancelledGesture = () => {
+    if (responderResetTimer.current) clearTimeout(responderResetTimer.current);
+    responderResetTimer.current = null;
     const previous = gestureSnapshot.current;
     gestureRef.current.active = false;
     gestureRef.current.vertical = false;
@@ -165,8 +170,14 @@ export function NotebookBottomTools(props: Props) {
   useEffect(() => {
     restoreCancelledGesture();
     setCategory(null);
+    return () => {
+      if (responderResetTimer.current) clearTimeout(responderResetTimer.current);
+      responderResetTimer.current = null;
+    };
   }, [mode, windowWidth, windowHeight, props.layoutKey]);
   useEffect(() => () => {
+    if (responderResetTimer.current) clearTimeout(responderResetTimer.current);
+    responderResetTimer.current = null;
     gestureRef.current.active = false;
     responderUsed.current = false;
   }, []);
@@ -224,9 +235,18 @@ export function NotebookBottomTools(props: Props) {
         setGestureVertical(true);
         setGestureDuration(state.duration);
       } else if (Math.abs(gesture.dx) > 16) {
-        const nearest = roleValues.map((role) => ({ role, box: roleBoxes.current[role] }))
-          .filter((item) => item.box)
-          .sort((a, b) => Math.abs(gesture.moveX - (a.box!.x + a.box!.width / 2)) - Math.abs(gesture.moveX - (b.box!.x + b.box!.width / 2)))[0];
+        const roleCenters = roleValues.map((role, index) => {
+          const box = roleBoxes.current[role];
+          if (box) return { role, center: box.x + box.width / 2 };
+          const origin = originBox.current;
+          if (!origin) return null;
+          const left = dockWidthRef.current > 0
+            ? Math.max(0, Math.min(Math.max(0, dockWidthRef.current - 184), origin.x + origin.width / 2 - dockLeft.current - 92))
+            : origin.x + origin.width / 2 - dockLeft.current - 92;
+          return { role, center: dockLeft.current + left + 29 + index * 63 };
+        }).filter((item): item is { role: Choice["role"]; center: number } => item !== null);
+        const nearest = roleCenters
+          .sort((a, b) => Math.abs(gesture.moveX - a.center) - Math.abs(gesture.moveX - b.center))[0];
         if (nearest) {
           state.role = nearest.role;
           setGestureRole(state.role);
@@ -245,7 +265,11 @@ export function NotebookBottomTools(props: Props) {
       setOriginLayout(null);
       rowBoxes.current = {};
       roleBoxes.current = {};
-      setTimeout(() => { responderUsed.current = false; }, 250);
+      if (responderResetTimer.current) clearTimeout(responderResetTimer.current);
+      responderResetTimer.current = setTimeout(() => {
+        responderUsed.current = false;
+        responderResetTimer.current = null;
+      }, 250);
     },
     onPanResponderTerminate: () => {
       restoreCancelledGesture();
@@ -268,6 +292,8 @@ export function NotebookBottomTools(props: Props) {
   };
 
   const chooseAccessibleNote = (choice: Choice) => {
+    if (responderResetTimer.current) clearTimeout(responderResetTimer.current);
+    responderResetTimer.current = null;
     gestureRef.current.active = false;
     Object.assign(gestureRef.current, { role: choice.role, duration: choice.glyph, dotted: choice.dotted });
     gestureSnapshot.current = { role: choice.role, duration: choice.glyph, dotted: choice.dotted };
@@ -282,13 +308,36 @@ export function NotebookBottomTools(props: Props) {
 
   const usedMarkIds = new Set<string>();
   const markGroups = [
+    {
+      label: ko ? "음자리표" : "Clefs",
+      literal: true,
+      items: [
+        { id: "clef-treble", label: ko ? "높은음자리표" : "Treble clef" },
+        { id: "clef-bass", label: ko ? "낮은음자리표" : "Bass clef" },
+        { id: "clef-alto", label: ko ? "가온음자리표" : "Alto clef" },
+        { id: "clef-tenor", label: ko ? "테너음자리표" : "Tenor clef" },
+        { id: "clef-percussion", label: ko ? "타악기 음자리표" : "Percussion clef" },
+      ],
+    },
+    {
+      label: ko ? "박자표" : "Meters",
+      literal: true,
+      items: [
+        { id: "time-2-4", label: ko ? "2/4박자" : "2/4 meter" },
+        { id: "time-3-4", label: ko ? "3/4박자" : "3/4 meter" },
+        { id: "time-4-4", label: ko ? "4/4박자" : "4/4 meter" },
+        { id: "time-6-8", label: ko ? "6/8박자" : "6/8 meter" },
+        { id: "time-9-8", label: ko ? "9/8박자" : "9/8 meter" },
+        { id: "time-12-8", label: ko ? "12/8박자" : "12/8 meter" },
+      ],
+    },
     { label: ko ? "임시표" : "Accidentals", items: ACCIDENTALS.map((item) => ({ id: item.value, label: item.labelKey })) },
     { label: ko ? "아티큘레이션" : "Articulations", items: ARTICULATIONS.map((item) => ({ id: item.id, label: item.labelKey })) },
     { label: ko ? "반복 · 이동 부호" : "Repeats & navigation", items: [{ id: "barline", label: ko ? "마디선" : "Barline" }, ...REPEAT_SIGNS.map((item) => ({ id: item.id, label: item.labelKey }))] },
     { label: ko ? "악기 기호" : "Instrument marks", items: ALL_INSTR_SYMBOLS.map((item) => ({ id: item.id, label: item.labelKey })) },
   ].map((group) => ({
     ...group,
-    items: group.items.map((item) => ({ ...item, label: item.id === "barline" ? item.label : t("scoreMode", item.label as any) })).filter((item) => {
+    items: group.items.map((item) => ({ ...item, label: item.id === "barline" || ("literal" in group && group.literal) ? item.label : t("scoreMode", item.label as any) })).filter((item) => {
       if (usedMarkIds.has(item.id)) return false;
       usedMarkIds.add(item.id);
       return true;
@@ -334,7 +383,7 @@ export function NotebookBottomTools(props: Props) {
           setOriginLayout({ x: originX, y: originY, width, height });
         });
       })}>
-          <View testID="notebook-note-idle-tools" accessibilityElementsHidden={pickerActive} importantForAccessibility={pickerActive ? "no-hide-descendants" : "auto"} style={[styles.notesDockContent, pickerActive && { opacity: 0 }]}>
+          <View testID="notebook-note-idle-tools" style={styles.notesDockContent}>
             <View style={styles.categoryRow}>
               <View testID="notebook-note-tile" ref={originRef} collapsable={false} pointerEvents={restGestureActive ? "none" : "auto"} onLayout={() => originRef.current?.measureInWindow((x, y, width, height) => setOriginLayout({ x, y, width, height }))} {...noteResponder.panHandlers} style={[styles.categoryButton, styles.noteOrigin, restGestureActive && { opacity: 0 }]}>
                 {!restGestureActive && <Pressable testID="notebook-note-origin" accessibilityRole="button" accessibilityLabel={ko ? "음표 선택. 좌우로 강도를, 위로 음가를 고르세요." : "Note picker. Swipe sideways for role, up for duration."} accessibilityState={{ expanded: showAccessibleChooser }} accessibilityActions={[{ name: "expand", label: ko ? "음표 선택기 펼치기" : "Expand note chooser" }]} onAccessibilityAction={(event) => { if (event.nativeEvent.actionName === "expand") setShowAccessibleChooser(true); }} onPress={() => { if (responderUsed.current) { responderUsed.current = false; return; } setShowAccessibleChooser(true); }} style={styles.originInner}>
@@ -343,25 +392,25 @@ export function NotebookBottomTools(props: Props) {
                 </Pressable>}
               </View>
               {restPicker.origin}
-              <Pressable testID="notebook-tuplet" disabled={gestureActive || restGestureActive} accessibilityElementsHidden={gestureActive || restGestureActive} accessibilityRole="button" accessibilityState={{ selected: props.tupletCount !== null }} onPress={props.onTuplet} style={[styles.categoryButton, props.tupletCount !== null && styles.categoryActive, (gestureActive || restGestureActive) && { opacity: 0 }]}>
+              <Pressable testID="notebook-tuplet" disabled={pickerActive} accessibilityElementsHidden={pickerActive} accessibilityRole="button" accessibilityState={{ selected: props.tupletCount !== null }} onPress={props.onTuplet} style={[styles.categoryButton, props.tupletCount !== null && styles.categoryActive, pickerActive && styles.hiddenNeighbor]}>
                 <View style={styles.categoryIconFrame}><NotebookTupletPreview count={props.tupletCount ?? 3} /></View>
                 <Text style={styles.categoryLabel}>{ko ? "잇단음표" : "Tuplet"}</Text>
               </Pressable>
-              <Pressable testID="notebook-category-marks" disabled={gestureActive || restGestureActive} accessibilityElementsHidden={gestureActive || restGestureActive} accessibilityRole="button" accessibilityState={{ expanded: category === "marks", selected: category === "marks" }} onPress={() => setCategory(category === "marks" ? null : "marks")} style={[styles.categoryButton, category === "marks" && styles.categoryActive, (gestureActive || restGestureActive) && { opacity: 0 }]}>
+              <Pressable testID="notebook-category-marks" disabled={pickerActive} accessibilityElementsHidden={pickerActive} accessibilityRole="button" accessibilityState={{ expanded: category === "marks", selected: category === "marks" }} onPress={() => setCategory(category === "marks" ? null : "marks")} style={[styles.categoryButton, category === "marks" && styles.categoryActive, pickerActive && styles.hiddenNeighbor]}>
                 <View style={styles.categoryIconFrame}><Ionicons name="musical-notes-outline" size={21} color="#725b3c" /></View>
                 <Text style={styles.categoryLabel}>{ko ? "기호" : "Marks"}</Text>
               </Pressable>
               {compactNoteActions ? (
-                <Pressable testID="notebook-note-more" disabled={pickerActive} accessibilityRole="button" accessibilityLabel={ko ? "더 많은 편집 도구" : "More editing tools"} accessibilityState={{ expanded: moreActionsOpen }} onPress={() => setMoreActionsOpen((open) => !open)} style={styles.moreActionsButton}>
+                <Pressable testID="notebook-note-more" disabled={pickerActive} accessibilityElementsHidden={pickerActive} accessibilityRole="button" accessibilityLabel={ko ? "더 많은 편집 도구" : "More editing tools"} accessibilityState={{ expanded: moreActionsOpen }} onPress={() => setMoreActionsOpen((open) => !open)} style={[styles.moreActionsButton, pickerActive && styles.hiddenNeighbor]}>
                   <Ionicons name={moreActionsOpen ? "close" : "ellipsis-horizontal"} size={19} color="#675d50" />
                 </Pressable>
               ) : (
                 <>
-                  <Pressable testID="notebook-auto-space" accessibilityRole="button" accessibilityLabel={ko ? "같은 간격으로 정리" : "Space notes evenly"} disabled={pickerActive || props.autoSpaceDisabled} onPress={props.onAutoSpace} style={[styles.inlineActionButton, props.autoSpaceDisabled && styles.disabled]}>
+                  <Pressable testID="notebook-auto-space" accessibilityElementsHidden={pickerActive} accessibilityRole="button" accessibilityLabel={ko ? "같은 간격으로 정리" : "Space notes evenly"} disabled={pickerActive || props.autoSpaceDisabled} onPress={props.onAutoSpace} style={[styles.inlineActionButton, props.autoSpaceDisabled && styles.disabled, pickerActive && styles.hiddenNeighbor]}>
                     <Ionicons name="options-outline" size={16} color="#695538" /><Text style={styles.autoSpaceText}>{ko ? "간격 정리" : "Auto-space"}</Text>
                   </Pressable>
-                  <Pressable testID="notebook-note-undo" accessibilityRole="button" accessibilityLabel={ko ? "실행 취소" : "Undo"} disabled={pickerActive || !props.canUndo} onPress={props.onUndo} style={[styles.noteHistoryButton, !props.canUndo && styles.disabled]}><Ionicons name="arrow-undo" size={17} color="#675d50" /></Pressable>
-                  <Pressable testID="notebook-note-redo" accessibilityRole="button" accessibilityLabel={ko ? "다시 실행" : "Redo"} disabled={pickerActive || !props.canRedo} onPress={props.onRedo} style={[styles.noteHistoryButton, !props.canRedo && styles.disabled]}><Ionicons name="arrow-redo" size={17} color="#675d50" /></Pressable>
+                  <Pressable testID="notebook-note-undo" accessibilityElementsHidden={pickerActive} accessibilityRole="button" accessibilityLabel={ko ? "실행 취소" : "Undo"} disabled={pickerActive || !props.canUndo} onPress={props.onUndo} style={[styles.noteHistoryButton, !props.canUndo && styles.disabled, pickerActive && styles.hiddenNeighbor]}><Ionicons name="arrow-undo" size={17} color="#675d50" /></Pressable>
+                  <Pressable testID="notebook-note-redo" accessibilityElementsHidden={pickerActive} accessibilityRole="button" accessibilityLabel={ko ? "다시 실행" : "Redo"} disabled={pickerActive || !props.canRedo} onPress={props.onRedo} style={[styles.noteHistoryButton, !props.canRedo && styles.disabled, pickerActive && styles.hiddenNeighbor]}><Ionicons name="arrow-redo" size={17} color="#675d50" /></Pressable>
                 </>
               )}
             </View>
@@ -464,6 +513,7 @@ const styles = StyleSheet.create({
   disabled: { opacity: 0.38 },
   zoomValue: { color: "#665944", minWidth: 38, textAlign: "center", fontSize: 11, fontWeight: "700", fontVariant: ["tabular-nums"] },
   notesDockContent: { paddingHorizontal: 6, paddingTop: 7, paddingBottom: 7 },
+  hiddenNeighbor: { opacity: 0 },
   noteActions: { minHeight: 38, flexDirection: "row", alignItems: "center", gap: 7, paddingHorizontal: 2 },
   actionsCaption: { color: "#9b8d77", fontSize: 8, fontWeight: "800", letterSpacing: 0.7 },
   actionsSpacer: { width: 0 },

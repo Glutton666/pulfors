@@ -1,4 +1,4 @@
-import React, { useMemo, useRef } from "react";
+import React, { useEffect, useMemo, useRef } from "react";
 import { PanResponder, Platform, StyleSheet, View } from "react-native";
 import Svg, { G, Line, Path, Rect } from "react-native-svg";
 import type { StaffPage, StaffPoint , NotebookSettings } from "@/lib/staff-notebook";
@@ -23,14 +23,32 @@ type Props = {
   settings?: Partial<NotebookSettings>;
   lineColor?: string;
   onPan?: (delta: StaffPoint) => void;
+  onZoomBy?: (ratio: number) => void;
+  layoutScaleOverride?: number;
   onTouch?: (point: StaffPoint, phase: "start" | "move" | "end" | "cancel") => void;
 };
 
-export function NotebookPaper({ page, width, height, paperScale, zoom, offset, lineWidth, lineColor = "#111111", drawing, pendingGlyph, preview, selectedStampId, selection, selectionBox, openTupletIds, pendingRole, pendingDotted, settings, onTouch, onPan }: Props) {
+export function NotebookPaper({ page, width, height, paperScale, zoom, offset, tool, lineWidth, lineColor = "#111111", drawing, pendingGlyph, preview, selectedStampId, selection, selectionBox, openTupletIds, pendingRole, pendingDotted, settings, onTouch, onPan, onZoomBy, layoutScaleOverride }: Props) {
+  const surface = useRef<View>(null);
+  const zoomCallback = useRef({ tool, onZoomBy });
+  zoomCallback.current = { tool, onZoomBy };
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+    const node = surface.current as unknown as HTMLElement | null;
+    if (!node?.addEventListener) return;
+    const wheel = (event: WheelEvent) => {
+      if (!event.ctrlKey || !zoomCallback.current.onZoomBy) return;
+      event.preventDefault();
+      zoomCallback.current.onZoomBy(Math.exp(-event.deltaY * 0.003));
+    };
+    node.addEventListener("wheel", wheel, { passive: false });
+    return () => node.removeEventListener("wheel", wheel);
+  }, []);
   const touch = useRef(onTouch); touch.current = onTouch;
   const pan = useRef(onPan); pan.current = onPan;
   const gesture = useMemo(() => createNotebookPaperGesture({
     edit: (point, phase) => touch.current?.(point, phase), pan: (delta) => pan.current?.(delta),
+    zoom: (ratio) => { if (zoomCallback.current.tool === "move") zoomCallback.current.onZoomBy?.(ratio); },
   }), []);
   const responder = useMemo(() => {
     const send = (event: any, phase: "start" | "move" | "end" | "cancel") => {
@@ -48,7 +66,7 @@ export function NotebookPaper({ page, width, height, paperScale, zoom, offset, l
     onPanResponderRelease: (event) => send(event, "end"),
     onPanResponderTerminate: (event) => send(event, "cancel"),
   }); }, [gesture]);
-  const layoutScale = page.layoutScale ?? 1;
+  const layoutScale = layoutScaleOverride ?? page.layoutScale ?? 1;
   const transform = `translate(${offset.x} ${offset.y}) scale(${zoom * layoutScale})`;
   const path = (points: StaffPoint[]) => points.map((point, i) => `${i ? "L" : "M"}${point.x},${point.y}`).join(" ") + (points.length === 1 ? " l0.01,0.01" : "");
   const displayedPage = page;
@@ -56,6 +74,7 @@ export function NotebookPaper({ page, width, height, paperScale, zoom, offset, l
   const tuplets = notebookTupletSpans(displayedPage, openTupletIds, beaming);
   return (
     <View
+      ref={surface}
       testID="notebook-drawing"
       style={[styles.paper, { width, height, transform: [{ scale: 1 }], ...(Platform.OS === "web" ? { userSelect: "none" as const, touchAction: "none" as const } : {}) }]}
       {...(onTouch ? responder.panHandlers : {})}

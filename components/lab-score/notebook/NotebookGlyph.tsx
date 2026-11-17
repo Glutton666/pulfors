@@ -20,6 +20,19 @@ const typography: Record<string, string> = {
 };
 
 export function NotebookGlyph({ glyph, x, y, size, role = "normal", dotted = false, beam }: { glyph: string; x: number; y: number; size: number; role?: NotebookNoteRole; dotted?: boolean; beam?: NotebookBeamStem }) {
+  const meter = /^time-(\d+)-(\d+)$/.exec(glyph);
+  if (meter) return <G testID="notebook-meter-glyph" transform={`translate(${x} ${y}) scale(${size / 26})`}>
+    <SvgText x={0} y={-3} textAnchor="middle" fontFamily="serif" fontWeight="bold" fontSize={25} fill="#111">{meter[1]}</SvgText>
+    <SvgText x={0} y={21} textAnchor="middle" fontFamily="serif" fontWeight="bold" fontSize={25} fill="#111">{meter[2]}</SvgText>
+  </G>;
+  if (glyph.startsWith("clef-")) return <G testID={`notebook-${glyph}`} transform={`translate(${x} ${y}) scale(${size / 26})`}>
+    {glyph === "clef-treble" && <Path d="M2 28 C-14 31 -21 12 -12 1 C-5 -9 13 -12 12 -28 C11 -41 1 -43 -1 -29 C-5 -7 13 14 9 32 C6 45 -8 40 -6 33 C-5 27 2 29 1 34 M10 12 C9 -1 -9 -2 -10 10 C-11 20 2 23 7 17" fill="none" stroke="#111" strokeWidth={2.5} strokeLinecap="round" />}
+    {glyph === "clef-bass" && <><Path d="M-11 -7 C-11 -23 12 -20 10 -5 C8 7 -3 14 -13 19 C-2 10 4 4 4 -5 C4 -15 -4 -16 -7 -10" fill="#111" /><Circle cx={-9} cy={-9} r={3.8} fill="#111" /><Circle cx={17} cy={-11} r={2} fill="#111" /><Circle cx={17} cy={1} r={2} fill="#111" /></>}
+    {(glyph === "clef-alto" || glyph === "clef-tenor") && <G transform={glyph === "clef-tenor" ? "translate(0 -12)" : undefined}>
+      <Path d="M-13 -24 V24 M-8 -24 V24 M-3 0 L4 -8 V-23 C23 -25 23 -2 6 0 C23 2 23 25 4 23 V8 Z" fill="none" stroke="#111" strokeWidth={3} />
+    </G>}
+    {glyph === "clef-percussion" && <Path d="M-7 -14 V14 M7 -14 V14" stroke="#111" strokeWidth={5} />}
+  </G>;
   const noteValue = noteDenominator[glyph];
   if (noteValue) {
     return <G>

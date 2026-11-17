@@ -1,6 +1,84 @@
 import { test, expect, type Page } from "@playwright/test";
 import type { StaffNotebook } from "../lib/staff-notebook";
 import { DEFAULT_NOTEBOOK_SETTINGS } from "../lib/staff-notebook";
+if (process.env.SETTINGS_TEST_URL) test.use({ baseURL: process.env.SETTINGS_TEST_URL });
+
+test("ink vertical drag selects a tool and cumulative right swipe opens that tool's settings", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await openNotebook(page);
+  const origin = (await page.getByTestId("notebook-ink-tool").boundingBox())!;
+  await page.mouse.move(origin.x + origin.width / 2, origin.y + origin.height / 2);
+  await page.mouse.down();
+  await page.waitForTimeout(450);
+  const erase = (await page.getByTestId("notebook-tool-erase").boundingBox())!;
+  const x = erase.x + erase.width / 2, y = erase.y + erase.height / 2;
+  await page.mouse.move(x, y, { steps: 12 });
+  await page.mouse.move(x + 70, y, { steps: 14 });
+  await page.mouse.up();
+  await expect(page.getByTestId("notebook-ink-options")).toBeVisible();
+  await expect(page.getByTestId("notebook-eraser-partial")).toBeVisible();
+  await page.getByTestId("notebook-eraser-partial").click();
+  await page.getByTestId("notebook-ink-options-close").click();
+  await expect(page.getByTestId("notebook-ink-tool")).toHaveAccessibleName(/Eraser|지우개/);
+  await page.screenshot({ path: "generated-artifacts/notebook-vertical-tool-gesture.png" });
+});
+
+test("portrait folds to one or two measures without changing wide layouts or losing notation", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await openNotebook(page);
+  await openSettings(page);
+  await page.getByTestId("notebook-measures-per-row").fill("4");
+  await page.getByTestId("notebook-measures-per-row").press("Enter");
+  await page.getByTestId("notebook-show-barlines").click();
+  await page.getByTestId("notebook-panel-close").click();
+  await expect(page.getByTestId("notebook-auto-barline")).toHaveCount(0);
+  const paper = (await page.getByTestId("notebook-drawing").boundingBox())!;
+  const staff = (await page.getByTestId("notebook-drawing").locator("line").first().boundingBox())!;
+  expect(staff.x + staff.width).toBeLessThanOrEqual(paper.x + paper.width + 1);
+  await page.mouse.move(paper.x + paper.width / 2, paper.y + 30);
+  await page.keyboard.down("Control");
+  await page.mouse.wheel(0, 1000);
+  await page.keyboard.up("Control");
+  await expect(page.getByTestId("notebook-ink-zoom")).toHaveText("50%");
+  for (let i = 0; i < 8; i++) await page.getByTestId("notebook-ink-zoom-out").click();
+  await expect(page.getByTestId("notebook-ink-zoom")).toHaveText("50%");
+  expect(await page.getByTestId("notebook-auto-barline").count()).toBeGreaterThan(0);
+  await page.screenshot({ path: "generated-artifacts/notebook-portrait-two-measures.png" });
+  await page.setViewportSize({ width: 844, height: 390 });
+  // Original four-bar geometry returns; display folding never overwrites settings.
+  const bars = page.getByTestId("notebook-auto-barline");
+  const firstY = await bars.first().getAttribute("y1");
+  expect((await bars.evaluateAll((nodes, y) => nodes.filter((node) => node.getAttribute("y1") === y).length, firstY))).toBe(3);
+  await page.setViewportSize({ width: 768, height: 1024 });
+  const tabletY = await bars.first().getAttribute("y1");
+  expect(await bars.evaluateAll((nodes, y) => nodes.filter((node) => node.getAttribute("y1") === y).length, tabletY)).toBe(3);
+  await chooseMode(page, "notes");
+  await chooseGlyph(page, "clef-treble");
+  await chooseGlyph(page, "time-6-8");
+  await expect(page.getByTestId("notebook-clef-treble")).toHaveCount(1);
+  await expect(page.getByTestId("notebook-meter-glyph")).toHaveCount(1);
+});
+
+test("one continuous note gesture preserves strong role and left-swipe dot while placing exactly once", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await openNotebook(page); await chooseMode(page, "notes");
+  const note = (await page.getByTestId("notebook-note-origin").boundingBox())!;
+  const x = note.x + note.width / 2, y = note.y + note.height / 2;
+  await page.mouse.move(x, y); await page.mouse.down();
+  const strong = (await page.getByTestId("notebook-note-role-strong").boundingBox())!;
+  await page.mouse.move(strong.x + strong.width / 2, y, { steps: 8 });
+  await page.mouse.move(strong.x + strong.width / 2, y - 140, { steps: 14 });
+  const quarter = (await page.getByTestId("notebook-note-duration-quarter").boundingBox())!;
+  await page.mouse.move(quarter.x + quarter.width / 2, quarter.y + quarter.height / 2, { steps: 8 });
+  const dotted = (await page.getByTestId("notebook-note-dotted").boundingBox())!;
+  await page.mouse.move(dotted.x + dotted.width / 2, dotted.y + dotted.height / 2, { steps: 8 });
+  await page.mouse.up();
+  const paper = page.getByTestId("notebook-drawing");
+  await expect(paper.locator('[data-testid^="notebook-stamp-"]')).toHaveCount(1);
+  await expect(paper.getByTestId("notebook-strong-mark")).toHaveCount(1);
+  await expect(paper.getByTestId("notebook-dot")).toHaveCount(1);
+  await page.screenshot({ path: "generated-artifacts/notebook-restored-note-gesture.png" });
+});
 
 for (const viewport of [{ width: 320, height: 740 }, { width: 768, height: 1024 }, { width: 844, height: 390 }]) {
   test(`isolated notation pickers and visible selection actions at ${viewport.width}`, async ({ page }) => {
@@ -13,7 +91,8 @@ for (const viewport of [{ width: 320, height: 740 }, { width: 768, height: 1024 
     }
     const note = (await page.getByTestId("notebook-note-origin").boundingBox())!;
     await page.mouse.move(note.x + note.width / 2, note.y + note.height / 2); await page.mouse.down();
-    await expect(idle).toHaveCSS("opacity", "0");
+    await expect(page.getByTestId("notebook-note-origin")).toBeVisible();
+    await expect(page.getByTestId("notebook-tuplet")).toHaveCSS("opacity", "0");
     await expect(page.getByTestId("notebook-note-more-menu")).toHaveCount(0);
     await expect(page.getByTestId("notebook-note-role-normal")).toBeInViewport({ ratio: 1 });
     await page.screenshot({ path: `generated-artifacts/notebook-isolated-roles-${viewport.width}.png` });
@@ -22,10 +101,10 @@ for (const viewport of [{ width: 320, height: 740 }, { width: 768, height: 1024 
     const duration = (await page.getByTestId("notebook-note-duration-quarter").boundingBox())!;
     await page.mouse.move(duration.x + duration.width / 2, duration.y + duration.height / 2, { steps: 5 });
     await page.screenshot({ path: `generated-artifacts/notebook-isolated-duration-${viewport.width}.png` });
-    await page.mouse.up(); await expect(idle).toHaveCSS("opacity", "1");
+    await page.mouse.up(); await expect(page.getByTestId("notebook-tuplet")).toHaveCSS("opacity", "1");
     const rest = (await page.getByTestId("notebook-rest-origin").boundingBox())!;
     await page.mouse.move(rest.x + rest.width / 2, rest.y + rest.height / 2); await page.mouse.down();
-    await expect(idle).toHaveCSS("opacity", "0");
+    await expect(page.getByTestId("notebook-tuplet")).toHaveCSS("opacity", "0");
     await expect(page.getByTestId("notebook-rest-gesture-preview")).toBeVisible();
     await page.mouse.move(rest.x + rest.width / 2, rest.y - 80, { steps: 8 });
     await expect(page.getByTestId("notebook-rest-gesture-preview")).toHaveCount(0);
