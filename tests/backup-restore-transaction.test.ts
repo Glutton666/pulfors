@@ -1,261 +1,181 @@
-// 백업 복원 트랜잭션 회귀 가드.
-// restoreFromJson은 multiSet 실패 시 스냅샷에서 롤백하고, 강제 종료된 경우
-// 부팅 시 rollbackPendingRestoreIfAny()로 자동 복구되어야 한다.
-import { test, beforeEach } from "node:test";
-import assert from "node:assert/strict";
+/* eslint-disable import/first */
+jest.unmock("@/lib/profile-storage");
+import Raw from "@react-native-async-storage/async-storage";
+import Scoped, { drainProfileWrites, profileKey, PROFILE_REGISTRY_KEY, sealProfileStorage } from "../lib/profile-storage";
+import { initializeProfiles, createProfile, readProfileData, listProfiles, registerProfileSwitchGuard, switchProfile } from "../lib/profiles";
 import { restoreFromJson, rollbackPendingRestoreIfAny } from "../lib/backup/full";
-import { ALL_KEYS, RESTORE_SNAPSHOT_KEY } from "../lib/backup/shared";
-import { CURRENT_SCHEMA_VERSION } from "../lib/backup/migrations";
-import { loadActivityLogs } from "../lib/activity-log";
+import { RESTORE_SNAPSHOT_KEY } from "../lib/backup/shared";
+import { createScoreDocument } from "../lib/score-storage";
+import { saveSettings, loadSettings } from "../lib/storage";
+import { updateProfile } from "../lib/profiles";
 
-const AsyncStorage = require("./_stubs/async-storage");
+const reset = () => (Raw as unknown as { __reset(): void }).__reset();
+const backup = (data: Record<string, string | null>, schemaVersion?: number) => JSON.stringify({
+  _meta: { app: "metronome", version: 2, createdAt: "2026-01-01", keyCount: Object.keys(data).length },
+  ...(schemaVersion !== undefined ? { schemaVersion } : {}), data,
+});
+beforeEach(async () => { reset(); await initializeProfiles(); });
+afterEach(() => { jest.restoreAllMocks(); });
 
-beforeEach(() => {
-  AsyncStorage.__reset();
+test("imports legacy and current backups as distinct profiles, preserving names and active data", async () => {
+  await Scoped.setItem("metronome_settings", JSON.stringify({ bpm: 77, username: "Same" }));
+  const input = { metronome_settings: JSON.stringify({ bpm: 130, username: "Same" }), practice_book: "[]" };
+  const old = await restoreFromJson(backup(input));
+  const current = await restoreFromJson(backup(input, 1));
+  expect(old.success).toBe(true); expect(current.success).toBe(true);
+  expect(old.profileId).not.toBe(current.profileId);
+  expect((await listProfiles()).length).toBe(3);
+  expect(await readProfileData(old.profileId!)).toEqual(input);
+  expect(JSON.parse((await Scoped.getItem("metronome_settings"))!).bpm).toBe(77);
 });
 
-function makeBackupJson(data: Record<string, string>): string {
-  return JSON.stringify({
-    _meta: {
-      app: "metronome",
-      version: 2,
-      createdAt: new Date().toISOString(),
-      keyCount: Object.keys(data).length,
-    },
-    schemaVersion: CURRENT_SCHEMA_VERSION,
-    data,
+test("duplicate document IDs remain independent because their profile namespaces differ", async () => {
+  const doc = createScoreDocument({ title: "original", parts: [{ instrumentId: "piano" }] });
+  const key = `metronome_score_${doc.id}`;
+  await Scoped.setItem(key, JSON.stringify(doc));
+  const incoming = { ...doc, metadata: { ...doc.metadata, title: "import" } };
+  const result = await restoreFromJson(backup({ metronome_scores_v1: JSON.stringify([doc.id]), [key]: JSON.stringify(incoming) }));
+  expect(result.success).toBe(true);
+  expect(JSON.parse((await Scoped.getItem(key))!).metadata.title).toBe("original");
+  expect(JSON.parse((await readProfileData(result.profileId!))[key]!).metadata.title).toBe("import");
+});
+
+test("partial import write failure never changes an existing profile or publishes a broken one", async () => {
+  await Scoped.setItem("practice_book", '[{"id":"original"}]');
+  const original = Raw.multiSet.bind(Raw);
+  jest.spyOn(Raw, "multiSet").mockImplementationOnce(async pairs => {
+    await original(pairs.slice(0, 1));
+    throw new Error("disk full");
   });
-}
-
-test("성공 경로: 복원 성공 시 스냅샷 키가 정리됨", async () => {
-  await AsyncStorage.setItem("metronome_settings", JSON.stringify({ bpm: 90 }));
-  const json = makeBackupJson({ metronome_settings: JSON.stringify({ bpm: 200 }) });
-  const r = await restoreFromJson(json);
-  assert.equal(r.success, true);
-  assert.equal(r.keyCount, 1);
-  assert.equal(await AsyncStorage.getItem(RESTORE_SNAPSHOT_KEY), null);
-  const s = JSON.parse(await AsyncStorage.getItem("metronome_settings"));
-  assert.equal(s.bpm, 200);
+  const result = await restoreFromJson(backup({ metronome_settings: '{"bpm":200}', practice_book: "[]" }));
+  expect(result).toMatchObject({ success: false, errorCode: "io" });
+  expect(await Scoped.getItem("practice_book")).toBe('[{"id":"original"}]');
+  expect((await listProfiles()).length).toBe(1);
 });
 
-test("활동 로그 백업: V1과 V2 세션 필드를 변형 없이 복원", async () => {
-  const timestamp = Date.now();
-  const sessions = [
-    { id: "v1", type: "practice_session", timestamp, data: { bpm: 100, mode: "dial", duration: 9 } },
-    {
-      id: "v2",
-      type: "practice_session",
-      timestamp,
-      data: {
-        bpm: 120, mode: "bar", duration: 12, schemaVersion: 2,
-        startedAt: timestamp - 30_000, endedAt: timestamp,
-        activeDurationSec: 12, pausedDurationSec: 8, interruptionDurationSec: 10,
-        pauseCount: 1, interruptionCount: 1, status: "completed", endReason: "manual",
-      },
-    },
-  ];
-  const result = await restoreFromJson(makeBackupJson({
-    metronome_activity_log: JSON.stringify(sessions),
-  }));
-  assert.equal(result.success, true);
-  assert.deepEqual(await loadActivityLogs(), sessions);
+test("failed registry publication cannot remove another profile", async () => {
+  const original = Raw.setItem.bind(Raw);
+  jest.spyOn(Raw, "setItem").mockImplementation(async (key, value) => {
+    if (key === PROFILE_REGISTRY_KEY) throw new Error("registry unavailable");
+    return original(key, value);
+  });
+  const result = await restoreFromJson(backup({ metronome_settings: '{"bpm":200}' }));
+  expect(result.success).toBe(false);
+  expect((await listProfiles()).length).toBe(1);
 });
 
-test("실패 경로: multiSet 실패 시 기존 데이터로 롤백", async () => {
-  await AsyncStorage.setItem("metronome_settings", JSON.stringify({ bpm: 77 }));
-  await AsyncStorage.setItem("practice_book", JSON.stringify([{ id: "p" }]));
-  const original = AsyncStorage.multiSet;
-  let calls = 0;
-  AsyncStorage.multiSet = async (pairs: [string, string][]) => {
-    calls++;
-    // 첫 번째 호출(실제 복원 단계)만 실패시키고, 롤백 단계 호출은 통과.
-    if (calls === 1) throw new Error("simulated multiSet failure");
-    return original.call(AsyncStorage, pairs);
-  };
-  try {
-    const json = makeBackupJson({ metronome_settings: JSON.stringify({ bpm: 200 }) });
-    const r = await restoreFromJson(json);
-    assert.equal(r.success, false);
-    assert.equal(r.errorCode, "io");
-    assert.equal(r.recoveryStatus, "rolled_back");
-    // 원본이 복구되었는지 확인
-    const s = JSON.parse(await AsyncStorage.getItem("metronome_settings"));
-    assert.equal(s.bpm, 77);
-    const book = JSON.parse(await AsyncStorage.getItem("practice_book"));
-    assert.equal(book[0].id, "p");
-    // 스냅샷 키도 정리되었는지
-    assert.equal(await AsyncStorage.getItem(RESTORE_SNAPSHOT_KEY), null);
-  } finally {
-    AsyncStorage.multiSet = original;
+test("parallel imports each add their own new profile", async () => {
+  const results = await Promise.all([91, 132, 160].map(bpm => restoreFromJson(backup({ metronome_settings: JSON.stringify({ bpm }) }))));
+  expect(results.every(result => result.success)).toBe(true);
+  expect(new Set(results.map(result => result.profileId)).size).toBe(3);
+  expect((await listProfiles()).length).toBe(4);
+});
+
+test("broken JSON, corrupt score documents and unknown future versions leave registry unchanged", async () => {
+  const before = await Raw.getItem(PROFILE_REGISTRY_KEY);
+  for (const json of ["broken", backup({ "metronome_score_bad": '{"id":"bad"}' }), backup({ practice_book: "{}" }),
+    backup({ metronome_settings: '{"bpm":"bad"}' }), backup({}, 999)]) {
+    expect((await restoreFromJson(json)).success).toBe(false);
+  }
+  expect(await Raw.getItem(PROFILE_REGISTRY_KEY)).toBe(before);
+});
+
+test("unrecognized backup keys cannot write device metadata", async () => {
+  const result = await restoreFromJson(backup({ metronome_settings: '{"bpm":100}', [PROFILE_REGISTRY_KEY]: "malicious" }));
+  expect(result.success).toBe(true);
+  expect((await readProfileData(result.profileId!))[PROFILE_REGISTRY_KEY]).toBeUndefined();
+});
+
+test("pending legacy restore snapshots are recovered before migration and retained on I/O failure", async () => {
+  const snapshot = JSON.stringify({ keys: ["metronome_settings"], data: { metronome_settings: '{"bpm":88}' } });
+  await Raw.setItem(RESTORE_SNAPSHOT_KEY, snapshot);
+  const result = await restoreFromJson(backup({ metronome_settings: '{"bpm":200}' }));
+  expect(result).toMatchObject({ success: false, recoveryStatus: "rollback_pending" });
+  const spy = jest.spyOn(Raw, "multiSet").mockRejectedValueOnce(new Error("disk"));
+  expect(await rollbackPendingRestoreIfAny()).toBe(false);
+  expect(await Raw.getItem(RESTORE_SNAPSHOT_KEY)).toBe(snapshot);
+  spy.mockRestore();
+  expect(await rollbackPendingRestoreIfAny()).toBe(true);
+  expect(await Raw.getItem("metronome_settings")).toBe('{"bpm":88}');
+  expect(await Raw.getItem(RESTORE_SNAPSHOT_KEY)).toBeNull();
+});
+
+test("legacy snapshot without an envelope still recovers and corrupt snapshots do not loop", async () => {
+  await Raw.setItem(RESTORE_SNAPSHOT_KEY, '{"metronome_settings":"{\\"bpm\\":90}"}');
+  expect(await rollbackPendingRestoreIfAny()).toBe(true);
+  await Raw.setItem(RESTORE_SNAPSHOT_KEY, "broken");
+  expect(await rollbackPendingRestoreIfAny()).toBe(false);
+  expect(await Raw.getItem(RESTORE_SNAPSHOT_KEY)).toBeNull();
+});
+
+test("migration interrupted before publication retries from untouched originals", async () => {
+  reset();
+  await Raw.setItem("practice_book", '[{"id":"legacy"}]');
+  const original = Raw.multiSet.bind(Raw);
+  jest.spyOn(Raw, "multiSet").mockImplementationOnce(async pairs => {
+    await original(pairs.slice(0, 1)); throw new Error("interrupted");
+  });
+  await expect(initializeProfiles()).rejects.toThrow("interrupted");
+  expect(await Raw.getItem(PROFILE_REGISTRY_KEY)).toBeNull();
+  expect(await Raw.getItem("practice_book")).toBe('[{"id":"legacy"}]');
+  await initializeProfiles();
+  expect(await Scoped.getItem("practice_book")).toBe('[{"id":"legacy"}]');
+});
+
+test("all content domains use separate physical keys including settings, sample maps and logs", async () => {
+  const second = await createProfile({ name: "Second" });
+  const keys = ["practice_book", "metronome_settings", "metronome_activity_log", "metronome_practice_rooms", "metronome_scores_v1",
+    "lab_staff_notebooks_v1", "@note_samples", "@note_sample_names", "@note_sample_sources", "@note_sample_channels",
+    "@note_sample_volumes", "@note_sample_speeds", "@note_sample_metro_channels_beat", "metronome_keyboard_bindings_by_mode_v1"];
+  for (const key of keys) await Scoped.setItem(key, JSON.stringify({ owner: "first" }));
+  const data = await readProfileData(second.id);
+  for (const key of keys) {
+    expect(await Raw.getItem(profileKey("legacy", key))).toBe('{"owner":"first"}');
+    expect(data[key]).not.toBe('{"owner":"first"}');
   }
 });
 
-test("복원 성공: 이전 개별 악보 키를 함께 교체해 오래된 문서가 남지 않음", async () => {
-  await AsyncStorage.setItem("metronome_scores_v1", JSON.stringify(["old-score"]));
-  await AsyncStorage.setItem("metronome_score_old-score", JSON.stringify({ id: "old-score" }));
-  const json = makeBackupJson({
-    metronome_scores_v1: JSON.stringify(["new-score"]),
-    "metronome_score_new-score": JSON.stringify({ id: "new-score" }),
+test("delayed writes retain their original owner; closed sessions reject rather than rebind", async () => {
+  const second = await createProfile({ name: "Second" });
+  let release!: () => void;
+  const original = Raw.setItem.bind(Raw);
+  jest.spyOn(Raw, "setItem").mockImplementationOnce(async (key, value) => {
+    await new Promise<void>(resolve => { release = resolve; }); await original(key, value);
   });
-  const result = await restoreFromJson(json);
-  assert.equal(result.success, true);
-  assert.equal(await AsyncStorage.getItem("metronome_score_old-score"), null);
-  assert.equal(await AsyncStorage.getItem("metronome_score_new-score"), JSON.stringify({ id: "new-score" }));
+  const writing = Scoped.setItem("late", "first");
+  sealProfileStorage();
+  await expect(Scoped.setItem("after", "no")).rejects.toThrow("closed");
+  release(); await writing; await drainProfileWrites();
+  expect(await Raw.getItem(profileKey("legacy", "late"))).toBe("first");
+  expect((await readProfileData(second.id)).late).toBeUndefined();
 });
 
-test("부분 쓰기 실패: 개별 악보를 포함한 이전 데이터가 모두 롤백됨", async () => {
-  await AsyncStorage.setItem("metronome_settings", JSON.stringify({ bpm: 77 }));
-  await AsyncStorage.setItem("metronome_scores_v1", JSON.stringify(["old-score"]));
-  await AsyncStorage.setItem("metronome_score_old-score", JSON.stringify({ id: "old-score" }));
-  const original = AsyncStorage.multiSet;
-  let calls = 0;
-  AsyncStorage.multiSet = async (pairs: [string, string][]) => {
-    calls++;
-    if (calls === 1) {
-      await original.call(AsyncStorage, pairs.slice(0, 1));
-      throw new Error("simulated partial write");
-    }
-    return original.call(AsyncStorage, pairs);
-  };
-  try {
-    const result = await restoreFromJson(makeBackupJson({
-      metronome_settings: JSON.stringify({ bpm: 200 }),
-      metronome_scores_v1: JSON.stringify(["new-score"]),
-      "metronome_score_new-score": JSON.stringify({ id: "new-score" }),
-    }));
-    assert.equal(result.success, false);
-    assert.equal(result.recoveryStatus, "rolled_back");
-    assert.equal(await AsyncStorage.getItem("metronome_settings"), JSON.stringify({ bpm: 77 }));
-    assert.equal(await AsyncStorage.getItem("metronome_score_old-score"), JSON.stringify({ id: "old-score" }));
-    assert.equal(await AsyncStorage.getItem("metronome_score_new-score"), null);
-    assert.equal(await AsyncStorage.getItem(RESTORE_SNAPSHOT_KEY), null);
-  } finally {
-    AsyncStorage.multiSet = original;
-  }
+test("a failed outgoing save blocks a switch before the registry can change", async () => {
+  const second = await createProfile({ name: "Second" });
+  const before = await Raw.getItem(PROFILE_REGISTRY_KEY);
+  const remove = registerProfileSwitchGuard(async () => { throw new Error("unsaved"); });
+  try { await expect(switchProfile(second.id)).rejects.toThrow("unsaved"); }
+  finally { remove(); }
+  expect(await Raw.getItem(PROFILE_REGISTRY_KEY)).toBe(before);
 });
 
-test("롤백도 실패하면 스냅샷을 보존하고 안전 복구 상태를 반환", async () => {
-  await AsyncStorage.setItem("metronome_settings", JSON.stringify({ bpm: 77 }));
-  const original = AsyncStorage.multiSet;
-  AsyncStorage.multiSet = async () => { throw new Error("simulated persistent I/O"); };
-  try {
-    const result = await restoreFromJson(makeBackupJson({ metronome_settings: JSON.stringify({ bpm: 200 }) }));
-    assert.equal(result.success, false);
-    assert.equal(result.recoveryStatus, "rollback_pending");
-    assert.notEqual(await AsyncStorage.getItem(RESTORE_SNAPSHOT_KEY), null);
-  } finally {
-    AsyncStorage.multiSet = original;
-  }
+test("removing a photo survives a later settings snapshot and never changes the active profile", async () => {
+  const second = await createProfile({ name: "Photo", photoUri: "file:///photo.jpg" });
+  await updateProfile(second.id, { name: "Photo", photoUri: undefined });
+  const updated = (await listProfiles()).find(p => p.id === second.id)!;
+  expect(updated.photoUri).toBeUndefined();
+  await Scoped.setItem("metronome_settings", '{"bpm":100,"profilePhoto":null}');
+  const settings = await loadSettings();
+  await saveSettings({ ...settings, profilePhoto: "file:///stale.jpg" });
+  expect(JSON.parse((await Scoped.getItem("metronome_settings"))!).profilePhoto).toBeNull();
 });
 
-test("보류된 롤백이 있으면 새 복원이 원본 스냅샷을 덮어쓰지 않음", async () => {
-  const originalSnapshot = JSON.stringify({
-    keys: ["metronome_settings"],
-    data: { metronome_settings: JSON.stringify({ bpm: 77 }) },
-  });
-  await AsyncStorage.setItem(RESTORE_SNAPSHOT_KEY, originalSnapshot);
-  await AsyncStorage.setItem("metronome_settings", JSON.stringify({ bpm: 999 }));
-  const result = await restoreFromJson(makeBackupJson({ metronome_settings: JSON.stringify({ bpm: 200 }) }));
-  assert.equal(result.success, false);
-  assert.equal(result.recoveryStatus, "rollback_pending");
-  assert.equal(await AsyncStorage.getItem(RESTORE_SNAPSHOT_KEY), originalSnapshot);
-  assert.equal(await AsyncStorage.getItem("metronome_settings"), JSON.stringify({ bpm: 999 }));
-});
-
-test("부팅 복구: 범위가 지정된 스냅샷은 이전 개별 악보를 되돌리고 새 악보를 제거", async () => {
-  const snapshot = JSON.stringify({
-    keys: ["metronome_scores_v1", "metronome_score_old-score", "metronome_score_new-score"],
-    data: {
-      metronome_scores_v1: JSON.stringify(["old-score"]),
-      "metronome_score_old-score": JSON.stringify({ id: "old-score" }),
-      "metronome_score_new-score": null,
-    },
-  });
-  await AsyncStorage.setItem("metronome_scores_v1", JSON.stringify(["new-score"]));
-  await AsyncStorage.setItem("metronome_score_new-score", JSON.stringify({ id: "new-score" }));
-  await AsyncStorage.setItem(RESTORE_SNAPSHOT_KEY, snapshot);
-  assert.equal(await rollbackPendingRestoreIfAny(), true);
-  assert.equal(await AsyncStorage.getItem("metronome_score_old-score"), JSON.stringify({ id: "old-score" }));
-  assert.equal(await AsyncStorage.getItem("metronome_score_new-score"), null);
-  assert.equal(await AsyncStorage.getItem(RESTORE_SNAPSHOT_KEY), null);
-});
-
-test("부팅 복구: 스냅샷 키가 남아 있으면 자동 롤백", async () => {
-  // 실패한 복원의 흔적을 직접 시뮬레이션:
-  // metronome_settings는 새 백업 값으로 덮였고, 스냅샷 키에는 옛 값이 남음.
-  const oldSnapshot = {
-    metronome_settings: JSON.stringify({ bpm: 88 }),
-    practice_book: JSON.stringify([{ id: "old" }]),
-  };
-  await AsyncStorage.setItem("metronome_settings", JSON.stringify({ bpm: 999 }));
-  await AsyncStorage.setItem(RESTORE_SNAPSHOT_KEY, JSON.stringify(oldSnapshot));
-
-  const ok = await rollbackPendingRestoreIfAny();
-  assert.equal(ok, true);
-  const s = JSON.parse(await AsyncStorage.getItem("metronome_settings"));
-  assert.equal(s.bpm, 88);
-  const book = JSON.parse(await AsyncStorage.getItem("practice_book"));
-  assert.equal(book[0].id, "old");
-  assert.equal(await AsyncStorage.getItem(RESTORE_SNAPSHOT_KEY), null);
-});
-
-test("부팅 복구: 스냅샷 없음 → no-op (false)", async () => {
-  const ok = await rollbackPendingRestoreIfAny();
-  assert.equal(ok, false);
-});
-
-test("부팅 복구: 손상된 스냅샷은 키를 비우고 false 반환 (무한 재시도 방지)", async () => {
-  await AsyncStorage.setItem(RESTORE_SNAPSHOT_KEY, "}}}");
-  const ok = await rollbackPendingRestoreIfAny();
-  assert.equal(ok, false);
-  assert.equal(await AsyncStorage.getItem(RESTORE_SNAPSHOT_KEY), null);
-});
-
-test("성공 경로: ALL_KEYS에 없는 백업 키는 무시", async () => {
-  const json = makeBackupJson({
-    metronome_settings: JSON.stringify({ bpm: 100 }),
-    unknown_alien_key: "should-be-ignored",
-  });
-  const r = await restoreFromJson(json);
-  assert.equal(r.success, true);
-  assert.equal(r.keyCount, 1);
-  assert.equal(await AsyncStorage.getItem("unknown_alien_key"), null);
-});
-
-test("ALL_KEYS 상수에 RESTORE_SNAPSHOT_KEY가 포함되지 않음", () => {
-  // 스냅샷 키는 백업/복원 대상이 아니어야 한다 (자기 자신을 백업하면 무한 재귀).
-  assert.equal(ALL_KEYS.includes(RESTORE_SNAPSHOT_KEY), false);
-});
-
-test("동시 복원: 병렬 호출이 직렬화되어 마지막 호출 결과가 일관됨", async () => {
-  await AsyncStorage.setItem("metronome_settings", JSON.stringify({ bpm: 50 }));
-  const a = makeBackupJson({ metronome_settings: JSON.stringify({ bpm: 100 }) });
-  const b = makeBackupJson({ metronome_settings: JSON.stringify({ bpm: 200 }) });
-  const [r1, r2] = await Promise.all([restoreFromJson(a), restoreFromJson(b)]);
-  assert.equal(r1.success, true);
-  assert.equal(r2.success, true);
-  // 직렬화되었으므로 스냅샷 키는 정리되어야 함 (경합으로 잔존 안 됨).
-  assert.equal(await AsyncStorage.getItem(RESTORE_SNAPSHOT_KEY), null);
-  // 두 결과 중 하나가 최종 — 어느 쪽이든 둘 중 하나의 값이어야 한다.
-  const s = JSON.parse(await AsyncStorage.getItem("metronome_settings"));
-  assert.ok(s.bpm === 100 || s.bpm === 200, `unexpected bpm: ${s.bpm}`);
-});
-
-test("부팅 복구: I/O 실패 시 스냅샷 키 보존(다음 부팅에서 재시도 가능)", async () => {
-  const goodSnapshot = JSON.stringify({
-    metronome_settings: JSON.stringify({ bpm: 88 }),
-  });
-  await AsyncStorage.setItem(RESTORE_SNAPSHOT_KEY, goodSnapshot);
-  const original = AsyncStorage.multiSet;
-  AsyncStorage.multiSet = async () => {
-    throw new Error("simulated transient I/O");
-  };
-  try {
-    const ok = await rollbackPendingRestoreIfAny();
-    assert.equal(ok, false);
-    // I/O 실패이므로 스냅샷은 보존되어야 함
-    assert.equal(await AsyncStorage.getItem(RESTORE_SNAPSHOT_KEY), goodSnapshot);
-  } finally {
-    AsyncStorage.multiSet = original;
-  }
+test("pending all-profile reset erases retained originals instead of migrating them again", async () => {
+  await Raw.setItem("practice_book", '[{"id":"legacy-original"}]');
+  await Raw.setItem("local_profiles_reset_pending_v1", "legacy");
+  await initializeProfiles();
+  expect(await Raw.getItem("practice_book")).toBeNull();
+  expect(await Scoped.getItem("practice_book")).toBeNull();
+  expect((await listProfiles()).length).toBe(1);
+  expect(await Raw.getItem("local_profiles_reset_pending_v1")).toBeNull();
 });

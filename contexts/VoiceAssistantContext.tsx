@@ -8,7 +8,7 @@ import React, {
   type ReactNode,
 } from "react";
 import { Platform } from "react-native";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import AsyncStorage from "@/lib/profile-storage";
 import { isVoiceRecognitionSupported, createWebRecognition } from "@/lib/voice-recognition";
 import type { RecognitionEvent } from "@/lib/voice-recognition";
 import { parseVoiceCommand } from "@/lib/voice-commands";

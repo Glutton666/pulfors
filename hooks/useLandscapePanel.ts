@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import * as ImagePicker from "expo-image-picker";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import AsyncStorage from "@/lib/profile-storage";
 import { captureBreadcrumb } from "@/lib/error-tracking";
 import { ensurePermission } from "@/lib/permissions";
 import { computeLandscapeStats } from "@/lib/index.helpers";

@@ -1,4 +1,4 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import AsyncStorage from "@/lib/profile-storage";
 import * as Crypto from "expo-crypto";
 import { logger } from "./logger";
 
@@ -217,6 +217,7 @@ export async function saveLoggingEnabled(val: boolean): Promise<void> {
 }
 
 let activityWriteChain: Promise<void> = Promise.resolve();
+export async function flushActivityWrites(): Promise<void> { await activityWriteChain; }
 
 export async function addActivityLog(
   entry: Omit<ActivityLog, "id" | "timestamp">

@@ -20,6 +20,7 @@ module.exports = {
     "\\.(wav|mp3|png|jpg|jpeg|gif|webp|ttf|otf)$": "<rootDir>/tests/_stubs/asset-file.js",
     // Expo / React Native 패키지 → stub
     "^react-native$": "<rootDir>/tests/_stubs/react-native.js",
+    "^react-native-view-shot$": "<rootDir>/tests/_stubs/view-shot.js",
     "^expo-haptics$": "<rootDir>/tests/_stubs/expo-haptics.js",
     "^expo-file-system$": "<rootDir>/tests/_stubs/expo-file-system.js",
     "^expo-file-system/legacy$": "<rootDir>/tests/_stubs/expo-file-system.js",

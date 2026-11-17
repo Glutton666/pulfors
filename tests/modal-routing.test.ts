@@ -507,10 +507,10 @@ test("source: lab 해금 상태가 프로필 생성 콜백과 메뉴에 연결�
   const profile = readFileSync(join(process.cwd(), "components/settings/SettingsProfileTab.tsx"), "utf-8");
 
   assert.match(ui, /labUnlocked=\{labUnlocked\}/);
-  // Both profile entry points receive the shared callback bundle.
+  // The standalone profile manager owns room edits; settings contains app maintenance.
   assert.match(ui, /const profileSettingsProps = \{[\s\S]*?onLabUnlocked: unlockLab,/);
-  assert.match(ui, /<SettingsModal[\s\S]*?\{\.\.\.profileSettingsProps\}/);
-  assert.match(ui, /<SettingsProfileTab \{\.\.\.profileSettingsProps\}/);
+  assert.match(ui, /<ProfileModal[\s\S]*?\{\.\.\.profileSettingsProps\}/);
+  assert.match(ui, /<AppMaintenance onResetApp=\{handleResetApp\}/);
   assert.match(profile, /if \(isLabPracticeRoomName\(room\.name\)\) \{[\s\S]*?onLabUnlocked\?\.\(\);/);
 });
 

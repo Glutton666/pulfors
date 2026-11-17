@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, useCallback, useRef, ReactNode } from "react";
 import { StyleSheet, View } from "react-native";
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, Easing, runOnJS } from "react-native-reanimated";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import AsyncStorage from "@/lib/profile-storage";
 import Colors, { getColors, type ThemeColor, type ThemeMode } from "@/constants/colors";
 import { Duration } from "@/constants/tokens";
 

@@ -5,7 +5,11 @@ import {
   Pressable,
   StyleSheet,
   ScrollView,
+  Linking,
 } from "react-native";
+import * as Clipboard from "expo-clipboard";
+import { PUBLIC_WEBSITE_URL } from "@/constants/website";
+import { alertInfo } from "@/lib/confirm";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -237,6 +241,22 @@ export function MenuScreen({
             )}
           </React.Fragment>
         ))}
+        {!showLab && <View style={{ padding: 20, gap: 8, borderTopWidth: 1, borderTopColor: C.border }}>
+          <Text style={{ color: C.textSecondary }}>{t("settings", "webVersionLink")}</Text>
+          <Text style={{ color: C.textTertiary, fontSize: 12 }} selectable>{PUBLIC_WEBSITE_URL}</Text>
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+            <Pressable testID="menu-open-website" accessibilityRole="link" style={{ padding: 12, minHeight: 44 }}
+              onPress={async () => {
+                try { await Linking.openURL(PUBLIC_WEBSITE_URL); }
+                catch { alertInfo(t("settings", "error"), t("settings", "webVersionOpenFailed")); }
+              }}><Text style={{ color: C.accent }}>{t("settings", "webVersionOpen")}</Text></Pressable>
+            <Pressable testID="menu-copy-website" accessibilityRole="button" style={{ padding: 12, minHeight: 44 }}
+              onPress={async () => {
+                try { await Clipboard.setStringAsync(PUBLIC_WEBSITE_URL); alertInfo(t("settings", "webVersionCopied")); }
+                catch { alertInfo(t("settings", "error")); }
+              }}><Text style={{ color: C.accent }}>{t("settings", "webVersionCopy")}</Text></Pressable>
+          </View>
+        </View>}
       </ScrollView>
     </View>
   );

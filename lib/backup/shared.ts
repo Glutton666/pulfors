@@ -14,6 +14,7 @@ import { normalizeNoteImageCrop } from "../note-image-crop";
 import { audioDataUri, readWebAudioBase64 } from "../web-audio-asset";
 import { CUSTOM_TUNING_SETS_KEY, validateCustomTuningSets } from "../custom-tuning-sets";
 import { SIGNAL_SENSITIVITY_KEY, parseSignalSensitivity } from "../signal-noise-gate";
+import * as Crypto from "expo-crypto";
 
 export const ALL_KEYS = [
   CUSTOM_TUNING_SETS_KEY,
@@ -39,12 +40,33 @@ export const ALL_KEYS = [
   "@note_sample_speeds",
   "@note_sample_metro_channels_beat",
   "metronome_onboarding_done",
+  "metronome_onboarding_lang_done",
   // 악보 모드 인덱스 (개별 악보는 SCORE_KEY_PREFIX + id 형태로 동적 관리)
   "metronome_scores_v1",
+  "stage_settings_v1",
+  "stage_setlist_v1",
+  "lab_staff_notebooks_v1",
+  "rhythm_lab_documents_v1",
+  "rhythm_lab_recovery_v1",
+  "rhythm_lab_entry_mode_v1",
+  "@drum_kit_mapping_v1",
+  "@practice_book_view_mode",
+  "metronome_keyboard_bindings_v1",
+  "metronome_keyboard_bindings_by_mode_v1",
+  "metronome_quick_add_v1",
+  "metronome_theme_mode",
+  "metronome_landscape_image",
+  "metronome_lab_unlocked",
+  "metronome_tutorial_state_v1",
+  "metronome_voice_assistant_v1",
+  "metronome_dial_wall_v2",
 ];
 
 // 악보 개별 항목 키 접두사
 export const SCORE_KEY_PREFIX = "metronome_score_";
+export function isProfileBackupKey(key: string): boolean {
+  return ALL_KEYS.includes(key) || key.startsWith(SCORE_KEY_PREFIX) || key.startsWith("hint_shown_v1_");
+}
 
 // 복원 트랜잭션용 임시 스냅샷 키. restoreFromJson 시작 시 ALL_KEYS의 현재
 // 값을 직렬화해 이 키에 저장하고, 정상 종료 시 삭제한다. 앱이 강제 종료되거나
@@ -152,6 +174,7 @@ export function pickFileWeb<T>(
       }
     };
     input.addEventListener("change", onChange);
+    input.addEventListener("cancel", () => resolve(fallback), { once: true });
     input.click();
   });
 }
@@ -677,6 +700,7 @@ export function collectAllAudioUris(
   data: Record<string, string | null>,
 ): Map<string, string> {
   const uris = new Map<string, string>();
+  collectAdditionalAssets(data, uris, new Map());
 
   const samplesJson = data["@note_samples"];
   if (samplesJson) {
@@ -716,6 +740,7 @@ export function collectImageUrisFromEntry(entry: PracticeEntry): Map<string, str
 
 export function collectAllImageUris(data: Record<string, string | null>): Map<string, string> {
   const uris = new Map<string, string>();
+  collectAdditionalAssets(data, new Map(), uris);
   try {
     const images: unknown = JSON.parse(data["metronome_hub_images"] ?? "[]");
     if (Array.isArray(images)) {
@@ -736,8 +761,32 @@ export function collectAllImageUris(data: Record<string, string | null>): Map<st
   return uris;
 }
 
+/** Include files in custom sound sets, notebook sources and profile photos too. */
+function collectAdditionalAssets(
+  data: Record<string, string | null>, audio: Map<string, string>, images: Map<string, string>,
+): void {
+  const visit = (value: unknown, path: string) => {
+    if (typeof value === "string" && /^(file:|blob:|data:|asset:)/.test(value)) {
+      const image = /image|photo/i.test(path) || /^data:image\//.test(value);
+      const map = image ? images : audio;
+      map.set(image ? imageAssetKey(value) : audioAssetKey(value), extractBaseUri(value));
+    } else if (Array.isArray(value)) value.forEach(item => visit(item, path));
+    else if (value && typeof value === "object") for (const [key, item] of Object.entries(value)) visit(item, `${path}.${key}`);
+  };
+  for (const key of [
+    "metronome_settings", "metronome_custom_sound_sets", "@drum_kit_mapping_v1",
+    "lab_staff_notebooks_v1", "metronome_landscape_image",
+    ...Object.keys(data).filter(key => key.startsWith(SCORE_KEY_PREFIX) && key !== "metronome_scores_v1"),
+  ]) {
+    if (!data[key]) continue;
+    if (key === "metronome_landscape_image") visit(data[key], key);
+    else visit(JSON.parse(data[key]!), key);
+  }
+}
+
 export async function readAllAudioFiles(
   uris: Map<string, string>,
+  strict = false,
 ): Promise<Record<string, string>> {
   if (uris.size > MAX_AUDIO_FILE_COUNT) throw new Error("Too many audio files in backup");
   const audioFiles: Record<string, string> = {};
@@ -745,12 +794,12 @@ export async function readAllAudioFiles(
     const base64 = await readAudioAsBase64(baseUri);
     if (base64) {
       audioFiles[fname] = base64;
-    }
+    } else if (strict) throw new Error("Could not read audio file for backup");
   }
   return audioFiles;
 }
 
-export async function readAllImageFiles(uris: Map<string, string>): Promise<Record<string, string>> {
+export async function readAllImageFiles(uris: Map<string, string>, strict = false): Promise<Record<string, string>> {
   const imageFiles: Record<string, string> = {};
   let total = 0;
   for (const [fname, baseUri] of uris) {
@@ -766,6 +815,7 @@ export async function readAllImageFiles(uris: Map<string, string>): Promise<Reco
       total += base64.length;
     }
   }
+  if (strict && Object.keys(imageFiles).length !== uris.size) throw new Error("Could not read image file for backup");
   return imageFiles;
 }
 
@@ -806,25 +856,27 @@ export function remapEntryAudioUris(
 
 export async function restoreAudioFiles(
   audioFiles: Record<string, string>,
+  strict = false,
 ): Promise<Map<string, string>> {
   const uriMapping = new Map<string, string>();
   const entries = Object.entries(audioFiles);
   if (entries.length > MAX_AUDIO_FILE_COUNT) {
-    if (Platform.OS === "web") throw new Error("Too many audio files in backup");
+    if (strict || Platform.OS === "web") throw new Error("Too many audio files in backup");
     logger.warn("[Backup] Audio file count exceeds limit:", entries.length);
     return uriMapping;
   }
   for (const [fname, base64] of entries) {
     if (typeof base64 !== "string" || base64.length > MAX_AUDIO_FILE_B64_CHARS) {
-      if (Platform.OS === "web") throw new Error("Invalid or oversized audio in backup");
+      if (strict || Platform.OS === "web") throw new Error("Invalid or oversized audio in backup");
       logger.warn("[Backup] Audio file too large, skipping:", fname, base64?.length);
       continue;
     }
     try {
-      const newUri = await writeAudioFromBase64(fname, base64);
+      if (strict) audioDataUri(base64);
+      const newUri = await writeAudioFromBase64(strict ? `${Crypto.randomUUID()}_${fname}` : fname, base64);
       uriMapping.set(fname, newUri);
     } catch (e) {
-      if (Platform.OS === "web") throw e;
+      if (strict || Platform.OS === "web") throw e;
       logger.warn("[Backup] Failed to restore audio file:", fname, e);
     }
   }
@@ -833,10 +885,12 @@ export async function restoreAudioFiles(
 
 export async function restoreImageFiles(
   imageFiles: Record<string, string>,
+  strict = false,
 ): Promise<Map<string, string>> {
   const uriMapping = new Map<string, string>();
   const entries = Object.entries(imageFiles);
   if (entries.length > MAX_IMAGE_FILE_COUNT) {
+    if (strict) throw new Error("Too many images in backup");
     logger.warn("[Backup] Image file count exceeds limit:", entries.length);
     return uriMapping;
   }
@@ -849,6 +903,7 @@ export async function restoreImageFiles(
       !detectImageExtension(base64)
     ) {
       logger.warn("[Backup] Invalid or oversized image, skipping:", fname);
+      if (strict) throw new Error("Invalid image in backup");
       continue;
     }
     try {
@@ -856,10 +911,11 @@ export async function restoreImageFiles(
       const mime = ext === "jpg" ? "image/jpeg" : `image/${ext}`;
       const newUri = Platform.OS === "web"
         ? `data:${mime};base64,${base64}`
-        : await writeImageFromBase64(`${fname.replace(/\.[^.]+$/, "")}.${ext}`, base64);
+        : await writeImageFromBase64(`${strict ? Crypto.randomUUID() + "_" : ""}${fname.replace(/\.[^.]+$/, "")}.${ext}`, base64);
       uriMapping.set(fname, newUri);
       total += base64.length;
     } catch (e) {
+      if (strict) throw e;
       logger.warn("[Backup] Failed to restore image file:", fname, e);
     }
   }
@@ -885,6 +941,7 @@ export function remapDataImageUris(
   uriMapping: Map<string, string>,
 ): Record<string, string | null> {
   const result = { ...data };
+  remapAdditionalAssets(result, uri => remapImageUri(uri, uriMapping));
   try {
     const entries: PracticeEntry[] = JSON.parse(result["practice_book"] ?? "[]");
     result["practice_book"] = JSON.stringify(entries.map((entry) => remapEntryImageUris(entry, uriMapping)));
@@ -904,6 +961,7 @@ export function remapDataUris(
   uriMapping: Map<string, string>,
 ): Record<string, string | null> {
   const result = { ...data };
+  remapAdditionalAssets(result, uri => remapUri(uri, uriMapping));
 
   if (result["@note_samples"]) {
     try {
@@ -922,4 +980,18 @@ export function remapDataUris(
   }
 
   return result;
+}
+
+function remapAdditionalAssets(data: Record<string, string | null>, remap: (uri: string) => string): void {
+  const visit = (value: unknown): unknown => {
+    if (typeof value === "string" && /^(file:|blob:|data:|asset:)/.test(value)) return remap(value);
+    if (Array.isArray(value)) return value.map(visit);
+    if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, visit(item)]));
+    return value;
+  };
+  for (const key of ["metronome_settings", "metronome_custom_sound_sets", "@drum_kit_mapping_v1", "lab_staff_notebooks_v1",
+    ...Object.keys(data).filter(key => key.startsWith(SCORE_KEY_PREFIX) && key !== "metronome_scores_v1")]) {
+    if (data[key]) data[key] = JSON.stringify(visit(JSON.parse(data[key]!)));
+  }
+  if (data.metronome_landscape_image) data.metronome_landscape_image = remap(data.metronome_landscape_image);
 }

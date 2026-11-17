@@ -14,7 +14,7 @@ import {
 import { Alert } from "@/lib/alert";
 import { confirmDestructive } from "@/lib/confirm";
 import { AnimatedSlideModal } from "@/components/AnimatedModal";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import AsyncStorage from "@/lib/profile-storage";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Colors from "@/constants/colors";

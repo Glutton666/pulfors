@@ -2,6 +2,8 @@
 // migrateBackup이 (a) 누락된 버전을 v0으로 분기하고, (b) 미래 버전을 거부하고,
 // (c) 정상 v1을 무손실 통과시키는지 회귀 가드한다. 추가로 importBackup이
 // 손상된 JSON과 미래 버전 파일을 적절한 errorCode로 보고하는지 확인한다.
+/* eslint-disable import/first */
+jest.unmock("@/lib/profile-storage");
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
@@ -14,6 +16,7 @@ import * as backupMigrations from "../lib/backup/migrations";
 import type { BackupFile } from "../lib/backup/shared";
 import { restoreFromJson } from "../lib/backup/full";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { initializeProfiles, readProfileData } from "../lib/profiles";
 
 function makeBackup(overrides: Partial<BackupFile> = {}): BackupFile {
   return {
@@ -141,6 +144,7 @@ test("[import] 미래 schemaVersion 백업은 errorCode='unsupported_version'으
 test("[import] 정상 v1 백업은 라운드트립으로 데이터를 복원하고 schemaVersion을 통과한다", async () => {
   // 깨끗한 상태에서 시작
   await (AsyncStorage as unknown as { __reset: () => void }).__reset();
+  await initializeProfiles();
   const settings = JSON.stringify({ bpm: 137, beatsPerMeasure: 5 });
   const valid: BackupFile = {
     _meta: { app: "metronome", version: 2, createdAt: "2026-05-03", keyCount: 1 },
@@ -152,12 +156,13 @@ test("[import] 정상 v1 백업은 라운드트립으로 데이터를 복원하�
   assert.equal(r.errorCode, undefined);
   assert.equal(r.keyCount, 1);
   // AsyncStorage에 실제로 저장된 값 확인
-  const stored = await AsyncStorage.getItem("metronome_settings");
+  const stored = (await readProfileData(r.profileId!)).metronome_settings;
   assert.equal(stored, settings);
 });
 
 test("[import] v0 백업은 restoreFromJson의 migration chain을 거쳐 모든 저장 키를 복원한다", async () => {
   await (AsyncStorage as unknown as { __reset: () => void }).__reset();
+  await initializeProfiles();
   const data = {
     metronome_settings: JSON.stringify({ bpm: 143, beatsPerMeasure: 7 }),
     practice_book: JSON.stringify([{ id: "legacy-entry", label: "Legacy", bpm: 90 }]),
@@ -182,7 +187,7 @@ test("[import] v0 백업은 restoreFromJson의 migration chain을 거쳐 모든 
     assert.equal(result.success, true);
     assert.equal(result.keyCount, Object.keys(data).length);
     for (const [key, value] of Object.entries(data)) {
-      assert.equal(await AsyncStorage.getItem(key), value, `${key} restored after migration`);
+      assert.equal((await readProfileData(result.profileId!))[key], value, `${key} restored after migration`);
     }
     assert.equal(migrateSpy.mock.calls.length, 1, "restore invokes the migration chain once");
     const migration = migrateSpy.mock.results[0]?.value;

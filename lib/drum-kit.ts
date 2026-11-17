@@ -1,4 +1,4 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import AsyncStorage from "@/lib/profile-storage";
 import { Platform } from "react-native";
 import { Asset } from "expo-asset";
 import { soundSets, drumPadSounds } from "./metronome-engine";

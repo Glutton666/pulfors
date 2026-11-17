@@ -1,4 +1,4 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import AsyncStorage from "@/lib/profile-storage";
 import { normalizeSampleChannel, normalizeMetroChannel, type SampleChannel, type MetroChannel } from "./stereo-channel";
 import { createDebouncedPersister } from "./persist";
 import type { PersisterStatus } from "./persist";

@@ -1,4 +1,4 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import AsyncStorage from "@/lib/profile-storage";
 import { validateRhythmDocument } from "./engine";
 import type { RhythmDocument } from "./types";
 

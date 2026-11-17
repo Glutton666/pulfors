@@ -10,6 +10,11 @@ import { useAudioPipeline } from "@/hooks/useAudioPipeline";
 import { useNoteSampleSave } from "@/hooks/useNoteSampleSave";
 import { useSoundSetPreview } from "@/hooks/useSoundSetPreview";
 import { useSettings } from "@/hooks/useSettings";
+import { registerProfileSwitchGuard } from "@/lib/profiles";
+import { flushAllPersisters } from "@/lib/persist";
+import { drainProfileWrites } from "@/lib/profile-storage";
+import { flushActivityWrites } from "@/lib/activity-log";
+import { stopAllScoreNotes } from "@/lib/score-audio";
 import {
   View,
   Platform,
@@ -47,7 +52,7 @@ import {
 } from "@/lib/storage";
 import * as Haptics from "expo-haptics";
 import * as Crypto from "expo-crypto";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import AsyncStorage from "@/lib/profile-storage";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { getTempoLabel as getTempoLabelI18n } from "@/lib/i18n";
@@ -2041,6 +2046,24 @@ export function useMetronomeScreen() {
   fatalRenderFailureRef.current = stopMetronome;
   const stopMetronomeRef = useRef(stopMetronome);
   stopMetronomeRef.current = stopMetronome;
+  useEffect(() => registerProfileSwitchGuard(async () => {
+    // The menu is the only switch entry point, so editors must be closed first.
+    cancelScheduledMetronome();
+    stopMetronome();
+    stopPlaybackAudio();
+    stopAllScoreNotes();
+    preparingCancelledRef.current = true;
+    await stopRoomTracking();
+    await flushAllPersisters();
+    await flushActivityWrites();
+    await drainProfileWrites();
+    invalidateSettingsLoad();
+    releaseNoteSampleResources(true);
+    invalidatePCMCache();
+  }), [
+    cancelScheduledMetronome, stopMetronome, stopPlaybackAudio, stopRoomTracking,
+    invalidateSettingsLoad, releaseNoteSampleResources,
+  ]);
   const completePracticeSessionRef = useRef(completePracticeSession);
   useEffect(() => { completePracticeSessionRef.current = completePracticeSession; }, [completePracticeSession]);
 

@@ -21,6 +21,7 @@ import { initErrorTracking } from "@/lib/error-tracking";
 import { StorageErrorAlert } from "@/components/StorageErrorAlert";
 import { WebAlertHost } from "@/components/WebAlertHost";
 import { rollbackPendingRestoreIfAny } from "@/lib/backup/full";
+import { initializeProfiles } from "@/lib/profiles";
 import {
   notifyInterruptionBegin,
   notifyInterruptionEnd,
@@ -103,9 +104,6 @@ export default function RootLayout() {
     initErrorTracking();
     // 이전 백업 복원이 강제 종료/오류로 끊긴 경우 자동 롤백.
     // 폰트 로딩과 병렬로 돌아 사용자에게 보이지 않게 동작한다.
-    rollbackPendingRestoreIfAny().catch((e) => {
-      logger.warn("Pending restore rollback failed:", e);
-    });
   }, []);
 
   // ── Android: expo-av 프로브 기반 오디오 포커스 모니터 ────────────────────────
@@ -179,6 +177,8 @@ export default function RootLayout() {
         await loadIconFonts();
         setPreparationStage("audio");
         await configureAudio();
+        await rollbackPendingRestoreIfAny();
+        await initializeProfiles();
         setAppIsReady(true);
       } catch (e) {
         logger.warn("App preparation error:", e);
@@ -210,20 +210,14 @@ export default function RootLayout() {
                     await loadIconFonts();
                     setPreparationStage("audio");
                     await configureAudio();
+                    await rollbackPendingRestoreIfAny();
+                    await initializeProfiles();
                     setAppIsReady(true);
                   } catch (e) {
                     logger.warn("App preparation retry failed:", e);
                     setPreparationError(e instanceof Error ? e.message : String(e));
                   }
                 })();
-              }
-            : undefined
-        }
-        onContinue={
-          preparationError
-            ? () => {
-                setPreparationError(null);
-                setAppIsReady(true);
               }
             : undefined
         }

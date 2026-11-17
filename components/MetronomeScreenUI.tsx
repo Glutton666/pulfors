@@ -24,7 +24,7 @@ import { SubdivisionBar, DragGhost } from "@/components/SubdivisionBar";
 import { StopwatchTimer } from "@/components/StopwatchTimer";
 import { SettingsModal, type SettingsScope } from "@/components/SettingsModal";
 import { ProfileModal } from "@/components/ProfileModal";
-import { SettingsProfileTab } from "@/components/settings/SettingsProfileTab";
+import { AppMaintenance } from "@/components/settings/AppMaintenance";
 import { AssistantModal } from "@/components/AssistantModal";
 import { SignalGeneratorModal, TuningGuideModal } from "@/components/SignalGeneratorModal";
 import { PracticeBookModal } from "@/components/PracticeBookModal";
@@ -72,7 +72,7 @@ import { showPlayingNotification } from "@/lib/notification-controls";
 import { addActivityLog, saveLoggingEnabled } from "@/lib/activity-log";
 import { hasNoteSample } from "@/lib/note-samples";
 import { combinePersisterStatuses, getPersistFailureBannerKey } from "@/lib/persist-status";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import AsyncStorage from "@/lib/profile-storage";
 import type { useMetronomeScreen } from "@/hooks/useMetronomeScreen";
 import { onAccentColor } from "@/lib/color-contrast";
 import { appendRapidTap, isChordEasterEggTitle, type PitchQuizMode } from "@/lib/pitch-quiz";
@@ -1201,7 +1201,7 @@ export function MetronomeScreenUI(props: Props) {
         visible={showSettings}
         scope={settingsScope}
         profileContent={settingsScope === "global"
-          ? <SettingsProfileTab {...profileSettingsProps} visible={showSettings} />
+          ? <AppMaintenance onResetApp={handleResetApp} onShowOnboarding={() => openExclusive("onboarding")} />
           : undefined}
         practiceBookContent={
           settingsScope === "beat" || settingsScope === "bar" || settingsScope === "note"

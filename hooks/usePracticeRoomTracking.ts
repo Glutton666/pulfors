@@ -17,6 +17,7 @@ export function usePracticeRoomTracking(onTracked?: () => void, loggingEnabled: 
   const [trackingRoomName, setTrackingRoomName] = useState<string | null>(null);
   const roomTrackRef = useRef<{ roomId: string; roomName: string; start: number } | null>(null);
   const locationIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const generationRef = useRef(0);
   const onTrackedRef = useRef(onTracked);
   const loggingEnabledRef = useRef(loggingEnabled);
   useEffect(() => { onTrackedRef.current = onTracked; }, [onTracked]);
@@ -24,8 +25,9 @@ export function usePracticeRoomTracking(onTracked?: () => void, loggingEnabled: 
 
   const startRoomTracking = useCallback(async (room: { id: string; name: string }) => {
     if (!loggingEnabledRef.current) return;
+    const generation = ++generationRef.current;
     const granted = await requestLocationPermission();
-    if (!granted) return;
+    if (!granted || generation !== generationRef.current) return;
     roomTrackRef.current = { roomId: room.id, roomName: room.name, start: Date.now() };
     setRoomTrackingActive(true);
     setTrackingRoomName(room.name);
@@ -34,8 +36,9 @@ export function usePracticeRoomTracking(onTracked?: () => void, loggingEnabled: 
     locationIntervalRef.current = setInterval(async () => {
       try {
         const loc = await getCurrentLocation();
-        if (!loc || !roomTrackRef.current) return;
+        if (!loc || !roomTrackRef.current || generation !== generationRef.current) return;
         const rooms = await loadPracticeRooms();
+        if (!roomTrackRef.current || generation !== generationRef.current) return;
         const trackedRoom = rooms.find(r => r.id === roomTrackRef.current!.roomId);
         if (!trackedRoom) return;
         const dist = findNearbyRoom(loc.coords.latitude, loc.coords.longitude, [trackedRoom], 20);
@@ -59,7 +62,8 @@ export function usePracticeRoomTracking(onTracked?: () => void, loggingEnabled: 
     }, 15000);
   }, []);
 
-  const stopRoomTracking = useCallback(() => {
+  const stopRoomTracking = useCallback(async () => {
+    generationRef.current += 1;
     if (locationIntervalRef.current) {
       clearInterval(locationIntervalRef.current);
       locationIntervalRef.current = null;
@@ -67,7 +71,7 @@ export function usePracticeRoomTracking(onTracked?: () => void, loggingEnabled: 
     if (roomTrackRef.current) {
       const dur = Math.round((Date.now() - roomTrackRef.current.start) / 1000);
       if (loggingEnabledRef.current && dur >= 10) {
-        addActivityLog({
+        await addActivityLog({
           type: "practice_room_visit",
           data: { roomId: roomTrackRef.current.roomId, roomName: roomTrackRef.current.roomName, duration: dur },
         }).then(() => onTrackedRef.current?.());
@@ -80,6 +84,7 @@ export function usePracticeRoomTracking(onTracked?: () => void, loggingEnabled: 
 
   /** Stops location tracking without creating a final activity record. */
   const discardRoomTracking = useCallback(() => {
+    generationRef.current += 1;
     if (locationIntervalRef.current) {
       clearInterval(locationIntervalRef.current);
       locationIntervalRef.current = null;
@@ -91,7 +96,7 @@ export function usePracticeRoomTracking(onTracked?: () => void, loggingEnabled: 
 
   useEffect(() => {
     return () => {
-      stopRoomTracking();
+      void stopRoomTracking();
     };
   }, [stopRoomTracking]);
 

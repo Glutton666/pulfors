@@ -114,3 +114,4 @@
 - [Tempo trainer behavior](tempo-trainer-behavior.md) — one saved time/measure rule; use audio measure boundaries, not extra post-click cues; retain Android tempo-editable output.
 - [GitHub workflow restriction](github-workflows-policy.md) — 이 프로젝트에서는 앞으로 .github/workflows 파일을 수정하지 않는다.
 - [Bar playback panel](bar-playback-panel-behavior.md) — 재생 중 편집 조작만 숨기고 재생·정지는 유지한다. 정지하면 재생 전 편집 선택으로 돌아간다.
+- [Local profile runtime boundary](local-profile-runtime-boundary.md) — keep each runtime bound to one profile; flush and reload on handoff so late callbacks cannot target a different profile.

@@ -17,7 +17,9 @@ for (const ext of ASSET_EXTS) {
 // react-native / expo-haptics 모듈도 CJS 경로로 재라우팅 (tsx의 esbuild가
 // node_modules/react-native/index.js를 Flow 타입 때문에 파싱하지 못함).
 const STUB_MAP = {
+  "@/lib/profile-storage": path.join(__dirname, "async-storage.js"),
   "react-native": path.join(__dirname, "react-native.js"),
+  "react-native-view-shot": path.join(__dirname, "view-shot.js"),
   "expo-haptics": path.join(__dirname, "expo-haptics.js"),
   "expo-file-system": path.join(__dirname, "expo-file-system.js"),
   "expo-file-system/legacy": path.join(__dirname, "expo-file-system.js"),

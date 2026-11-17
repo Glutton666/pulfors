@@ -38,6 +38,7 @@ export const translations = {
     soundTab: { ko: "사운드", en: "Sound" },
     practiceTab: { ko: "연습장", en: "Practice" },
     profileTab: { ko: "프로필", en: "Profile" },
+    appManagement: { ko: "앱 관리", en: "App" },
     themeMode: { ko: "화면 모드", en: "Display Mode" },
     nightMode: { ko: "밤", en: "Night" },
     dayMode: { ko: "낮", en: "Day" },

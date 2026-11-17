@@ -37,7 +37,7 @@ import Animated, {
 import type { SharedValue } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import AsyncStorage from "@/lib/profile-storage";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { usePlaybackVisual } from "@/contexts/PlaybackVisualContext";
 import * as Haptics from "expo-haptics";

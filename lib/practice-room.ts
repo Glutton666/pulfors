@@ -1,4 +1,4 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import AsyncStorage from "@/lib/profile-storage";
 import * as Location from "expo-location";
 import * as Crypto from "expo-crypto";
 import { Platform } from "react-native";
@@ -43,6 +43,11 @@ export async function loadLabUnlocked(): Promise<boolean> {
 
 export async function loadPracticeRooms(): Promise<PracticeRoom[]> {
   try {
+    const settings = await AsyncStorage.getItem("metronome_settings");
+    if (settings) {
+      const overrides = JSON.parse(settings).profileRooms;
+      if (Array.isArray(overrides)) return overrides;
+    }
     const data = await AsyncStorage.getItem(PRACTICE_ROOMS_KEY);
     if (data) return JSON.parse(data);
   } catch (e) {
@@ -53,9 +58,18 @@ export async function loadPracticeRooms(): Promise<PracticeRoom[]> {
 
 export async function savePracticeRooms(rooms: PracticeRoom[]): Promise<void> {
   try {
+    const raw = await AsyncStorage.getItem("metronome_settings");
+    if (raw) {
+      const settings = JSON.parse(raw);
+      if (settings.profileRooms) {
+        settings.profileRooms = rooms;
+        await AsyncStorage.setItem("metronome_settings", JSON.stringify(settings));
+      }
+    }
     await AsyncStorage.setItem(PRACTICE_ROOMS_KEY, JSON.stringify(rooms));
   } catch (e) {
     logger.warn("Failed to save practice rooms:", e);
+    throw e;
   }
 }
 

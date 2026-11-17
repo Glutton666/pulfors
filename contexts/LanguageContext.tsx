@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, ReactNode } from "react";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import AsyncStorage from "@/lib/profile-storage";
 import { type Language, createT, type TranslationFn, isLanguageCode, detectDeviceLanguage } from "@/lib/i18n";
 
 const LANGUAGE_KEY = "metronome_language";

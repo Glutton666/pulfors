@@ -2,7 +2,7 @@
 // 악보 AsyncStorage CRUD
 // ============================================================
 
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import AsyncStorage from "@/lib/profile-storage";
 import * as Crypto from "expo-crypto";
 import type { ScoreDocument, ScoreListItem, ScorePart, ScoreMeasure } from "./score-types";
 import { INSTRUMENTS, migrateLegacyLayoutOverrides } from "./score-types";

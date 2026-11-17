@@ -1,5 +1,6 @@
 import { Platform } from "react-native";
 import type { SampleChannel } from "./stereo-channel";
+import RawStorage from "@react-native-async-storage/async-storage";
 
 export interface CacheEntry {
   rawUri: string;
@@ -60,6 +61,12 @@ export async function _defaultDeleteArtifactForTests(path: string): Promise<void
 
 async function defaultDeleteArtifact(path: string): Promise<void> {
   if (!path) return;
+  // Cache output may have been saved by another profile. On uncertainty retain.
+  try {
+    const pairs = await RawStorage.multiGet(await RawStorage.getAllKeys());
+    const base = path.split("#")[0];
+    if (pairs.some(([, raw]) => raw?.includes(base))) return;
+  } catch { return; }
   if (Platform.OS === "web") {
     if (path.startsWith("blob:")) {
       try { URL.revokeObjectURL(path); } catch {}

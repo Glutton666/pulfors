@@ -1,4 +1,4 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import AsyncStorage from "@/lib/profile-storage";
 import type { PracticeEntry } from "./storage";
 
 export type StaffPoint = { x: number; y: number };
@@ -50,7 +50,7 @@ const validPoint = (point: StaffPoint) => !!point && Number.isFinite(point.x) &&
 const validErasures = (value?: StaffErasure[]) => value === undefined || Array.isArray(value) && value.every((cut) =>
   !!cut && Number.isFinite(cut.width) && cut.width > 0 && Array.isArray(cut.points) && cut.points.length > 0 && cut.points.every(validPoint));
 
-function isNotebook(value: unknown): value is StaffNotebook {
+export function isNotebook(value: unknown): value is StaffNotebook {
   if (!value || typeof value !== "object") return false;
   const note = value as StaffNotebook;
   const settings = note.settings;

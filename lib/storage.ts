@@ -1,4 +1,4 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import AsyncStorage from "@/lib/profile-storage";
 import { DEFAULT_TEMPO_TRAINER, normalizeTempoTrainer, type TempoTrainerConfig } from "./tempo-trainer";
 import * as Crypto from "expo-crypto";
 import type { BeatType } from "./metronome-engine";
@@ -338,6 +338,8 @@ export interface MetronomeSettings {
   timerStopMode?: "immediate" | "end-of-cycle";
   username?: string;
   primaryInstrumentId?: string;
+  profilePhoto?: string | null;
+  profileRooms?: import("./practice-room").PracticeRoom[];
   landscapeReversed?: boolean;
   showLandscapeImage?: boolean;
   landscapeContentType?: "photo" | "stats";
@@ -625,7 +627,13 @@ export async function saveSettings(
 ): Promise<void> {
   return enqueueSettingsStorageOperation(async () => {
     try {
-      await AsyncStorage.setItem(SETTINGS_KEY, JSON.stringify(normalizeSettingsVolumes(settings)));
+      const raw = await AsyncStorage.getItem(SETTINGS_KEY);
+      const previous = raw ? JSON.parse(raw) : {};
+      await AsyncStorage.setItem(SETTINGS_KEY, JSON.stringify(normalizeSettingsVolumes({
+        ...settings,
+        profilePhoto: Object.hasOwn(previous, "profilePhoto") ? previous.profilePhoto : settings.profilePhoto,
+        profileRooms: previous.profileRooms ?? settings.profileRooms,
+      })));
     } catch (e) {
       if (options.notifyOnError !== false) {
         notifyStorageError({ key: SETTINGS_KEY, operation: "save", error: e });

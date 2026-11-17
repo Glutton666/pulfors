@@ -1,4 +1,4 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import AsyncStorage from "@/lib/profile-storage";
 
 export const CUSTOM_TUNING_SETS_KEY = "metronome_custom_tuning_sets_v1";
 export interface CustomTuningTarget { id: string; name: string; frequency: number | null }

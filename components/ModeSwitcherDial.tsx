@@ -17,7 +17,7 @@ import Animated, {
   cancelAnimation,
 } from "react-native-reanimated";
 import type { SharedValue } from "react-native-reanimated";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import AsyncStorage from "@/lib/profile-storage";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/contexts/ThemeContext";

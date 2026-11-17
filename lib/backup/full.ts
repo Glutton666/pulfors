@@ -7,6 +7,7 @@ import { logger } from "../logger";
 import { captureBreadcrumb } from "../error-tracking";
 import {
   ALL_KEYS,
+  isProfileBackupKey,
   SCORE_KEY_PREFIX,
   MAX_IMPORT_JSON_CHARS,
   RESTORE_SNAPSHOT_KEY,
@@ -28,12 +29,17 @@ import {
 } from "./shared";
 import { CURRENT_SCHEMA_VERSION, migrateBackup, UnsupportedBackupVersionError } from "./migrations";
 import { BackupFileSchema, formatZodError } from "./schema";
+import { addProfileData, getActiveProfileId, readProfileData } from "../profiles";
+import { flushAllPersisters } from "../persist";
+import { drainProfileWrites } from "../profile-storage";
+import { validateProfileBackupData } from "./profile-validation";
 
 export type ImportBackupErrorCode = "unsupported_version" | "invalid" | "io";
 
 export interface ImportBackupResult {
   success: boolean;
   keyCount: number;
+  profileId?: string;
   errorCode?: ImportBackupErrorCode;
   /** Zod가 파싱 단계에서 감지한 필드별 오류 설명. 사용자에게 표시 가능. */
   validationDetail?: string;
@@ -41,34 +47,17 @@ export interface ImportBackupResult {
   recoveryStatus?: "rolled_back" | "rollback_pending";
 }
 
-/** score 인덱스에서 모든 개별 악보 키를 동적으로 수집한다 */
-async function collectScoreKeys(): Promise<string[]> {
+export async function exportBackup(profileId = getActiveProfileId()): Promise<boolean> {
   try {
-    const indexJson = await AsyncStorage.getItem("metronome_scores_v1");
-    if (!indexJson) return [];
-    const ids: unknown = JSON.parse(indexJson);
-    if (!Array.isArray(ids)) return [];
-    return (ids as unknown[])
-      .filter((v) => typeof v === "string")
-      .map((id) => `${SCORE_KEY_PREFIX}${id}`);
-  } catch {
-    return [];
-  }
-}
-
-export async function exportBackup(): Promise<boolean> {
-  try {
-    const scoreKeys = await collectScoreKeys();
-    const allKeys = [...ALL_KEYS, ...scoreKeys];
-    const pairs = await AsyncStorage.multiGet(allKeys);
-    const data: Record<string, string | null> = {};
-    for (const [key, value] of pairs) {
-      data[key] = value;
+    if (profileId === getActiveProfileId()) {
+      await flushAllPersisters();
+      await drainProfileWrites();
     }
+    const data = Object.fromEntries(Object.entries(await readProfileData(profileId)).filter(([key]) => isProfileBackupKey(key)));
 
     const allUris = collectAllAudioUris(data);
-    const audioFiles = await readAllAudioFiles(allUris);
-    const imageFiles = await readAllImageFiles(collectAllImageUris(data));
+    const audioFiles = await readAllAudioFiles(allUris, true);
+    const imageFiles = await readAllImageFiles(collectAllImageUris(data), true);
 
     const backup: BackupFile = {
       _meta: {
@@ -239,14 +228,18 @@ async function restoreFromJsonInternal(
       throw e;
     }
 
+    try { validateProfileBackupData(data); }
+    catch (error) {
+      return { success: false, keyCount: 0, errorCode: "invalid", validationDetail: String(error) };
+    }
     if (backup.audioFiles && Object.keys(backup.audioFiles).length > 0) {
-      const uriMapping = await restoreAudioFiles(backup.audioFiles);
+      const uriMapping = await restoreAudioFiles(backup.audioFiles, true);
       if (uriMapping.size > 0) {
         data = remapDataUris(data, uriMapping);
       }
     }
     if (backup.imageFiles && Object.keys(backup.imageFiles).length > 0) {
-      const imageMapping = await restoreImageFiles(backup.imageFiles);
+      const imageMapping = await restoreImageFiles(backup.imageFiles, true);
       if (imageMapping.size > 0) data = remapDataImageUris(data, imageMapping);
     }
 
@@ -254,61 +247,18 @@ async function restoreFromJsonInternal(
 
     const pairs: [string, string][] = [];
     for (const [key, value] of Object.entries(data)) {
-      const isKnownKey = ALL_KEYS.includes(key) || key.startsWith(SCORE_KEY_PREFIX);
+      const isKnownKey = isProfileBackupKey(key);
       if (value !== null && value !== undefined && isKnownKey) {
         pairs.push([key, value]);
       }
     }
 
-    // 트랜잭션: 기존의 정적 키뿐 아니라 현재/새 백업에 들어있는 개별 악보 키도
-    // 함께 다룬다. 그렇지 않으면 부분 실패 시 악보 인덱스와 실제 문서가 서로
-    // 다른 세대로 남을 수 있다.
-    const existingScoreKeys = await collectScoreKeys();
-    const incomingScoreKeys = Object.keys(data).filter((key) => key.startsWith(SCORE_KEY_PREFIX));
-    const restoreKeys = [...new Set([...ALL_KEYS, ...existingScoreKeys, ...incomingScoreKeys])];
-
-    // 트랜잭션: 기존 restoreKeys 값을 스냅샷에 저장한 뒤 multiRemove + multiSet을
-    // 시도한다. 어느 단계에서 실패하거나 앱이 강제 종료되더라도 스냅샷이
-    // 남아 부팅 시 rollbackPendingRestoreIfAny()로 자동 복구할 수 있다.
-    let snapshotJson: string;
-    try {
-      const snapshotPairs = await AsyncStorage.multiGet(restoreKeys);
-      const snapshotObj: Record<string, string | null> = {};
-      for (const [k, v] of snapshotPairs) snapshotObj[k] = v;
-      snapshotJson = JSON.stringify({ keys: restoreKeys, data: snapshotObj });
-      await AsyncStorage.setItem(RESTORE_SNAPSHOT_KEY, snapshotJson);
-    } catch (e) {
-      logger.warn("[Backup] Snapshot before restore failed:", e);
-      captureBreadcrumb({ category: "backup.restore", message: "Snapshot failed", level: "error", data: { error: String(e) } });
-      return { success: false, keyCount: 0, errorCode: "io" };
-    }
-
-    try {
-      await AsyncStorage.multiRemove(restoreKeys);
-      if (pairs.length > 0) {
-        await AsyncStorage.multiSet(pairs);
-      }
-      await AsyncStorage.removeItem(RESTORE_SNAPSHOT_KEY);
-      return { success: true, keyCount: pairs.length };
-    } catch (e) {
-      logger.warn("[Backup] Restore write failed, rolling back:", e);
-      captureBreadcrumb({ category: "backup.restore", message: "Write failed, rollback", level: "error", data: { error: String(e) } });
-      try {
-        await applyRestoreSnapshot(snapshotJson);
-        await AsyncStorage.removeItem(RESTORE_SNAPSHOT_KEY);
-        return { success: false, keyCount: 0, errorCode: "io", recoveryStatus: "rolled_back" };
-      } catch (rollbackErr) {
-        // 롤백도 실패한 경우 — 스냅샷 키는 남겨 다음 부팅에서 재시도하도록 한다.
-        logger.warn("[Backup] Rollback also failed, snapshot retained for boot recovery:", rollbackErr);
-        captureBreadcrumb({
-          category: "backup.restore",
-          message: "Rollback failed, snapshot retained",
-          level: "error",
-          data: { error: String(rollbackErr) },
-        });
-      }
-      return { success: false, keyCount: 0, errorCode: "io", recoveryStatus: "rollback_pending" };
-    }
+    const settings = JSON.parse(data.metronome_settings ?? "{}");
+    const profile = await addProfileData(Object.fromEntries(pairs), {
+      name: typeof settings.username === "string" ? settings.username : "",
+      photoUri: typeof settings.profilePhoto === "string" ? settings.profilePhoto : undefined,
+    });
+    return { success: true, keyCount: pairs.length, profileId: profile.id };
   } catch (e) {
     logger.warn("[Backup] Restore error:", e);
     captureBreadcrumb({ category: "backup.restore", message: "Restore error", level: "error", data: { error: String(e) } });

@@ -251,7 +251,7 @@ export function SettingsModal({
     { key: "theme", icon: "color-palette-outline", label: t("settings", "themeTab") },
     { key: "sound", icon: "musical-notes-outline", label: t("settings", "soundTab") },
     ...(scope === "global" && profileContent
-      ? [{ key: "profile" as SettingsTab, icon: "person-outline", label: t("settings", "profileTab") }]
+      ? [{ key: "profile" as SettingsTab, icon: "construct-outline", label: t("settings", "appManagement") }]
       : []),
     ...(practiceBookContent && (scope === "beat" || scope === "bar" || scope === "note")
       ? [{ key: "practice" as SettingsTab, icon: "book-outline", label: t("settings", "practiceTab") }]

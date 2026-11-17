@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import AsyncStorage from "@/lib/profile-storage";
 
 export type RhythmEntryMode = "capture" | "notation";
 export const RHYTHM_ENTRY_MODE_KEY = "rhythm_lab_entry_mode_v1";

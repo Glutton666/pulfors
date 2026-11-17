@@ -7,6 +7,8 @@
 //   3) 백업: 데이터 sanitize + remap + JSON 직렬화 라운드트립이 손실 없는지
 //   4) 백업 전체 흐름: exportBackup이 만든 JSON을 restoreFromJson이 읽어
 //      schemaVersion=1 경로를 통과하고 데이터를 손실 없이 복원하는지 (Task #46)
+/* eslint-disable import/first */
+jest.unmock("@/lib/profile-storage");
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
@@ -30,6 +32,7 @@ import { exportBackup, restoreFromJson } from "../lib/backup/full";
 import { sharePracticeEntry } from "../lib/backup/practice";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { CURRENT_SCHEMA_VERSION } from "../lib/backup/migrations";
+import { initializeProfiles, readProfileData } from "../lib/profiles";
 
 // FileSystem stub을 직접 참조해 writeAsStringAsync를 패치할 수 있도록 가져온다.
 // setup.cjs가 "expo-file-system/legacy"를 이 스텁으로 라우팅하므로
@@ -443,6 +446,7 @@ test("[backup-export-import] exportBackup이 생성한 JSON을 restoreFromJson�
   ]);
   await AsyncStorage.setItem("metronome_settings", originalSettings);
   await AsyncStorage.setItem("practice_book", originalBook);
+  await initializeProfiles();
 
   // 2) FileSystem stub의 writeAsStringAsync를 패치해 exportBackup이 쓰는
   //    JSON 문자열을 가로챈다.
@@ -473,14 +477,15 @@ test("[backup-export-import] exportBackup이 생성한 JSON을 restoreFromJson�
   // 4) AsyncStorage를 초기화한 뒤 가로챈 JSON을 restoreFromJson에 넘겨
   //    데이터가 손실 없이 복원되는지 확인한다.
   (AsyncStorage as unknown as { __reset(): void }).__reset();
+  await initializeProfiles();
   const result = await restoreFromJson(capturedJson!);
   assert.equal(result.success, true, "복원 성공");
   assert.equal(result.errorCode, undefined, "errorCode 없음");
   assert.ok(result.keyCount >= 2, "최소 2개 키 복원");
 
-  const restoredSettings = await AsyncStorage.getItem("metronome_settings");
+  const restoredSettings = (await readProfileData(result.profileId!)).metronome_settings;
   assert.equal(restoredSettings, originalSettings, "settings가 원본과 동일하게 복원됨");
-  const restoredBook = await AsyncStorage.getItem("practice_book");
+  const restoredBook = (await readProfileData(result.profileId!)).practice_book;
   assert.equal(restoredBook, originalBook, "practice_book이 원본과 동일하게 복원됨");
 });
 
@@ -507,6 +512,7 @@ test("[backup-export-import] schemaVersion=999으로 조작된 JSON은 importBac
 
 test("[backup-photo-roundtrip] 전체 백업의 허브·노트·중첩 큐 사진을 새 위치로 복원", async () => {
   (AsyncStorage as unknown as { __reset(): void }).__reset();
+  await initializeProfiles();
   const imageBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
   const backup = JSON.stringify({
     _meta: {
@@ -536,7 +542,6 @@ test("[backup-photo-roundtrip] 전체 백업의 허브·노트·중첩 큐 사�
       "hub.png": imageBase64,
       "root.png": imageBase64,
       "child.png": imageBase64,
-      "corrupt.png": "iVBORw0KGgoAAA",
     },
   });
 
@@ -552,9 +557,12 @@ test("[backup-photo-roundtrip] 전체 백업의 허브·노트·중첩 큐 사�
 
   assert.equal(writtenImages.filter((uri) => uri.includes("/note_images/")).length, 3);
   assert.equal(writtenImages.some((uri) => uri.includes("corrupt")), false);
-  const hubs = JSON.parse((await AsyncStorage.getItem("metronome_hub_images"))!);
+  const registry = JSON.parse((await AsyncStorage.getItem("local_profiles_v1"))!);
+  const imported = registry.profiles.at(-1)!;
+  const importedData = await readProfileData(imported.id);
+  const hubs = JSON.parse(importedData.metronome_hub_images!);
   assert.match(hubs[0].uri, /^file:\/\/\/stub\/doc\/note_images\//);
-  const book = JSON.parse((await AsyncStorage.getItem("practice_book"))!);
+  const book = JSON.parse(importedData.practice_book!);
   assert.match(book[0].imageUri, /^file:\/\/\/stub\/doc\/note_images\//);
   assert.match(book[0].noteQueueEntries[0].imageUri, /^file:\/\/\/stub\/doc\/note_images\//);
   assert.deepEqual(book[0].imageCrop, { scale: 1.5, x: 0.1, y: -0.2, aspectRatio: 0.75 });

@@ -56,6 +56,12 @@ export interface DebouncedPersister<T extends object> {
 
 const DEFAULT_MAX_ATTEMPTS = 3;
 const DEFAULT_BASE_DELAY_MS = 500;
+const livePersisters = new Set<() => Promise<void>>();
+
+/** Flush every debounced producer before a profile runtime is closed. */
+export async function flushAllPersisters(): Promise<void> {
+  await Promise.all([...livePersisters].map(flush => flush()));
+}
 
 export function createDebouncedPersister<T extends object>(
   getSnapshot: () => T,
@@ -241,6 +247,25 @@ export function createDebouncedPersister<T extends object>(
     }
     return () => statusListeners.delete(listener);
   };
+
+  livePersisters.add(() => new Promise<void>((resolve, reject) => {
+    const check = () => {
+      if (writing || Object.keys(pending).length > 0) {
+        if (cycleFailed) { finish(new Error("Unsaved changes remain")); }
+        return;
+      }
+      finish();
+    };
+    const finish = (error?: Error) => {
+      clearTimeout(timeout);
+      statusListeners.delete(check);
+      if (error) reject(error); else resolve();
+    };
+    const timeout = setTimeout(() => finish(new Error("Saving timed out")), 15000);
+    statusListeners.add(check);
+    flushNow();
+    check();
+  }));
 
   return persister;
 }

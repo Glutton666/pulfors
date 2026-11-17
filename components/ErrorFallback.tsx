@@ -15,7 +15,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { useThemeSafe } from "@/contexts/ThemeContext";
 import { Radius, FontSize } from "@/constants/tokens";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import AsyncStorage from "@/lib/profile-storage";
 import { createT, detectDeviceLanguage, isLanguageCode, type Language } from "@/lib/i18n";
 import { router } from "expo-router";
 
