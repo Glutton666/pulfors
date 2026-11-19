@@ -36,6 +36,40 @@ function withFakeNow<T>(startMs: number, fn: (advance: (ms: number) => void) => 
 
 const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 
+test("repeat-until-skipped loops a sequential Bar entry at its end marker without dropping the last subdivision", () => {
+  withFakeNow(1000, advance => {
+    const engine = new MetronomeEngine();
+    const beats: number[] = [];
+    engine.setOnBeat(beat => beats.push(beat));
+    engine.setBpm(120);
+    engine.setBeatsPerMeasure(4);
+    engine.setLoopBlocks([{ startBeat: 1, endBeat: 3, type: "count", value: 1 }]);
+    engine.setBlockPlayMode("sequential");
+    engine.setAllBeatSubdivisions({ "2": ["normal", "normal"] });
+    engine.setAllBarRepeats({ 2: { type: "count", value: 1, isEnd: true } });
+    const normalSchedule = engine.getScheduleInfo();
+    assert.ok(normalSchedule.ticks.some(t => t.stopAfterThis));
+    engine.setRepeatUntilSkipped(true);
+    const loop = engine.getScheduleInfo();
+    assert.deepEqual(loop.ticks.map(t => t.beat), [0, 1, 2, 2]);
+    assert.equal(loop.durationMs, 1500);
+    engine.start();
+    const internals = engine as unknown as EngineInternals;
+    const pump = (ms: number) => { advance(ms); internals.loop(); };
+    pump(500); pump(500); pump(250); pump(250);
+    assert.equal(engine.getIsRunning(), true);
+    assert.deepEqual(beats, [0, 1, 2, 0]);
+    engine.requestStopAfterMeasure();
+    pump(500); pump(500); pump(250);
+    assert.equal(engine.getIsRunning(), true);
+    pump(250);
+    assert.equal(engine.getIsRunning(), false);
+    assert.deepEqual(beats, [0, 1, 2, 0, 1, 2]);
+    assert.deepEqual(engine.getScheduleInfo(), normalSchedule);
+    engine.stop();
+  });
+});
+
 test("measureStartTime: 100마디 진행 후 절대 기준선과 정확히 일치 (drift 0)", () => {
   withFakeNow(1000, () => {
     const e = new MetronomeEngine();

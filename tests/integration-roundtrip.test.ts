@@ -194,7 +194,7 @@ test("[entry-roundtrip] PracticeEntry -> entryToBarConfig -> selectCurrentBarCon
     beatSubdivisions: { "0": ["accent", "normal"] },
     barRepeats: { 0: { type: "count", value: 4 } },
     loopBlocks: [{ startBeat: 0, endBeat: 5, type: "count", value: 2 }],
-    barLoopMode: "once",
+    barLoopMode: "loop",
     subdivisionPattern: ["accent"],
     barClockMode: "timer",
     barTimerDuration: 300,
@@ -210,6 +210,7 @@ test("[entry-roundtrip] PracticeEntry -> entryToBarConfig -> selectCurrentBarCon
   assert.deepEqual(bar.beatSubdivisions, entry.beatSubdivisions);
   assert.deepEqual(bar.barRepeats, entry.barRepeats);
   assert.deepEqual(bar.loopBlocks, entry.loopBlocks);
+  assert.equal(bar.barLoopMode, "loop");
   assert.equal(bar.barClockMode, "timer");
   assert.equal(bar.barTimerDuration, 300);
   assert.deepEqual(bar.noteSamples, entry.noteSamples);
@@ -240,6 +241,7 @@ test("[entry-roundtrip] PracticeEntry -> entryToBarConfig -> selectCurrentBarCon
   assert.deepEqual(live.beatTypes, entry.beatTypes);
   assert.deepEqual(live.barRepeats, entry.barRepeats);
   assert.deepEqual(live.loopBlocks, entry.loopBlocks);
+  assert.equal(live.barLoopMode, "loop");
   assert.deepEqual(live.noteSamples, entry.noteSamples);
   assert.deepEqual(live.noteSampleChannels, entry.noteSampleChannels);
 });

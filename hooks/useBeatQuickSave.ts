@@ -72,7 +72,7 @@ export function useBeatQuickSave(params: UseBeatQuickSaveParams): UseBeatQuickSa
         beatTypes: [...beatTypes],
         beatSubdivisions: { ...beatSubdivisions },
         barRepeats: {} as Record<number, BarRepeatEntry>,
-        barLoopMode: "once" as const,
+        barLoopMode: "loop" as const,
         subdivisionPattern: [...subdivisionPattern],
       };
       const entry = createPracticeEntry(label, config, username);

@@ -162,6 +162,7 @@ export class MetronomeEngine {
   private onSubBeat: ((beat: number, subBeat: number) => void) | null = null;
   private onMeasureComplete: (() => void) | null = null;
   private stopAfterMeasure = false;
+  private repeatUntilSkipped = false;
   private playStrongClick: (() => void) | null = null;
   private playHighClick: (() => void) | null = null;
   private playLowClick: (() => void) | null = null;
@@ -328,6 +329,16 @@ export class MetronomeEngine {
     this.stopAfterMeasure = true;
   }
 
+  /**
+   * Repeat the current configured Note entry. An internal end marker ends a
+   * pass, not the queue item. A user's explicit stop-after-pass still wins.
+   */
+  setRepeatUntilSkipped(enabled: boolean) {
+    if (this.repeatUntilSkipped === enabled) return;
+    this.repeatUntilSkipped = enabled;
+    this.invalidateScheduleCache();
+  }
+
   getBeatsPerMeasure() {
     return this.beatsPerMeasure;
   }
@@ -352,7 +363,7 @@ export class MetronomeEngine {
       // Only a known repeating schedule can be extrapolated after a stalled JS turn.
       // Random passes and finite sessions must wait for their real boundary handoff.
       if (this.shouldStopAtMeasureBoundary() || this.blockPlayMode === "random" || this.scheduleDirty ||
-        this.pendingMeasureStartAction || this.schedule[this.schedule.length - 1]?.stopAfterThis) return callbackPosition();
+        this.pendingMeasureStartAction || (!this.repeatUntilSkipped && this.schedule[this.schedule.length - 1]?.stopAfterThis)) return callbackPosition();
       pass += Math.floor(elapsed / this.measureDurationMs);
       elapsed %= this.measureDurationMs;
     }
@@ -981,6 +992,7 @@ export class MetronomeEngine {
                 state.ticks[state.ticks.length - 1] = {
                   ...state.ticks[state.ticks.length - 1],
                   stopAfterThis: true,
+                  endBarOffsetMs: state.time - state.ticks[state.ticks.length - 1].time,
                 };
               }
               break;
@@ -993,6 +1005,17 @@ export class MetronomeEngine {
 
     this.measureDurationMs = state.time;
     ticks.sort((a, b) => a.time - b.time);
+    if (this.repeatUntilSkipped) {
+      const end = ticks.findIndex((tick) => tick.stopAfterThis);
+      if (end >= 0) {
+        const endTick = ticks[end];
+        this.measureDurationMs = endTick.time + (endTick.endBarOffsetMs ?? 0);
+        // Keep any layer covering the ending bar, but not ticks beyond that
+        // bar. The rendered audio and the tracking clock get the same pass.
+        const tail = ticks.findIndex((tick) => tick.time >= this.measureDurationMs);
+        if (tail >= 0) ticks.length = tail;
+      }
+    }
     return ticks;
   }
 
@@ -1039,6 +1062,7 @@ export class MetronomeEngine {
       ov: ovs,
       lb: this.loopBlocks,
       mode: this.blockPlayMode,
+      repeatUntilSkipped: this.repeatUntilSkipped,
     });
   }
 
@@ -1371,7 +1395,7 @@ export class MetronomeEngine {
 
   private shouldStopAtMeasureBoundary() {
     return this.stopAfterMeasure ||
-      (this.blockPlayMode === "sequential" && this.loopBlocks.length > 0);
+      (!this.repeatUntilSkipped && this.blockPlayMode === "sequential" && this.loopBlocks.length > 0);
   }
 
   private finishMeasureBoundaryStop() {
@@ -1485,7 +1509,7 @@ export class MetronomeEngine {
       this.scheduleIndex++;
 
       // isEnd 심볼 — volta 소진 후 전체 정지
-      if (tick.stopAfterThis && this.isRunning) {
+      if (tick.stopAfterThis && !this.repeatUntilSkipped && this.isRunning) {
         this.stop();
         this.onMeasureComplete?.();
         return;
@@ -1663,6 +1687,7 @@ export class MetronomeEngine {
     this.setExternalBeatClock(null);
     this.isRunning = false;
     this.stopAfterMeasure = false;
+    this.setRepeatUntilSkipped(false);
     this.upcomingRandomSchedule = null;
     if (this.timerId) {
       clearTimeout(this.timerId);

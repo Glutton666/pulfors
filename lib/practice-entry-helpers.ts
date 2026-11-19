@@ -110,7 +110,7 @@ export function entryToBarConfig(entry: PracticeEntry): BarConfig {
     noteSampleChannels: { ...(entry.noteSampleChannels || {}) } as NoteSampleChannelMap,
     noteSampleVolumes: { ...(entry.noteSampleVolumes || {}) },
     noteSampleSpeeds: { ...(entry.noteSampleSpeeds || {}) },
-    barLoopMode: "once",
+    barLoopMode: entry.barLoopMode || "once",
     blockPlayMode: entry.blockPlayMode || "loop",
     hasBeenConfigured: true,
   };

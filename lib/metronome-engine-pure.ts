@@ -53,6 +53,8 @@ export interface ScheduledTick {
   randomSequenceIndex?: number;
   /** isEnd 심볼의 마지막 허용 반복에서 발생 — 이 tick 재생 후 엔진 전체 정지 */
   stopAfterThis?: boolean;
+  /** Time from the end-marker tick to the end of its bar, including its last subdivision. */
+  endBarOffsetMs?: number;
 }
 
 export interface LoopBlockData {
@@ -410,6 +412,7 @@ export function pureEmitBeatsInRange(
             state.ticks[state.ticks.length - 1] = {
               ...state.ticks[state.ticks.length - 1],
               stopAfterThis: true,
+              endBarOffsetMs: state.time - state.ticks[state.ticks.length - 1].time,
             };
           }
           break;

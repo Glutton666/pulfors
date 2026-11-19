@@ -1,5 +1,10 @@
 import type { PracticeEntry } from "@/lib/storage";
 
+/** Legacy Beat entries often contain `barLoopMode: "once"`, but Beat is continuous. */
+export function noteQueueEntryRepeats(entry: PracticeEntry): boolean {
+  return entry.mode === "beat" || ((entry.mode ?? "bar") === "bar" && entry.barLoopMode === "loop");
+}
+
 /**
  * Creates independent, persistence-safe snapshots for a saved Note-mode queue.
  * Explicit shallow copies keep later edits from mutating the saved queue entry.
@@ -7,6 +12,7 @@ import type { PracticeEntry } from "@/lib/storage";
 export function serializeNoteQueueEntries(queue: PracticeEntry[]): PracticeEntry[] {
   return queue.map((entry) => ({
     ...entry,
+    ...(entry.mode === "beat" ? { barLoopMode: "loop" as const } : {}),
     beatTypes: [...entry.beatTypes],
     beatSubdivisions: { ...entry.beatSubdivisions },
     barRepeats: { ...entry.barRepeats },

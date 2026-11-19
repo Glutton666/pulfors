@@ -755,6 +755,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
     if (options.configureEngine !== false) {
       applyMetronomePlaybackPlan(engine, plan);
     }
+    engine.setRepeatUntilSkipped(plan.mode === "note" && !plan.unit.stopAfterMeasure);
 
     try {
       releaseBackgroundLease();
@@ -1142,7 +1143,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
       p.showPlayingNotification(plan.bpm, playbackAtStart.modeLabel, p.languageRef.current);
       startOrResumePracticeSession();
       if (
-        plan.mode === "note" && plan.unit.stopAfterMeasure ||
+        plan.mode === "note" ? plan.unit.stopAfterMeasure :
         (!polygonPlayback && p.barModeRef.current && p.barLoopModeRef.current === "once")
       ) {
         engine.requestStopAfterMeasure();

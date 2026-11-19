@@ -279,6 +279,7 @@ function makeEngine() {
     setVisualTimingProvider: jest.fn(),
     setPendingMeasureStartAction: jest.fn(),
     requestStopAfterMeasure: jest.fn(),
+    setRepeatUntilSkipped: jest.fn(),
   };
 }
 
@@ -1511,7 +1512,21 @@ describe("pre-rendered playback reliability", () => {
     expect(params.stopRenderedAudio.mock.invocationCallOrder[0])
       .toBeLessThan(player.play.mock.invocationCallOrder[0]);
     expect(engine.requestStopAfterMeasure).toHaveBeenCalledTimes(1);
+    expect(engine.setRepeatUntilSkipped).toHaveBeenCalledWith(false);
     expect(params.showPlayingNotification).toHaveBeenCalledWith(120, "Note", "en");
+  });
+
+  it("starts a repeating Note entry without arming an automatic handoff", async () => {
+    const engine = makeEngine();
+    const params = makePlaybackParams(engine, { ...mockPlayer });
+    params.barModeRef.current = true;
+    params.barLoopModeRef.current = "once";
+    const { result } = renderHook(() => usePlaybackControl(params as any));
+    await act(async () => {
+      expect(await result.current.startConfiguredPlayback(false)).toBe(true);
+    });
+    expect(engine.setRepeatUntilSkipped).toHaveBeenCalledWith(true);
+    expect(engine.requestStopAfterMeasure).not.toHaveBeenCalled();
   });
 
   it("releases a stale Note queue player when a newer entry starts preparing", async () => {

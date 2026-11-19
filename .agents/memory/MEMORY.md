@@ -115,3 +115,4 @@
 - [GitHub workflow restriction](github-workflows-policy.md) — Replit에서만 .github/workflows 수정 금지(Replit OAuth에 workflow 권한 없음); 로컬 PC는 수정 가능.
 - [Bar playback panel](bar-playback-panel-behavior.md) — 재생 중 편집 조작만 숨기고 재생·정지는 유지한다. 정지하면 재생 전 편집 선택으로 돌아간다.
 - [Local profile runtime boundary](local-profile-runtime-boundary.md) — keep each runtime bound to one profile; flush and reload on handoff so late callbacks cannot target a different profile.
+- [노트 큐 반복 범위](note-queue-repeat-policy.md) — 비트와 반복 바는 직접 넘길 때까지 반복한다. 항목 반복과 큐 전체 반복은 별개다.

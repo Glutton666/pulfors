@@ -30,6 +30,7 @@ import type { ScoreDocument } from "@/lib/score-types";
 import { ScoreRenderer } from "@/components/ScoreRenderer";
 import { ImageFramingModal, PracticeSourcePickerModal } from "@/components/NoteModeModals";
 import { reconcileNoteSources } from "@/lib/note-mode-sources";
+import { noteQueueEntryRepeats } from "@/lib/note-queue-helpers";
 import { clampNoteImageCropToFrame, fitNoteImageFrame, normalizeNoteImageCrop } from "@/lib/note-image-crop";
 import { BarPlayButton } from "@/components/BarPlayButton";
 
@@ -305,6 +306,7 @@ function QueueItem({
   const { t } = useLanguage();
   const [frameVisible, setFrameVisible] = useState(false);
   const [pendingUri, setPendingUri] = useState<string | null>(entry.imageUri ?? null);
+  const repeats = noteQueueEntryRepeats(entry);
 
   const handlePickImage = useCallback(async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -319,7 +321,15 @@ function QueueItem({
   }, [onImageChange]);
 
   return (
-    <View style={[styles.queueItem, { borderColor: C.border, backgroundColor: C.surfaceLight }, isCurrent && { borderColor: accentColor, borderWidth: 1.5, backgroundColor: "rgba(212,168,70,0.08)" }]}>
+    <View
+      testID={`note-queue-item-${index}`}
+      style={[
+        styles.queueItem,
+        { borderColor: C.border, backgroundColor: C.surfaceLight },
+        repeats && { borderColor: accentColor, borderStyle: "dashed" },
+        isCurrent && { borderColor: accentColor, borderWidth: 1.5, backgroundColor: "rgba(212,168,70,0.08)" },
+      ]}
+    >
       <View style={styles.reorderBtns}>
         <Pressable onPress={onMoveUp} hitSlop={8} disabled={isFirst} style={{ opacity: isFirst ? 0.25 : 1 }}>
           <Ionicons name="chevron-up" size={S.ms(14, 0.4)} color={C.textTertiary} />
@@ -359,6 +369,12 @@ function QueueItem({
           <Text style={styles.queueItemBpm}>{entry.bpm} BPM</Text>
           <BeatDots beatTypes={entry.beatTypes} />
         </View>
+        {repeats && (
+          <View style={styles.queueItemMeta}>
+            <Ionicons name="repeat" size={S.ms(13, 0.3)} color={accentColor} />
+            <Text style={[styles.queueItemBpm, { color: accentColor }]}>{t("noteMode", "repeatUntilNext")}</Text>
+          </View>
+        )}
       </View>
       {entry.imageUri && (
         <Pressable onPress={() => { setPendingUri(entry.imageUri ?? null); setFrameVisible(true); }} hitSlop={8} style={{ padding: Spacing.xxs }}>
@@ -504,6 +520,7 @@ export function NoteModeView({
   }, [onPlayModeChange, onTogglePlay]);
 
   const currentEntry = queue[currentIndex];
+  const currentEntryRepeats = currentEntry ? noteQueueEntryRepeats(currentEntry) : false;
   const prevEntry = currentIndex > 0 ? queue[currentIndex - 1] : (playMode === "loop" && queue.length > 0 ? queue[queue.length - 1] : null);
   const nextEntry = currentIndex < queue.length - 1 ? queue[currentIndex + 1] : (playMode === "loop" && queue.length > 0 ? queue[0] : null);
   const totalBeats = Math.max(1, currentEntry?.beatsPerMeasure ?? 1);
@@ -564,12 +581,15 @@ export function NoteModeView({
           </>
         ) : <View style={{ flex: 1 }} />}
       </View>
-      <View style={[styles.stripItem, styles.stripItemActive, { borderColor: C.accent }]}>
+      <View
+        testID="note-current-entry"
+        style={[styles.stripItem, styles.stripItemActive, { borderColor: C.accent }, currentEntryRepeats && { borderStyle: "dashed" }]}
+      >
         {currentEntry?.imageUri ? (
           <Image source={{ uri: currentEntry.imageUri }} style={styles.stripThumb} />
         ) : (
           <View style={[styles.stripThumb, styles.stripThumbEmpty, { borderColor: C.accent }]}>
-            <Ionicons name="play" size={S.ms(10, 0.4)} color={C.accent} />
+            <Ionicons name={currentEntryRepeats ? "repeat" : "play"} size={S.ms(12, 0.4)} color={C.accent} />
           </View>
         )}
         <Text style={[styles.stripLabel, { color: C.accent, fontFamily: "SpaceGrotesk_600SemiBold" }]} numberOfLines={1}>{currentEntry?.label}</Text>
@@ -635,6 +655,7 @@ export function NoteModeView({
               </Pressable>
               {queue.length > 1 && (
                 <Pressable
+                  testID="note-next-entry"
                   style={[styles.nextButton, { width: S.ms(44, 0.4), height: S.ms(36, 0.4), borderRadius: S.ms(8, 0.3) }]}
                   onPress={onManualNext}
                   onLongPress={onManualNextImmediate}
@@ -642,6 +663,7 @@ export function NoteModeView({
                   hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
                   accessibilityRole="button"
                   accessibilityLabel={t("noteMode", "nextBeat")}
+                  accessibilityHint={t("noteMode", "nextBeatHint")}
                 >
                   <Ionicons name="play-skip-forward" size={S.ms(14, 0.3)} color={C.accent} />
                   <Text style={[styles.nextButtonText, { color: C.accent, fontSize: S.ms(9, 0.3) }]}>
@@ -726,12 +748,14 @@ export function NoteModeView({
             </Pressable>
             {queue.length > 1 && (
               <Pressable
+                testID="note-next-entry"
                 style={styles.nextButton}
                 onPress={onManualNext}
                 onLongPress={onManualNextImmediate}
                 delayLongPress={500}
                 accessibilityRole="button"
                 accessibilityLabel={t("noteMode", "nextBeat")}
+                accessibilityHint={t("noteMode", "nextBeatHint")}
               >
                 <Ionicons name="play-skip-forward" size={S.ms(18, 0.4)} color={C.accent} />
                 <Text style={[styles.nextButtonText, { color: C.accent }]}>
@@ -1006,6 +1030,7 @@ export function NoteModeView({
         />
         {isPlaying && queue.length > 1 && (
           <Pressable
+            testID="note-next-entry"
             style={[
               styles.nextButton,
               isLandscape && { width: S.ms(52, 0.4), height: S.ms(30, 0.4), borderRadius: S.ms(8, 0.3) },
@@ -1015,7 +1040,8 @@ export function NoteModeView({
             delayLongPress={500}
             hitSlop={isLandscape ? { top: 8, bottom: 8, left: 4, right: 4 } : undefined}
             accessibilityRole="button"
-            accessibilityLabel={t("noteMode", "nextBeatHint")}
+            accessibilityLabel={t("noteMode", "nextBeat")}
+            accessibilityHint={t("noteMode", "nextBeatHint")}
           >
             <Ionicons name="play-skip-forward" size={isLandscape ? 16 : 18} color={C.accent} />
             <Text style={[styles.nextButtonText, { color: C.accent }, isLandscape && { fontSize: S.ms(9, 0.3) }]}>

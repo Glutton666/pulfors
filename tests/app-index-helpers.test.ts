@@ -442,7 +442,7 @@ test("selectCurrentBarConfig: barMode=false returns dial-derived state", () => {
   assert.equal(out.beatsPerMeasure, 3); // from dialConfig (created with 3)
   assert.deepEqual(out.barRepeats, {});
   assert.deepEqual(out.loopBlocks, []);
-  assert.equal(out.barLoopMode, "once");
+  assert.equal(out.barLoopMode, "loop");
   assert.equal(out.blockPlayMode, "loop");
   assert.equal(out.barClockMode, undefined);
 });

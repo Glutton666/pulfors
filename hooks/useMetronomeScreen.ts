@@ -74,7 +74,7 @@ import { useDeepLink } from "@/contexts/DeepLinkContext";
 import { useVoiceAssistant } from "@/contexts/VoiceAssistantContext";
 import { make_styles } from "@/lib/index.styles";
 import { defaultBeatTypes, hydrateDialConfigFromSettings, createShuffledIndices as createShuffledIndicesPure, beatSubdivisionCounts as beatSubdivisionCountsPure, selectCurrentBarConfig, applyEntryToEngine as applyEntryToEngineCore, migrateLayerBlocks } from "@/lib/index.helpers";
-import { serializeNoteQueueEntries } from "@/lib/note-queue-helpers";
+import { noteQueueEntryRepeats, serializeNoteQueueEntries } from "@/lib/note-queue-helpers";
 import {
   type ActiveModal,
   deriveModalFlags,
@@ -3118,6 +3118,7 @@ export function useMetronomeScreen() {
     if (index < 0 || index >= q.length) return;
     const transitionEpoch = ++noteEntryTransitionEpochRef.current;
     const entry = q[index];
+    const repeatEntry = noteQueueEntryRepeats(entry);
     const engine = engineRef.current;
     if (!engine) return;
 
@@ -3185,7 +3186,7 @@ export function useMetronomeScreen() {
     setBeatSubdivisions({ ...entry.beatSubdivisions });
     setBarRepeats(mgRepeats2);
     setLoopBlocks([...mgBlocks2]);
-    setBarLoopMode(entry.barLoopMode || "once");
+    setBarLoopMode(repeatEntry ? "loop" : "once");
     setBlockPlayMode(entry.blockPlayMode || "loop");
     if (entry.subdivisionPattern) setSubdivisionPattern([...entry.subdivisionPattern]);
     setNoteSamples({ ...entrySamples });
@@ -3213,7 +3214,7 @@ export function useMetronomeScreen() {
       noteSampleNames: { ...entryNames },
       noteSampleSources: { ...entrySources },
       noteSampleSpeeds: { ...(entry.noteSampleSpeeds || {}) },
-      barLoopMode: "once",
+      barLoopMode: repeatEntry ? "loop" : "once",
       blockPlayMode: entry.blockPlayMode || "loop",
       hasBeenConfigured: true,
     };
@@ -3230,7 +3231,7 @@ export function useMetronomeScreen() {
     // The engine can emit beat 0 synchronously inside the shared startup path.
     // The Note-specific ref was set before sample preparation so its measure
     // counter accepts that beat; visible playing state still waits for audio.
-    const started = await startConfiguredPlayback(true);
+    const started = await startConfiguredPlayback(!repeatEntry);
     if (transitionEpoch !== noteEntryTransitionEpochRef.current) return;
     noteIsPlayingRef.current = started;
     setNoteIsPlaying(started);
