@@ -34,3 +34,8 @@ missing keys in an ordinary namespaced profile.
 storage before migration commits. Explicit in-place access preserves those originals
 without the second copy. Only byte-identical retained originals may be cleaned up
 after confirmation; changed originals remain recovery material.
+
+In browser persistence tests, read the active profile's backing key after a
+successful save. Seeding legacy keys before startup can trigger migration; the
+original key may then be missing or still contain the unchanged fixture. Wait
+for the save confirmation before trying to dismiss it or reopen the document.

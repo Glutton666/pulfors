@@ -7,8 +7,13 @@ export type StaffPoint = { x: number; y: number };
 export type StaffErasure = { points: StaffPoint[]; width: number };
 export type StaffStroke = { id: string; points: StaffPoint[]; width: number; color?: string; erasures?: StaffErasure[] };
 export type NotebookNoteRole = "normal" | "ghost" | "strong";
+export type NotebookSplit = {
+  sourceId: string;
+  index: number;
+  original: { glyph: string; dotted?: boolean; durationBeats?: number; tieTo?: string; tieFrom?: string };
+};
 export type StaffStamp = { id: string; glyph: string; x: number; y: number; size: number; role?: NotebookNoteRole; dotted?: boolean; attachTo?: string; erasures?: StaffErasure[];
-  durationBeats?: number; tieTo?: string; tieFrom?: string; chordId?: string; generated?: boolean; measure?: number; order?: number };
+  durationBeats?: number; tieTo?: string; tieFrom?: string; chordId?: string; generated?: boolean; measure?: number; order?: number; split?: NotebookSplit };
 export type StaffTuplet = { id: string; stampIds: string[]; ratio?: { actual: number; normal: number } };
 export type StaffPage = { id: string; strokes: StaffStroke[]; staffCount?: number; stamps?: StaffStamp[]; anchor?: StaffPoint; tuplets?: StaffTuplet[];
   layoutScale?: number; completedRows?: number[]; blankRows?: number[]; measureCounts?: number[] };
@@ -87,6 +92,13 @@ export function isNotebook(value: unknown): value is StaffNotebook {
          (stamp.durationBeats === undefined || Number.isFinite(stamp.durationBeats) && stamp.durationBeats > 0 && stamp.durationBeats <= 128) &&
          (stamp.tieTo === undefined || typeof stamp.tieTo === "string") &&
          (stamp.tieFrom === undefined || typeof stamp.tieFrom === "string") &&
+          (stamp.split === undefined || !!stamp.split && typeof stamp.split.sourceId === "string" &&
+            Number.isInteger(stamp.split.index) && stamp.split.index >= 0 && (stamp.split.index === 0 ? stamp.id === stamp.split.sourceId : stamp.id !== stamp.split.sourceId) &&
+            !!stamp.split.original && /^(rest-)?(whole|half|quarter|eighth|sixteenth|thirty_second)$/.test(stamp.split.original.glyph) &&
+            (stamp.split.original.dotted === undefined || typeof stamp.split.original.dotted === "boolean") &&
+            (stamp.split.original.durationBeats === undefined || Number.isFinite(stamp.split.original.durationBeats) && stamp.split.original.durationBeats > 0 && stamp.split.original.durationBeats <= 128) &&
+            (stamp.split.original.tieTo === undefined || typeof stamp.split.original.tieTo === "string") &&
+            (stamp.split.original.tieFrom === undefined || typeof stamp.split.original.tieFrom === "string")) &&
          (stamp.chordId === undefined || typeof stamp.chordId === "string") &&
          (stamp.generated === undefined || typeof stamp.generated === "boolean") &&
          (stamp.measure === undefined || Number.isInteger(stamp.measure) && stamp.measure >= 0 && stamp.measure <= 100000) &&

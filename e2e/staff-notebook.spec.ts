@@ -83,6 +83,96 @@ test("one continuous note gesture preserves strong role and left-swipe dot while
   await page.screenshot({ path: "generated-artifacts/notebook-restored-note-gesture.png" });
 });
 
+for (const viewport of [{ width: 320, height: 568 }, { width: 568, height: 320 }]) {
+  test(`note arc returns to role, keeps duration and dots, and cancels touch at ${viewport.width}x${viewport.height}`, async ({ page }) => {
+    await page.setViewportSize(viewport);
+    await openNotebook(page); await chooseMode(page, "notes");
+    const center = async (id: string) => {
+      const box = (await page.getByTestId(id).boundingBox())!;
+      return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+    };
+    if (viewport.width > viewport.height) {
+      const handle = await center("notebook-tools-handle");
+      await page.mouse.move(handle.x, handle.y); await page.mouse.down();
+      await page.mouse.move(handle.x - 55, handle.y - 75, { steps: 12 }); await page.mouse.up();
+    }
+    const paper = page.getByTestId("notebook-drawing");
+    const placed = paper.locator('[data-testid^="notebook-stamp-"]');
+    const move = async (id: string, steps = 10) => {
+      const { x, y } = await center(id);
+      await page.mouse.move(x, y, { steps });
+    };
+    const origin = await center("notebook-note-origin");
+    await page.mouse.move(origin.x, origin.y); await page.mouse.down();
+    await expect(page.getByTestId("notebook-note-role-strong")).toBeInViewport({ ratio: 1 });
+    await move("notebook-note-role-strong");
+    await expect(page.getByTestId("notebook-note-role-strong")).toHaveAttribute("data-selected", "true");
+    await page.mouse.move(origin.x, origin.y - 26, { steps: 1 });
+    for (const glyph of ["whole", "half", "quarter", "eighth", "sixteenth", "thirty_second"])
+      await expect(page.getByTestId(`notebook-note-duration-${glyph}`)).toBeInViewport({ ratio: 1 });
+    await move("notebook-note-duration-half");
+    await move("notebook-note-dotted");
+    await expect(page.getByTestId("notebook-note-dotted")).toHaveAttribute("data-selected", "true");
+    await page.mouse.move(origin.x, origin.y, { steps: 12 });
+    await expect(page.getByTestId("notebook-note-role-strong")).toHaveAttribute("data-selected", "true");
+    await move("notebook-note-role-ghost");
+    await expect(page.getByTestId("notebook-note-role-ghost")).toHaveAttribute("data-selected", "true");
+    await page.mouse.move(origin.x, origin.y - 26, { steps: 1 });
+    await move("notebook-note-duration-half");
+    await expect(page.getByTestId("notebook-note-duration-half")).toHaveAttribute("data-dotted", "true");
+    await expect(placed).toHaveCount(0);
+    await move("notebook-note-plain");
+    await expect(page.getByTestId("notebook-note-plain")).toHaveAttribute("data-selected", "true");
+    await page.mouse.up();
+    await expect(placed).toHaveCount(1);
+    await expect(paper.getByTestId("notebook-dot")).toHaveCount(0);
+    await expect(page.getByTestId("notebook-tuplet")).toHaveCSS("opacity", "1");
+    const touch = await page.context().newCDPSession(page);
+    await touch.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [await center("notebook-note-origin")] });
+    await expect(page.getByTestId("notebook-note-role-ghost")).toBeVisible();
+    await touch.send("Input.dispatchTouchEvent", { type: "touchCancel", touchPoints: [] });
+    await expect(page.getByTestId("notebook-note-role-ghost")).toHaveCount(0);
+    await expect(page.getByTestId("notebook-tuplet")).toHaveCSS("opacity", "1");
+    await expect(placed).toHaveCount(1);
+    await openSettings(page);
+    await page.getByTestId("notebook-save").click();
+    await expect(page.getByTestId("web-alert")).toContainText(/Notebook saved|저장했습니다/);
+    const [saved] = await storedNotes(page);
+    expect(saved.pages[0].stamps).toEqual([expect.objectContaining({ glyph: "half", role: "ghost", dotted: false })]);
+  });
+}
+
+for (const automatic of [false, true]) test(`one undo restores a new input and its ${automatic ? "automatic" : "manual"} spacing`, async ({ page }) => {
+  await page.setViewportSize({ width: 768, height: 1024 });
+  await openNotebook(page);
+  await openSettings(page);
+  await page.getByTestId("notebook-measures-per-row").fill("2");
+  await page.getByTestId("notebook-measures-per-row").press("Enter");
+  if (automatic) await page.getByTestId("notebook-auto-spacing").click();
+  await page.getByTestId("notebook-panel-close").click();
+  await chooseMode(page, "notes");
+  await chooseGlyph(page, "quarter");
+  await chooseGlyph(page, "whole");
+  if (!automatic) await noteAction(page, "notebook-auto-space");
+  const paper = page.getByTestId("notebook-drawing");
+  await expect(paper.getByTestId("notebook-tie")).toHaveCount(1);
+  await noteAction(page, "notebook-note-undo");
+  await expect(paper.locator('[data-testid^="notebook-stamp-"]')).toHaveCount(1);
+  await expect(paper.getByTestId("notebook-tie")).toHaveCount(0);
+  await noteAction(page, "notebook-note-redo");
+  await expect(paper.getByTestId("notebook-tie")).toHaveCount(1);
+  await openSettings(page);
+  await page.getByTestId("notebook-save").click();
+  await expect(page.getByTestId("web-alert")).toContainText(/Notebook saved|저장했습니다/);
+  await closeNotice(page);
+  const [saved] = await storedNotes(page);
+  await openSaved(page, saved.title);
+  await page.getByTestId("notebook-panel-close").click();
+  await expect(paper.getByTestId("notebook-tie")).toHaveCount(1);
+  await noteAction(page, "notebook-auto-space");
+  await expect(paper.getByTestId("notebook-tie")).toHaveCount(1);
+});
+
 for (const viewport of [{ width: 320, height: 740 }, { width: 768, height: 1024 }, { width: 844, height: 390 }]) {
   test(`isolated notation pickers and visible selection actions at ${viewport.width}`, async ({ page }) => {
     await page.setViewportSize(viewport);
@@ -701,16 +791,9 @@ async function closeNotice(page: Page) {
   if (await ok.isVisible()) await ok.click();
 }
 async function latestSavedNotebook(page: Page): Promise<StaffNotebook> {
-  return page.evaluate(() => {
-    const registry = JSON.parse(localStorage.getItem("local_profiles_v1") ?? "null");
-    const active = registry?.profiles.find((profile: { id: string }) => profile.id === registry.activeId);
-    const key = active && active.storage !== "legacy"
-      ? `local_profile:${active.id}:lab_staff_notebooks_v1`
-      : "lab_staff_notebooks_v1";
-    const notes = JSON.parse(localStorage.getItem(key) ?? "[]");
-    if (!notes[0]) throw new Error("No notebook was saved in the active profile");
-    return notes[0];
-  });
+  const [saved] = await storedNotes(page);
+  if (!saved) throw new Error("No notebook was saved in the active profile");
+  return saved;
 }
 async function chooseMode(page: Page, mode: "ink" | "notes" | "select" | "settings") {
   await page.getByTestId("notebook-right-toggle").click();
@@ -967,7 +1050,8 @@ for (const viewport of [{ width: 768, height: 1024 }, { width: 844, height: 390 
     await page.mouse.move(origin.x + origin.width / 2, origin.y + origin.height / 2);
     await page.mouse.down();
     await expect(page.getByTestId("notebook-note-role-normal")).toBeVisible();
-    await expect(page.getByTestId("notebook-rest-origin")).toHaveCount(0);
+    await expect(page.getByTestId("notebook-rest-tile")).toHaveAttribute("aria-hidden", "true");
+    await expect(page.getByTestId("notebook-rest-tile")).toHaveCSS("opacity", "0");
     await page.mouse.move(origin.x + origin.width / 2, origin.y - 90, { steps: 10 });
     await expect(page.getByTestId("notebook-note-duration-quarter")).toBeVisible();
     const paper = (await page.getByTestId("notebook-paper-stage").boundingBox())!;
@@ -990,9 +1074,9 @@ for (const viewport of [{ width: 768, height: 1024 }, { width: 844, height: 390 
     await page.getByTestId("notebook-mode-ink").focus();
     await page.getByTestId("notebook-mode-ink").press("Enter");
     await page.mouse.up();
-    await expect(page.getByTestId("notebook-drawing").locator("ellipse")).toHaveCount(0);
+    await expect(page.getByTestId("notebook-drawing").getByTestId("notebook-note-head")).toHaveCount(0);
     await chooseMode(page, "notes"); await chooseGlyph(page, "whole");
-    await expect(page.getByTestId("notebook-drawing").locator("ellipse")).toHaveCount(1);
+    await expect(page.getByTestId("notebook-drawing").getByTestId("notebook-note-head")).toHaveCount(1);
     await expect(page.getByTestId("notebook-stamp-confirm")).toHaveCount(0);
   });
 }
@@ -1017,7 +1101,8 @@ for (const viewport of [{ width: 390, height: 844 }, { width: 768, height: 1024 
     const box = (await origin.boundingBox())!;
     await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
     await page.mouse.down();
-    await expect(page.getByTestId("notebook-note-origin")).toHaveCount(0);
+    await expect(page.getByTestId("notebook-note-tile")).toHaveAttribute("aria-hidden", "true");
+    await expect(page.getByTestId("notebook-note-tile")).toHaveCSS("opacity", "0");
     const steady = (await origin.boundingBox())!;
     expect(steady.x).toBeCloseTo(box.x);
     expect(steady.y).toBeCloseTo(box.y);
@@ -1038,11 +1123,12 @@ for (const viewport of [{ width: 390, height: 844 }, { width: 768, height: 1024 
     await expect(paper.getByTestId("notebook-tuplet-right")).toHaveCount(1);
     await expect(paper.locator('rect[fill="#fff"]')).toHaveCount(0);
     await openSettings(page); await page.getByTestId("notebook-save").click();
-    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("lab_staff_notebooks_v1")!)[0]);
+    await expect(page.getByTestId("web-alert")).toContainText(/Notebook saved|저장했습니다/);
+    const saved = await latestSavedNotebook(page);
     expect(saved.pages[0].stamps).toHaveLength(3);
-    expect(saved.pages[0].stamps[0]).toMatchObject({ glyph: "rest-quarter", dotted: false, x: 55, y: 102 });
-    expect(saved.pages[0].stamps[1]).toMatchObject({ glyph: "rest-thirty_second", dotted: true });
-    expect(saved.pages[0].tuplets[0].stampIds).toHaveLength(3);
+    expect(saved.pages[0].stamps?.[0]).toMatchObject({ glyph: "rest-quarter", dotted: false, x: 55, y: 102 });
+    expect(saved.pages[0].stamps?.[1]).toMatchObject({ glyph: "rest-thirty_second", dotted: true });
+    expect(saved.pages[0].tuplets?.[0].stampIds).toHaveLength(3);
     await closeNotice(page); await openSaved(page, saved.title);
     await page.getByTestId("notebook-panel-close").click();
     await expect(paper.getByTestId("notebook-rest-dot")).toHaveCount(1);
@@ -1126,7 +1212,9 @@ test("staged note gesture preserves strong and dotted choices; tuplets count not
   await page.mouse.move(strong.x + strong.width / 2, y, { steps: 8 });
   await page.mouse.move(x + 60, y - 90, { steps: 8 });
   const quarter = (await page.getByTestId("notebook-note-duration-quarter").boundingBox())!;
-  await page.mouse.move(quarter.x + quarter.width / 2 - 16, quarter.y + quarter.height / 2, { steps: 5 });
+  await page.mouse.move(quarter.x + quarter.width / 2, quarter.y + quarter.height / 2, { steps: 5 });
+  const dotted = (await page.getByTestId("notebook-note-dotted").boundingBox())!;
+  await page.mouse.move(dotted.x + dotted.width / 2, dotted.y + dotted.height / 2, { steps: 5 });
   await page.mouse.up();
   await expect(page.getByTestId("notebook-stamp-confirm")).toHaveCount(0);
   await chooseGlyph(page, "whole");
@@ -1367,9 +1455,12 @@ const otherNote: StaffNotebook = {
 const editedTitle = "Guard edited";
 const titleInput = (page: Page) => page.getByPlaceholder(/^Notebook title$|^노트 제목$/);
 const openSaved = (page: Page, title: string) => page.getByLabel(new RegExp(`^Open ${title}$|^${title} 열기$`)).click();
-const storedNotes = (page: Page): Promise<StaffNotebook[]> =>
-  page.evaluate((key) => JSON.parse(localStorage.getItem(key) ?? "[]"), notebookKey);
-const storedRaw = (page: Page) => page.evaluate((key) => localStorage.getItem(key), notebookKey);
+const storedRaw = (page: Page) => page.evaluate((key) => {
+  const registry = JSON.parse(localStorage.getItem("local_profiles_v1")!);
+  const profile = registry.profiles.find((entry: { id: string }) => entry.id === registry.activeId);
+  return localStorage.getItem(profile.storage === "legacy" ? key : `local_profile:${profile.id}:${key}`);
+}, notebookKey);
+const storedNotes = async (page: Page): Promise<StaffNotebook[]> => JSON.parse(await storedRaw(page) ?? "[]");
 const paperContents = (page: Page) => page.getByTestId("notebook-drawing").locator("svg").evaluate((svg) => {
   const document = svg.cloneNode(true) as SVGElement;
   // Selection is editor state, not saved ink. Loading correctly clears it.

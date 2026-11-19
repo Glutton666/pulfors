@@ -83,14 +83,15 @@ test("popup blocks paper callbacks and its changes do not create document histor
   expect(mockPaper.page.strokes[0]).toMatchObject({ color: "#854ab0", width: 4 });
 });
 
-test("spacing is one undo/redo edit and repeat/empty spacing adds no history", async () => {
+test("spacing joins the preceding input in undo/redo; repeat and empty spacing add no history", async () => {
   await mount();
   act(() => mockTools.onAutoSpace());
   expect(mockTools.canUndo).toBe(false);
-  for (const glyph of ["quarter", "rest-eighth", "sixteenth"]) {
+  for (const glyph of ["quarter", "rest-eighth"]) {
     act(() => mockTools.onChoose({ glyph, role: "normal", dotted: false }));
   }
   const before = mockPaper.page;
+  act(() => mockTools.onChoose({ glyph: "sixteenth", role: "normal", dotted: false }));
   act(() => mockTools.onAutoSpace());
   const corrected = mockPaper.page;
   expect(corrected.stamps[1].x - corrected.stamps[0].x).toBeGreaterThan(corrected.stamps[2].x - corrected.stamps[1].x);
@@ -102,5 +103,5 @@ test("spacing is one undo/redo edit and repeat/empty spacing adds no history", a
   expect(mockPaper.page).toEqual(corrected);
   act(() => mockTools.onUndo());
   act(() => mockTools.onUndo());
-  expect(mockPaper.page.stamps).toHaveLength(2);
+  expect(mockPaper.page.stamps).toHaveLength(1);
 });

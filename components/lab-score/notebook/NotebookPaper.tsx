@@ -21,6 +21,7 @@ type Props = {
   selectedStampId?: string | null; selection?: NotebookSelection; selectionBox?: NotebookBounds | null;
   openTupletIds?: string[]; pendingRole?: "normal" | "ghost" | "strong"; pendingDotted?: boolean;
   settings?: Partial<NotebookSettings>;
+  externalTieIds?: ReadonlySet<string>;
   lineColor?: string;
   onPan?: (delta: StaffPoint) => void;
   onZoomBy?: (ratio: number) => void;
@@ -28,7 +29,7 @@ type Props = {
   onTouch?: (point: StaffPoint, phase: "start" | "move" | "end" | "cancel") => void;
 };
 
-export function NotebookPaper({ page, width, height, paperScale, zoom, offset, tool, lineWidth, lineColor = "#111111", drawing, pendingGlyph, preview, selectedStampId, selection, selectionBox, openTupletIds, pendingRole, pendingDotted, settings, onTouch, onPan, onZoomBy, layoutScaleOverride }: Props) {
+export function NotebookPaper({ page, width, height, paperScale, zoom, offset, tool, lineWidth, lineColor = "#111111", drawing, pendingGlyph, preview, selectedStampId, selection, selectionBox, openTupletIds, pendingRole, pendingDotted, settings, externalTieIds, onTouch, onPan, onZoomBy, layoutScaleOverride }: Props) {
   const surface = useRef<View>(null);
   const zoomCallback = useRef({ tool, onZoomBy });
   zoomCallback.current = { tool, onZoomBy };
@@ -72,6 +73,7 @@ export function NotebookPaper({ page, width, height, paperScale, zoom, offset, t
   const displayedPage = page;
   const beaming = useMemo(() => notebookBeaming(displayedPage, settings, openTupletIds), [displayedPage, settings, openTupletIds]);
   const tuplets = notebookTupletSpans(displayedPage, openTupletIds, beaming);
+  const byId = useMemo(() => new Map((page.stamps ?? []).map((s) => [s.id, s])), [page.stamps]);
   return (
     <View
       ref={surface}
@@ -105,15 +107,15 @@ export function NotebookPaper({ page, width, height, paperScale, zoom, offset, t
           {beaming.groups.map((group) => <NotebookObjectMask key={group.id} cuts={(page.stamps ?? []).filter((s) => group.memberIds.includes(s.id)).flatMap(paperErasures)}>
             <NotebookBeamLayer groups={[group]} />
           </NotebookObjectMask>)}
-          {(page.stamps ?? []).filter((s) => s.tieTo).map((s) => {
-            const next = page.stamps?.find((n) => n.id === s.tieTo);
+           {(page.stamps ?? []).filter((s) => s.tieTo && s.tieTo !== s.id && (byId.has(s.tieTo) || externalTieIds?.has(s.tieTo))).map((s) => {
+             const next = byId.get(s.tieTo!);
             const sameRow = next && Math.floor(next.y / ROW_HEIGHT) === Math.floor(s.y / ROW_HEIGHT);
             const end = sameRow ? next.x - 4 : naturalPaperWidth(page) - 38;
             const y = s.y + 12, middle = (s.x + end) / 2;
             return <G key={`tie:${s.id}`}><Path testID="notebook-tie" d={`M${s.x + 4} ${y} Q${middle} ${y + 14} ${end} ${y}`} stroke="#111" strokeWidth={1.5} fill="none" />
               {next && !sameRow && <Path d={`M38 ${next.y + 12} Q${(38 + next.x) / 2} ${next.y + 26} ${next.x - 4} ${next.y + 12}`} stroke="#111" strokeWidth={1.5} fill="none" />}</G>;
           })}
-          {(page.stamps ?? []).filter((s) => s.tieFrom && !page.stamps?.some((other) => other.id === s.tieFrom)).map((s) =>
+           {(page.stamps ?? []).filter((s) => s.tieFrom && !byId.has(s.tieFrom) && externalTieIds?.has(s.tieFrom)).map((s) =>
             <Path key={`incoming-tie:${s.id}`} testID="notebook-incoming-tie" d={`M38 ${s.y + 12} Q${(38 + s.x) / 2} ${s.y + 26} ${s.x - 4} ${s.y + 12}`} stroke="#111" strokeWidth={1.5} fill="none" />)}
           {tuplets.map((span) => <NotebookObjectMask key={`${span.id}:${span.row}`} cuts={(page.stamps ?? []).filter((s) => page.tuplets?.find((t) => t.id === span.id)?.stampIds.includes(s.id)).flatMap(paperErasures)}>
             <NotebookTupletGlyph {...span} />

@@ -1,12 +1,12 @@
 import type { NotebookSettings, StaffNotebook, StaffPage, StaffStamp, StaffTuplet } from "./staff-notebook";
 import { ROW_HEIGHT, rowAt, inkInRow } from "./staff-notebook-layout";
 import { NOTEBOOK_LEFT, NOTEBOOK_SPAN, isManualBar, measuresInRow, naturalPaperWidth, notebookMeasureRegions } from "./notebook-measures";
+import { assertNotebookSplitsReflowable, identifyLegacyNotebookSplits, indexNotebookSplits, NOTEBOOK_VALUES as values, notebookSourceId, restoreNotebookStamp } from "./notebook-splits";
 export { NOTEBOOK_LEFT, NOTEBOOK_SPAN, isManualBar, measuresInRow, naturalPaperWidth, notebookMeasureRegions } from "./notebook-measures";
 export type { NotebookMeasureRegion } from "./notebook-measures";
 export { notebookStampMeasure as notebookMeasureAt } from "./notebook-measures";
 
 const EPS = 1e-7;
-const values: Record<string, number> = { whole: 4, half: 2, quarter: 1, eighth: .5, sixteenth: .25, thirty_second: .125 };
 export const isMusic = (s: StaffStamp) => /^(rest-)?(whole|half|quarter|eighth|sixteenth|thirty_second)$/.test(s.glyph);
 export const notationMeter = (settings?: Partial<NotebookSettings>) => settings?.notationMeter ?? { beats: 4, unit: 4 as const };
 export const measureDuration = (settings?: Partial<NotebookSettings>) => {
@@ -27,6 +27,16 @@ type Unit = { stamps: StaffStamp[]; groups: StaffTuplet[]; duration: number; sou
 type Placed = { unit: Unit; row: number; measure: number; start: number; duration: number };
 export type MusicLayoutOptions = { allowCrowded?: boolean; spillVisual?: boolean; openGroup?: StaffTuplet };
 export type MusicLayoutResult = { note: StaffNotebook; reason: "changed" | "unchanged" | "crowded"; requiredScale: number };
+
+/** Optional fields disappear on disk; insertion order of keys is not an edit. */
+function sameLayout(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (!a || !b || typeof a !== "object" || typeof b !== "object") return false;
+  if (Array.isArray(a) || Array.isArray(b)) return Array.isArray(a) && Array.isArray(b) && a.length === b.length && a.every((item, i) => sameLayout(item, b[i]));
+  const left = a as Record<string, unknown>, right = b as Record<string, unknown>;
+  return Object.keys(left).every((key) => sameLayout(left[key], right[key])) &&
+    Object.keys(right).every((key) => right[key] === undefined || Object.hasOwn(left, key));
+}
 
 function envelope(s: StaffStamp, attachments: StaffStamp[]) {
   const scale = s.size / 26;
@@ -52,7 +62,9 @@ function fragmentGlyph(duration: number, rest: boolean) {
 }
 
 /** Transactional, duration-aware reflow. No mutation on an unaccepted visual overflow. */
-export function layoutNotebookMusic(input: StaffNotebook, options: MusicLayoutOptions = {}): MusicLayoutResult {
+export function layoutNotebookMusic(source: StaffNotebook, options: MusicLayoutOptions = {}): MusicLayoutResult {
+  const input = identifyLegacyNotebookSplits(source);
+  assertNotebookSplitsReflowable(input);
   const settings = input.settings, capacity = measureDuration(settings), perRow = measuresInRow(settings);
   const rowsPerPage = settings?.rowsPerPage ?? input.pages[0]?.staffCount ?? 7;
   const rowOffsets: number[] = []; let totalRows = 0;
@@ -60,6 +72,19 @@ export function layoutNotebookMusic(input: StaffNotebook, options: MusicLayoutOp
   const originals = input.pages.flatMap((p) => p.stamps ?? []);
   if (!originals.length) return { note: input, reason: "unchanged", requiredScale: 1 };
   const attachments = originals.filter((s) => !!s.attachTo);
+  const previousSplits = indexNotebookSplits(input);
+  const idToSource = new Map(originals.map((s) => [s.id, notebookSourceId(s)]));
+  const sourcePageById = new Map(input.pages.flatMap((page) => (page.stamps ?? []).map((s) => [s.id, page] as const)));
+  const reservedIds = new Set(originals.filter((s) => !s.generated && !s.split?.index).map((s) => s.id));
+  const outputIds = new Set(reservedIds);
+  const allocateId = (base: string) => {
+    let candidate = base, suffix = 0;
+    while (outputIds.has(candidate)) candidate = `${base}~${++suffix}`;
+    outputIds.add(candidate);
+    return candidate;
+  };
+  const lastPiece = new Map<string, string>();
+  const sourceStamps = new Map<string, StaffStamp>();
   const allGroups = [...input.pages.flatMap((p) => p.tuplets ?? []), ...(options.openGroup ? [options.openGroup] : [])];
   const unitsByRow = new Map<number, Unit[]>();
   const completed = new Set<number>(), blank = new Set<number>();
@@ -82,7 +107,8 @@ export function layoutNotebookMusic(input: StaffNotebook, options: MusicLayoutOp
     }
     p.completedRows?.forEach((r) => completed.add(rowOffsets[pi] + r));
     p.blankRows?.forEach((r) => blank.add(rowOffsets[pi] + r));
-    const stamps = (p.stamps ?? []).filter((s) => !s.generated && !s.attachTo && !isManualBar(s));
+    const stamps = (p.stamps ?? []).filter((s) => !s.generated && !s.attachTo && !isManualBar(s) && !s.split?.index).map(restoreNotebookStamp);
+    stamps.forEach((s) => sourceStamps.set(s.id, s));
     const byId = new Map(stamps.map((s) => [s.id, s]));
     const consumed = new Set<string>();
     for (const s of [...stamps].sort((a, b) => rowAt(a.y, p.staffCount ?? 7) - rowAt(b.y, p.staffCount ?? 7) || a.x - b.x || (a.order ?? 0) - (b.order ?? 0))) {
@@ -130,18 +156,24 @@ export function layoutNotebookMusic(input: StaffNotebook, options: MusicLayoutOp
       }
       if (unit.duration > capacity - at + EPS && !unit.groups.length && unit.stamps.length === 1 && isMusic(unit.stamps[0])) {
         const original = unit.stamps[0], rest = original.glyph.startsWith("rest-");
-        let remaining = unit.duration, offset = 0;
+        let remaining = unit.duration, available = capacity - at;
         const pieces: { stamp: StaffStamp; duration: number }[] = [];
         while (remaining > EPS) {
-          const available = offset ? capacity : capacity - at;
+          if (available <= EPS) available = capacity;
           const part = fragmentGlyph(Math.min(remaining, available), rest);
-          const partId = offset ? `${original.id}:split:${offset}` : original.id;
-          pieces.push({ stamp: { ...original, glyph: part.glyph, dotted: part.dotted, durationBeats: part.duration, id: partId, tieTo: undefined }, duration: part.duration });
-          remaining -= part.duration; offset++;
+          const index = pieces.length, id = index ? allocateId(`${original.id}:split:${index}`) : original.id;
+          const oldPart = previousSplits.get(original.id)?.[index]?.stamp;
+          const split = { sourceId: original.id, index, original: {
+            glyph: original.glyph, dotted: original.dotted, durationBeats: original.durationBeats, tieTo: original.tieTo, tieFrom: original.tieFrom,
+          } };
+          pieces.push({ stamp: { ...original, glyph: part.glyph, dotted: part.dotted, durationBeats: part.duration, id, split,
+            tieTo: undefined, tieFrom: undefined, erasures: index ? oldPart?.erasures : original.erasures }, duration: part.duration });
+          remaining -= part.duration; available -= part.duration;
         }
+        lastPiece.set(original.id, pieces.at(-1)!.stamp.id);
         pieces.forEach((p, i) => { if (!rest) {
-          p.stamp.tieTo = pieces[i + 1]?.stamp.id ?? original.tieTo;
-          p.stamp.tieFrom = pieces[i - 1]?.stamp.id ?? original.tieFrom;
+          p.stamp.tieTo = pieces[i + 1]?.stamp.id;
+          p.stamp.tieFrom = pieces[i - 1]?.stamp.id;
         } });
         queue.unshift(...pieces.map((p) => ({ ...unit, stamps: [p.stamp], duration: p.duration })));
         continue;
@@ -156,7 +188,7 @@ export function layoutNotebookMusic(input: StaffNotebook, options: MusicLayoutOp
         let remaining = capacity - used, start = used, i = 0;
         while (remaining > EPS) {
           const f = fragmentGlyph(remaining, true);
-          const stamp: StaffStamp = { id: `auto-rest:${input.id}:${row}:${m}:${i++}`, glyph: f.glyph, dotted: f.dotted, durationBeats: f.duration, generated: true, x: 0, y: 102 + row * ROW_HEIGHT, size: 26 };
+          const stamp: StaffStamp = { id: allocateId(`auto-rest:${input.id}:${row}:${m}:${i++}`), glyph: f.glyph, dotted: f.dotted, durationBeats: f.duration, generated: true, x: 0, y: 102 + row * ROW_HEIGHT, size: 26 };
           placed.push({ unit: { stamps: [stamp], groups: [], duration: f.duration, sourceRow: row }, row, measure: m, start, duration: f.duration });
           remaining -= f.duration; start += f.duration;
         }
@@ -211,7 +243,7 @@ export function layoutNotebookMusic(input: StaffNotebook, options: MusicLayoutOp
       for (let m = 0; m < maxBars; m++) {
         const bar = entries.filter((e) => e.measure === m);
         const width = bar.reduce((sum, e) => sum + unitWidth(e.unit, attachments), 0) + 24;
-        if (width > available) return { note: input, reason: "crowded", requiredScale: NOTEBOOK_SPAN / width };
+        if (width > available) return { note: source, reason: "crowded", requiredScale: NOTEBOOK_SPAN / width };
         const fraction = manual ? regionFraction(oldRow, m) : 1;
         const segment = manual ? manual.bounds[m + 1] - manual.bounds[firstMeasure] : bars + 1;
         if (bars && (Math.max(maximumWidth, width / fraction) * segment > available || bars >= maxBars)) {
@@ -289,8 +321,7 @@ export function layoutNotebookMusic(input: StaffNotebook, options: MusicLayoutOp
     }
     return false;
   });
-  if (crowded && !options.allowCrowded && !options.spillVisual) return { note: input, reason: "crowded", requiredScale };
-  if (crowded && options.spillVisual) return { note: input, reason: "crowded", requiredScale };
+  if (crowded && (!options.allowCrowded || options.spillVisual)) return { note: source, reason: "crowded", requiredScale };
   for (let r = 0; r < rowCount; r++) {
     const pi = Math.floor(r / rowsPerPage), page = layouts[pi], localRow = r % rowsPerPage;
     const rowBars = rowCounts.get(r) ?? perRow;
@@ -319,9 +350,8 @@ export function layoutNotebookMusic(input: StaffNotebook, options: MusicLayoutOp
           const left = Math.max(...ink.map((e) => e.left)), right = Math.max(...ink.map((e) => e.right));
           const x = cursor + left;
           members.forEach((s) => {
-            const oldPage = input.pages.find((p) => p.stamps?.some((v) => v.id === s.id)) ?? input.pages[0];
-            const oldRow = rowAt(s.y, oldPage.staffCount ?? 7);
-            const y = localRow * ROW_HEIGHT + (s.generated ? 102 : s.y - oldRow * ROW_HEIGHT);
+            const sourceCount = sourcePageById.get(notebookSourceId(s))?.staffCount ?? 7;
+            const y = localRow * ROW_HEIGHT + (s.generated ? 102 : s.y - rowAt(s.y, sourceCount) * ROW_HEIGHT);
             page.stamps.push({ ...s, x, y, measure: m, order: entry.start });
             for (const a of attachments.filter((a) => a.attachTo === s.id)) page.stamps.push({ ...a, x: x + a.x - s.x, y: y + a.y - s.y, measure: m });
           });
@@ -332,15 +362,34 @@ export function layoutNotebookMusic(input: StaffNotebook, options: MusicLayoutOp
     }
   }
   const pages: StaffPage[] = layouts;
+  const byOutputId = new Map(pages.flatMap((p) => p.stamps ?? []).map((s) => [s.id, s]));
+  // Authored links use authored identities; display links start on the tail
+  // and end on the head. Internal fragment links were computed above.
+  for (const s of sourceStamps.values()) {
+    const first = byOutputId.get(s.id), last = byOutputId.get(lastPiece.get(s.id) ?? s.id);
+    if (!first || !last) continue;
+    const fromId = s.tieFrom && idToSource.get(s.tieFrom), toId = s.tieTo && idToSource.get(s.tieTo);
+    const from = fromId && fromId !== s.id && sourceStamps.has(fromId) ? lastPiece.get(fromId) ?? fromId : undefined;
+    const to = toId && toId !== s.id && sourceStamps.has(toId) ? toId : undefined;
+    first.tieFrom = from;
+    last.tieTo = to;
+    if (first.split) {
+      // All newly projected fragments share this descriptor.
+      first.split.original.tieFrom = from ? fromId : undefined;
+      first.split.original.tieTo = to;
+    }
+  }
   const lastId = input.lastNote?.stampId, lastPage = pages.find((p) => p.stamps?.some((s) => s.id === lastId));
   const anchorIds = input.pages.flatMap((p) => {
     const a = p.anchor && p.stamps?.find((s) => Math.abs(s.x - p.anchor!.x) < 1 && Math.abs(s.y - p.anchor!.y) < 1);
-    return a ? [a.id] : [];
+    return a ? [notebookSourceId(a)] : [];
   });
   pages.forEach((p) => {
     const a = p.stamps?.find((s) => anchorIds.includes(s.id));
     if (a) p.anchor = { x: a.x, y: a.y };
   });
   const note = { ...input, pages, lastNote: lastPage && lastId ? { pageId: lastPage.id, stampId: lastId } : undefined };
-  return { note, reason: JSON.stringify(note) === JSON.stringify(input) ? "unchanged" : "changed", requiredScale };
+  return sameLayout(note.pages, source.pages) && sameLayout(note.lastNote, source.lastNote)
+    ? { note: source, reason: "unchanged", requiredScale }
+    : { note, reason: "changed", requiredScale };
 }

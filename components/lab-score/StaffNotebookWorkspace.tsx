@@ -20,7 +20,8 @@ import { eraseNotebookGesture, type NotebookEraserMode } from "@/lib/notebook-er
 import { layoutNotebookMusic, measuresInRow, naturalPaperWidth, notebookMeasureRegions, standardTupletRatio, isManualBar, isMusic, measureDuration, musicalDuration } from "@/lib/notebook-music-layout";
 import { prepareNotebookMeasureEdit } from "@/lib/notebook-measure-edit";
 import { randomizeNotebook } from "@/lib/notebook-random";
-import { insertSelectionBeforeFollowing, notebookWritingTail } from "@/lib/notebook-editing";
+import { insertSelectionBeforeFollowing, notebookWritingTail, selectedNotebookStamps } from "@/lib/notebook-editing";
+import { identifyLegacyNotebookSplits, notebookSourceId, restoreNotebookStamp } from "@/lib/notebook-splits";
 import { NotebookObjectEditor } from "@/components/lab-score/notebook/NotebookObjectEditor";
 import { notebookPortraitPolicy, projectNotebookPortrait } from "@/lib/notebook-portrait-layout";
 
@@ -29,7 +30,7 @@ const id = (prefix: string) => `${prefix}_${Date.now()}_${Math.random().toString
 const withDefaults = (note: StaffNotebook): StaffNotebook => ({
   ...note,
   settings: { ...DEFAULT_NOTEBOOK_SETTINGS, ...(note.settings ?? {}), offsetX: 0, offsetY: 0 },
-  pages: note.pages.map((page) => ({ ...page, stamps: page.stamps ?? [] })),
+  pages: identifyLegacyNotebookSplits(note).pages.map((page) => ({ ...page, stamps: page.stamps ?? [] })),
 });
 
 type Props = {
@@ -122,8 +123,9 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
   const eraseGesture = useRef<{ base: StaffPage; points: StaffPoint[] } | null>(null);
   const editSnapshot = useRef<{ selection: NotebookSelection; draft: typeof dragDraft } | null>(null);
   const rightToggleRef = useRef<any>(null);
-  const undoStack = useRef<StaffNotebook[]>([]);
-  const redoStack = useRef<StaffNotebook[]>([]);
+  const undoStack = useRef<{ note: StaffNotebook; pageIndex: number }[]>([]);
+  const redoStack = useRef<{ note: StaffNotebook; pageIndex: number }[]>([]);
+  const spacingMayJoinInput = useRef<StaffNotebook | null>(null);
   const savedSnapshot = useRef(JSON.stringify(note));
   const selectionGesture = useRef<{ kind: "box" | "drag"; start: StaffPoint; selection: NotebookSelection; base: StaffPage; hitId?: string } | null>(null);
   const panStart = useRef<{ point: StaffPoint; offset: StaffPoint } | null>(null);
@@ -183,15 +185,22 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
     ...prev, pages: prev.pages.map((item, i) => i === index ? next : item),
     lastNote: lastStampId ? { pageId: next.id, stampId: lastStampId } : prev.lastNote?.pageId === next.id && !next.stamps?.some((stamp) => stamp.id === prev.lastNote!.stampId) ? undefined : prev.lastNote,
   }));
-  const checkpoint = () => { undoStack.current = [...undoStack.current.slice(-39), editingNote]; redoStack.current = []; };
+  const checkpoint = () => {
+    undoStack.current = [...undoStack.current.slice(-39), { note: editingNote, pageIndex }];
+    redoStack.current = []; spacingMayJoinInput.current = null;
+  };
   const layoutError = (e: unknown) => Alert.alert(ko ? "배치를 확인해 주세요" : "Check layout",
     e instanceof Error && e.message === "TUPLET_EXCEEDS_MEASURE"
       ? (ko ? "이 잇단음표의 음악적 길이가 한 마디보다 깁니다. 크기를 줄여도 길이는 바뀌지 않습니다. 음가나 비율을 수정해 주세요." : "This tuplet exceeds one measure. Visual shrinking cannot change its duration. Edit its values or ratio.")
-      : e instanceof Error ? e.message : String(e));
-  const commitDocument = (next: StaffNotebook, arrange = !!next.settings?.autoSpacing, after?: (next: StaffNotebook) => void, openIds?: string[]) => {
+      : e instanceof Error && e.message === "NOTEBOOK_AMBIGUOUS_SPLIT"
+        ? (ko ? "이전 저장본의 분할 음표 연결을 확인할 수 없어 간격을 정리하지 않았습니다. 저장된 음표는 그대로 두었습니다." : "This older notebook has split notes that cannot be verified. Spacing was not changed and the saved notes were left intact.")
+        : e instanceof Error ? e.message : String(e));
+  const commitDocument = (next: StaffNotebook, arrange = !!next.settings?.autoSpacing, after?: (next: StaffNotebook) => void, openIds?: string[], joinInput = false) => {
     const commit = (result: StaffNotebook) => {
       if (JSON.stringify(result) === JSON.stringify(editingNote)) { after?.(result); return; }
-      checkpoint(); setNote(result);
+      if (joinInput && spacingMayJoinInput.current === note && undoStack.current.length) spacingMayJoinInput.current = null;
+      else checkpoint();
+      setNote(result);
       if (result.lastNote) { const pi = result.pages.findIndex((p) => p.id === result.lastNote!.pageId); if (pi >= 0) setPageIndex(pi); }
       after?.(result);
     };
@@ -200,7 +209,7 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
         const currentOpen = openIds ?? tupletIds;
         const openGroup = currentOpen && currentOpen.length >= 2 ? { id: "open-edit", stampIds: currentOpen } : undefined;
         const result = arrange ? layoutNotebookMusic(candidate, { openGroup, ...opts }) : { note: candidate, reason: "changed" as const };
-        if (result.reason !== "crowded") { if (result.reason === "unchanged") after?.(result.note); else commit(result.note); return; }
+        if (result.reason !== "crowded") { commit(result.note); return; }
         setDecision({ title: ko ? "한 줄에 객체가 많습니다" : "This row is crowded", message: ko ? "음악적 길이는 유지하면서 배치 방법을 선택해 주세요." : "Choose a layout without changing musical durations.", options: [
           { label: ko ? "줄당 마디 수 변경" : "Fewer measures per row", action: () => {
             const n = measuresInRow(candidate.settings);
@@ -230,17 +239,18 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
     playback.stop();
     const previous = undoStack.current.at(-1);
     if (!previous) return;
-    redoStack.current = [...redoStack.current, note];
+    redoStack.current = [...redoStack.current, { note, pageIndex }];
     undoStack.current = undoStack.current.slice(0, -1);
-    resetTransient(); setNote(previous);
+    spacingMayJoinInput.current = null;
+    resetTransient(); setNote(previous.note); setPageIndex(previous.pageIndex);
   };
   const redo = () => {
     playback.stop();
     const next = redoStack.current.at(-1);
     if (!next) return;
-    undoStack.current = [...undoStack.current, note];
+    undoStack.current = [...undoStack.current, { note, pageIndex }];
     redoStack.current = redoStack.current.slice(0, -1);
-    resetTransient(); setNote(next);
+    resetTransient(); setNote(next.note); setPageIndex(next.pageIndex);
   };
   const openPanel = (next: "menu" | "settings") => {
     setPanel((old) => old === next ? null : next);
@@ -466,7 +476,7 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
     const writingTail = !attached && isTupletMember(choice.glyph) ? notebookWritingTail(editingNote, pageIndex) : undefined;
     const index = attached && targetIndex >= 0 ? targetIndex : writingTail?.pageIndex ?? pageIndex;
     const destination = attached ? targetPage : editingNote.pages[index] ?? page;
-    if (index !== pageIndex) { setPageIndex(index); setOffset({ x: 0, y: 0 }); setTupletIds(null); }
+    // Change pages only after the edit commits so undo restores the prior cursor.
     const point = attached?.point ?? stampPosition(destination, { ...settings, snap: isTupletMember(choice.glyph) && settings.snap }, writingTail?.stamp);
     const anchor = constrainStaffPoint(destination, point, isTupletMember(choice.glyph) && settings.snap);
     const stamp: StaffStamp = { id: id("stamp"), glyph: choice.glyph, ...anchor, size: 26,
@@ -482,15 +492,18 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
       stamp.y = previous.y; anchor.x = stamp.x; anchor.y = stamp.y;
     }
     const apply = () => {
-      const updated: StaffPage = { ...destination, anchor: { x: stamp.x, y: stamp.y }, stamps: [...stamps, stamp] };
+      const parent = attached && stamps.find((s) => s.id === attached.attachTo);
+      const nextAnchor = attached ? destination.anchor ?? (parent ? { x: parent.x, y: parent.y } : undefined) : { x: stamp.x, y: stamp.y };
+      const updated: StaffPage = { ...destination, anchor: nextAnchor, stamps: [...stamps, stamp] };
       const priorRow = destination.anchor && rowAt(destination.anchor.y, destination.staffCount ?? 7), newRow = rowAt(stamp.y, destination.staffCount ?? 7);
-      if (settings.autoSpacing && priorRow !== undefined && priorRow !== newRow) updated.completedRows = [...new Set([...(destination.completedRows ?? []), priorRow])];
+      if (!attached && settings.autoSpacing && priorRow !== undefined && priorRow !== newRow) updated.completedRows = [...new Set([...(destination.completedRows ?? []), priorRow])];
       commitDocument(pageDocument(index, updated, isNotebookNote(stamp.glyph) ? stamp.id : undefined), !!settings.autoSpacing, (result) => {
         if (nextOpen) setTupletIds(nextOpen);
         const p = result.pages.find((p) => p.stamps?.some((s) => s.id === stamp.id)) ?? updated;
         const targetIndex = result.pages.findIndex((p) => p.stamps?.some((s) => s.id === stamp.id));
-        if (targetIndex >= 0) setPageIndex(targetIndex);
+        if (targetIndex >= 0) { setPageIndex(targetIndex); if (targetIndex !== pageIndex) setOffset({ x: 0, y: 0 }); }
         setSelection(includeAttached(p, { stampIds: [stamp.id], strokeIds: [] })); setTool("select");
+        if (!settings.autoSpacing && isMusic(stamp)) spacingMayJoinInput.current = result;
       }, nextOpen);
     };
     if (isManualBar(stamp)) {
@@ -512,7 +525,7 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
     const ids = tupletIds.filter((id) => page.stamps?.some((s) => s.id === id && isTupletMember(s.glyph)));
     if (ids.length < 2) { Alert.alert(ko ? "음표·쉼표를 두 개 이상 넣어 주세요" : "Add at least two notes or rests"); return; }
     const group = { id: id("tuplet"), stampIds: ids, ratio: standardTupletRatio(ids.length) };
-    if ((page.stamps ?? []).filter((s) => ids.includes(s.id)).reduce((sum, s) => sum + musicalDuration(s, [group]), 0) > measureDuration(settings) + 1e-7) {
+    if ((page.stamps ?? []).filter((s) => ids.includes(s.id)).reduce((sum, s) => sum + musicalDuration(restoreNotebookStamp(s), [group]), 0) > measureDuration(settings) + 1e-7) {
       layoutError(new Error("TUPLET_EXCEEDS_MEASURE")); return;
     }
     commitDocument(pageDocument(pageIndex, { ...page, tuplets: [...(page.tuplets ?? []), group] }),
@@ -520,7 +533,7 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
   };
   const autoSpace = () => {
     if (playback.running || playback.preparing || dragDraft || drawingRef.current.length || eraseGesture.current) return;
-    commitDocument(editingNote, true);
+    commitDocument(editingNote, true, undefined, undefined, true);
   };
   const withInkChoice = (chosen: NotebookSelection, action: (chosen: NotebookSelection) => void, copying = false) => {
     if (!chosen.strokeIds.length) { action(chosen); return; }
@@ -548,16 +561,22 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
       const detached = (base.stamps ?? []).filter((s) => picked.stampIds.includes(s.id) && s.attachTo && !picked.stampIds.includes(s.attachTo));
       const source = { ...base, strokes: paste ? base.strokes.filter((s) => !chosen.strokeIds.includes(s.id) || picked.strokeIds.includes(s.id)) : base.strokes,
         stamps: base.stamps?.map((s) => detached.some((d) => d.id === s.id) ? { ...s, attachTo: undefined } : s) };
-      const result = transformSelection(source, picked, delta, copy && !paste, () => id("object"));
+      const result = transformSelection(source, picked, delta, copy && !paste, () => id("object"), editingNote);
       const anchor = result.page.stamps?.find((s) => result.selection.stampIds.includes(s.id) && isNotebookNote(s.glyph))
         ?? result.page.stamps?.find((s) => result.selection.stampIds.includes(s.id));
       const doCommit = (next: StaffPage) => {
         if (settings.autoSpacing && (copy || paste)) next = insertSelectionBeforeFollowing(next, result.selection);
-        commitDocument(pageDocument(pageIndex, { ...next, anchor: anchor ? { x: anchor.x, y: anchor.y } : page.anchor }, anchor && isNotebookNote(anchor.glyph) ? anchor.id : undefined),
-          !!settings.autoSpacing, () => { setSelection(result.selection); setDragDraft(null); if (detached.length) notify(ko ? "연결 해제 ↗" : "Attachment released ↗"); });
+        const at = anchor && next.stamps?.find((s) => s.id === anchor.id);
+        commitDocument(pageDocument(pageIndex, { ...next, anchor: at ? { x: at.x, y: at.y } : page.anchor }, at && isNotebookNote(at.glyph) ? notebookSourceId(at) : undefined),
+          !!settings.autoSpacing, (committed) => {
+            const sources = new Set((next.stamps ?? []).filter((s) => result.selection.stampIds.includes(s.id)).map(notebookSourceId));
+            const current = committed.pages.find((p) => p.stamps?.some((s) => anchor && s.id === notebookSourceId(anchor))) ?? committed.pages[pageIndex];
+            setSelection({ strokeIds: result.selection.strokeIds, stampIds: (current?.stamps ?? []).filter((s) => sources.has(notebookSourceId(s))).map((s) => s.id) });
+            setDragDraft(null); if (detached.length) notify(ko ? "연결 해제 ↗" : "Attachment released ↗");
+          });
       };
       const movedNote = result.page.stamps?.find((s) => result.selection.stampIds.includes(s.id) && isNotebookNote(s.glyph));
-      const overlap = movedNote && result.page.stamps?.find((s) => !result.selection.stampIds.includes(s.id) && isNotebookNote(s.glyph) &&
+      const overlap = movedNote && result.page.stamps?.find((s) => !s.split?.index && !result.selection.stampIds.includes(s.id) && isNotebookNote(s.glyph) &&
         Math.abs(s.x - movedNote.x) < 10 && rowAt(s.y, page.staffCount ?? 7) === rowAt(movedNote.y, page.staffCount ?? 7));
       const pendingGroup = movedNote && result.page.tuplets?.find((g) => !g.stampIds.includes(movedNote.id) && (() => {
         const members = result.page.stamps!.filter((s) => g.stampIds.includes(s.id));
@@ -588,7 +607,9 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
   const saveClipboard = () => {
     if (!selectionCount(selection)) return;
     withInkChoice(selection, (picked) => {
-      const entry = { id: id("clipboard"), label: `${ko ? "선택 묶음" : "Selection"} ${clipboard.length + 1}`, count: selectionCount(picked), page: captureSelection(page, picked) };
+      const captured = captureSelection(page, picked, editingNote);
+      const entry = { id: id("clipboard"), label: `${ko ? "선택 묶음" : "Selection"} ${clipboard.length + 1}`,
+        count: (captured.stamps?.length ?? 0) + captured.strokes.length, page: captured };
       setClipboard((previous) => [...previous, entry]);
     }, true);
   };
@@ -624,14 +645,25 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
   };
   const selectedGroup = page.tuplets?.find((g) => g.stampIds.some((id) => selection.stampIds.includes(id)));
   const editObject = (stampId: string, patch: Partial<StaffStamp>, remove = false) => {
-    const next = remove ? removeSelection(page, { stampIds: [stampId], strokeIds: [] }, false)
-      : { ...page, stamps: page.stamps?.map((s) => s.id === stampId ? { ...s, ...patch, durationBeats: undefined, generated: false } : s) };
+    const ownerIndex = editingNote.pages.findIndex((p) => p.stamps?.some((s) => s.id === stampId));
+    const owner = editingNote.pages[ownerIndex];
+    if (!owner) return;
+    const next = remove ? removeSelection(owner, { stampIds: [stampId], strokeIds: [] }, false)
+      : { ...owner, stamps: owner.stamps?.map((s) => {
+        if (s.id !== stampId) return s;
+        const original = restoreNotebookStamp(s);
+        const edited = { ...original, ...patch, durationBeats: "glyph" in patch || "dotted" in patch ? undefined : original.durationBeats, generated: false };
+        if (!s.split) return edited;
+        return { ...s, role: edited.role, split: { ...s.split, original: { ...s.split.original,
+          glyph: edited.glyph, dotted: edited.dotted, durationBeats: edited.durationBeats } } };
+      }) };
     const group = next.tuplets?.find((g) => g.id === selectedGroup?.id || g.stampIds.includes(stampId));
     if (group && next.stamps!.filter((s) => group.stampIds.includes(s.id)).reduce((sum, s) => sum + musicalDuration(s, [group]), 0) > measureDuration(settings) + 1e-7) {
       layoutError(new Error("TUPLET_EXCEEDS_MEASURE")); return;
     }
-    commitDocument(pageDocument(pageIndex, next), !!settings.autoSpacing, () => {
-      if (remove) setSelection((s) => ({ ...s, stampIds: s.stampIds.filter((id) => id !== stampId) }));
+    commitDocument(pageDocument(ownerIndex, next), !!settings.autoSpacing, (committed) => {
+      const selected = new Set(selectedNotebookStamps(page, selection).filter((s) => !remove || s.id !== stampId).map((s) => s.id));
+      setSelection((s) => ({ ...s, stampIds: committed.pages.flatMap((p) => p.stamps ?? []).filter((s) => selected.has(notebookSourceId(s))).map((s) => s.id) }));
     });
   };
   const editRatio = (actual: number, normal: number) => {
@@ -660,6 +692,9 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
     ? sourcePaper === page && viewPolicy.zoom === portraitPolicy.zoom ? inputProjection : projectNotebookPortrait(sourcePaper, settings, viewPolicy.columns, viewPolicy.zoom, portraitBoost) : null,
   [sourcePaper, page, settings, inputProjection, viewPolicy.columns, viewPolicy.zoom, portraitPolicy.zoom, portraitBoost]);
   const paperPage = projection?.page ?? sourcePaper;
+  const externalTieIds = useMemo(() => new Set((settings.random || playback.running ? performanceNote : editingNote).pages
+    .filter((p, i) => playback.running || i !== pageIndex).flatMap((p) => (p.stamps ?? []).map((s) => s.id))),
+  [settings.random, playback.running, performanceNote, editingNote, pageIndex]);
   const drawingPoints = projection ? drawing.map(projection.forward) : drawing;
   const displayedSelection = projection ? { ...selection, strokeIds: [...projection.strokeOwners]
     .filter(([, owner]) => selection.strokeIds.includes(owner)).map(([key]) => key) } : selection;
@@ -689,6 +724,7 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
           nestedScrollEnabled showsVerticalScrollIndicator={false}>
           <NotebookPaper
             settings={settings}
+            externalTieIds={externalTieIds}
             page={paperPage} width={PAPER_WIDTH * paperScale * (projection ? Math.max(1, zoom) : zoom)} height={(paperPage.staffCount ?? 7) * ROW_HEIGHT * paperScale * zoom * (projection ? portraitBoost : paperPage.layoutScale ?? 1)}
             paperScale={paperScale} zoom={zoom}
             layoutScaleOverride={projection ? portraitBoost : undefined}
@@ -779,7 +815,7 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
         </View>
       ) : null}
       {objectEditor && <View style={{ position: "absolute", bottom: 82, left: 8, right: 8, maxHeight: "70%", zIndex: 48 }}>
-        <NotebookObjectEditor ko={ko} stamps={(page.stamps ?? []).filter((s) => selection.stampIds.includes(s.id))} group={selectedGroup}
+        <NotebookObjectEditor ko={ko} stamps={selectedNotebookStamps(page, selection)} group={selectedGroup}
           onChange={editObject} onRatio={editRatio} onDelete={(stampId) => editObject(stampId, {}, true)} onClose={() => setObjectEditor(false)} />
       </View>}
       <Modal visible={!!decision} transparent animationType="fade" onRequestClose={() => setDecision(null)}>

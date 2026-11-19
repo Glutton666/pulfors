@@ -69,6 +69,17 @@ test("a manual line between notes is a real measure boundary", () => {
   expect(stamps(result).filter((s) => s.id !== "bar").map((s) => s.measure)).toEqual([0, 1]);
   expect(stamps(result).find((s) => s.id === "bar")!.measure).toBe(1);
 });
+test("moving a manual line restores a whole note that now fits past the boundary", () => {
+  const initial = withStamps(note(true), [stamp("q", 100), stamp("w", 225, undefined, "whole")]);
+  const split = layoutNotebookMusic(addBar(initial, 500)).note;
+  expect(stamps(split).find((s) => s.id === "w")?.tieTo).toBeDefined();
+  const moved = prepareNotebookMeasureEdit(split, withStamps(split, stamps(split).map((s) => s.id === "bar" ? { ...s, x: 170 } : s)));
+  const arranged = layoutNotebookMusic(moved).note;
+  expect(stamps(arranged).find((s) => s.id === "bar")?.x).toBe(170);
+  expect(stamps(arranged).find((s) => s.id === "w")).toMatchObject({ glyph: "whole", measure: 1, tieTo: undefined, split: undefined });
+  expect(stamps(arranged).filter((s) => s.tieFrom || s.tieTo)).toEqual([]);
+  expect(layoutNotebookMusic(arranged).reason).toBe("unchanged");
+});
 test("effective measures survive save/reopen and randomization after a boundary moves", async () => {
   const initial = addBar(note(), 244);
   const moved = prepareNotebookMeasureEdit(initial, withStamps(initial, stamps(initial).map((s) => s.id === "bar" ? { ...s, x: 500 } : s)));

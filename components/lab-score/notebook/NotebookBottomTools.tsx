@@ -1,10 +1,12 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import { PanResponder, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import React, { useEffect, useRef, useState } from "react";
+import { Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { ALL_INSTR_SYMBOLS, ACCIDENTALS, ARTICULATIONS, REPEAT_SIGNS } from "@/components/ScorePalette";
 import { NotebookGlyphPreview } from "./NotebookGlyph";
 import { NotebookTupletPreview } from "./NotebookTupletGlyph";
 import { useNotebookRestPicker } from "./NotebookRestPicker";
+import { useNotebookNotePicker } from "./NotebookNotePicker";
+import { noteDurations as durations, noteRoles as roleValues, type NotePickerChoice } from "@/lib/notebook-note-picker";
 import type { NotebookMode } from "./NotebookModeMenu";
 import { useLanguage } from "@/contexts/LanguageContext";
 import type { NotebookEraserMode } from "@/lib/notebook-erasing";
@@ -56,8 +58,6 @@ type Props = {
   onEditSelection?: () => void;
 };
 
-const durations = ["whole", "half", "quarter", "eighth", "sixteenth", "thirty_second"];
-const roleValues: Choice["role"][] = ["ghost", "normal", "strong"];
 type NotesCategory = "note" | "marks" | null;
 const durationLabels = {
   en: ["Whole", "Half", "Quarter", "Eighth", "16th", "32nd"],
@@ -68,47 +68,29 @@ export function NotebookBottomTools(props: Props) {
   const { t } = useLanguage();
   const { ko, mode } = props;
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
-  const [gestureActive, setGestureActive] = useState(false);
-  const [gestureVertical, setGestureVertical] = useState(false);
   const [showAccessibleChooser, setShowAccessibleChooser] = useState(false);
-  const [, setMeasuredRowsVersion] = useState(0);
-  const [gestureRole, setGestureRole] = useState<Choice["role"]>("normal");
-  const [gestureDuration, setGestureDuration] = useState("quarter");
-  const [dotChoice, setDotChoice] = useState(false);
   const [category, setCategory] = useState<NotesCategory>(null);
   const [restGestureActive, setRestGestureActive] = useState(false);
-  const originRef = useRef<View>(null);
   const dockRef = useRef<View>(null);
-  const rowRefs = useRef<Record<string, View | null>>({});
-  const roleRefs = useRef<Record<Choice["role"], View | null>>({ ghost: null, normal: null, strong: null });
-  const originBox = useRef<{ x: number; y: number; width: number; height: number } | null>(null);
-  const rowBoxes = useRef<Record<string, { x: number; y: number; width: number; height: number }>>({});
-  const roleBoxes = useRef<Record<string, { x: number; y: number; width: number; height: number }>>({});
-  const gestureRef = useRef({ active: false, dx: 0, dy: 0, vertical: false, role: "normal" as Choice["role"], duration: "quarter", dotted: false, lastX: 0, lastY: 0 });
-  const gestureSnapshot = useRef({ role: "normal" as Choice["role"], duration: "quarter", dotted: false });
-  const responderUsed = useRef(false);
-  const responderResetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const callbacks = useRef(props);
-  callbacks.current = props;
-  const [originLayout, setOriginLayout] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
-  const dockTop = useRef(0);
-  const dockLeft = useRef(0);
   const [dockPosition, setDockPosition] = useState({ x: 0, y: 0 });
   const [dockWidth, setDockWidth] = useState(0);
-  const dockWidthRef = useRef(dockWidth);
-  dockWidthRef.current = dockWidth;
   const [dockHeight, setDockHeight] = useState(0);
   const [moreActionsOpen, setMoreActionsOpen] = useState(false);
-  const pickerActive = gestureActive || restGestureActive;
   const pickerTop = props.pickerTop ?? 8;
   const pickerBottom = props.pickerBottom ?? windowHeight - 8;
+  const resetKey = `${mode}:${windowWidth}:${windowHeight}:${props.layoutKey}`;
+  const notePicker = useNotebookNotePicker({
+    dockRef, width: windowWidth, top: pickerTop, bottom: Math.max(pickerTop, Math.min(windowHeight, pickerBottom)), resetKey,
+    onChoose: props.onChoose,
+    onBegin: () => { setMoreActionsOpen(false); setShowAccessibleChooser(false); setCategory(null); },
+  });
+  const { role: gestureRole, glyph: gestureDuration, dotted: dotChoice } = notePicker.choice;
+  const pickerActive = notePicker.active || restGestureActive;
   // RNW can deliver onLayout before this mode's ref is attached. Measure after
   // commit as well, otherwise an untouched marks drawer uses y=0 and collapses.
   useEffect(() => {
     if (mode !== "notes") return;
     const frame = requestAnimationFrame(() => dockRef.current?.measureInWindow((x, y, width, height) => {
-      dockLeft.current = x;
-      dockTop.current = y;
       setDockWidth(width);
       setDockHeight(height);
       setDockPosition({ x, y });
@@ -118,10 +100,6 @@ export function NotebookBottomTools(props: Props) {
   const roomAbove = Math.max(0, dockPosition.y - pickerTop - 8);
   const roomBelow = Math.max(0, pickerBottom - (dockPosition.y + (dockHeight || 66)) - 8);
   const compactNoteActions = dockWidth > 0 && dockWidth < 440;
-  const durationSpace = Math.max(roomAbove, roomBelow);
-  const durationRowHeight = Math.max(8, Math.min(34, (durationSpace - 16) / 6));
-  const durationColumnHeight = durationRowHeight * durations.length + 8;
-  const durationAbove = roomAbove >= durationColumnHeight || roomAbove >= roomBelow;
   const chooserAbove = roomAbove >= 66 || roomAbove >= roomBelow;
   const moreActionsAbove = roomAbove >= 58 || roomAbove >= roomBelow;
   const drawerAvailable = Math.max(64, Math.min(350, Math.max(roomAbove, roomBelow)));
@@ -132,7 +110,7 @@ export function NotebookBottomTools(props: Props) {
     bottomBoundary: pickerBottom,
     modeKey: mode,
     layoutKey: props.layoutKey,
-    otherPickerActive: gestureActive,
+    otherPickerActive: notePicker.active,
     dockRef,
     onChoose: props.onChoose,
     onActiveChange: (active) => {
@@ -145,162 +123,10 @@ export function NotebookBottomTools(props: Props) {
     },
   });
 
-  const restoreCancelledGesture = () => {
-    if (responderResetTimer.current) clearTimeout(responderResetTimer.current);
-    responderResetTimer.current = null;
-    const previous = gestureSnapshot.current;
-    gestureRef.current.active = false;
-    gestureRef.current.vertical = false;
-    gestureRef.current.role = previous.role;
-    gestureRef.current.duration = previous.duration;
-    gestureRef.current.dotted = previous.dotted;
-    setGestureRole(previous.role);
-    setGestureDuration(previous.duration);
-    setDotChoice(previous.dotted);
-    setGestureActive(false);
-    setGestureVertical(false);
-    setShowAccessibleChooser(false);
-    setOriginLayout(null);
-    originBox.current = null;
-    rowBoxes.current = {};
-    roleBoxes.current = {};
-    responderUsed.current = false;
-  };
+  useEffect(() => { setShowAccessibleChooser(false); setCategory(null); }, [resetKey]);
 
-  useEffect(() => {
-    restoreCancelledGesture();
-    setCategory(null);
-    return () => {
-      if (responderResetTimer.current) clearTimeout(responderResetTimer.current);
-      responderResetTimer.current = null;
-    };
-  }, [mode, windowWidth, windowHeight, props.layoutKey]);
-  useEffect(() => () => {
-    if (responderResetTimer.current) clearTimeout(responderResetTimer.current);
-    responderResetTimer.current = null;
-    gestureRef.current.active = false;
-    responderUsed.current = false;
-  }, []);
-
-  const noteResponder = useMemo(() => PanResponder.create({
-    onStartShouldSetPanResponderCapture: () => true,
-    onMoveShouldSetPanResponderCapture: () => true,
-    onStartShouldSetPanResponder: () => true,
-    onMoveShouldSetPanResponder: () => true,
-    onPanResponderGrant: () => {
-      const state = gestureRef.current;
-      gestureSnapshot.current = { role: state.role, duration: state.duration, dotted: state.dotted };
-      Object.assign(state, { active: true, dx: 0, dy: 0, vertical: false, lastX: 0, lastY: 0 });
-      responderUsed.current = true;
-      rowBoxes.current = {};
-      roleBoxes.current = {};
-      originRef.current?.measureInWindow((x, y, width, height) => {
-        originBox.current = { x, y, width, height };
-        setOriginLayout({ x, y, width, height });
-      });
-      dockRef.current?.measureInWindow((x, y) => {
-        dockLeft.current = x;
-        dockTop.current = y;
-        setDockPosition({ x, y });
-      });
-      setGestureActive(true);
-      setMoreActionsOpen(false);
-      setGestureVertical(false);
-      setShowAccessibleChooser(false);
-      setGestureRole(state.role);
-      setGestureDuration(state.duration);
-      setDotChoice(state.dotted);
-      setCategory(null);
-    },
-    onPanResponderMove: (_event, gesture) => {
-      const state = gestureRef.current;
-      state.dx = gesture.dx;
-      state.dy = gesture.dy;
-      state.lastX = gesture.moveX;
-      state.lastY = gesture.moveY;
-      if (state.vertical) {
-        const hit = durations.map((duration) => ({ duration, box: rowBoxes.current[duration] }))
-          .find(({ box }) => box && gesture.moveY >= box.y && gesture.moveY <= box.y + box.height);
-        if (hit) {
-          state.duration = hit.duration;
-          const center = rowBoxes.current[hit.duration]!.x + rowBoxes.current[hit.duration]!.width / 2;
-          state.dotted = gesture.moveX < center;
-          setGestureDuration(state.duration);
-          setDotChoice(state.dotted);
-        }
-        return;
-      }
-      if (gesture.dy < -12 && Math.abs(gesture.dy) > Math.abs(gesture.dx) * 0.65) {
-        state.vertical = true;
-        setGestureVertical(true);
-        setGestureDuration(state.duration);
-      } else if (Math.abs(gesture.dx) > 16) {
-        const roleCenters = roleValues.map((role, index) => {
-          const box = roleBoxes.current[role];
-          if (box) return { role, center: box.x + box.width / 2 };
-          const origin = originBox.current;
-          if (!origin) return null;
-          const left = dockWidthRef.current > 0
-            ? Math.max(0, Math.min(Math.max(0, dockWidthRef.current - 184), origin.x + origin.width / 2 - dockLeft.current - 92))
-            : origin.x + origin.width / 2 - dockLeft.current - 92;
-          return { role, center: dockLeft.current + left + 29 + index * 63 };
-        }).filter((item): item is { role: Choice["role"]; center: number } => item !== null);
-        const nearest = roleCenters
-          .sort((a, b) => Math.abs(gesture.moveX - a.center) - Math.abs(gesture.moveX - b.center))[0];
-        if (nearest) {
-          state.role = nearest.role;
-          setGestureRole(state.role);
-        }
-      }
-    },
-    onPanResponderRelease: () => {
-      const state = gestureRef.current;
-      if (!state.active) return;
-      state.active = false;
-      const role = state.role;
-      gestureSnapshot.current = { role, duration: state.duration, dotted: state.dotted };
-      callbacks.current.onChoose({ glyph: state.duration, role, dotted: state.dotted });
-      setGestureActive(false);
-      setGestureVertical(false);
-      setOriginLayout(null);
-      rowBoxes.current = {};
-      roleBoxes.current = {};
-      if (responderResetTimer.current) clearTimeout(responderResetTimer.current);
-      responderResetTimer.current = setTimeout(() => {
-        responderUsed.current = false;
-        responderResetTimer.current = null;
-      }, 250);
-    },
-    onPanResponderTerminate: () => {
-      restoreCancelledGesture();
-    },
-    onPanResponderTerminationRequest: () => false,
-  }), []);
-
-  const measureDurationRows = () => {
-    let measured = 0;
-    durations.forEach((duration) => rowRefs.current[duration]?.measureInWindow((x, y, width, height) => {
-      rowBoxes.current[duration] = { x, y, width, height };
-      measured += 1;
-      if (measured === durations.length) setMeasuredRowsVersion((version) => version + 1);
-    }));
-  };
-  const measureRoleChoices = () => {
-    roleValues.forEach((role) => roleRefs.current[role]?.measureInWindow((x, y, width, height) => {
-      roleBoxes.current[role] = { x, y, width, height };
-    }));
-  };
-
-  const chooseAccessibleNote = (choice: Choice) => {
-    if (responderResetTimer.current) clearTimeout(responderResetTimer.current);
-    responderResetTimer.current = null;
-    gestureRef.current.active = false;
-    Object.assign(gestureRef.current, { role: choice.role, duration: choice.glyph, dotted: choice.dotted });
-    gestureSnapshot.current = { role: choice.role, duration: choice.glyph, dotted: choice.dotted };
-    setGestureRole(choice.role); setGestureDuration(choice.glyph); setDotChoice(choice.dotted);
-    responderUsed.current = false;
-    setGestureActive(false);
-    setGestureVertical(false);
+  const chooseAccessibleNote = (choice: NotePickerChoice) => {
+    notePicker.setAccessibleChoice(choice);
     setShowAccessibleChooser(false);
     setCategory(null);
     props.onChoose(choice);
@@ -373,21 +199,19 @@ export function NotebookBottomTools(props: Props) {
   if (mode === "notes") {
     return (
       <View ref={dockRef} style={[styles.dock, styles.notesDock]} onLayout={() => dockRef.current?.measureInWindow((x, y, width, height) => {
-        dockLeft.current = x;
-        dockTop.current = y;
         setDockWidth(width);
         setDockHeight(height);
         setDockPosition({ x, y });
-        originRef.current?.measureInWindow((originX, originY, width, height) => {
-          originBox.current = { x: originX, y: originY, width, height };
-          setOriginLayout({ x: originX, y: originY, width, height });
-        });
       })}>
           <View testID="notebook-note-idle-tools" style={styles.notesDockContent}>
             <View style={styles.categoryRow}>
               {/* Hide the idle control without removing the gesture target or moving the layout. */}
-              <View testID="notebook-note-tile" ref={originRef} collapsable={false} pointerEvents={restGestureActive ? "none" : "auto"} aria-hidden={pickerActive || undefined} accessibilityElementsHidden={pickerActive} importantForAccessibility={pickerActive ? "no-hide-descendants" : "auto"} onLayout={() => originRef.current?.measureInWindow((x, y, width, height) => setOriginLayout({ x, y, width, height }))} {...noteResponder.panHandlers} style={[styles.categoryButton, styles.noteOrigin, pickerActive && styles.hiddenNeighbor]}>
-                <Pressable testID="notebook-note-origin" disabled={pickerActive} accessibilityRole="button" accessibilityLabel={ko ? "음표 선택. 좌우로 강도를, 위로 음가를 고르세요." : "Note picker. Swipe sideways for role, up for duration."} accessibilityState={{ expanded: showAccessibleChooser }} accessibilityActions={[{ name: "expand", label: ko ? "음표 선택기 펼치기" : "Expand note chooser" }]} onAccessibilityAction={(event) => { if (!pickerActive && event.nativeEvent.actionName === "expand") setShowAccessibleChooser(true); }} onPress={() => { if (responderUsed.current) { responderUsed.current = false; return; } setShowAccessibleChooser(true); }} style={styles.originInner}>
+              <View testID="notebook-note-tile" ref={notePicker.originRef} collapsable={false} pointerEvents={restGestureActive ? "none" : "auto"} aria-hidden={pickerActive || undefined} accessibilityElementsHidden={pickerActive} importantForAccessibility={pickerActive ? "no-hide-descendants" : "auto"} {...notePicker.panHandlers} style={[styles.categoryButton, styles.noteOrigin, pickerActive && styles.hiddenNeighbor, Platform.OS === "web" && { touchAction: "none", userSelect: "none" }]}>
+                <Pressable testID="notebook-note-origin" disabled={pickerActive} accessibilityRole="button" accessibilityLabel={ko ? "음표 선택. 좌우로 강도를, 위로 음가를 고르세요." : "Note picker. Swipe sideways for role, up for duration."} accessibilityState={{ expanded: showAccessibleChooser }} accessibilityActions={[{ name: "expand", label: ko ? "음표 선택기 펼치기" : "Expand note chooser" }]} onAccessibilityAction={(event) => { if (!pickerActive && event.nativeEvent.actionName === "expand") setShowAccessibleChooser(true); }} onPress={(event) => {
+                  const native = event.nativeEvent as typeof event.nativeEvent & { pointerType?: string; detail?: number };
+                  if (notePicker.consumePress() && native.pointerType !== "keyboard" && native.detail !== 0) return;
+                  setShowAccessibleChooser(true);
+                }} style={styles.originInner}>
                   <View style={styles.categoryIconFrame}><NotebookGlyphPreview glyph={gestureDuration} size={22} role={gestureRole} dotted={dotChoice} /></View>
                   <Text style={styles.categoryLabel}>{ko ? "음표" : "Note"}</Text>
                 </Pressable>
@@ -423,25 +247,7 @@ export function NotebookBottomTools(props: Props) {
             <Pressable testID="notebook-note-redo" accessibilityRole="menuitem" accessibilityLabel={ko ? "다시 실행" : "Redo"} disabled={!props.canRedo} onPress={() => { props.onRedo(); setMoreActionsOpen(false); }} style={[styles.moreMenuAction, !props.canRedo && styles.disabled]}><Ionicons name="arrow-redo" size={17} color="#675d50" /><Text style={styles.moreMenuLabel}>{ko ? "다시" : "Redo"}</Text></Pressable>
           </View>}
 
-          {gestureActive && originLayout ? <View pointerEvents="box-none" style={[styles.gestureLayer, { bottom: 0 }]}>
-          {!gestureVertical && <View pointerEvents="box-none" onLayout={measureRoleChoices} style={[styles.roleChoices, { left: Math.max(0, Math.min(Math.max(0, dockWidth - 184), originLayout.x + originLayout.width / 2 - dockLeft.current - 92)), top: originLayout.y + originLayout.height / 2 - dockTop.current - 21 }]}>
-            {roleValues.map((role) => <Pressable key={role} ref={((node: any) => { roleRefs.current[role] = node; }) as any} testID={`notebook-note-role-${role}`} accessibilityRole="button" accessibilityLabel={`${ko ? "음표" : "Note"} ${role}`} onPress={() => { gestureRef.current.role = role; setGestureRole(role); }} style={[styles.roleChoice, gestureRole === role && styles.roleChoiceActive]}><NotebookGlyphPreview glyph="quarter" size={19} role={role} /><Text style={styles.roleLabel}>{ko ? ({ ghost: "고스트", normal: "노말", strong: "스트롱" }[role]) : role}</Text></Pressable>)}
-          </View>}
-          {gestureVertical && <View pointerEvents="box-none" onLayout={measureDurationRows} style={[
-            styles.durationColumn,
-             { left: Math.max(42, Math.min(Math.max(42, dockWidth - 138), originLayout.x + originLayout.width / 2 - dockLeft.current - 48)), top: durationAbove
-               ? Math.max(pickerTop - dockTop.current, originLayout.y - dockTop.current - durationColumnHeight - 8)
-               : Math.min(pickerBottom - dockTop.current - durationColumnHeight, originLayout.y - dockTop.current + originLayout.height + 8) },
-          ]}>
-            {[...durations].reverse().map((duration) => <Pressable key={duration} ref={((node: any) => { rowRefs.current[duration] = node; }) as any} collapsable={false} testID={`notebook-note-duration-${duration}`} accessibilityRole="button" accessibilityLabel={durationLabels[ko ? "ko" : "en"][durations.indexOf(duration)]} onPress={() => chooseAccessibleNote({ glyph: duration, role: gestureRef.current.role, dotted: gestureRef.current.dotted })} style={[styles.durationChoice, { height: durationRowHeight }, gestureDuration === duration && styles.verticalDurationActive]}>
-              <NotebookGlyphPreview glyph={duration} size={20} role={gestureRole} dotted={gestureDuration === duration && dotChoice} />
-            </Pressable>)}
-          </View>}
-          {gestureVertical && rowBoxes.current[gestureDuration] && <>
-            <Pressable testID="notebook-note-dotted" accessibilityRole="button" accessibilityLabel={ko ? "점음표" : "Dotted"} onPress={() => { gestureRef.current.dotted = true; setDotChoice(true); }} style={[styles.branchChoice, { left: rowBoxes.current[gestureDuration].x - dockLeft.current - 46, top: rowBoxes.current[gestureDuration].y - dockTop.current + rowBoxes.current[gestureDuration].height / 2 - 18 }, dotChoice && styles.roleChoiceActive]}><NotebookGlyphPreview glyph={gestureDuration} size={18} role={gestureRole} dotted /></Pressable>
-            <Pressable testID="notebook-note-plain" accessibilityRole="button" accessibilityLabel={ko ? "일반 음표" : "Plain"} onPress={() => { gestureRef.current.dotted = false; setDotChoice(false); }} style={[styles.branchChoice, { left: rowBoxes.current[gestureDuration].x - dockLeft.current + 98, top: rowBoxes.current[gestureDuration].y - dockTop.current + rowBoxes.current[gestureDuration].height / 2 - 18 }, !dotChoice && styles.roleChoiceActive]}><NotebookGlyphPreview glyph={gestureDuration} size={18} role={gestureRole} /></Pressable>
-          </>}
-        </View> : null}
+        {notePicker.overlay}
 
         {restPicker.overlay}
 
@@ -474,10 +280,10 @@ export function NotebookBottomTools(props: Props) {
         {showAccessibleChooser && !pickerActive && <ScrollView horizontal showsHorizontalScrollIndicator={false}
           style={[styles.accessibleChooser, chooserAbove ? { bottom: "100%", top: undefined } : { top: "100%", bottom: undefined }, { maxHeight: Math.max(44, Math.min(58, chooserAbove ? roomAbove : roomBelow)) }]}
           contentContainerStyle={styles.accessibleChooserContent}>
-          {roleValues.map((role) => <Pressable key={role} testID={`notebook-note-role-${role}`} accessibilityRole="button" accessibilityLabel={`${ko ? "음표" : "Note"} ${role}`} onPress={() => { gestureRef.current.role = role; setGestureRole(role); }} style={styles.accessibleChoice}><NotebookGlyphPreview glyph={gestureDuration} size={19} role={role} dotted={dotChoice} /></Pressable>)}
+          {roleValues.map((role) => <Pressable key={role} testID={`notebook-note-role-${role}`} accessibilityRole="button" accessibilityState={{ selected: role === gestureRole }} accessibilityLabel={`${ko ? "음표" : "Note"} ${role}`} onPress={() => notePicker.setAccessibleChoice({ role })} style={styles.accessibleChoice}><NotebookGlyphPreview glyph={gestureDuration} size={19} role={role} dotted={dotChoice} /></Pressable>)}
           {durations.map((duration) => <Pressable key={duration} testID={`notebook-note-duration-${duration}`} accessibilityRole="button" accessibilityLabel={durationLabels[ko ? "ko" : "en"][durations.indexOf(duration)]} onPress={() => chooseAccessibleNote({ glyph: duration, role: gestureRole, dotted: dotChoice })} style={styles.accessibleChoice}><NotebookGlyphPreview glyph={duration} size={18} role={gestureRole} dotted={dotChoice} /></Pressable>)}
-          <Pressable testID="notebook-note-plain" accessibilityRole="button" accessibilityLabel={ko ? "일반 음표" : "Plain"} onPress={() => { gestureRef.current.dotted = false; setDotChoice(false); }} style={styles.accessibleChoice}><NotebookGlyphPreview glyph={gestureDuration} size={18} role={gestureRole} /></Pressable>
-          <Pressable testID="notebook-note-dotted" accessibilityRole="button" accessibilityLabel={ko ? "점음표" : "Dotted"} onPress={() => { gestureRef.current.dotted = true; setDotChoice(true); }} style={styles.accessibleChoice}><NotebookGlyphPreview glyph={gestureDuration} size={18} role={gestureRole} dotted /></Pressable>
+          <Pressable testID="notebook-note-plain" accessibilityRole="button" accessibilityState={{ selected: !dotChoice }} accessibilityLabel={ko ? "일반 음표" : "Plain"} onPress={() => notePicker.setAccessibleChoice({ dotted: false })} style={styles.accessibleChoice}><NotebookGlyphPreview glyph={gestureDuration} size={18} role={gestureRole} /></Pressable>
+          <Pressable testID="notebook-note-dotted" accessibilityRole="button" accessibilityState={{ selected: dotChoice }} accessibilityLabel={ko ? "점음표" : "Dotted"} onPress={() => notePicker.setAccessibleChoice({ dotted: true })} style={styles.accessibleChoice}><NotebookGlyphPreview glyph={gestureDuration} size={18} role={gestureRole} dotted /></Pressable>
         </ScrollView>}
       </View>
     );
@@ -548,14 +354,6 @@ const styles = StyleSheet.create({
   categoryActive: { backgroundColor: "#f0e7d9", borderColor: "#b69a70" },
   categoryLabel: { color: "#62543e", fontSize: 10, fontWeight: "700", letterSpacing: 0.1, textAlign: "center" },
   tupletBracket: { color: "#725b3c", fontSize: 15, fontWeight: "700", lineHeight: 19 },
-  gestureLayer: { position: "absolute", left: 0, right: 0, top: 0, zIndex: 80, elevation: 22, overflow: "visible" },
-  roleChoices: { position: "absolute", height: 42, flexDirection: "row", alignItems: "center", gap: 5, overflow: "visible" },
-  roleChoice: { width: 58, height: 42, alignItems: "center", justifyContent: "center", borderRadius: 10, borderWidth: 1, borderColor: "#e4d9c7", backgroundColor: "#fffdf8" },
-  roleChoiceActive: { backgroundColor: "#f0e5d3", borderColor: "#b69a70" },
-  roleLabel: { color: "#725b3c", fontSize: 10, lineHeight: 13, fontWeight: "600" },
-  durationColumn: { position: "absolute", width: 96, padding: 4, borderRadius: 12, borderWidth: 1, borderColor: "#ded3c2", backgroundColor: "#fffdf8", shadowColor: "#403321", shadowOpacity: 0.17, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 20 },
-  durationChoice: { width: 86, height: 35, borderRadius: 7, alignItems: "center", justifyContent: "center" },
-  branchChoice: { position: "absolute", width: 36, height: 36, alignItems: "center", justifyContent: "center", borderRadius: 7, borderWidth: 1, borderColor: "#e6dccd", backgroundColor: "#fffdf8" },
   accessibleChooser: { position: "absolute", left: 5, right: 5, bottom: "100%", zIndex: 80, maxHeight: 58, borderRadius: 12, borderWidth: 1, borderColor: "#dfd3c1", backgroundColor: "#fffdf8", elevation: 18 },
   accessibleChooserContent: { minHeight: 56, alignItems: "center", gap: 5, paddingHorizontal: 6 },
   accessibleChoice: { width: 48, height: 46, alignItems: "center", justifyContent: "center", borderRadius: 8, borderWidth: 1, borderColor: "#e8e0d4", backgroundColor: "#fffdf9" },

@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createStaffNotebook, DEFAULT_NOTEBOOK_SETTINGS, listStaffNotebooks, saveStaffNotebook } from "../lib/staff-notebook";
 import { eraseNotebookGesture } from "../lib/notebook-erasing";
+import { layoutNotebookMusic } from "../lib/notebook-music-layout";
 
 test("notation meter survives save and restore separately from playback meter", async () => {
   await AsyncStorage.setItem("lab_staff_notebooks_v1", "[]");
@@ -27,6 +28,29 @@ test("dotted thirty-second rests round-trip inside a tuplet", async () => {
   note.pages[0].tuplets = [{ id: "t", stampIds: ["r", "n"] }];
   await saveStaffNotebook(note);
   assert.deepEqual((await listStaffNotebooks())[0].pages, note.pages);
+});
+
+test("saved cross-page fragments reflow from the same original after reopening", async () => {
+  await AsyncStorage.setItem("lab_staff_notebooks_v1", "[]");
+  const note = createStaffNotebook("Cross-page split");
+  note.settings = { ...DEFAULT_NOTEBOOK_SETTINGS, measuresPerRow: 1, rowsPerPage: 1 };
+  note.pages[0].staffCount = 1;
+  note.pages[0].stamps = [
+    { id: "q", glyph: "quarter", x: 80, y: 102, size: 26 },
+    { id: "n", glyph: "whole", x: 160, y: 102, size: 26, role: "ghost", dotted: false },
+  ];
+  const laid = layoutNotebookMusic(note).note;
+  await saveStaffNotebook(laid);
+  const [reopened] = await listStaffNotebooks();
+  assert.equal(reopened.pages[1].stamps?.[0].tieFrom, "n");
+  assert.equal(reopened.pages[1].stamps?.[0].split?.original.glyph, "whole");
+  expect(JSON.parse(JSON.stringify(layoutNotebookMusic(reopened).note))).toEqual(reopened);
+  assert.equal(layoutNotebookMusic(reopened).reason, "unchanged");
+  reopened.pages[0].stamps = reopened.pages[0].stamps?.filter((s) => s.id !== "q");
+  const [whole] = layoutNotebookMusic(reopened).note.pages[0].stamps!;
+  assert.equal(whole.glyph, "whole");
+  assert.equal(whole.role, "ghost");
+  assert.equal(whole.tieTo, undefined);
 });
 
 test("legacy ink-only notebooks remain readable and keep their exact points", async () => {

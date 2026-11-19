@@ -1,6 +1,8 @@
 import { DEFAULT_NOTEBOOK_SETTINGS, type StaffNotebook, type StaffStamp } from "../lib/staff-notebook";
 import { layoutNotebookMusic, musicalDuration, measuresInRow, notebookMeasureRegions, notationMeter, standardTupletRatio, writtenDuration } from "../lib/notebook-music-layout";
-import { includeAttached, removeSelection, selectNotebookUnits, reorderNotebookRows, transformSelection, notebookWritingTail } from "../lib/notebook-editing";
+import { captureSelection, includeAttached, removeSelection, selectNotebookUnits, reorderNotebookRows, transformSelection, notebookWritingTail, paginateNotebook } from "../lib/notebook-editing";
+import { identifyLegacyNotebookSplits, notebookSourceId, restoreNotebookStamp } from "../lib/notebook-splits";
+import { prepareNotebookMeasureEdit } from "../lib/notebook-measure-edit";
 import { randomizeNotebook } from "../lib/notebook-random";
 import { ROW_HEIGHT } from "../lib/staff-notebook-layout";
 
@@ -12,6 +14,107 @@ const notebook = (stamps: StaffStamp[], settings: Partial<StaffNotebook["setting
 });
 const all = (n: StaffNotebook) => n.pages.flatMap((p) => p.stamps ?? []);
 const user = (n: StaffNotebook) => all(n).filter((s) => !s.generated);
+
+function expectCoherentFragments(note: StaffNotebook, beats: number) {
+  const stamps = all(note);
+  expect(new Set(stamps.map((s) => s.id)).size).toBe(stamps.length);
+  expect(user(note).reduce((sum, s) => sum + writtenDuration(s), 0)).toBe(beats);
+  const byId = new Map(stamps.map((s) => [s.id, s]));
+  for (const s of stamps) {
+    if (s.tieTo) {
+      expect(s.tieTo).not.toBe(s.id);
+      expect(byId.get(s.tieTo)?.tieFrom).toBe(s.id);
+    }
+    if (s.tieFrom) expect(byId.get(s.tieFrom)?.tieTo).toBe(s.id);
+  }
+}
+
+test.each([true, false])("4/4 repeated arrangement after inserting ahead of a split conserves all seven beats (auto=%s)", (autoSpacing) => {
+  const source = notebook([stamp("q"), { ...stamp("w", "whole", 170), role: "strong", dotted: false },
+    { ...stamp("sharp", "sharp", 150), attachTo: "w" }], { measuresPerRow: 2, autoSpacing });
+  source.pages[0].anchor = { x: 170, y: 102 };
+  source.lastNote = { pageId: "p", stampId: "w" };
+  const first = layoutNotebookMusic(source).note;
+  expectCoherentFragments(first, 5);
+  const edited = { ...first, pages: first.pages.map((p, i) => i ? p : { ...p, stamps: [stamp("h", "half", 45), ...p.stamps!] }) };
+  const second = layoutNotebookMusic(prepareNotebookMeasureEdit(first, edited)).note;
+  expectCoherentFragments(second, 7);
+  const third = layoutNotebookMusic(JSON.parse(JSON.stringify(second))).note;
+  expect(third).toEqual(second);
+  expectCoherentFragments(third, 7);
+  const original = user(third).find((s) => s.id === "w")!;
+  expect(restoreNotebookStamp(original)).toMatchObject({ id: "w", glyph: "whole", role: "strong", dotted: false });
+  expect(user(third).find((s) => s.id === "sharp")!.x - original.x).toBe(-20);
+  expect(notebookWritingTail(third, 0)?.stamp.split?.sourceId).toBe("w");
+  expect(third.lastNote).toEqual(source.lastNote);
+
+  const collapsed = layoutNotebookMusic({ ...first, pages: first.pages.map((p) => removeSelection(p, { strokeIds: [], stampIds: ["q"] })) }).note;
+  expectCoherentFragments(collapsed, 4);
+  expect(user(collapsed).find((s) => s.id === "w")).toMatchObject({ glyph: "whole", role: "strong", dotted: false });
+  expect(user(collapsed).filter((s) => s.split)).toEqual([]);
+});
+
+test("a dotted rest crosses a page without ties and returns to its authored form when the meter changes", () => {
+  const source = notebook([stamp("h", "half"), { ...stamp("r", "rest-half", 160), dotted: true }], { rowsPerPage: 1 });
+  source.pages[0].staffCount = 1;
+  source.pages[0].anchor = { x: 160, y: 102 };
+  const first = layoutNotebookMusic(source).note;
+  expect(first.pages).toHaveLength(2);
+  expect(notebookWritingTail(first, 0)).toMatchObject({ pageIndex: 1, stamp: { id: "r:split:1" } });
+  expect(notebookWritingTail(paginateNotebook(first, 2, () => "new"), 0)).toMatchObject({ pageIndex: 0, stamp: { id: "r:split:1" } });
+  expect(all(first).filter((s) => s.tieFrom || s.tieTo)).toEqual([]);
+  expectCoherentFragments(first, 5);
+  const changed = layoutNotebookMusic({ ...first, settings: { ...first.settings!, notationMeter: { beats: 5, unit: 4 } } }).note;
+  expect(user(changed).filter((s) => notebookSourceId(s) === "r")).toEqual([
+    expect.objectContaining({ id: "r", glyph: "rest-half", dotted: true, split: undefined }),
+  ]);
+  expect(changed.pages[0].anchor?.x).toBe(user(changed).find((s) => s.id === "r")!.x);
+});
+
+test("copying, moving and erasing a continuation operate on the original across pages", () => {
+  const source = notebook([stamp("q"), stamp("w", "whole", 170),
+    { ...stamp("sharp", "sharp", 150), attachTo: "w" }], { rowsPerPage: 1 });
+  source.pages[0].staffCount = 1;
+  source.lastNote = { pageId: "p", stampId: "w" };
+  const laid = layoutNotebookMusic(source).note;
+  const page = laid.pages[1];
+  const picked = { stampIds: ["w:split:1"], strokeIds: [] };
+  const clipboard = captureSelection(page, picked, laid);
+  expect(clipboard.stamps).toEqual([expect.objectContaining({ id: "w", glyph: "whole" }), expect.objectContaining({ id: "sharp", attachTo: "w" })]);
+  let id = 0;
+  const copy = transformSelection(page, picked, { x: 150, y: 0 }, true, () => `copy${++id}`, laid);
+  expect(copy.page.stamps?.find((s) => s.id === "copy1")).toMatchObject({ glyph: "whole", split: undefined });
+  expect(copy.page.stamps?.find((s) => s.id === "copy2")?.attachTo).toBe("copy1");
+  const movedPage = transformSelection(page, picked, { x: 245, y: 0 }).page;
+  const moved = prepareNotebookMeasureEdit(laid, { ...laid, pages: [laid.pages[0], movedPage] });
+  expect(moved.pages[0].stamps!.map((s) => s.id)).toEqual(["q"]);
+  expect(moved.pages[1].stamps!.find((s) => s.id === "sharp")?.attachTo).toBe("w");
+  expect(moved.lastNote).toEqual({ pageId: page.id, stampId: "w" });
+  expectCoherentFragments(layoutNotebookMusic(moved).note, 5);
+  const deleted = prepareNotebookMeasureEdit(laid, { ...laid, pages: [laid.pages[0], removeSelection(page, picked)] });
+  expect(user(deleted).map((s) => s.id)).toEqual(["q"]);
+  expect(deleted.lastNote).toBeUndefined();
+});
+
+test("only intact legacy chains are recognized; damaged or duplicate parts are left untouched", () => {
+  const source = notebook([stamp("q"), stamp("w", "whole", 170)], { measuresPerRow: 2 });
+  const laid = layoutNotebookMusic(source).note;
+  const legacy = { ...laid, pages: laid.pages.map((p) => ({ ...p, stamps: p.stamps!.map(({ split, ...s }) => s) })) };
+  expect(identifyLegacyNotebookSplits(legacy).pages[0].stamps!.find((s) => s.id === "w")?.split?.original.glyph).toBe("whole");
+  expectCoherentFragments(layoutNotebookMusic(legacy).note, 5);
+  const pieces = legacy.pages[0].stamps!;
+  for (const stamps of [
+    [...pieces, pieces.find((s) => s.id === "w:split:1")!],
+    pieces.filter((s) => s.id !== "w:split:1"),
+    pieces.map((s) => s.id === "w:split:1" ? { ...s, tieTo: s.id } : s),
+  ]) {
+    const damaged = { ...legacy, pages: [{ ...legacy.pages[0], stamps }] };
+    const before = JSON.stringify(damaged);
+    expect(identifyLegacyNotebookSplits(damaged)).toBe(damaged);
+    expect(() => layoutNotebookMusic(damaged)).toThrow("NOTEBOOK_AMBIGUOUS_SPLIT");
+    expect(JSON.stringify(damaged)).toBe(before);
+  }
+});
 
 test("notation meter is independent of a loaded pattern and simple metronome", () => {
   const settings = { ...DEFAULT_NOTEBOOK_SETTINGS, beatsPerMeasure: 1, source: { beatsPerMeasure: 7 } as any };
