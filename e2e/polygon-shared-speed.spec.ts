@@ -44,37 +44,129 @@ async function openPolygon(page: Page) {
 const speedLabels = { 0.5: "1/8 · ×0.5", 1: "1/4 · ×1", 2: "1/2 · ×2" };
 
 async function holdForSpeed(page: Page, nextRate: keyof typeof speedLabels) {
-  const speed = page.getByTestId("polygon-shared-speed");
-  await speed.click({ delay: 550 });
-  await expect(speed).toHaveAccessibleName(`Shared speed: ${speedLabels[nextRate]}`);
+  const screen = page.getByTestId("polygon-screen");
+  await screen.getByTestId("bpm-slider").click({ delay: 620 });
+  await expect(screen.getByTestId("bpm-center-hold-value")).toContainText(speedLabels[nextRate]);
 }
 
-test("a tap leaves the speed unchanged and a long touch advances one step", async ({ page }) => {
+test("only holding the BPM center changes the rate and a long touch advances one step", async ({ page }) => {
   await openPolygon(page);
-  const speed = page.getByTestId("polygon-shared-speed");
-  await expect(speed).toHaveAccessibleName(`Shared speed: ${speedLabels[1]}`);
-  await speed.click();
-  await speed.tap();
-  await expect(speed).toHaveAccessibleName(`Shared speed: ${speedLabels[1]}`);
+  const screen = page.getByTestId("polygon-screen");
+  const slider = screen.getByTestId("bpm-slider");
+  const speed = screen.getByTestId("bpm-center-hold-value");
+  const play = screen.getByTestId("polygon-play-toggle");
+  await expect(speed).toContainText(speedLabels[1]);
+  await slider.tap();
+  await expect(play).toContainText("Playing");
+  await expect(speed).toContainText(speedLabels[1]);
+  await play.click();
+  await expect(play).toContainText("Stopped");
 
-  const bounds = (await speed.boundingBox())!;
+  const bounds = (await slider.boundingBox())!;
   const client = await page.context().newCDPSession(page);
   try {
     await client.send("Input.dispatchTouchEvent", {
       type: "touchStart",
       touchPoints: [{ x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 }],
     });
-    await expect(speed).toHaveAccessibleName(`Shared speed: ${speedLabels[0.5]}`);
+    await expect(speed).toContainText(speedLabels[0.5]);
     await page.waitForTimeout(500);
     await client.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
-    await expect(speed).toHaveAccessibleName(`Shared speed: ${speedLabels[0.5]}`);
+    await expect(speed).toContainText(speedLabels[0.5]);
   } finally {
     await client.detach();
   }
-  await speed.press("Enter");
-  await expect(speed).toHaveAccessibleName(`Shared speed: ${speedLabels[2]}`);
-  await speed.press("Space");
-  await expect(speed).toHaveAccessibleName(`Shared speed: ${speedLabels[1]}`);
+  await screen.getByRole("slider", { name: "BPM" }).press("Shift+Enter");
+  await expect(speed).toContainText(speedLabels[2]);
+  await screen.getByRole("slider", { name: "BPM" }).press("Shift+Space");
+  await expect(speed).toContainText(speedLabels[1]);
+  await expect(play).toContainText("Stopped");
+});
+
+test("shaking unlocks signed timing, and a stationary hold opens millisecond settings", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await openPolygon(page);
+  const vertex = page.getByTestId("polygon-vertex-0");
+  const preview = page.getByTestId("polygon-offset-preview");
+  const popup = page.getByTestId("polygon-offset-popup");
+  const field = page.getByTestId("polygon-offset-ms");
+  const go = async (deltas: number[], start = true) => {
+    const box = (await vertex.boundingBox())!;
+    const x = box.x + box.width / 2;
+    const y = box.y + box.height / 2;
+    if (start) {
+      await page.mouse.move(x, y);
+      await page.mouse.down();
+    }
+    for (const dx of deltas) await page.mouse.move(x + dx, y);
+  };
+  await go([36]);
+  await page.mouse.up();
+  await expect(preview).toHaveCount(0);
+  await expect(popup).toHaveCount(0);
+  await expect(vertex).toHaveAccessibleName(/: 0 ms$/);
+
+  await go([16, -16, 16, -16, 16]);
+  await expect(preview).toHaveText("0 ms");
+  await go([48], false);
+  await expect(preview).toHaveText(/^\+\d+ ms$/);
+  await page.screenshot({ path: "generated-artifacts/polygon-offset-drag.jpg" });
+  await go([-33], false);
+  await expect(preview).toHaveText(/^-\d+ ms$/);
+  const advanced = (await preview.innerText()).replace(" ms", "");
+  await page.mouse.up();
+  await expect(preview).toHaveCount(0);
+  await expect(popup).toHaveCount(0);
+  await expect(vertex).toHaveAccessibleName(new RegExp(`: ${advanced} ms$`));
+
+  await vertex.click({ delay: 550 });
+  await expect(field).toHaveValue(advanced);
+  await page.getByRole("button", { name: "Move 1 ms earlier" }).click();
+  await expect(field).toHaveValue(String(Number(advanced) - 1));
+  await field.fill("-80");
+  await page.getByTestId("polygon-offset-confirm").click();
+  await expect(popup).toHaveCount(0);
+  await expect(vertex).toHaveAccessibleName(/: -80 ms$/);
+
+  await page.evaluate(() => { (window as any).polygonProbe = true; });
+  await page.getByTestId("polygon-play-toggle").click();
+  await expect.poll(() => page.evaluate(() => (window as any).polygonAudioStarts.length))
+    .toBeGreaterThanOrEqual(6);
+  const intervals = await page.evaluate(() => {
+    const times = (window as any).polygonAudioStarts as number[];
+    return [times[4] - times[3], times[5] - times[4]];
+  });
+  // The advanced first vertex belongs to the upcoming measure, so the
+  // adjacent gaps shorten and then lengthen by the same 80 ms.
+  expect(Math.abs(intervals[0] - 420)).toBeLessThan(65);
+  expect(Math.abs(intervals[1] - 580)).toBeLessThan(65);
+});
+
+test("touch cancellation discards a vertex preview and a short touch still cycles its accent", async ({ page }) => {
+  await openPolygon(page);
+  const vertex = page.getByTestId("polygon-vertex-0");
+  const preview = page.getByTestId("polygon-offset-preview");
+  const box = (await vertex.boundingBox())!;
+  const x = box.x + box.width / 2;
+  const y = box.y + box.height / 2;
+  const client = await page.context().newCDPSession(page);
+  try {
+    await client.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x, y }] });
+    for (const dx of [16, -16, 16, -16, 16, 60]) {
+      await client.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x: x + dx, y }] });
+    }
+    await expect(preview).toHaveText(/^\+\d+ ms$/);
+    await client.send("Input.dispatchTouchEvent", { type: "touchCancel", touchPoints: [] });
+    await expect(preview).toHaveCount(0);
+    await expect(vertex).toHaveAccessibleName(/: 0 ms$/);
+  } finally {
+    await client.detach();
+  }
+  const canvas = page.getByTestId("polygon-canvas");
+  await expect(canvas.getByText("N", { exact: true })).toHaveCount(0);
+  await vertex.tap();
+  await expect(canvas.getByText("N", { exact: true })).toHaveCount(1);
+  await expect(page.getByTestId("polygon-offset-popup")).toHaveCount(0);
 });
 
 test("shared speeds scale actual non-silent browser output without changing displayed BPM", async ({ page }) => {
@@ -143,9 +235,10 @@ test("portrait, short landscape and tablet retain accessible controls and bounde
     ["phone", 375, 667], ["landscape", 844, 390], ["tablet", 768, 1024],
   ] as const) {
     await page.setViewportSize({ width, height });
-    await expect(page.getByTestId("polygon-shared-speed")).toBeVisible();
-    for (const testId of ["polygon-play-toggle", "polygon-shared-speed", "polygon-layer-add"]) {
-      const target = page.getByTestId(testId);
+    const screen = page.getByTestId("polygon-screen");
+    await expect(screen.getByTestId("bpm-center-hold-value")).toBeVisible();
+    for (const testId of ["polygon-play-toggle", "bpm-slider", "polygon-layer-add"]) {
+      const target = screen.getByTestId(testId);
       const box = await target.boundingBox();
       expect(box).not.toBeNull();
       expect(box!.y).toBeGreaterThanOrEqual(0);

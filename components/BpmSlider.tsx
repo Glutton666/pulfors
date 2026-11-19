@@ -30,6 +30,9 @@ interface BpmSliderProps {
   onBpmChange: (bpm: number) => void;
   onTapTempo: () => void;
   onDenominatorCycle?: () => void;
+  /** Optional current value and hint for the existing center-hold gesture. */
+  centerHoldLabel?: string;
+  centerHoldHint?: string;
   isLandscape?: boolean;
   /** Blend into an existing controller surface instead of drawing a second card. */
   embedded?: boolean;
@@ -39,7 +42,7 @@ interface BpmSliderProps {
 
 type Zone = "left" | "center" | "right";
 
-export function BpmSlider({ bpm, onBpmChange, onTapTempo, onDenominatorCycle, isLandscape = false, embedded = false, isDark }: BpmSliderProps) {
+export function BpmSlider({ bpm, onBpmChange, onTapTempo, onDenominatorCycle, centerHoldLabel, centerHoldHint, isLandscape = false, embedded = false, isDark }: BpmSliderProps) {
   const { colors: themeC } = useTheme();
   const C = isDark === undefined ? themeC : {
     ...themeC,
@@ -74,6 +77,10 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo, onDenominatorCycle, is
   useEffect(() => { onTapTempoRef.current = onTapTempo; }, [onTapTempo]);
   const onDenominatorCycleRef = useRef(onDenominatorCycle);
   useEffect(() => { onDenominatorCycleRef.current = onDenominatorCycle; }, [onDenominatorCycle]);
+  useEffect(() => () => {
+    if (longPressTimer.current !== null) clearTimeout(longPressTimer.current);
+    if (longPressRepeat.current !== null) clearInterval(longPressRepeat.current);
+  }, []);
 
   const offsetX = useSharedValue(0);
   const flash = useSharedValue(0);
@@ -224,7 +231,13 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo, onDenominatorCycle, is
   const leftGlowStyle = useAnimatedStyle(() => ({ opacity: glowL.value * 0.3 }));
   const rightGlowStyle = useAnimatedStyle(() => ({ opacity: glowR.value * 0.3 }));
 
-  const handleKeyDown = useCallback((event: { nativeEvent?: { key?: string }; key?: string; preventDefault?: () => void }) => {
+  const handleKeyDown = useCallback((event: {
+    nativeEvent?: { key?: string; shiftKey?: boolean; repeat?: boolean };
+    key?: string;
+    shiftKey?: boolean;
+    repeat?: boolean;
+    preventDefault?: () => void;
+  }) => {
     const key = event.key ?? event.nativeEvent?.key;
     let next: number | null = null;
     if (key === "ArrowLeft" || key === "ArrowDown") next = Math.max(20, bpmRef.current - 1);
@@ -233,14 +246,18 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo, onDenominatorCycle, is
     else if (key === "End") next = 300;
     else if (key === "Enter" || key === " " || key === "Spacebar") {
       event.preventDefault?.();
-      onTapTempoRef.current();
+      if (centerHoldLabel && (event.shiftKey ?? event.nativeEvent?.shiftKey)) {
+        if (!(event.repeat ?? event.nativeEvent?.repeat)) onDenominatorCycleRef.current?.();
+      } else {
+        onTapTempoRef.current();
+      }
       return;
     }
     if (next !== null) {
       event.preventDefault?.();
       if (next !== bpmRef.current) onBpmChangeRef.current(next);
     }
-  }, []);
+  }, [centerHoldLabel]);
   // React Native does not expose tabIndex/onKeyDown in its shared View props,
   // while react-native-web does. Keep these web-only so native focus/gestures
   // retain their existing semantics.
@@ -259,8 +276,12 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo, onDenominatorCycle, is
         accessible
         accessibilityRole="adjustable"
         accessibilityLabel="BPM"
-        accessibilityHint={t("a11y", "bpmSliderHint")}
-        accessibilityValue={{ min: 20, max: 300, now: bpm, text: `${bpm} BPM` }}
+        accessibilityHint={centerHoldHint ?? t("a11y", "bpmSliderHint")}
+        accessibilityValue={{ min: 20, max: 300, now: bpm, text: centerHoldLabel ? `${bpm} BPM · ${centerHoldLabel}` : `${bpm} BPM` }}
+        accessibilityActions={centerHoldHint ? [{ name: "cycleCenter", label: centerHoldHint }] : undefined}
+        onAccessibilityAction={centerHoldHint ? ({ nativeEvent }) => {
+          if (nativeEvent.actionName === "cycleCenter") onDenominatorCycleRef.current?.();
+        } : undefined}
         accessibilityState={{ disabled: false }}
         onFocus={() => setIsFocused(true)}
         onBlur={() => setIsFocused(false)}
@@ -306,7 +327,9 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo, onDenominatorCycle, is
             <View style={styles.bpmContent}>
               <Text style={[styles.bpmValue, { color: C.text }, isLandscape && { fontSize: S.ms(40, 0.4), lineHeight: S.ms(46, 0.4) }]} testID="bpm-display">{bpm}</Text>
               <Text style={[styles.bpmUnit, { color: C.textTertiary }, isLandscape && { fontSize: S.ms(10, 0.3), marginTop: -2 }]}>
-                BPM
+                BPM{centerHoldLabel && (
+                  <Text testID="bpm-center-hold-value" style={{ color: C.accent }}> · {centerHoldLabel}</Text>
+                )}
               </Text>
             </View>
             <Feather name="plus" size={isLandscape ? S.ms(18, 0.4) : S.ms(24, 0.4)} color={C.textSecondary} style={styles.bpmIcon} />
@@ -329,6 +352,9 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo, onDenominatorCycle, is
       </View>
 
       <Text style={[styles.hint, { color: C.text }]}>{t("main", "bpmHint")}</Text>
+      {centerHoldHint && (
+        <Text style={[styles.hint, { color: C.textSecondary, opacity: 1, textAlign: "center" }]}>{centerHoldHint}</Text>
+      )}
     </View>
   );
 }

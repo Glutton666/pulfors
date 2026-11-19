@@ -22,6 +22,7 @@ import { useScale } from "@/lib/scale";
 import type { UsePolygonModeResult } from "@/hooks/usePolygonMode";
 import type { ClickPCMs } from "@/lib/audio-renderer";
 import { getWebAudioContext } from "@/lib/audio-renderer";
+import { polygonSlotDurationMs } from "@/lib/polygon-offset";
 import { PolygonCanvas } from "@/components/polygon-mode/PolygonCanvas";
 import { PolygonLayerEditor } from "@/components/polygon-mode/PolygonLayerEditor";
 import { PolygonOffsetPopup } from "@/components/polygon-mode/PolygonOffsetPopup";
@@ -33,6 +34,7 @@ interface PolygonModeViewProps {
   onClose: () => void;
   onTogglePlay?: () => void;
   bpm?: number;
+  beatsPerMeasure?: number;
   onBpmChange?: (bpm: number) => void;
 }
 
@@ -42,7 +44,7 @@ const SHARED_SPEEDS = [
   { rate: 0.5, label: "1/8 · ×0.5" },
 ] as const;
 
-export function PolygonModeView({ polygonMode, isPlaying, onClose, onTogglePlay, bpm, onBpmChange }: PolygonModeViewProps) {
+export function PolygonModeView({ polygonMode, isPlaying, onClose, onTogglePlay, bpm, beatsPerMeasure = 4, onBpmChange }: PolygonModeViewProps) {
   const { colors: C } = useTheme();
   const { t, language } = useLanguage();
   const S = useScale();
@@ -72,6 +74,7 @@ export function PolygonModeView({ polygonMode, isPlaying, onClose, onTogglePlay,
   const cycleSharedSpeed = () => {
     polygonMode.setPlaybackRate(SHARED_SPEEDS[(speedIndex + 1) % SHARED_SPEEDS.length].rate);
   };
+  const getSlotMs = (sides: number) => polygonSlotDurationMs(bpm ?? 120, polygonMode.playbackRate, beatsPerMeasure, sides);
 
   const handleLayerSelect = useCallback((id: string) => {
     setEditingLayerId(id === editingLayerId ? null : id);
@@ -230,6 +233,8 @@ export function PolygonModeView({ polygonMode, isPlaying, onClose, onTogglePlay,
               editingLayerId={editingLayerId}
               onVertexPress={handleVertexBeatTypeCycle}
               onVertexLongPress={handleVertexLongPress}
+              onVertexOffsetCommit={handleSetOffset}
+              getSlotMs={getSlotMs}
               size={canvasSize}
             />
           </View>
@@ -244,7 +249,7 @@ export function PolygonModeView({ polygonMode, isPlaying, onClose, onTogglePlay,
               textAlign: "center",
               marginTop: 8,
             }}>
-              {t("polygon", "muteVertex")}
+              {t("polygon", "vertexTimingHint")}
             </Text>
           )}
         </View>
@@ -270,53 +275,6 @@ export function PolygonModeView({ polygonMode, isPlaying, onClose, onTogglePlay,
           onPickCustomSound={handlePickCustomSound}
           compactHeight={isCompactHeight}
         />
-        <View style={{ paddingHorizontal: S.ms(16, 0.3), paddingTop: S.ms(5, 0.3) }}>
-           <Pressable
-             testID="polygon-shared-speed"
-             onLongPress={cycleSharedSpeed}
-             delayLongPress={450}
-             onPress={Platform.OS === "web" ? ({ nativeEvent }) => {
-               // Allow keyboard/assistive activation, not a short pointer tap.
-               const { key, detail } = nativeEvent as typeof nativeEvent & { key?: string; detail?: number };
-               if (key === "Enter" || key === " " || key === "Spacebar" || detail === 0) cycleSharedSpeed();
-             } : undefined}
-             accessibilityRole="button"
-             accessibilityLabel={`${t("polygon", "sharedSpeed")}: ${speed.label}`}
-             accessibilityHint={t("polygon", "sharedSpeedHint")}
-             accessibilityActions={[{ name: "activate", label: t("polygon", "cycleSharedSpeed") }]}
-             onAccessibilityAction={({ nativeEvent }) => {
-               if (nativeEvent.actionName === "activate") cycleSharedSpeed();
-             }}
-             style={({ pressed }) => ({
-               minHeight: 44,
-               paddingHorizontal: S.ms(12, 0.3),
-               paddingVertical: 5,
-               flexDirection: "row",
-               alignItems: "center",
-               justifyContent: "space-between",
-               gap: 8,
-               borderRadius: S.ms(10, 0.3),
-               borderWidth: 1,
-               borderColor: C.border,
-               backgroundColor: pressed ? C.accent + "20" : "transparent",
-             })}
-           >
-             <View style={{ flexShrink: 1 }}>
-               <Text style={{ fontSize: S.ms(12, 0.3), color: C.textSecondary }}>
-                 {t("polygon", "sharedSpeed")}
-               </Text>
-               <Text style={{ fontSize: S.ms(10, 0.3), color: C.textTertiary }}>
-                 {t("polygon", "sharedSpeedHint")}
-               </Text>
-             </View>
-             <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-               <Text style={{ fontFamily: "SpaceGrotesk_600SemiBold", fontSize: S.ms(13, 0.3), color: C.accent }}>
-                 {speed.label}
-               </Text>
-               <Ionicons name="swap-horizontal-outline" size={S.ms(15, 0.3)} color={C.accent} />
-             </View>
-           </Pressable>
-        </View>
         {bpm !== undefined && onBpmChange && (
           <View style={{ paddingHorizontal: S.ms(16, 0.3), paddingTop: S.ms(5, 0.3) }}>
             <BpmSlider
@@ -324,6 +282,9 @@ export function PolygonModeView({ polygonMode, isPlaying, onClose, onTogglePlay,
               bpm={bpm}
               onBpmChange={onBpmChange}
               onTapTempo={() => onTogglePlay?.()}
+               onDenominatorCycle={cycleSharedSpeed}
+               centerHoldLabel={speed.label}
+               centerHoldHint={t("polygon", "sharedSpeedHint")}
               isLandscape={isCompactHeight}
             />
           </View>
@@ -332,11 +293,13 @@ export function PolygonModeView({ polygonMode, isPlaying, onClose, onTogglePlay,
       </View>
 
       {/* ── 오프셋 팝업 ── */}
-      {offsetPopup && (
+      {offsetPopup && currentPopupLayer && (
         <PolygonOffsetPopup
+          key={`${offsetPopup.layerId}:${offsetPopup.vertexIdx}`}
           visible
           vertexIdx={offsetPopup.vertexIdx}
           currentOffset={currentPopupOffset}
+          slotMs={getSlotMs(currentPopupLayer.sides)}
           onConfirm={(offset) => handleSetOffset(offsetPopup.layerId, offsetPopup.vertexIdx, offset)}
           onClose={() => setOffsetPopup(null)}
         />

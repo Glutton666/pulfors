@@ -26,6 +26,7 @@ import {
 } from "@/lib/pcm-cache";
 import { buildPolygonPlaybackPlan, type PolygonPlaybackPlan } from "@/lib/audio-playback-plan";
 import { createPolygonClock, type PolygonPlaybackRate } from "@/lib/polygon-clock";
+import { clampPolygonOffset } from "@/lib/polygon-offset";
 import {
   buildPolygonSchedule,
   createPolygonScheduleRunner,
@@ -579,7 +580,8 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
         prev.map((l) => {
           if (l.id !== layerId) return l;
           const newOffsets = [...l.offsets];
-          newOffsets[vertexIdx] = Math.max(0, Math.min(0.5, offset));
+          if (vertexIdx < 0 || vertexIdx >= l.sides) return l;
+          newOffsets[vertexIdx] = clampPolygonOffset(offset);
           return { ...l, offsets: newOffsets };
         }),
       );

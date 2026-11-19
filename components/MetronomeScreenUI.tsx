@@ -872,6 +872,7 @@ export function MetronomeScreenUI(props: Props) {
             onClose={closeMenuItem}
             onTogglePlay={() => void togglePlayPauseRef.current?.()}
             bpm={bpm}
+            beatsPerMeasure={Math.max(1, Math.min(16, Math.floor(beatsPerMeasure || 4)))}
             onBpmChange={tutorialBpmChange}
           />
         </View>

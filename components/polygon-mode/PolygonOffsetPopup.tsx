@@ -1,191 +1,112 @@
-/**
- * PolygonOffsetPopup — 꼭짓점 타이밍 오프셋 편집 팝업
- *
- * 슬라이더 대신 프리셋 버튼 + 스텝 컨트롤로 구성 (외부 의존성 없음)
- * 0% = 정박, 25% = 약한 스윙, 50% = 강한 스윙
- */
-
 import React, { useState } from "react";
-import {
-  View, Text, Pressable, Modal, StyleSheet,
-} from "react-native";
+import { View, Text, TextInput, Pressable, Modal, StyleSheet } from "react-native";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useScale } from "@/lib/scale";
+import { clampPolygonOffsetMs } from "@/lib/polygon-offset";
 
 interface PolygonOffsetPopupProps {
   visible: boolean;
   vertexIdx: number;
-  currentOffset: number; // 0.0 ~ 0.5
+  currentOffset: number;
+  slotMs: number;
   onConfirm: (offset: number) => void;
   onClose: () => void;
 }
 
-const PRESETS = [
-  { pct: 0,  label: "0%" },
-  { pct: 10, label: "10%" },
-  { pct: 17, label: "17%" },
-  { pct: 25, label: "25%" },
-  { pct: 33, label: "33%" },
-  { pct: 50, label: "50%" },
-];
+const signed = (ms: number) => `${ms > 0 ? "+" : ""}${ms}`;
 
 export function PolygonOffsetPopup({
-  visible,
-  vertexIdx,
-  currentOffset,
-  onConfirm,
-  onClose,
+  visible, vertexIdx, currentOffset, slotMs, onConfirm, onClose,
 }: PolygonOffsetPopupProps) {
   const { colors: C } = useTheme();
   const { t } = useLanguage();
   const S = useScale();
-  const [value, setValue] = useState(currentOffset);
-
-  const pct = Math.round(value * 100);
-
-  const step = (delta: number) => {
-    setValue(v => Math.max(0, Math.min(0.5, Math.round((v + delta / 100) * 100) / 100)));
+  const [draft, setDraft] = useState<string | null>(null);
+  const currentMs = clampPolygonOffsetMs(currentOffset * slotMs, slotMs);
+  const text = draft ?? signed(currentMs);
+  const numeric = /^[+-]?\d+$/.test(text.trim()) ? Number(text) : NaN;
+  const canConfirm = Number.isFinite(numeric);
+  const limit = Math.floor(slotMs / 2);
+  const step = (delta: number) =>
+    setDraft(signed(clampPolygonOffsetMs((canConfirm ? numeric : currentMs) + delta, slotMs)));
+  const confirm = () => {
+    if (!canConfirm) return;
+    onConfirm(draft === null ? currentOffset : clampPolygonOffsetMs(numeric, slotMs) / slotMs);
+    onClose();
   };
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="fade"
-      onRequestClose={onClose}
-    >
-      <Pressable
-        style={[StyleSheet.absoluteFillObject, {
-          backgroundColor: "rgba(0,0,0,0.6)",
-          justifyContent: "center",
-          alignItems: "center",
-        }]}
-        onPress={onClose}
-      >
-        <Pressable
-          onPress={(e) => e.stopPropagation()}
-          style={{
-            backgroundColor: C.surface,
-            borderRadius: 16,
-            padding: S.ms(20, 0.4),
-            width: "82%",
-            maxWidth: 340,
-            gap: S.ms(14, 0.4),
-          }}
-        >
-          <Text style={{
-            fontFamily: "SpaceGrotesk_700Bold",
-            fontSize: S.ms(16, 0.4),
-            color: C.text,
-            textAlign: "center",
-          }}>
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "center", alignItems: "center" }}>
+        <Pressable style={StyleSheet.absoluteFillObject} onPress={onClose} accessible={false} />
+        <View testID="polygon-offset-popup" accessibilityViewIsModal style={{
+          backgroundColor: C.surface,
+          borderRadius: 16,
+          padding: S.ms(20, 0.4),
+          width: "82%",
+          maxWidth: 340,
+          gap: S.ms(14, 0.4),
+        }}>
+          <Text style={{ fontFamily: "SpaceGrotesk_700Bold", fontSize: S.ms(16, 0.4), color: C.text, textAlign: "center" }}>
             {t("polygon", "offsetTitle").replace("{{n}}", String(vertexIdx + 1))}
           </Text>
-
-          {/* 현재 값 + 스텝 컨트롤 */}
-          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 16 }}>
-            <Pressable
-              onPress={() => step(-1)}
-              style={({ pressed }) => ({
-                width: 40, height: 40, borderRadius: 20,
-                backgroundColor: pressed ? C.accent + "33" : C.background,
-                borderWidth: 1, borderColor: C.border,
-                alignItems: "center", justifyContent: "center",
-              })}
-            >
-              <Text style={{ fontSize: 20, color: C.text, fontFamily: "SpaceGrotesk_700Bold" }}>−</Text>
-            </Pressable>
-            <Text style={{
-              fontFamily: "SpaceGrotesk_700Bold",
-              fontSize: S.ms(34, 0.4),
-              color: C.accent,
-              minWidth: 80,
-              textAlign: "center",
-            }}>
-              {pct}%
-            </Text>
-            <Pressable
-              onPress={() => step(1)}
-              style={({ pressed }) => ({
-                width: 40, height: 40, borderRadius: 20,
-                backgroundColor: pressed ? C.accent + "33" : C.background,
-                borderWidth: 1, borderColor: C.border,
-                alignItems: "center", justifyContent: "center",
-              })}
-            >
-              <Text style={{ fontSize: 20, color: C.text, fontFamily: "SpaceGrotesk_700Bold" }}>+</Text>
-            </Pressable>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            {[-1, 0, 1].map((delta) => delta === 0 ? (
+              <View key={delta} style={{ flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", gap: 4 }}>
+                <TextInput
+                  testID="polygon-offset-ms"
+                  accessibilityLabel={t("polygon", "offsetInput")}
+                  autoCorrect={false}
+                  maxLength={9}
+                  selectTextOnFocus
+                  value={text}
+                  onChangeText={setDraft}
+                  onSubmitEditing={confirm}
+                  style={{
+                    fontFamily: "SpaceGrotesk_700Bold", fontSize: S.ms(23, 0.4), color: C.accent,
+                    minWidth: 0, flex: 1, textAlign: "right", padding: 4,
+                    borderBottomWidth: 1, borderBottomColor: C.border,
+                  }}
+                />
+                <Text style={{ color: C.textSecondary }}>ms</Text>
+              </View>
+            ) : (
+              <Pressable
+                key={delta}
+                onPress={() => step(delta)}
+                accessibilityRole="button"
+                accessibilityLabel={t("polygon", delta < 0 ? "offsetEarlier" : "offsetLater")}
+                style={({ pressed }) => ({
+                  width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center",
+                  backgroundColor: pressed ? C.accent + "33" : C.background,
+                  borderWidth: 1, borderColor: C.border,
+                })}
+              >
+                <Text style={{ fontSize: 20, color: C.text }}>{delta < 0 ? "−" : "+"}</Text>
+              </Pressable>
+            ))}
           </View>
-
-          <Text style={{
-            fontFamily: "SpaceGrotesk_400Regular",
-            fontSize: S.ms(11, 0.3),
-            color: C.textSecondary,
-            textAlign: "center",
-          }}>
-            {t("polygon", "offsetHint")}
+          <Text style={{ fontSize: S.ms(11, 0.3), color: C.textSecondary, textAlign: "center" }}>
+            {t("polygon", "offsetHint")}{"\n"}{signed(-limit)} … {signed(limit)} ms
           </Text>
-
-          {/* 프리셋 */}
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
-            {PRESETS.map((preset) => {
-              const active = Math.abs(pct - preset.pct) < 1;
-              return (
-                <Pressable
-                  key={preset.pct}
-                  onPress={() => setValue(preset.pct / 100)}
-                  style={({ pressed }) => ({
-                    paddingHorizontal: 10,
-                    paddingVertical: 5,
-                    borderRadius: 8,
-                    backgroundColor: active ? C.accent : pressed ? C.accent + "22" : C.background,
-                    borderWidth: 1,
-                    borderColor: active ? C.accent : C.border,
-                  })}
-                >
-                  <Text style={{
-                    fontFamily: "SpaceGrotesk_500Medium",
-                    fontSize: S.ms(12, 0.3),
-                    color: active ? "#fff" : C.textSecondary,
-                  }}>
-                    {preset.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-
-          {/* 버튼 */}
-          <View style={{ flexDirection: "row", gap: 8, marginTop: 4 }}>
-            <Pressable
-              onPress={() => { setValue(0); }}
-              style={({ pressed }) => ({
-                flex: 1, paddingVertical: 10, borderRadius: 8,
-                backgroundColor: pressed ? C.border : C.background,
-                borderWidth: 1, borderColor: C.border,
-                alignItems: "center",
-              })}
-            >
-              <Text style={{ fontFamily: "SpaceGrotesk_500Medium", fontSize: S.ms(13, 0.3), color: C.textSecondary }}>
-                {t("polygon", "offsetReset")}
-              </Text>
+          <View style={{ flexDirection: "row", gap: 8 }}>
+            <Pressable accessibilityRole="button" onPress={() => setDraft("0")} style={({ pressed }) => ({
+              flex: 1, minHeight: 44, borderRadius: 8, justifyContent: "center", alignItems: "center",
+              backgroundColor: pressed ? C.border : C.background, borderWidth: 1, borderColor: C.border,
+            })}>
+              <Text style={{ color: C.textSecondary }}>{t("polygon", "offsetReset")}</Text>
             </Pressable>
-            <Pressable
-              onPress={() => { onConfirm(value); onClose(); }}
-              style={({ pressed }) => ({
-                flex: 1, paddingVertical: 10, borderRadius: 8,
-                backgroundColor: pressed ? C.accent + "CC" : C.accent,
-                alignItems: "center",
-              })}
-            >
-              <Text style={{ fontFamily: "SpaceGrotesk_600SemiBold", fontSize: S.ms(13, 0.3), color: "#fff" }}>
-                {t("polygon", "offsetConfirm")}
-              </Text>
+            <Pressable testID="polygon-offset-confirm" accessibilityRole="button" disabled={!canConfirm}
+              onPress={confirm} style={({ pressed }) => ({
+                flex: 1, minHeight: 44, borderRadius: 8, justifyContent: "center", alignItems: "center",
+                backgroundColor: pressed ? C.accent + "CC" : C.accent, opacity: canConfirm ? 1 : 0.5,
+              })}>
+              <Text style={{ color: "#fff" }}>{t("polygon", "offsetConfirm")}</Text>
             </Pressable>
           </View>
-        </Pressable>
-      </Pressable>
+        </View>
+      </View>
     </Modal>
   );
 }

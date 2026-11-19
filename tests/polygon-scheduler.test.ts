@@ -75,6 +75,64 @@ describe("polygon integer scheduler", () => {
     expect(schedule.events[1].tick).toBe(POLYGON_TICKS_PER_MEASURE / 2);
   });
 
+  it("advances a vertex across a beat boundary using the earlier beat callback", () => {
+    const schedule = buildPolygonSchedule({
+      beatsPerMeasure: 4,
+      layers: [layer("quad", 4, { offsets: [0, -0.2] })],
+    });
+    const emit = jest.fn();
+    const runner = createPolygonScheduleRunner(emit);
+    runner.scheduleBeat({ sessionId: 1, schedule, absoluteBeat: 0, bpm: 120 });
+    expect(emit.mock.calls.map(([event]) => event.vertex)).toEqual([0]);
+    jest.advanceTimersByTime(399);
+    expect(emit).toHaveBeenCalledTimes(1);
+    jest.advanceTimersByTime(1);
+    expect(emit.mock.calls.map(([event]) => event.vertex)).toEqual([0, 1]);
+    runner.scheduleBeat({ sessionId: 1, schedule, absoluteBeat: 1, bpm: 120 });
+    expect(emit).toHaveBeenCalledTimes(2);
+  });
+
+  it("plays an advanced first vertex at startup, then before the next measure only once", () => {
+    const schedule = buildPolygonSchedule({
+      beatsPerMeasure: 4,
+      layers: [layer("quad", 4, { offsets: [-0.2] })],
+    });
+    const firstVertex = jest.fn();
+    const runner = createPolygonScheduleRunner(event => {
+      if (event.vertex === 0) firstVertex();
+    });
+    const fire = (absoluteBeat: number, nextSchedule = schedule) =>
+      runner.scheduleBeat({ sessionId: 1, schedule: nextSchedule, absoluteBeat, bpm: 120 });
+    fire(0);
+    expect(firstVertex).toHaveBeenCalledTimes(1);
+    jest.advanceTimersByTime(1500);
+    fire(3);
+    jest.advanceTimersByTime(399);
+    expect(firstVertex).toHaveBeenCalledTimes(1);
+    jest.advanceTimersByTime(1);
+    expect(firstVertex).toHaveBeenCalledTimes(2);
+    runner.cancelLayer(1, "quad");
+    jest.advanceTimersByTime(100);
+    // Returning to zero after the advance sounded must not repeat that same vertex.
+    fire(4, buildPolygonSchedule({ beatsPerMeasure: 4, layers: [layer("quad", 4)] }));
+    expect(firstVertex).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps startup and the upcoming advance separate in one-beat measures", () => {
+    const schedule = buildPolygonSchedule({ beatsPerMeasure: 1, layers: [layer("pulse", 1, { offsets: [-0.5] })] });
+    const emit = jest.fn();
+    const runner = createPolygonScheduleRunner(emit);
+    runner.scheduleBeat({ sessionId: 1, schedule, absoluteBeat: 0, bpm: 120 });
+    expect(emit).toHaveBeenCalledTimes(1);
+    jest.advanceTimersByTime(250);
+    expect(emit).toHaveBeenCalledTimes(2);
+    jest.advanceTimersByTime(250);
+    runner.scheduleBeat({ sessionId: 1, schedule, absoluteBeat: 1, bpm: 120 });
+    expect(emit).toHaveBeenCalledTimes(2);
+    jest.advanceTimersByTime(250);
+    expect(emit).toHaveBeenCalledTimes(3);
+  });
+
   it("delivers non-divisor layers without duplicate or missing occurrences", () => {
     const schedule = buildPolygonSchedule({
       beatsPerMeasure: 4,

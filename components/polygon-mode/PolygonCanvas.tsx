@@ -8,13 +8,12 @@
  * - 편집 모드: 비편집 레이어 opacity 0.25 dimmed
  * - 꼭짓점 탭: S/A/N/M 강세 순환 (onVertexPress)
  * - 꼭짓점 롱프레스: 오프셋 편집 (onVertexLongPress)
- * - 터치 처리: SVG 위 절대위치 Pressable 오버레이 사용
- *   (react-native-svg <G> onLongPress는 웹에서 동작하지 않음)
+ * - 꼭짓점 흔들기 + 드래그: 타이밍을 미리 보고 놓을 때 적용
  */
 
-import React, { useEffect, useRef } from "react";
-import { View, Pressable, StyleSheet } from "react-native";
-import Svg, { Circle, Polygon, G, Text as SvgText } from "react-native-svg";
+import React, { useEffect, useId, useState } from "react";
+import { View, Text, StyleSheet } from "react-native";
+import Svg, { Circle, Defs, RadialGradient, Stop, Polygon, G, Text as SvgText } from "react-native-svg";
 import Animated, {
   useSharedValue,
   useAnimatedProps,
@@ -24,6 +23,9 @@ import Animated, {
 } from "react-native-reanimated";
 import type { PolygonLayer } from "./PolygonTypes";
 import { motionDuration, useReducedMotion } from "@/hooks/useReducedMotion";
+import { useTheme } from "@/contexts/ThemeContext";
+import { formatPolygonOffsetMs } from "@/lib/polygon-offset";
+import { PolygonVertexTarget } from "./PolygonVertexTarget";
 import {
   sortLayersForDisplay,
   computeLayerLayout,
@@ -41,9 +43,11 @@ interface PolygonCanvasProps {
   activeVertices: Record<string, number>;
   editingLayerId: string | null;
   /** 꼭짓점 탭 → 강세 순환 (S/A/N/M) */
-  onVertexPress?: (layerId: string, vertexIdx: number) => void;
+  onVertexPress: (layerId: string, vertexIdx: number) => void;
   /** 편집 모드에서 꼭짓점 롱프레스 → 오프셋 편집 */
-  onVertexLongPress?: (layerId: string, vertexIdx: number) => void;
+  onVertexLongPress: (layerId: string, vertexIdx: number) => void;
+  onVertexOffsetCommit: (layerId: string, vertexIdx: number, offset: number) => void;
+  getSlotMs: (sides: number) => number;
   size: number; // 캔버스 크기 (정사각형)
 }
 
@@ -107,9 +111,12 @@ function getLabelPos(
 
 export function PolygonCanvas({
   layers, activeVertices, editingLayerId,
-  onVertexPress, onVertexLongPress, size,
+  onVertexPress, onVertexLongPress, onVertexOffsetCommit, getSlotMs, size,
 }: PolygonCanvasProps) {
   const reduceMotion = useReducedMotion();
+  const { colors: C } = useTheme();
+  const glowId = `polygon-glow-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
+  const [drag, setDrag] = useState<{ key: string; layerId: string; vertexIdx: number; ms: number; offset: number } | null>(null);
   const sorted = sortLayersForDisplay(layers);
   const layouts = computeLayerLayout(sorted, size);
 
@@ -122,6 +129,16 @@ export function PolygonCanvas({
   // ── 터치 오버레이 히트 타깃 (SVG G onLongPress는 웹에서 미동작) ──
   // 편집 모드에서는 편집 중인 레이어의 타깃만 활성화 (겹치는 꼭짓점 라우팅)
   const hitTargets = computeHitTargets(sorted, layouts, size, editingLayerId);
+  const renderedLayers = drag ? sorted.map(layer => {
+    if (layer.id !== drag.layerId) return layer;
+    const offsets = [...layer.offsets];
+    offsets[drag.vertexIdx] = drag.offset;
+    return { ...layer, offsets };
+  }) : sorted;
+  const glow = drag
+    ? computeHitTargets(renderedLayers, layouts, size, editingLayerId).find(target => target.key === drag.key)
+    : undefined;
+  const glowColor = sorted.find(layer => layer.id === glow?.layerId)?.color ?? C.accent;
   const pulseLabelIndices = new Map<string, number>();
   const pulseCount = sorted.reduce((count, layer) => {
     if (Math.max(1, layer.sides) !== 1) return count;
@@ -132,7 +149,7 @@ export function PolygonCanvas({
   return (
     <View style={{ width: size, height: size }}>
       <Svg width={size} height={size}>
-        {sorted.map((layer, idx) => {
+        {renderedLayers.map((layer, idx) => {
           const isEditing = editingLayerId !== null;
           const isThisEditing = layer.id === editingLayerId;
           const layerOpacity = isEditing && !isThisEditing ? 0.2 : 1;
@@ -244,7 +261,7 @@ export function PolygonCanvas({
               {activeVerts.map((av, k) => {
                 const vi = activeIndices[k];
                 const isActive = vi === activeVertex;
-                const hasOffset = (layer.offsets[vi] ?? 0) > 0.01;
+                const hasOffset = Math.abs(layer.offsets[vi] ?? 0) > 0.000001;
                 const beatType = getVertexBeatType(layer, vi);
                 const label = BEAT_TYPE_LABEL[beatType];
                 const labelPos = getLabelPos(av.x, av.y, cx, cy, LABEL_OFFSET);
@@ -308,26 +325,56 @@ export function PolygonCanvas({
             </G>
           );
         })}
+        {glow && (
+          <>
+            <Defs>
+              <RadialGradient id={glowId}>
+                <Stop offset="0%" stopColor={glowColor} stopOpacity={0.65} />
+                <Stop offset="45%" stopColor={glowColor} stopOpacity={0.28} />
+                <Stop offset="100%" stopColor={glowColor} stopOpacity={0} />
+              </RadialGradient>
+            </Defs>
+            <Circle cx={glow.x} cy={glow.y} r={32} fill={`url(#${glowId})`} />
+            <Circle cx={glow.x} cy={glow.y} r={5} fill={glowColor} />
+          </>
+        )}
       </Svg>
 
-      {/* ── 터치 오버레이: 탭(강세 순환) + 롱프레스(오프셋 팝업) ── */}
+      {drag && glow && (
+        <View pointerEvents="none" style={{
+          position: "absolute",
+          left: Math.max(0, Math.min(size - 84, glow.x - 42)),
+          top: glow.y > 40 ? glow.y - 38 : glow.y + 16,
+          width: 84, paddingVertical: 4, alignItems: "center",
+          borderRadius: 8, borderWidth: 1, borderColor: glowColor, backgroundColor: C.surface,
+        }}>
+          <Text testID="polygon-offset-preview" style={{
+            color: C.text, fontFamily: "SpaceGrotesk_600SemiBold", fontSize: 12,
+          }}>{formatPolygonOffsetMs(drag.ms)}</Text>
+        </View>
+      )}
+
+      {/* Keep hit targets at the committed positions until release. */}
       <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
-        {hitTargets.map((tgt) => (
-          <Pressable
-            key={tgt.key}
-            onPress={onVertexPress ? () => onVertexPress(tgt.layerId, tgt.vertexIdx) : undefined}
-            onLongPress={onVertexLongPress ? () => onVertexLongPress(tgt.layerId, tgt.vertexIdx) : undefined}
-            delayLongPress={400}
-            style={{
-              position: "absolute",
-              left: tgt.x - HIT_R,
-              top: tgt.y - HIT_R,
-              width: HIT_R * 2,
-              height: HIT_R * 2,
-              borderRadius: HIT_R,
-            }}
-          />
-        ))}
+        {hitTargets.map((tgt) => {
+          const layer = sorted.find(item => item.id === tgt.layerId)!;
+          return (
+            <PolygonVertexTarget
+              key={tgt.key}
+              x={tgt.x} y={tgt.y} radius={HIT_R}
+              vertexIdx={tgt.vertexIdx}
+              offset={layer.offsets[tgt.vertexIdx] ?? 0}
+              slotMs={getSlotMs(layer.sides)}
+              onTap={() => onVertexPress(tgt.layerId, tgt.vertexIdx)}
+              onHold={() => onVertexLongPress(tgt.layerId, tgt.vertexIdx)}
+              onPreview={preview => {
+                if (preview) setDrag({ ...tgt, ...preview, key: tgt.key });
+                else setDrag(current => current?.key === tgt.key ? null : current);
+              }}
+              onCommit={offset => onVertexOffsetCommit(tgt.layerId, tgt.vertexIdx, offset)}
+            />
+          );
+        })}
       </View>
     </View>
   );

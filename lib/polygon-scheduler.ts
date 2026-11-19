@@ -1,3 +1,5 @@
+import { clampPolygonOffset } from "./polygon-offset";
+
 /**
  * Polygon-only musical clock. Score timeline types intentionally do not cross
  * this boundary.
@@ -63,10 +65,13 @@ export function buildPolygonSchedule(
     const ticksPerSlot = POLYGON_TICKS_PER_MEASURE / sides;
     for (let vertex = 0; vertex < sides; vertex++) {
       const slotTick = vertex * ticksPerSlot;
-      const rawOffset = layer.offsets?.[vertex] ?? 0;
-      const offset = Number.isFinite(rawOffset)
-        ? Math.max(0, Math.min(0.5, rawOffset))
-        : 0;
+      const offset = clampPolygonOffset(layer.offsets?.[vertex] ?? 0);
+      const tick = slotTick + Math.round(offset * ticksPerSlot);
+      // Reserve an advance from the beat containing its new position.
+      // Positive delays can still be reserved from the original beat.
+      const schedulingTick = offset < 0
+        ? (tick + POLYGON_TICKS_PER_MEASURE) % POLYGON_TICKS_PER_MEASURE
+        : slotTick;
       events.push(Object.freeze({
         id: `${layer.id}:${vertex}`,
         layerId: layer.id,
@@ -75,8 +80,8 @@ export function buildPolygonSchedule(
         soundSet: layer.soundSet,
         volume: Math.max(0, Math.min(1, layer.volume ?? 1)),
         slotTick,
-        tick: slotTick + Math.round(offset * ticksPerSlot),
-        beat: Math.floor(slotTick / ticksPerBeat),
+        tick,
+        beat: Math.floor(schedulingTick / ticksPerBeat),
       }));
     }
   }
@@ -125,14 +130,16 @@ export function createPolygonScheduleRunner(
   const cancelWhere = (matches: (entry: {
     sessionId: number;
     layerId: string;
-  }) => boolean) => {
+  }) => boolean, clearDelivered: boolean) => {
     for (const [key, entry] of pending) {
       if (!matches(entry)) continue;
       clearTimeout(entry.timer);
       pending.delete(key);
     }
-    for (const [key, entry] of delivered) {
-      if (matches(entry)) delivered.delete(key);
+    if (clearDelivered) {
+      for (const [key, entry] of delivered) {
+        if (matches(entry)) delivered.delete(key);
+      }
     }
   };
 
@@ -157,11 +164,9 @@ export function createPolygonScheduleRunner(
         if (entry.sessionId === sessionId && entry.measure < measure) delivered.delete(key);
       }
 
-      for (const event of schedule.events) {
-        if (event.beat !== beat) continue;
-        const occurrenceId = `${sessionId}\0${measure}\0${event.id}`;
-        if (pending.has(occurrenceId) || delivered.has(occurrenceId)) continue;
-        const deltaTicks = Math.max(0, event.tick - beatStartTick);
+      const scheduleEvent = (event: PolygonScheduleEvent, occurrenceMeasure: number, deltaTicks: number) => {
+        const occurrenceId = `${sessionId}\0${occurrenceMeasure}\0${event.id}`;
+        if (pending.has(occurrenceId) || delivered.has(occurrenceId)) return;
         const delayMs = deltaTicks * measureDurationMs / POLYGON_TICKS_PER_MEASURE;
         const deliver = () => {
           // clearTimeout alone does not reject a callback already queued by a
@@ -172,7 +177,7 @@ export function createPolygonScheduleRunner(
           delivered.set(occurrenceId, {
             sessionId,
             layerId: event.layerId,
-            measure,
+            measure: occurrenceMeasure,
           });
           (onEvent ?? defaultOnEvent)(event);
         };
@@ -182,19 +187,31 @@ export function createPolygonScheduleRunner(
           timer = setTimeout(deliver, delayMs);
           pending.set(occurrenceId, { timer, sessionId, layerId: event.layerId });
         }
+      };
+
+      for (const event of schedule.events) {
+        const fromNextMeasure = event.tick < 0;
+        // On a fresh start, there is no preceding measure for vertex zero.
+        // Play its first occurrence at the start, then honor the advance on repeats.
+        if (normalizedAbsoluteBeat === 0 && fromNextMeasure) scheduleEvent(event, 0, 0);
+        if (event.beat !== beat) continue;
+        const tick = fromNextMeasure ? POLYGON_TICKS_PER_MEASURE + event.tick : event.tick;
+        scheduleEvent(event, measure + (fromNextMeasure ? 1 : 0), Math.max(0, tick - beatStartTick));
       }
     },
     cancelLayer(sessionId, layerId) {
-      cancelWhere((entry) => entry.sessionId === sessionId && entry.layerId === layerId);
+      // An edit can move a played vertex into a later beat (or from the
+      // previous measure back to the first beat). Keep the occurrence consumed.
+      cancelWhere((entry) => entry.sessionId === sessionId && entry.layerId === layerId, false);
     },
     cancelSession(sessionId) {
-      cancelWhere((entry) => entry.sessionId === sessionId);
+      cancelWhere((entry) => entry.sessionId === sessionId, true);
       latestBeatBySession.delete(sessionId);
     },
     dispose() {
       if (disposed) return;
       disposed = true;
-      cancelWhere(() => true);
+      cancelWhere(() => true, true);
       latestBeatBySession.clear();
     },
     snapshot: () => ({

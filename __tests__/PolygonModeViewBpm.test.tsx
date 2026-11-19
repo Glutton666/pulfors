@@ -46,11 +46,12 @@ jest.mock("@/components/polygon-mode/PolygonOffsetPopup", () => ({
 jest.mock("@/components/BpmSlider", () => {
   const React = require("react");
   return {
-    BpmSlider: ({ bpm, onBpmChange, onTapTempo }: any) => React.createElement(
+    BpmSlider: ({ bpm, onBpmChange, onTapTempo, onDenominatorCycle, centerHoldLabel }: any) => React.createElement(
       "div",
       { "data-testid": "bpm-slider" },
       React.createElement("button", { "data-testid": "bpm-slider-tap", onClick: onTapTempo }, "TAP"),
       React.createElement("button", { "data-testid": "bpm-slider-increment", onClick: () => onBpmChange(bpm + 1) }, "+"),
+      React.createElement("button", { "data-testid": "bpm-slider-hold", onClick: onDenominatorCycle }, centerHoldLabel),
       React.createElement("span", { "data-testid": "bpm-display" }, String(bpm)),
       React.createElement("span", null, "BPM"),
     ),
@@ -87,20 +88,21 @@ function makePolygonMode(): UsePolygonModeResult {
 // ── 테스트 ────────────────────────────────────────────────────────────────────
 
 describe("PolygonModeView — beat-mode BPM controller", () => {
-  it("shows all shared speeds and forwards their exact rates without changing BPM", () => {
+  it("uses the BPM controller's center hold to cycle speed without changing BPM", () => {
     const polygonMode = makePolygonMode();
     const onBpmChange = jest.fn();
-    const { getByTestId, getByText } = render(
+    const { getByTestId, rerender, queryByTestId } = render(
       <PolygonModeView polygonMode={polygonMode} isPlaying={false}
         onClose={jest.fn()} bpm={120} onBpmChange={onBpmChange} />,
     );
-    for (const rate of [2, 1, 0.5]) {
-      fireEvent.click(getByTestId(`polygon-speed-${rate}`));
-      expect(polygonMode.setPlaybackRate).toHaveBeenLastCalledWith(rate);
+    for (const [rate, label, next] of [[1, "1/4 · ×1", 0.5], [0.5, "1/8 · ×0.5", 2], [2, "1/2 · ×2", 1]] as const) {
+      rerender(<PolygonModeView polygonMode={{ ...polygonMode, playbackRate: rate }} isPlaying={false}
+        onClose={jest.fn()} bpm={120} onBpmChange={onBpmChange} />);
+      expect(getByTestId("bpm-slider-hold").textContent).toBe(label);
+      fireEvent.click(getByTestId("bpm-slider-hold"));
+      expect(polygonMode.setPlaybackRate).toHaveBeenLastCalledWith(next);
     }
-    expect(getByText("1/2 · ×2")).not.toBeNull();
-    expect(getByText("1/4 · ×1")).not.toBeNull();
-    expect(getByText("1/8 · ×0.5")).not.toBeNull();
+    expect(queryByTestId("polygon-shared-speed")).toBeNull();
     expect(getByTestId("bpm-display").textContent).toBe("120");
     expect(onBpmChange).not.toHaveBeenCalled();
   });
