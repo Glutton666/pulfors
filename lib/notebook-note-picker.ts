@@ -2,29 +2,30 @@ import type { NotebookNoteRole, StaffPoint } from "./staff-notebook";
 
 export const noteDurations = ["whole", "half", "quarter", "eighth", "sixteenth", "thirty_second"] as const;
 export const noteRoles = ["ghost", "normal", "strong"] as const;
+export type NotationPickerKind = "note" | "rest";
 type Duration = typeof noteDurations[number];
 export type NotePickerChoice = { glyph: Duration; role: NotebookNoteRole; dotted: boolean };
 const ascending = [...noteDurations].reverse();
 const clamp = (n: number, lo: number, hi: number) => Math.min(Math.max(lo, hi), Math.max(lo, n));
 
 /** The display and hit test both read these window-space points. */
-export function layoutNotePicker(anchor: StaffPoint, width: number, top: number, bottom: number) {
+export function layoutNotePicker(anchor: StaffPoint, width: number, top: number, bottom: number, kind: NotationPickerKind = "note") {
   const up = anchor.y - top, down = bottom - anchor.y;
-  const direction = up >= 150 || up >= down ? -1 : 1;
-  const room = Math.max(20, direction === -1 ? up : down);
-  const radius = clamp(room / 13, 6, 14);
-  const step = clamp((room - radius - 47) / 5, 4, 32);
-  const near = Math.min(48, room - radius - 5 * step);
-  const roleSpace = Math.min(46, Math.max(16, (width - 36) / 4));
-  const branchSpace = Math.min(36, roleSpace);
-  const x = clamp(anchor.x, roleSpace + 18, width - roleSpace - 18);
-  const curve = x < width / 2 ? 1 : -1;
-  const roles = noteRoles.map((role, i) => ({ role, x: x + (i - 1) * roleSpace, y: anchor.y - 6 * Math.abs(i - 1) }));
+  const direction = up >= 315 || up >= down ? -1 : 1;
+  const room = Math.max(20, (direction === -1 ? up : down) - 4);
+  const near = clamp(room * .12, 16, 34);
+  const radius = clamp((room - near - 20) / 11, 2, Math.min(23, width / 8));
+  const step = clamp((room - near - radius) / 5, 1, 52);
+  const roleRadius = Math.min(23, width / 8);
+  const roleSpace = roleRadius * 2 + 7;
+  const branchSpace = radius * 2 + 7;
+  const x = clamp(anchor.x, roleSpace + roleRadius + 4, width - roleSpace - roleRadius - 4);
+  const roles = noteRoles.map((role, i) => ({ role, x: x + (i - 1) * roleSpace, y: anchor.y }));
   const durations = ascending.map((glyph, i) => ({
-    glyph, x: clamp(x + curve * (10 + 20 * Math.sin(i / 5 * Math.PI)), branchSpace + radius + 3, width - branchSpace - radius - 3),
+    glyph, x,
     y: anchor.y + direction * (near + step * i),
   }));
-  return { anchor, roles, durations, direction, radius, step, branchSpace, near };
+  return { anchor, kind, roles, durations, direction, radius, roleRadius, step, branchSpace, near };
 }
 export type NotePickerLayout = ReturnType<typeof layoutNotePicker>;
 export type NotePickerDrag = {
@@ -46,11 +47,11 @@ export function moveNotePickerDrag(state: NotePickerDrag, layout: NotePickerLayo
   if (state.phase === "role") {
     if (travel >= enter || (direction === 1 && point.y < anchor.y - enter)) {
       Object.assign(next, { phase: "duration", branchArmed: false, enteredLane: false, furthest: 0, peakChoice: state.choice, focus: "glyph" });
-    } else if (Math.abs(point.x - state.roleX) >= 8 && Math.abs(point.y - anchor.y) <= 20) {
+    } else if (layout.kind === "note" && Math.abs(point.x - state.roleX) >= 8 && Math.abs(point.y - anchor.y) <= 20) {
       const closest = layout.roles.reduce((a, b) => Math.abs(point.x - a.x) <= Math.abs(point.x - b.x) ? a : b);
       next.choice = { ...state.choice, role: closest.role };
     }
-  } else if (travel < enter * .6 && (state.enteredLane || Math.abs(point.x - anchor.x) > branchSpace)) {
+  } else if (Math.abs(point.y - anchor.y) < enter * .6 && (state.enteredLane || Math.abs(point.x - anchor.x) > branchSpace)) {
     return { ...next, phase: "role", roleX: point.x, choice: state.peakChoice, branchArmed: false, enteredLane: false };
   }
   if (next.phase !== "duration" || travel < Math.max(enter, near - step * .5)) return next;

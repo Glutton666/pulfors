@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { BackHandler, PanResponder, Platform, StyleSheet, View } from "react-native";
 import Svg, { Path } from "react-native-svg";
-import { layoutNotePicker, moveNotePickerDrag, startNotePickerDrag, type NotePickerChoice, type NotePickerDrag, type NotePickerLayout } from "@/lib/notebook-note-picker";
+import { layoutNotePicker, moveNotePickerDrag, startNotePickerDrag, type NotationPickerKind, type NotePickerChoice, type NotePickerDrag, type NotePickerLayout } from "@/lib/notebook-note-picker";
 import { NotebookGlyph } from "./NotebookGlyph";
 
 type Options = {
+  kind: NotationPickerKind;
   dockRef: React.RefObject<View | null>;
   width: number; top: number; bottom: number;
   resetKey: string;
@@ -14,7 +15,7 @@ type Options = {
 const initial: NotePickerChoice = { glyph: "quarter", role: "normal", dotted: false };
 type Session = { drag: NotePickerDrag; layout?: NotePickerLayout; dock?: { x: number; y: number } };
 
-export function useNotebookNotePicker(options: Options) {
+export function useNotebookNotationPicker(options: Options) {
   const latest = useRef(options); latest.current = options;
   const originRef = useRef<View>(null);
   const session = useRef<Session | null>(null);
@@ -72,7 +73,7 @@ export function useNotebookNotePicker(options: Options) {
         originRef.current?.measureInWindow((left, top, width, height) => {
           if (session.current !== current) return;
           const bounds = latest.current;
-          current.layout = layoutNotePicker({ x: left + width / 2, y: top + height / 2 }, bounds.width, bounds.top, bounds.bottom);
+          current.layout = layoutNotePicker({ x: left + width / 2, y: top + height / 2 }, bounds.width, bounds.top, bounds.bottom, bounds.kind);
           current.drag = moveNotePickerDrag(current.drag, current.layout, current.drag.last);
           setDisplay({ ...current });
         });
@@ -108,24 +109,20 @@ export function useNotebookNotePicker(options: Options) {
     },
     setAccessibleChoice,
     overlay: display?.layout && display.dock
-      ? <NotePickerArc layout={display.layout} dock={display.dock} drag={display.drag} /> : null,
+      ? <NotationPicker layout={display.layout} dock={display.dock} drag={display.drag} /> : null,
   };
 }
 
-function NotePickerArc({ layout, dock, drag }: { layout: NotePickerLayout; dock: { x: number; y: number }; drag: NotePickerDrag }) {
+function NotationPicker({ layout, dock, drag }: { layout: NotePickerLayout; dock: { x: number; y: number }; drag: NotePickerDrag }) {
   const duration = drag.phase === "duration";
-  const points = duration ? layout.durations : layout.roles;
+  const isRest = layout.kind === "rest";
+  const points = duration ? layout.durations : isRest ? [layout.roles[1]] : layout.roles;
   const selected = layout.durations.find((p) => p.glyph === drag.choice.glyph)!;
-  const radius = duration ? layout.radius : 15;
+  const radius = duration ? layout.radius : layout.roleRadius;
   const pointPath = points.map((p) => ({ x: p.x - dock.x, y: p.y - dock.y }));
   const minX = Math.min(...pointPath.map((p) => p.x)) - 2, minY = Math.min(...pointPath.map((p) => p.y)) - 2;
   const width = Math.max(...pointPath.map((p) => p.x)) - minX + 2, height = Math.max(...pointPath.map((p) => p.y)) - minY + 2;
-  const line = pointPath.slice(1).reduce((path, p, i) => {
-    const previous = pointPath[i];
-    const midY = (previous.y + p.y) / 2, midX = (previous.x + p.x) / 2;
-    return duration ? `${path} C${previous.x} ${midY},${p.x} ${midY},${p.x} ${p.y}`
-      : `${path} C${midX} ${previous.y},${midX} ${p.y},${p.x} ${p.y}`;
-  }, `M${pointPath[0].x} ${pointPath[0].y}`);
+  const line = `M${pointPath[0].x} ${pointPath[0].y} L${pointPath.at(-1)!.x} ${pointPath.at(-1)!.y}`;
   const branch = (dotted: boolean) => ({
     x: selected.x + (dotted ? -1 : 1) * layout.branchSpace, y: selected.y,
     glyph: selected.glyph, role: drag.choice.role, dotted,
@@ -135,19 +132,21 @@ function NotePickerArc({ layout, dock, drag }: { layout: NotePickerLayout; dock:
     ...layout.durations.map((p) => ({ ...p, id: `duration-${p.glyph}`, role: drag.choice.role,
       dotted: p.glyph === selected.glyph && drag.choice.dotted, selected: p.glyph === selected.glyph && drag.focus === "glyph" })),
     branch(true), branch(false),
-  ] : layout.roles.map((p) => ({
-    ...p, id: `role-${p.role}`, glyph: drag.choice.glyph, dotted: drag.choice.dotted, selected: p.role === drag.choice.role,
+  ] : (isRest ? [layout.roles[1]] : layout.roles).map((p) => ({
+    ...p, id: isRest ? "gesture-preview" : `role-${p.role}`, glyph: drag.choice.glyph, dotted: drag.choice.dotted, selected: p.role === drag.choice.role,
   }));
-  return <View pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={styles.layer}>
-    <Svg width={width} height={height} viewBox={`${minX} ${minY} ${width} ${height}`} style={{ position: "absolute", left: minX, top: minY }}>
+  return <View testID={`notebook-${layout.kind}-gesture-picker`} pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={styles.layer}>
+    {points.length > 1 && <Svg width={width} height={height} viewBox={`${minX} ${minY} ${width} ${height}`} style={{ position: "absolute", left: minX, top: minY }}>
       <Path d={line} fill="none" stroke="#baa385" strokeOpacity={.55} strokeWidth={1.25} strokeLinecap="round" />
-    </Svg>
-    {items.map((item) => <View key={item.id} testID={`notebook-note-${item.id}`} dataSet={{ selected: String(item.selected), dotted: String(item.dotted) }}
-      style={[styles.glyph, { left: item.x - dock.x - radius, top: item.y - dock.y - radius, width: radius * 2, height: radius * 2 },
+    </Svg>}
+    {items.map((item) => <View key={item.id} testID={`notebook-${layout.kind}-${item.id}`} dataSet={{ selected: String(item.selected), dotted: String(item.dotted) }}
+      style={[styles.glyph, { left: item.x - dock.x - radius, top: item.y - dock.y - radius, width: radius * 2, height: radius * 2, borderRadius: radius },
         item.selected && styles.selected]}>
-      <Svg width={radius * 1.85} height={radius * 1.85} viewBox="0 0 54 60">
-        <NotebookGlyph glyph={item.glyph} role={item.role} dotted={item.dotted} x={24} y={item.glyph === "whole" && item.role !== "strong" ? 30 : 43}
-          size={item.selected ? 23 : 19} />
+      <Svg width={radius * 1.9} height={radius * 1.9} viewBox="0 0 54 60">
+        <NotebookGlyph glyph={isRest ? `rest-${item.glyph}` : item.glyph} role={item.role} dotted={item.dotted}
+          x={isRest ? 25 : 24}
+          y={isRest ? (item.glyph === "thirty_second" ? 27 : 30) : item.glyph === "whole" && item.role !== "strong" ? 37 : item.role === "strong" ? 52 : 46}
+          size={isRest ? 49 : 26} />
       </Svg>
     </View>)}
   </View>;
@@ -155,6 +154,6 @@ function NotePickerArc({ layout, dock, drag }: { layout: NotePickerLayout; dock:
 
 const styles = StyleSheet.create({
   layer: { ...StyleSheet.absoluteFillObject, overflow: "visible", zIndex: 80, elevation: 22 },
-  glyph: { position: "absolute", alignItems: "center", justifyContent: "center", borderRadius: 20, backgroundColor: "#fffdf7" },
+  glyph: { position: "absolute", alignItems: "center", justifyContent: "center", backgroundColor: "#fffdf7" },
   selected: { backgroundColor: "#f1e4c9", borderWidth: 1, borderColor: "#d2b994" },
 });

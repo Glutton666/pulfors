@@ -5,7 +5,7 @@ import { ALL_INSTR_SYMBOLS, ACCIDENTALS, ARTICULATIONS, REPEAT_SIGNS } from "@/c
 import { NotebookGlyphPreview } from "./NotebookGlyph";
 import { NotebookTupletPreview } from "./NotebookTupletGlyph";
 import { useNotebookRestPicker } from "./NotebookRestPicker";
-import { useNotebookNotePicker } from "./NotebookNotePicker";
+import { useNotebookNotationPicker } from "./NotebookNotePicker";
 import { noteDurations as durations, noteRoles as roleValues, type NotePickerChoice } from "@/lib/notebook-note-picker";
 import type { NotebookMode } from "./NotebookModeMenu";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -70,7 +70,6 @@ export function NotebookBottomTools(props: Props) {
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const [showAccessibleChooser, setShowAccessibleChooser] = useState(false);
   const [category, setCategory] = useState<NotesCategory>(null);
-  const [restGestureActive, setRestGestureActive] = useState(false);
   const dockRef = useRef<View>(null);
   const [dockPosition, setDockPosition] = useState({ x: 0, y: 0 });
   const [dockWidth, setDockWidth] = useState(0);
@@ -79,13 +78,15 @@ export function NotebookBottomTools(props: Props) {
   const pickerTop = props.pickerTop ?? 8;
   const pickerBottom = props.pickerBottom ?? windowHeight - 8;
   const resetKey = `${mode}:${windowWidth}:${windowHeight}:${props.layoutKey}`;
-  const notePicker = useNotebookNotePicker({
+  const gestureOptions = {
     dockRef, width: windowWidth, top: pickerTop, bottom: Math.max(pickerTop, Math.min(windowHeight, pickerBottom)), resetKey,
     onChoose: props.onChoose,
     onBegin: () => { setMoreActionsOpen(false); setShowAccessibleChooser(false); setCategory(null); },
+  };
+  const notePicker = useNotebookNotationPicker({
+    ...gestureOptions, kind: "note",
   });
   const { role: gestureRole, glyph: gestureDuration, dotted: dotChoice } = notePicker.choice;
-  const pickerActive = notePicker.active || restGestureActive;
   // RNW can deliver onLayout before this mode's ref is attached. Measure after
   // commit as well, otherwise an untouched marks drawer uses y=0 and collapses.
   useEffect(() => {
@@ -105,23 +106,14 @@ export function NotebookBottomTools(props: Props) {
   const drawerAvailable = Math.max(64, Math.min(350, Math.max(roomAbove, roomBelow)));
   const drawerAbove = roomAbove >= 180 || roomAbove >= roomBelow;
   const restPicker = useNotebookRestPicker({
+    ...gestureOptions,
     ko,
-    topBoundary: pickerTop,
-    bottomBoundary: pickerBottom,
-    modeKey: mode,
-    layoutKey: props.layoutKey,
+    chooserAbove,
+    chooserSpace: chooserAbove ? roomAbove : roomBelow,
     otherPickerActive: notePicker.active,
-    dockRef,
-    onChoose: props.onChoose,
-    onActiveChange: (active) => {
-      setRestGestureActive(active);
-      if (active) {
-        setMoreActionsOpen(false);
-        setCategory(null);
-        setShowAccessibleChooser(false);
-      }
-    },
   });
+  const restGestureActive = restPicker.active;
+  const pickerActive = notePicker.active || restGestureActive;
 
   useEffect(() => { setShowAccessibleChooser(false); setCategory(null); }, [resetKey]);
 
@@ -207,9 +199,9 @@ export function NotebookBottomTools(props: Props) {
             <View style={styles.categoryRow}>
               {/* Hide the idle control without removing the gesture target or moving the layout. */}
               <View testID="notebook-note-tile" ref={notePicker.originRef} collapsable={false} pointerEvents={restGestureActive ? "none" : "auto"} aria-hidden={pickerActive || undefined} accessibilityElementsHidden={pickerActive} importantForAccessibility={pickerActive ? "no-hide-descendants" : "auto"} {...notePicker.panHandlers} style={[styles.categoryButton, styles.noteOrigin, pickerActive && styles.hiddenNeighbor, Platform.OS === "web" && { touchAction: "none", userSelect: "none" }]}>
-                <Pressable testID="notebook-note-origin" disabled={pickerActive} accessibilityRole="button" accessibilityLabel={ko ? "음표 선택. 좌우로 강도를, 위로 음가를 고르세요." : "Note picker. Swipe sideways for role, up for duration."} accessibilityState={{ expanded: showAccessibleChooser }} accessibilityActions={[{ name: "expand", label: ko ? "음표 선택기 펼치기" : "Expand note chooser" }]} onAccessibilityAction={(event) => { if (!pickerActive && event.nativeEvent.actionName === "expand") setShowAccessibleChooser(true); }} onPress={(event) => {
+                <Pressable testID="notebook-note-origin" disabled={restGestureActive} tabIndex={pickerActive ? -1 : undefined} accessibilityRole="button" accessibilityLabel={ko ? "음표 선택. 좌우로 강도를, 위로 음가를 고르세요." : "Note picker. Swipe sideways for role, up for duration."} accessibilityState={{ expanded: showAccessibleChooser }} accessibilityActions={[{ name: "expand", label: ko ? "음표 선택기 펼치기" : "Expand note chooser" }]} onAccessibilityAction={(event) => { if (!pickerActive && event.nativeEvent.actionName === "expand") setShowAccessibleChooser(true); }} onPress={(event) => {
                   const native = event.nativeEvent as typeof event.nativeEvent & { pointerType?: string; detail?: number };
-                  if (notePicker.consumePress() && native.pointerType !== "keyboard" && native.detail !== 0) return;
+                  if (pickerActive || (notePicker.consumePress() && native.pointerType !== "keyboard" && native.detail !== 0)) return;
                   setShowAccessibleChooser(true);
                 }} style={styles.originInner}>
                   <View style={styles.categoryIconFrame}><NotebookGlyphPreview glyph={gestureDuration} size={22} role={gestureRole} dotted={dotChoice} /></View>
@@ -280,10 +272,10 @@ export function NotebookBottomTools(props: Props) {
         {showAccessibleChooser && !pickerActive && <ScrollView horizontal showsHorizontalScrollIndicator={false}
           style={[styles.accessibleChooser, chooserAbove ? { bottom: "100%", top: undefined } : { top: "100%", bottom: undefined }, { maxHeight: Math.max(44, Math.min(58, chooserAbove ? roomAbove : roomBelow)) }]}
           contentContainerStyle={styles.accessibleChooserContent}>
-          {roleValues.map((role) => <Pressable key={role} testID={`notebook-note-role-${role}`} accessibilityRole="button" accessibilityState={{ selected: role === gestureRole }} accessibilityLabel={`${ko ? "음표" : "Note"} ${role}`} onPress={() => notePicker.setAccessibleChoice({ role })} style={styles.accessibleChoice}><NotebookGlyphPreview glyph={gestureDuration} size={19} role={role} dotted={dotChoice} /></Pressable>)}
-          {durations.map((duration) => <Pressable key={duration} testID={`notebook-note-duration-${duration}`} accessibilityRole="button" accessibilityLabel={durationLabels[ko ? "ko" : "en"][durations.indexOf(duration)]} onPress={() => chooseAccessibleNote({ glyph: duration, role: gestureRole, dotted: dotChoice })} style={styles.accessibleChoice}><NotebookGlyphPreview glyph={duration} size={18} role={gestureRole} dotted={dotChoice} /></Pressable>)}
-          <Pressable testID="notebook-note-plain" accessibilityRole="button" accessibilityState={{ selected: !dotChoice }} accessibilityLabel={ko ? "일반 음표" : "Plain"} onPress={() => notePicker.setAccessibleChoice({ dotted: false })} style={styles.accessibleChoice}><NotebookGlyphPreview glyph={gestureDuration} size={18} role={gestureRole} /></Pressable>
-          <Pressable testID="notebook-note-dotted" accessibilityRole="button" accessibilityState={{ selected: dotChoice }} accessibilityLabel={ko ? "점음표" : "Dotted"} onPress={() => notePicker.setAccessibleChoice({ dotted: true })} style={styles.accessibleChoice}><NotebookGlyphPreview glyph={gestureDuration} size={18} role={gestureRole} dotted /></Pressable>
+          {roleValues.map((role) => <Pressable key={role} testID={`notebook-note-role-${role}`} accessibilityRole="button" accessibilityState={{ selected: role === gestureRole }} accessibilityLabel={`${ko ? "음표" : "Note"} ${role}`} onPress={() => notePicker.setAccessibleChoice({ role })} style={styles.accessibleChoice}><NotebookGlyphPreview glyph={gestureDuration} size={22} role={role} dotted={dotChoice} /></Pressable>)}
+          {durations.map((duration) => <Pressable key={duration} testID={`notebook-note-duration-${duration}`} accessibilityRole="button" accessibilityLabel={durationLabels[ko ? "ko" : "en"][durations.indexOf(duration)]} onPress={() => chooseAccessibleNote({ glyph: duration, role: gestureRole, dotted: dotChoice })} style={styles.accessibleChoice}><NotebookGlyphPreview glyph={duration} size={22} role={gestureRole} dotted={dotChoice} /></Pressable>)}
+          <Pressable testID="notebook-note-plain" accessibilityRole="button" accessibilityState={{ selected: !dotChoice }} accessibilityLabel={ko ? "일반 음표" : "Plain"} onPress={() => notePicker.setAccessibleChoice({ dotted: false })} style={styles.accessibleChoice}><NotebookGlyphPreview glyph={gestureDuration} size={22} role={gestureRole} /></Pressable>
+          <Pressable testID="notebook-note-dotted" accessibilityRole="button" accessibilityState={{ selected: dotChoice }} accessibilityLabel={ko ? "점음표" : "Dotted"} onPress={() => notePicker.setAccessibleChoice({ dotted: true })} style={styles.accessibleChoice}><NotebookGlyphPreview glyph={gestureDuration} size={22} role={gestureRole} dotted /></Pressable>
         </ScrollView>}
       </View>
     );

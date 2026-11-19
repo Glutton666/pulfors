@@ -84,7 +84,7 @@ test("one continuous note gesture preserves strong role and left-swipe dot while
 });
 
 for (const viewport of [{ width: 320, height: 568 }, { width: 568, height: 320 }]) {
-  test(`note arc returns to role, keeps duration and dots, and cancels touch at ${viewport.width}x${viewport.height}`, async ({ page }) => {
+  test(`straight note picker returns to role, keeps duration and dots, and cancels touch at ${viewport.width}x${viewport.height}`, async ({ page }) => {
     await page.setViewportSize(viewport);
     await openNotebook(page); await chooseMode(page, "notes");
     const center = async (id: string) => {
@@ -194,6 +194,19 @@ for (const viewport of [{ width: 320, height: 740 }, { width: 768, height: 1024 
     await expect(page.getByTestId("notebook-note-role-normal")).toHaveCount(0);
     await expect(page.getByTestId("notebook-note-tile")).toHaveCSS("opacity", "0");
     const duration = (await page.getByTestId("notebook-note-duration-quarter").boundingBox())!;
+    const pickerBoxes = async (kind: "note" | "rest") => {
+      const column = page.getByTestId(`notebook-${kind}-gesture-picker`).locator(`[data-testid^="notebook-${kind}-duration-"]`);
+      await expect(column).toHaveCount(6);
+      const boxes = await column.evaluateAll((nodes) => nodes.map((node) => {
+        const { x, y, width, height } = node.getBoundingClientRect();
+        return { x, y, width, height };
+      }));
+      expect(Math.max(...boxes.map(box => box.x)) - Math.min(...boxes.map(box => box.x))).toBeLessThan(0.1);
+      expect(boxes.slice(1).every((box, index) => Math.abs(box.y - boxes[index].y) >= box.height)).toBe(true);
+      return boxes;
+    };
+    const noteBoxes = await pickerBoxes("note");
+    expect(noteBoxes[0].width).toBeGreaterThanOrEqual(38);
     await page.mouse.move(duration.x + duration.width / 2, duration.y + duration.height / 2, { steps: 5 });
     await page.screenshot({ path: `generated-artifacts/notebook-isolated-duration-${viewport.width}.png` });
     await page.mouse.up(); await expect(page.getByTestId("notebook-tuplet")).toHaveCSS("opacity", "1");
@@ -208,6 +221,9 @@ for (const viewport of [{ width: 320, height: 740 }, { width: 768, height: 1024 
     await expect(page.getByTestId("notebook-rest-gesture-preview")).toHaveCount(0);
     await expect(page.getByTestId("notebook-rest-tile")).toHaveCSS("opacity", "0");
     const restDuration = (await page.getByTestId("notebook-rest-duration-quarter").boundingBox())!;
+    const restBoxes = await pickerBoxes("rest");
+    expect(restBoxes[0].width).toBeCloseTo(noteBoxes[0].width, 0);
+    expect(restBoxes[1].y - restBoxes[0].y).toBeCloseTo(noteBoxes[1].y - noteBoxes[0].y, 0);
     await page.mouse.move(restDuration.x + restDuration.width / 2, restDuration.y + restDuration.height / 2, { steps: 5 });
     await page.mouse.up(); await expect(idle).toHaveCSS("opacity", "1");
     await expect(page.getByTestId("notebook-rest-tile")).toHaveCSS("opacity", "1");
@@ -1110,8 +1126,12 @@ for (const viewport of [{ width: 390, height: 844 }, { width: 768, height: 1024 
     const duration = page.getByTestId("notebook-rest-duration-thirty_second");
     await expect(duration).toBeVisible();
     const row = (await duration.boundingBox())!;
-    await page.mouse.move(row.x + row.width / 2 - 18, row.y + row.height / 2, { steps: 8 });
-    await expect(page.getByTestId("notebook-rest-dotted")).toBeInViewport({ ratio: 1 });
+    await page.mouse.move(row.x + row.width / 2, row.y + row.height / 2, { steps: 8 });
+    const dotted = page.getByTestId("notebook-rest-dotted");
+    await expect(dotted).toBeInViewport({ ratio: 1 });
+    const dotBox = (await dotted.boundingBox())!;
+    await page.mouse.move(dotBox.x + dotBox.width / 2, dotBox.y + dotBox.height / 2, { steps: 8 });
+    await expect(dotted).toHaveAttribute("data-selected", "true");
     await page.screenshot({ path: `generated-artifacts/rest-picker-${viewport.width}.png` });
     await page.mouse.up();
     await expect(paper.locator('[data-testid^="notebook-stamp-"]')).toHaveCount(2);

@@ -12,3 +12,7 @@ Keep a continuous drag responder on a stable View rather than spreading its hand
 When an overlapping chooser replaces how a tool looks, hide the whole idle tile (including its border and background) without removing its pointer target or changing its measured size. Suppress focus and accessibility activation for the hidden tile until the gesture ends.
 
 **Why:** In the notebook picker, hiding only the neighboring tools left the idle tile behind the choices. Removing the active tile would also discard the drag origin used for placement.
+
+On web, don't toggle the active gesture's nested Pressable to `disabled` on pointer-down. Hide it from focus instead and guard activation, leaving the pointer target unchanged until release.
+
+**Why:** React Native Web changes how disabled Pressables receive pointers. With the shared notation picker, quick clicks could leave the gesture open without a release even though slower drags worked.
