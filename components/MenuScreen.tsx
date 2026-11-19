@@ -11,6 +11,7 @@ import * as Clipboard from "expo-clipboard";
 import { PUBLIC_WEBSITE_URL } from "@/constants/website";
 import { alertInfo } from "@/lib/confirm";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useScale } from "@/lib/scale";
@@ -57,6 +58,7 @@ export function MenuScreen({
   const { colors: C } = useTheme();
   const { t, language } = useLanguage();
   const S = useScale();
+  const { bottom: bottomInset } = useSafeAreaInsets();
   const ITEM_H = S.ms(64, 0.4);
   const ICON_SIZE = S.ms(22, 0.4);
 
@@ -190,7 +192,11 @@ export function MenuScreen({
       </Pressable>
 
       <ScrollView
-        contentContainerStyle={{ paddingVertical: S.ms(8, 0.3) }}
+        contentContainerStyle={{
+          flexGrow: 1,
+          paddingTop: S.ms(8, 0.3),
+          paddingBottom: showLab ? S.ms(8, 0.3) : 0,
+        }}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
@@ -241,7 +247,14 @@ export function MenuScreen({
             )}
           </React.Fragment>
         ))}
-        {!showLab && <View style={{ padding: 20, gap: 8, borderTopWidth: 1, borderTopColor: C.border }}>
+        {!showLab && <View style={{
+          marginTop: "auto",
+          padding: 20,
+          paddingBottom: 20 + bottomInset,
+          gap: 8,
+          borderTopWidth: 1,
+          borderTopColor: C.border,
+        }}>
           <Text style={{ color: C.textSecondary }}>{t("settings", "webVersionLink")}</Text>
           <Text style={{ color: C.textTertiary, fontSize: 12 }} selectable>{PUBLIC_WEBSITE_URL}</Text>
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>

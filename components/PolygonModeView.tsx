@@ -36,6 +36,12 @@ interface PolygonModeViewProps {
   onBpmChange?: (bpm: number) => void;
 }
 
+const SHARED_SPEEDS = [
+  { rate: 2, label: "1/2 · ×2" },
+  { rate: 1, label: "1/4 · ×1" },
+  { rate: 0.5, label: "1/8 · ×0.5" },
+] as const;
+
 export function PolygonModeView({ polygonMode, isPlaying, onClose, onTogglePlay, bpm, onBpmChange }: PolygonModeViewProps) {
   const { colors: C } = useTheme();
   const { t, language } = useLanguage();
@@ -61,6 +67,11 @@ export function PolygonModeView({ polygonMode, isPlaying, onClose, onTogglePlay,
   ));
   const isCompactHeight = height < 520;
   const isShortLandscape = isCompactHeight && width > height;
+  const speedIndex = SHARED_SPEEDS.findIndex(({ rate }) => rate === polygonMode.playbackRate);
+  const speed = SHARED_SPEEDS[speedIndex];
+  const cycleSharedSpeed = () => {
+    polygonMode.setPlaybackRate(SHARED_SPEEDS[(speedIndex + 1) % SHARED_SPEEDS.length].rate);
+  };
 
   const handleLayerSelect = useCallback((id: string) => {
     setEditingLayerId(id === editingLayerId ? null : id);
@@ -260,50 +271,51 @@ export function PolygonModeView({ polygonMode, isPlaying, onClose, onTogglePlay,
           compactHeight={isCompactHeight}
         />
         <View style={{ paddingHorizontal: S.ms(16, 0.3), paddingTop: S.ms(5, 0.3) }}>
-          <Text style={{
-            fontFamily: "SpaceGrotesk_500Medium",
-            fontSize: S.ms(11, 0.3),
-            color: C.textSecondary,
-            marginBottom: S.ms(5, 0.3),
-          }}>
-            {language === "ko" ? "공통 속도" : "Shared speed"}
-          </Text>
-          <View style={{ flexDirection: "row", gap: S.ms(7, 0.3) }}>
-            {([
-              { rate: 2, label: "1/2 · ×2", id: "polygon-speed-2" },
-              { rate: 1, label: "1/4 · ×1", id: "polygon-speed-1" },
-              { rate: 0.5, label: "1/8 · ×0.5", id: "polygon-speed-0.5" },
-            ] as const).map(({ rate, label, id }) => {
-              const selected = polygonMode.playbackRate === rate;
-              return (
-                <Pressable
-                  key={rate}
-                  testID={id}
-                  onPress={() => polygonMode.setPlaybackRate(rate)}
-                  accessibilityRole="radio"
-                  accessibilityLabel={`${language === "ko" ? "공통 속도" : "Shared speed"} ${label}`}
-                  accessibilityState={{ checked: selected, selected }}
-                  {...(Platform.OS === "web" ? ({ "aria-checked": selected } as any) : {})}
-                  style={({ pressed }) => ({
-                    flex: 1,
-                    minHeight: S.ms(34, 0.3),
-                    alignItems: "center",
-                    justifyContent: "center",
-                    borderRadius: S.ms(10, 0.3),
-                    borderWidth: 1,
-                    borderColor: selected ? C.accent : C.border,
-                    backgroundColor: selected ? C.accent + "20" : pressed ? C.background : "transparent",
-                  })}
-                >
-                  <Text style={{
-                    fontFamily: selected ? "SpaceGrotesk_600SemiBold" : "SpaceGrotesk_500Medium",
-                    fontSize: S.ms(11, 0.3),
-                    color: selected ? C.accent : C.textSecondary,
-                  }}>{label}</Text>
-                </Pressable>
-              );
-            })}
-          </View>
+           <Pressable
+             testID="polygon-shared-speed"
+             onLongPress={cycleSharedSpeed}
+             delayLongPress={450}
+             onPress={Platform.OS === "web" ? ({ nativeEvent }) => {
+               // Allow keyboard/assistive activation, not a short pointer tap.
+               const { key, detail } = nativeEvent as typeof nativeEvent & { key?: string; detail?: number };
+               if (key === "Enter" || key === " " || key === "Spacebar" || detail === 0) cycleSharedSpeed();
+             } : undefined}
+             accessibilityRole="button"
+             accessibilityLabel={`${t("polygon", "sharedSpeed")}: ${speed.label}`}
+             accessibilityHint={t("polygon", "sharedSpeedHint")}
+             accessibilityActions={[{ name: "activate", label: t("polygon", "cycleSharedSpeed") }]}
+             onAccessibilityAction={({ nativeEvent }) => {
+               if (nativeEvent.actionName === "activate") cycleSharedSpeed();
+             }}
+             style={({ pressed }) => ({
+               minHeight: 44,
+               paddingHorizontal: S.ms(12, 0.3),
+               paddingVertical: 5,
+               flexDirection: "row",
+               alignItems: "center",
+               justifyContent: "space-between",
+               gap: 8,
+               borderRadius: S.ms(10, 0.3),
+               borderWidth: 1,
+               borderColor: C.border,
+               backgroundColor: pressed ? C.accent + "20" : "transparent",
+             })}
+           >
+             <View style={{ flexShrink: 1 }}>
+               <Text style={{ fontSize: S.ms(12, 0.3), color: C.textSecondary }}>
+                 {t("polygon", "sharedSpeed")}
+               </Text>
+               <Text style={{ fontSize: S.ms(10, 0.3), color: C.textTertiary }}>
+                 {t("polygon", "sharedSpeedHint")}
+               </Text>
+             </View>
+             <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+               <Text style={{ fontFamily: "SpaceGrotesk_600SemiBold", fontSize: S.ms(13, 0.3), color: C.accent }}>
+                 {speed.label}
+               </Text>
+               <Ionicons name="swap-horizontal-outline" size={S.ms(15, 0.3)} color={C.accent} />
+             </View>
+           </Pressable>
         </View>
         {bpm !== undefined && onBpmChange && (
           <View style={{ paddingHorizontal: S.ms(16, 0.3), paddingTop: S.ms(5, 0.3) }}>

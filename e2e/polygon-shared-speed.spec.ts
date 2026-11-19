@@ -41,13 +41,48 @@ async function openPolygon(page: Page) {
   await expect(page.getByTestId("polygon-screen")).toBeVisible();
 }
 
+const speedLabels = { 0.5: "1/8 · ×0.5", 1: "1/4 · ×1", 2: "1/2 · ×2" };
+
+async function holdForSpeed(page: Page, nextRate: keyof typeof speedLabels) {
+  const speed = page.getByTestId("polygon-shared-speed");
+  await speed.click({ delay: 550 });
+  await expect(speed).toHaveAccessibleName(`Shared speed: ${speedLabels[nextRate]}`);
+}
+
+test("a tap leaves the speed unchanged and a long touch advances one step", async ({ page }) => {
+  await openPolygon(page);
+  const speed = page.getByTestId("polygon-shared-speed");
+  await expect(speed).toHaveAccessibleName(`Shared speed: ${speedLabels[1]}`);
+  await speed.click();
+  await speed.tap();
+  await expect(speed).toHaveAccessibleName(`Shared speed: ${speedLabels[1]}`);
+
+  const bounds = (await speed.boundingBox())!;
+  const client = await page.context().newCDPSession(page);
+  try {
+    await client.send("Input.dispatchTouchEvent", {
+      type: "touchStart",
+      touchPoints: [{ x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 }],
+    });
+    await expect(speed).toHaveAccessibleName(`Shared speed: ${speedLabels[0.5]}`);
+    await page.waitForTimeout(500);
+    await client.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+    await expect(speed).toHaveAccessibleName(`Shared speed: ${speedLabels[0.5]}`);
+  } finally {
+    await client.detach();
+  }
+  await speed.press("Enter");
+  await expect(speed).toHaveAccessibleName(`Shared speed: ${speedLabels[2]}`);
+  await speed.press("Space");
+  await expect(speed).toHaveAccessibleName(`Shared speed: ${speedLabels[1]}`);
+});
+
 test("shared speeds scale actual non-silent browser output without changing displayed BPM", async ({ page }) => {
   await page.setViewportSize({ width: 402, height: 874 });
   await openPolygon(page);
   const control = page.getByTestId("polygon-play-toggle");
-  for (const [rate, expectedInterval] of [[2, 250], [1, 500], [0.5, 1000]]) {
-    await page.getByTestId(`polygon-speed-${rate}`).click();
-    await expect(page.getByTestId(`polygon-speed-${rate}`)).toHaveAttribute("aria-checked", "true");
+  for (const [rate, expectedInterval] of [[0.5, 1000], [2, 250], [1, 500]] as const) {
+    await holdForSpeed(page, rate);
     await page.evaluate(() => {
       (window as any).polygonAudioStarts = [];
       (window as any).polygonProbe = true;
@@ -70,10 +105,13 @@ test("shared speeds scale actual non-silent browser output without changing disp
   }
   // A live edit must commit without stopping, and old-rate timers must not
   // create extra clicks after the new boundary.
-  await page.getByTestId("polygon-speed-2").click();
+  await holdForSpeed(page, 0.5);
+  await holdForSpeed(page, 2);
   await control.click();
   await expect(control).toContainText("Playing");
-  await page.getByTestId("polygon-speed-0.5").click();
+  await holdForSpeed(page, 1);
+  await holdForSpeed(page, 0.5);
+  await expect(control).toContainText("Playing");
   await page.evaluate(() => { (window as any).polygonAudioStarts = []; });
   await expect.poll(async () => page.evaluate(() =>
     ((window as any).polygonAudioStarts as number[]).length
@@ -105,8 +143,8 @@ test("portrait, short landscape and tablet retain accessible controls and bounde
     ["phone", 375, 667], ["landscape", 844, 390], ["tablet", 768, 1024],
   ] as const) {
     await page.setViewportSize({ width, height });
-    await expect(page.getByTestId("polygon-speed-1")).toBeVisible();
-    for (const testId of ["polygon-play-toggle", "polygon-speed-2", "polygon-speed-0.5", "polygon-layer-add"]) {
+    await expect(page.getByTestId("polygon-shared-speed")).toBeVisible();
+    for (const testId of ["polygon-play-toggle", "polygon-shared-speed", "polygon-layer-add"]) {
       const target = page.getByTestId(testId);
       const box = await target.boundingBox();
       expect(box).not.toBeNull();
