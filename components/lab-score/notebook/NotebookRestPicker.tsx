@@ -177,23 +177,28 @@ export function useNotebookRestPicker(props: PickerProps) {
     : 0;
   const accessibleAbove = spaceAbove >= 66 || spaceAbove >= spaceBelow;
 
+  const hideOrigin = active || props.otherPickerActive;
   const origin = (
     <View
       testID="notebook-rest-tile"
       ref={originRef}
       collapsable={false}
       pointerEvents={props.otherPickerActive ? "none" : "auto"}
+      aria-hidden={hideOrigin || undefined}
+      accessibilityElementsHidden={hideOrigin}
+      importantForAccessibility={hideOrigin ? "no-hide-descendants" : "auto"}
       {...responder.panHandlers}
-      style={[styles.origin, props.otherPickerActive && { opacity: 0 }]}
+      style={[styles.origin, hideOrigin && styles.hiddenOrigin]}
     >
-      {!props.otherPickerActive && <Pressable
+      <Pressable
         testID="notebook-rest-origin"
+        disabled={hideOrigin}
         accessibilityRole="button"
         accessibilityLabel={props.ko ? "쉼표 선택. 위로 음가를, 좌우로 점 유무를 고르세요." : "Rest picker. Swipe up for duration, left for dotted and right for plain."}
         accessibilityState={{ expanded: showAccessibleChooser }}
         accessibilityActions={[{ name: "expand", label: props.ko ? "쉼표 선택기 펼치기" : "Expand rest chooser" }]}
         onAccessibilityAction={(event) => {
-          if (event.nativeEvent.actionName === "expand") setShowAccessibleChooser(true);
+          if (!hideOrigin && event.nativeEvent.actionName === "expand") setShowAccessibleChooser(true);
         }}
         onPress={() => {
           if (responderUsed.current) {
@@ -206,7 +211,7 @@ export function useNotebookRestPicker(props: PickerProps) {
       >
         <View style={styles.categoryIconFrame}><NotebookGlyphPreview glyph={`rest-${duration}`} size={22} role="normal" dotted={dotted} /></View>
         <Text style={styles.categoryLabel}>{props.ko ? "쉼표" : "Rest"}</Text>
-      </Pressable>}
+      </Pressable>
     </View>
   );
 
@@ -291,6 +296,7 @@ export function useNotebookRestPicker(props: PickerProps) {
 
 const styles = StyleSheet.create({
   previewLabel: { color: "#725b3c", fontSize: 10, lineHeight: 14, fontWeight: "600" },
+  hiddenOrigin: { opacity: 0 },
   origin: { flex: 1, minWidth: 46, height: 64, minHeight: 64, paddingHorizontal: 0, borderRadius: 11, borderWidth: 1, borderColor: "#e7dfd2", backgroundColor: "#fffdf9", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3 },
   originInner: { flex: 1, alignSelf: "stretch", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 3 },
   categoryIconFrame: { height: 36, width: 56, alignItems: "center", justifyContent: "center", overflow: "visible" },

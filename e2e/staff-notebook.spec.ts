@@ -2,6 +2,9 @@ import { test, expect, type Page } from "@playwright/test";
 import type { StaffNotebook } from "../lib/staff-notebook";
 import { DEFAULT_NOTEBOOK_SETTINGS } from "../lib/staff-notebook";
 if (process.env.SETTINGS_TEST_URL) test.use({ baseURL: process.env.SETTINGS_TEST_URL });
+if (process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH) {
+  test.use({ launchOptions: { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH } });
+}
 
 test("ink vertical drag selects a tool and cumulative right swipe opens that tool's settings", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
@@ -91,26 +94,33 @@ for (const viewport of [{ width: 320, height: 740 }, { width: 768, height: 1024 
     }
     const note = (await page.getByTestId("notebook-note-origin").boundingBox())!;
     await page.mouse.move(note.x + note.width / 2, note.y + note.height / 2); await page.mouse.down();
-    await expect(page.getByTestId("notebook-note-origin")).toBeVisible();
+    await expect(page.getByTestId("notebook-note-tile")).toHaveCSS("opacity", "0");
+    await expect(page.getByTestId("notebook-rest-tile")).toHaveCSS("opacity", "0");
     await expect(page.getByTestId("notebook-tuplet")).toHaveCSS("opacity", "0");
     await expect(page.getByTestId("notebook-note-more-menu")).toHaveCount(0);
     await expect(page.getByTestId("notebook-note-role-normal")).toBeInViewport({ ratio: 1 });
     await page.screenshot({ path: `generated-artifacts/notebook-isolated-roles-${viewport.width}.png` });
     await page.mouse.move(note.x + note.width / 2 + 20, note.y - 80, { steps: 8 });
     await expect(page.getByTestId("notebook-note-role-normal")).toHaveCount(0);
+    await expect(page.getByTestId("notebook-note-tile")).toHaveCSS("opacity", "0");
     const duration = (await page.getByTestId("notebook-note-duration-quarter").boundingBox())!;
     await page.mouse.move(duration.x + duration.width / 2, duration.y + duration.height / 2, { steps: 5 });
     await page.screenshot({ path: `generated-artifacts/notebook-isolated-duration-${viewport.width}.png` });
     await page.mouse.up(); await expect(page.getByTestId("notebook-tuplet")).toHaveCSS("opacity", "1");
+    await expect(page.getByTestId("notebook-note-tile")).toHaveCSS("opacity", "1");
     const rest = (await page.getByTestId("notebook-rest-origin").boundingBox())!;
     await page.mouse.move(rest.x + rest.width / 2, rest.y + rest.height / 2); await page.mouse.down();
     await expect(page.getByTestId("notebook-tuplet")).toHaveCSS("opacity", "0");
     await expect(page.getByTestId("notebook-rest-gesture-preview")).toBeVisible();
+    await expect(page.getByTestId("notebook-note-tile")).toHaveCSS("opacity", "0");
+    await expect(page.getByTestId("notebook-rest-tile")).toHaveCSS("opacity", "0");
     await page.mouse.move(rest.x + rest.width / 2, rest.y - 80, { steps: 8 });
     await expect(page.getByTestId("notebook-rest-gesture-preview")).toHaveCount(0);
+    await expect(page.getByTestId("notebook-rest-tile")).toHaveCSS("opacity", "0");
     const restDuration = (await page.getByTestId("notebook-rest-duration-quarter").boundingBox())!;
     await page.mouse.move(restDuration.x + restDuration.width / 2, restDuration.y + restDuration.height / 2, { steps: 5 });
     await page.mouse.up(); await expect(idle).toHaveCSS("opacity", "1");
+    await expect(page.getByTestId("notebook-rest-tile")).toHaveCSS("opacity", "1");
     await expect(page.getByTestId("notebook-drawing").locator('[data-testid^="notebook-stamp-"]')).toHaveCount(2);
     await chooseMode(page, "select");
     await expect(page.getByTestId("notebook-edit-selection")).toHaveCount(0);
@@ -690,6 +700,18 @@ async function closeNotice(page: Page) {
   const ok = page.getByText(/^OK$|^확인$/).last();
   if (await ok.isVisible()) await ok.click();
 }
+async function latestSavedNotebook(page: Page): Promise<StaffNotebook> {
+  return page.evaluate(() => {
+    const registry = JSON.parse(localStorage.getItem("local_profiles_v1") ?? "null");
+    const active = registry?.profiles.find((profile: { id: string }) => profile.id === registry.activeId);
+    const key = active && active.storage !== "legacy"
+      ? `local_profile:${active.id}:lab_staff_notebooks_v1`
+      : "lab_staff_notebooks_v1";
+    const notes = JSON.parse(localStorage.getItem(key) ?? "[]");
+    if (!notes[0]) throw new Error("No notebook was saved in the active profile");
+    return notes[0];
+  });
+}
 async function chooseMode(page: Page, mode: "ink" | "notes" | "select" | "settings") {
   await page.getByTestId("notebook-right-toggle").click();
   await page.getByTestId(`notebook-mode-${mode}`).click();
@@ -822,8 +844,10 @@ test("second-finger takeover cancels ink, erasing and note/selection movement wi
     await expect(page.getByTestId("notebook-drop-actions")).toHaveCount(0);
     await expect(paper.locator("svg > g").first()).not.toHaveAttribute("transform", transform!);
   }
-  await openSettings(page); await page.getByTestId("notebook-save").click(); await closeNotice(page);
-  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("lab_staff_notebooks_v1")!)[0]);
+  await openSettings(page); await page.getByTestId("notebook-save").click();
+  await expect(page.getByTestId("web-alert")).toContainText(/Notebook saved|저장했습니다/);
+  await closeNotice(page);
+  const saved = await latestSavedNotebook(page);
   expect(saved.pages[0].strokes).toHaveLength(1);
   expect(saved.pages[0].stamps).toHaveLength(1);
 });
@@ -1112,11 +1136,12 @@ test("staged note gesture preserves strong and dotted choices; tuplets count not
   await chooseGlyph(page, "sharp");
   await openSettings(page); await page.getByTestId("notebook-save").click();
   await expect(page.getByTestId("web-alert")).toContainText(/Notebook saved|저장했습니다/);
-  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("lab_staff_notebooks_v1")!)[0]);
-  expect(saved.pages[0].stamps[0]).toMatchObject({ glyph: "quarter", role: "strong", dotted: true });
-  expect(saved.pages[0].stamps[1]).toMatchObject({ glyph: "whole", role: "normal", dotted: false });
-  expect(saved.pages[0].tuplets[0].stampIds).toHaveLength(3);
-  expect(saved.pages[0].stamps[3].attachTo).toBe(saved.pages[0].stamps[1].id);
+  const saved = await latestSavedNotebook(page);
+  const stamps = saved.pages[0].stamps ?? [];
+  expect(stamps[0]).toMatchObject({ glyph: "quarter", role: "strong", dotted: true });
+  expect(stamps[1]).toMatchObject({ glyph: "whole", role: "normal", dotted: false });
+  expect(saved.pages[0].tuplets?.[0].stampIds).toHaveLength(3);
+  expect(stamps[3].attachTo).toBe(stamps[1].id);
   await closeNotice(page); await openSaved(page, saved.title);
   await page.getByTestId("notebook-panel-close").click();
   await expect(page.getByTestId("notebook-drawing").locator("text").filter({ hasText: /^3$/ })).toHaveCount(1);
