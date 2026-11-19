@@ -1,6 +1,7 @@
-import type { NotebookSettings, StaffPage, StaffPoint } from "./staff-notebook";
+import type { NotebookSettings, StaffPage, StaffPoint, StaffStamp } from "./staff-notebook";
 import { PAPER_WIDTH, ROW_HEIGHT, rowAt } from "./staff-notebook-layout";
-import { NOTEBOOK_LEFT, NOTEBOOK_SPAN, notebookMeasureRegions } from "./notebook-measures";
+import { NOTEBOOK_LEFT, NOTEBOOK_SPAN, naturalPaperWidth } from "./notebook-measures";
+import { notebookSections, placeSectionStamp, sectionKind, sectionStaffY, type SectionMeasure } from "./notebook-sections";
 
 /** A view projection only: resizing never rewrites the saved score or its meter. */
 export function notebookPortraitPolicy(width: number, height: number, requestedZoom: number) {
@@ -9,17 +10,38 @@ export function notebookPortraitPolicy(width: number, height: number, requestedZ
   return { portrait, zoom, columns: portrait ? Math.min(2, Math.max(1, Math.floor(1 / zoom + 1e-7))) : undefined };
 }
 
-export function projectNotebookPortrait(page: StaffPage, settings: Partial<NotebookSettings>, columns: number, zoom = 1, boost = 1) {
-  const regions = notebookMeasureRegions(page, settings);
+export function notebookDisplayColumns(zoom: number, base: number, portraitColumns?: number) {
+  return portraitColumns ?? Math.min(32, Math.max(1, Math.floor(base / zoom + 1e-7)));
+}
+
+export function projectNotebookPortrait(page: StaffPage, settings: Partial<NotebookSettings>, columns: number, zoom = 1, boost = 1, sections?: SectionMeasure[], keepRows = false) {
+  const regions = sections ?? notebookSections({ id: "", title: "", updatedAt: 0, pages: [page], settings: settings as NotebookSettings })[0];
   const byRow = new Map<number, { region: (typeof regions)[number]; index: number }[]>();
   regions.forEach((region, index) => {
     const group = byRow.get(region.row) ?? [];
     group.push({ region, index }); byRow.set(region.row, group);
   });
-  const count = Math.max(1, Math.min(2, columns));
+  const count = Math.max(1, Math.min(32, columns));
   const span = PAPER_WIDTH / (Math.min(1, zoom) * boost) - NOTEBOOK_LEFT * 2;
   const cellWidth = span / count;
-  const rows = Math.ceil(regions.length / count);
+  const displayRows: number[][] = [];
+  const cells = regions.map((region, index) => {
+    let row = displayRows.at(-1);
+    if (!row || (keepRows ? region.index === 0 : row.length >= count || region.clefChange || region.meterChange)) { row = []; displayRows.push(row); }
+    const col = row.length;
+    row.push(index);
+    const clef = col === 0 ? region.clef : region.clefChange?.glyph;
+    const marks = Number(!!clef) + Number(!!region.meterChange);
+    const sourceSpan = naturalPaperWidth(page) - NOTEBOOK_LEFT * 2;
+    const width = keepRows ? (region.right - region.left) * span / sourceSpan : cellWidth;
+    const left = keepRows ? NOTEBOOK_LEFT + (region.left - NOTEBOOK_LEFT) * span / sourceSpan : NOTEBOOK_LEFT + col * cellWidth;
+    const pad = Math.min(marks * 32, width * .52);
+    return { row: displayRows.length - 1, col, left, width, clef, marks, pad };
+  });
+  const rows = displayRows.length;
+  const displayedRegions = regions.map((r, i): SectionMeasure => ({
+    ...r, row: cells[i].row, index: cells[i].col, left: cells[i].left, right: cells[i].left + cells[i].width,
+  }));
   const sourceIndex = (point: StaffPoint) => {
     const row = rowAt(point.y, page.staffCount ?? 7);
     const candidates = byRow.get(row)!;
@@ -27,22 +49,43 @@ export function projectNotebookPortrait(page: StaffPage, settings: Partial<Noteb
   };
   const inCell = (point: StaffPoint, index: number) => {
     const r = regions[index];
+    const cell = cells[index];
     return {
-      x: NOTEBOOK_LEFT + index % count * cellWidth + (point.x - r.left) * cellWidth / (r.right - r.left),
-      y: Math.floor(index / count) * ROW_HEIGHT + point.y - r.row * ROW_HEIGHT,
+      x: cell.left + cell.pad + (point.x - r.left) * (cell.width - cell.pad) / (r.right - r.left),
+      y: cell.row * ROW_HEIGHT + point.y - r.row * ROW_HEIGHT,
     };
   };
   const forward = (point: StaffPoint) => inCell(point, sourceIndex(point));
-  const inverse = (point: StaffPoint): StaffPoint => {
+  const displayIndex = (point: StaffPoint) => {
     const row = Math.max(0, Math.min(rows - 1, Math.floor(point.y / ROW_HEIGHT)));
-    const col = Math.max(0, Math.min(count - 1, Math.floor((point.x - NOTEBOOK_LEFT) / cellWidth)));
-    const index = Math.min(regions.length - 1, row * count + col);
+    return displayRows[row].find((i) => point.x < cells[i].left + cells[i].width) ?? displayRows[row].at(-1)!;
+  };
+  const inverse = (point: StaffPoint): StaffPoint => {
+    const index = displayIndex(point);
     const r = regions[index];
+    const cell = cells[index];
     return {
-      x: r.left + (point.x - NOTEBOOK_LEFT - col * cellWidth) * (r.right - r.left) / cellWidth,
-      y: r.row * ROW_HEIGHT + point.y - row * ROW_HEIGHT,
+      x: r.left + (point.x - cell.left - cell.pad) * (r.right - r.left) / (cell.width - cell.pad),
+      y: r.row * ROW_HEIGHT + point.y - cell.row * ROW_HEIGHT,
     };
   };
+  // Headers occupy the reserved leading space, not the note coordinate
+  // range. Drag their reference point by its *displayed* delta between
+  // cells, then snap to the corresponding source measure.
+  const sectionDrag = (source: StaffStamp, rendered: StaffStamp, start: StaffPoint, point: StaffPoint): StaffPoint => {
+    const reference = { x: rendered.x + point.x - start.x, y: rendered.y + point.y - start.y };
+    const target = displayIndex(reference);
+    if (target === sourceIndex(source)) return { x: source.x, y: source.y };
+    const { x, y } = placeSectionStamp(source, regions[target]);
+    return { x, y };
+  };
+  const headerPoint = (index: number, glyph: string) => {
+    const c = cells[index];
+    return { x: c.left + c.pad / Math.max(1, c.marks) * (sectionKind(glyph) === "meter" && c.clef ? 1.5 : .5),
+      y: sectionStaffY(glyph, c.row), size: Math.min(26, c.pad / Math.max(1, c.marks) * .86) };
+  };
+  const inheritedClefs = regions.flatMap((region, i) =>
+    cells[i].clef && !region.clefChange ? [{ glyph: cells[i].clef!, ...headerPoint(i, cells[i].clef!) }] : []);
   const strokeOwners = new Map<string, string>();
   // Split only the displayed path at fold boundaries. The original stroke,
   // including its id, masks, and coordinates, remains untouched in the document.
@@ -86,9 +129,15 @@ export function projectNotebookPortrait(page: StaffPage, settings: Partial<Noteb
   });
   const projected: StaffPage = {
     ...page, staffCount: rows, strokes, layoutScale: NOTEBOOK_SPAN / span,
-    stamps: page.stamps?.map((s) => ({ ...s, ...forward(s), measure: sourceIndex(s) % count })),
+    stamps: page.stamps?.map((s) => {
+      const i = sourceIndex(s), cell = cells[i];
+      const pos = s.sectionStart && cell.pad ? headerPoint(i, s.glyph)
+        : s.glyph === "barline" || s.glyph === "bar_line" ? { ...forward(s), x: forward(s).x - cell.pad } : forward(s);
+      return { ...s, ...pos, measure: cell.col };
+    }),
     anchor: page.anchor && forward(page.anchor),
-    measureCounts: Array.from({ length: rows }, (_, row) => Math.min(count, regions.length - row * count)),
+    measureCounts: displayRows.map((row) => row.length),
   };
-  return { page: projected, forward, inverse, strokeOwners };
+  return { page: projected, forward, inverse, sectionDrag, inheritedClefs, regions: displayedRegions, strokeOwners,
+    firstMeasureInRow(point: StaffPoint) { return regions[displayRows[cells[sourceIndex(point)].row][0]]; } };
 }

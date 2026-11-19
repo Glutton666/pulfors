@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AppState, Platform } from "react-native";
 import { DEFAULT_NOTEBOOK_SETTINGS, type StaffNotebook } from "@/lib/staff-notebook";
 import { type NotebookRow } from "@/lib/staff-notebook-layout";
-import { buildNotebookNotationPlan, notebookPosition, type NotebookBar } from "@/lib/notebook-playback-plan";
+import { buildNotebookNotationPlan, notebookChunkEnds, notebookMeasurePosition } from "@/lib/notebook-playback-plan";
 import { getNotebookPatternSchedule, renderNotebookPatternPCM } from "@/lib/audio-export";
 import { getWebAudioContext, playWebRenderedLoop, releaseRenderedWav, saveRenderedWav } from "@/lib/audio-renderer";
 import type { PracticeEntry } from "@/lib/storage";
@@ -16,6 +16,7 @@ export function useNotebookPlayback(note: StaffNotebook, active: boolean) {
   const [error, setError] = useState("");
   const [rows, setRows] = useState<NotebookRow[]>([]);
   const [position, setPosition] = useState({ row: 0, progress: 0 });
+  const [measure, setMeasure] = useState(0);
   const owner = useRef(0);
   const dispose = useRef<() => void>(() => {});
   const abort = useRef<AbortController | null>(null);
@@ -48,6 +49,7 @@ export function useNotebookPlayback(note: StaffNotebook, active: boolean) {
       const perRow = measuresInRow(settings);
       const base = buildNotebookNotationPlan({ ...snapshot, settings });
       const plan = settings.followSymbols ? followNotebookSigns(snapshot, base, perRow) : base;
+      plan.chunkEnds = notebookChunkEnds(plan.chunks);
       const beats = settings.beatsPerMeasure ?? 1;
       const simple: PracticeEntry = {
         id: "notebook-click", label: `${beats}/4`, createdAt: 0, mode: "beat",
@@ -55,42 +57,24 @@ export function useNotebookPlayback(note: StaffNotebook, active: boolean) {
         beatSubdivisions: {}, barRepeats: {}, barLoopMode: "once", subdivisionPattern: [],
       };
       const source = settings.source ? settings.source.bpm === settings.bpm ? settings.source : { ...settings.source, bpm: settings.bpm } : simple;
-      const inputs = [source];
-      if (!inputs.length || inputs.some((entry) => entry.scoreId || entry.rhythmDocument ||
-        entry.mode && !["beat", "bar"].includes(entry.mode))) throw new Error("UNSUPPORTED_PATTERN");
-      const rendered: ReturnType<typeof getNotebookPatternSchedule>[] = [];
-      const bars: NotebookBar[] = [];
-      for (const entry of inputs) {
-        check();
-        const audio = getNotebookPatternSchedule(entry);
-        check();
-        const sourceIndex = rendered.length; rendered.push(audio);
-        if (entry.mode !== "bar") {
-          bars.push({ source: sourceIndex, startMs: 0, endMs: audio.durationMs });
-        } else {
-          const main = audio.ticks.filter((tick) => (tick.layerIndex ?? 0) === 0 && tick.subBeat === 0);
-          const starts = main.filter((tick, index) => !index || Math.abs(tick.time - main[index - 1].time) > 0.01);
-          starts.forEach((tick, index) => {
-            const root = (entry.loopBlocks ?? []).map((block, i) => ({ block, i }))
-              .filter(({ block }) => block.layerOf === undefined && tick.beat >= block.startBeat && tick.beat <= block.endBeat)
-              .sort((a, b) => (b.block.endBeat - b.block.startBeat) - (a.block.endBeat - a.block.startBeat))[0];
-            const repeat = entry.barRepeats[tick.beat];
-            const group = root ? `${sourceIndex}:block:${root.i}` :
-              repeat && (repeat.type === "duration" || repeat.value > 1) ? `${sourceIndex}:repeat:${tick.beat}` : undefined;
-            bars.push({ source: sourceIndex, startMs: tick.time, endMs: starts[index + 1]?.time ?? audio.durationMs, group });
-          });
-        }
-      }
+      if (source.scoreId || source.rhythmDocument || source.mode && !["beat", "bar"].includes(source.mode))
+        throw new Error("UNSUPPORTED_PATTERN");
+      check();
       // The paper clock is notation time, not the imported pattern's bar clock.
       // Loop the complete original pattern independently; never slice its blocks at paper boundaries.
-      const audio = rendered[0];
+      const audio = getNotebookPatternSchedule(source);
+      check();
       if (!(audio.durationMs > 0)) throw new Error("EMPTY_PATTERN");
-      const ticks = Array.from({ length: Math.ceil(plan.durationMs / audio.durationMs) }, (_, pass) =>
+      const passes = Math.ceil(plan.durationMs / audio.durationMs);
+      // Play complete click measures in a continuous loop: a 7/8 paper
+      // boundary must not restart the selected 4/4 click halfway through a beat.
+      const durationMs = continuousClick ? passes * audio.durationMs : plan.durationMs;
+      const ticks = Array.from({ length: passes }, (_, pass) =>
         audio.ticks.map((tick) => ({ ...tick, time: tick.time + pass * audio.durationMs }))
-          .filter((tick) => tick.time < plan.durationMs)).flat();
+          .filter((tick) => tick.time < durationMs)).flat();
       // Render the final schedule, not sliced old audio: sample tails must
       // overlap their NEW neighbours in the shuffled sheet.
-      const { pcm } = await renderNotebookPatternPCM(source, controller.signal, { ticks, durationMs: plan.durationMs });
+      const { pcm } = await renderNotebookPatternPCM(source, controller.signal, { ticks, durationMs });
       // Restart, stop, deactivation or unmount can cancel while assets decode.
       // Recheck ownership before installing any output or publishing paper rows.
       check();
@@ -120,17 +104,23 @@ export function useNotebookPlayback(note: StaffNotebook, active: boolean) {
       const deadline = performance.now() + 5000;
       while (!ready() || getPosition() <= 0) { check(); if (performance.now() > deadline) throw new Error("AUDIO_UNAVAILABLE"); await new Promise((resolve) => setTimeout(resolve, 20)); }
       check();
-      setRows(plan.rows); setPosition({ row: 0, progress: 0 }); setRunning(true); setPreparing(false);
+      const present = (at: number) => {
+        const { measure: currentMeasure, ...rowPosition } = notebookMeasurePosition(plan, at);
+        setPosition(rowPosition); setMeasure(currentMeasure);
+      };
+      setRows(plan.rows); present(0); setRunning(true); setPreparing(false);
       const release = cleanup;
       let furthestPosition = 0;
+      let previousPosition = 0;
       const timer = setInterval(() => {
         if (!valid()) return;
         const at = getPosition();
         // A simple metronome has no natural end. After the last paper row,
         // keep its camera there while audio continues; native loop-position
         // resets must not make the sheet jump back to the beginning.
-        furthestPosition = Math.max(furthestPosition, at);
-        setPosition(notebookPosition(plan.rowEnds, continuousClick ? furthestPosition : at, plan.positionRows));
+        furthestPosition = Math.max(furthestPosition, continuousClick && previousPosition - at > durationMs / 2 ? durationMs : at);
+        previousPosition = at;
+        present(continuousClick ? furthestPosition : at);
         if (!ready() || !continuousClick && at >= plan.durationMs) stop();
       }, 30);
       dispose.current = () => { clearInterval(timer); release(); };
@@ -154,5 +144,5 @@ export function useNotebookPlayback(note: StaffNotebook, active: boolean) {
     if (Platform.OS === "web") document.addEventListener("visibilitychange", hidden);
     return () => { sub.remove(); if (Platform.OS === "web") document.removeEventListener("visibilitychange", hidden); stop(); };
   }, [stop]);
-  return { running, preparing, error, rows, position, start, stop };
+  return { running, preparing, error, rows, position, measure, start, stop };
 }

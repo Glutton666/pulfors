@@ -41,12 +41,10 @@ export function NotebookSettingsPanel(props: Props) {
   const [rowsDraft, setRowsDraft] = useState(String(currentRows));
   const [zoomDraft, setZoomDraft] = useState(String(Math.round(props.scale * 100)));
   const [beatsDraft, setBeatsDraft] = useState(String(meter.beats));
-  const [measuresDraft, setMeasuresDraft] = useState(String(settings.measuresPerRow ?? (settings.lineUnit === "phrase" ? 4 : 1)));
 
   useEffect(() => setRowsDraft(String(currentRows)), [currentRows, note.id]);
   useEffect(() => setZoomDraft(String(Math.round(props.scale * 100))), [props.scale]);
   useEffect(() => setBeatsDraft(String(meter.beats)), [meter.beats]);
-  useEffect(() => setMeasuresDraft(String(settings.measuresPerRow ?? (settings.lineUnit === "phrase" ? 4 : 1))), [settings.measuresPerRow, settings.lineUnit]);
 
   const eligible = patterns.filter((entry) => !entry.mode || entry.mode === "beat" || entry.mode === "bar");
   const unsupported = patterns.filter((entry) => entry.mode && entry.mode !== "beat" && entry.mode !== "bar");
@@ -70,9 +68,9 @@ export function NotebookSettingsPanel(props: Props) {
     setRowsDraft(String(value));
     if (value !== settings.rowsPerPage) props.onRows(value);
   };
-  const commitZoom = () => {
-    const parsed = Number(zoomDraft);
-    const value = Number.isFinite(parsed) ? Math.max(35, Math.min(250, Math.round(parsed))) : Math.round(props.scale * 100);
+  const commitZoom = (text = zoomDraft) => {
+    const parsed = Number(text);
+    const value = Number.isFinite(parsed) ? Math.max(props.portraitLayout ? 50 : 35, Math.min(250, Math.round(parsed))) : Math.round(props.scale * 100);
     setZoomDraft(String(value));
     props.onZoom(value / 100);
   };
@@ -81,12 +79,6 @@ export function NotebookSettingsPanel(props: Props) {
     const beats = Number.isFinite(parsed) ? Math.max(1, Math.min(12, Math.round(parsed))) : meter.beats;
     setBeatsDraft(String(beats));
     if (beats !== meter.beats) props.onSettings({ notationMeter: { beats, unit: meter.unit } });
-  };
-  const commitMeasures = (text = measuresDraft) => {
-    const parsed = Number(text);
-    const value = Number.isFinite(parsed) ? Math.max(1, Math.min(32, Math.round(parsed))) : settings.measuresPerRow ?? 1;
-    setMeasuresDraft(String(value));
-    props.onSettings({ measuresPerRow: value, lineUnit: value === 1 ? "measure" : "phrase" });
   };
 
   return (
@@ -144,7 +136,7 @@ export function NotebookSettingsPanel(props: Props) {
       <Text style={styles.sectionTitle}>{ko ? "페이지 구성" : "Page layout"}</Text>
       <View style={styles.meterSection}>
         <View style={styles.fieldLabelRow}>
-          <Text style={styles.fieldLabel}>{ko ? "기보 박자" : "Notation meter"}</Text>
+          <Text style={styles.fieldLabel}>{ko ? "기본 기보 박자" : "Default notation meter"}</Text>
           <Text style={styles.value}>{ko ? "악보 배치" : "Musical layout"}</Text>
         </View>
         <View style={styles.meterFraction}>
@@ -181,19 +173,12 @@ export function NotebookSettingsPanel(props: Props) {
             ))}
           </View>
         </View>
-        <Text style={styles.meta}>{ko ? "기보 박자는 마디 배치와 진행 추적을 정합니다. 패턴 재생 박자는 바뀌지 않습니다." : "Sets measure layout and page tracking; it does not change pattern playback meter."}</Text>
+        <Text style={styles.meta}>{ko ? "첫 박자표를 넣기 전까지 적용됩니다. 클릭 소리의 박자는 바뀌지 않습니다." : "Applies until the first placed time signature. It does not change the click meter."}</Text>
       </View>
       {toggle(ko ? "자동 간격" : "Automatic spacing", settings.autoSpacing ?? false, (autoSpacing) => props.onSettings({ autoSpacing }), "notebook-auto-spacing")}
       {toggle(ko ? "자동 크기 조정" : "Automatic scaling", settings.autoScale ?? false, (autoScale) => props.onSettings({ autoScale }), "notebook-auto-scale")}
       {toggle(ko ? "마디선 표시" : "Show barlines", settings.showBarlines ?? false, (showBarlines) => props.onSettings({ showBarlines }), "notebook-show-barlines")}
       <Text style={styles.meta}>{ko ? "마디선을 숨겨도 마디 계산은 계속됩니다." : "Hiding barlines leaves measure calculations intact."}</Text>
-      {props.portraitLayout && <Text style={styles.meta}>{ko
-        ? "휴대폰 세로는 100%에서 한 줄 한 마디, 50%에서 최대 두 마디입니다. 아래 마디 수는 가로 화면·태블릿에 적용되며 저장된 악보의 음악적 길이는 바뀌지 않습니다."
-        : "Phone portrait shows one measure at 100% and up to two at 50%. The count below is retained for landscape and tablets; musical duration is unchanged."}</Text>}
-      <View style={styles.fieldGroup}>
-        <View style={styles.fieldLabelRow}><Text style={styles.fieldLabel}>{ko ? "한 줄의 마디 수" : "Measures per row"}</Text><Text style={styles.value}>1–32</Text></View>
-        <TextInput testID="notebook-measures-per-row" accessibilityLabel={ko ? "한 줄의 마디 수" : "Measures per row"} value={measuresDraft} onChangeText={setMeasuresDraft} onBlur={() => commitMeasures()} onSubmitEditing={(event) => commitMeasures(event.nativeEvent.text)} keyboardType="number-pad" returnKeyType="done" style={styles.numberInput} />
-      </View>
       <View style={styles.pageControls}>
         <Pressable accessibilityRole="button" accessibilityLabel={ko ? "이전 페이지" : "Previous page"} onPress={() => props.onPage(Math.max(0, props.pageIndex - 1))} disabled={props.pageIndex <= 0} style={[styles.pageArrow, props.pageIndex <= 0 && styles.disabled]}><Ionicons name="chevron-back" size={18} color="#665b4d" /></Pressable>
         <Text style={styles.pageCounter}>{t.page} {props.pageIndex + 1} / {Math.max(1, note.pages.length)}</Text>
@@ -229,10 +214,13 @@ export function NotebookSettingsPanel(props: Props) {
         <View style={styles.fieldLabelRow}><Text style={styles.fieldLabel}>{ko ? "종이 확대" : "Paper zoom"}</Text><Text style={styles.value}>{Math.round(props.scale * 100)}%</Text></View>
         <View style={styles.zoomControls}>
           <Pressable accessibilityRole="button" accessibilityLabel={ko ? "축소" : "Zoom out"} onPress={() => props.onZoom(Math.max(0.35, +(props.scale - 0.1).toFixed(2)))} style={styles.zoomButton}><Ionicons name="remove" size={17} color="#625849" /></Pressable>
-          <TextInput value={zoomDraft} onChangeText={setZoomDraft} onBlur={commitZoom} onSubmitEditing={commitZoom} keyboardType="number-pad" returnKeyType="done" style={styles.zoomInput} accessibilityLabel={ko ? "확대 비율" : "Zoom percentage"} />
+          <TextInput testID="notebook-paper-zoom" value={zoomDraft} onChangeText={setZoomDraft} onBlur={() => commitZoom()} onSubmitEditing={(e) => commitZoom(e.nativeEvent.text)} keyboardType="number-pad" returnKeyType="done" style={styles.zoomInput} accessibilityLabel={ko ? "확대 비율" : "Zoom percentage"} />
           <Text style={styles.value}>%</Text>
           <Pressable accessibilityRole="button" accessibilityLabel={ko ? "확대" : "Zoom in"} onPress={() => props.onZoom(Math.min(2.5, +(props.scale + 0.1).toFixed(2)))} style={styles.zoomButton}><Ionicons name="add" size={17} color="#625849" /></Pressable>
         </View>
+        <Text style={styles.meta}>{props.portraitLayout
+          ? (ko ? "100%에서 한 마디, 50%에서 한 줄에 최대 두 마디까지 보입니다." : "See one measure per row at 100% and up to two at 50%.")
+          : (ko ? "축소하면 한 줄에 더 많은 마디가 보입니다. 악보의 음가와 마디 경계는 그대로입니다." : "Zoom out to see more measures per row. Written durations and boundaries stay the same.")}</Text>
       </View>
 
       <View style={styles.rule} />
@@ -241,14 +229,6 @@ export function NotebookSettingsPanel(props: Props) {
       {toggle(t.follow, settings.follow, (follow) => props.onSettings({ follow }), "notebook-follow")}
       {toggle(ko ? "반복 · 이동 기호 따라가기" : "Follow repeat & navigation marks", settings.followSymbols ?? false, (followSymbols) => props.onSettings({ followSymbols }), "notebook-follow-symbols")}
        <Text style={styles.meta}>{ko ? "놓은 부호만 해석합니다. 도돌이표는 2회, D.C./D.S. 뒤에는 반복하지 않습니다. 코다는 앞의 이동 지점과 뒤의 도착 지점, 두 곳에 놓아 주세요." : "Reads placed marks only. Repeats play twice, without repeats after D.C./D.S. Place two Coda marks: the earlier trigger and later destination."}</Text>
-      <View style={styles.fieldGroup}>
-        <Text style={styles.fieldLabel}>{ko ? "한 줄의 길이" : "Length of each staff row"}</Text>
-        <View style={styles.segment}>
-          <Pressable testID="notebook-line-unit-measure" accessibilityRole="button" accessibilityState={{ selected: (settings.measuresPerRow ?? (settings.lineUnit === "phrase" ? 4 : 1)) === 1 }} onPress={() => { setMeasuresDraft("1"); props.onSettings({ lineUnit: "measure", measuresPerRow: 1 }); }} style={[styles.segmentButton, (settings.measuresPerRow ?? (settings.lineUnit === "phrase" ? 4 : 1)) === 1 && styles.segmentSelected]}><Text style={[styles.segmentText, (settings.measuresPerRow ?? (settings.lineUnit === "phrase" ? 4 : 1)) === 1 && styles.segmentTextSelected]}>{t.measure}</Text></Pressable>
-          <Pressable testID="notebook-line-unit-phrase" accessibilityRole="button" accessibilityState={{ selected: (settings.measuresPerRow ?? (settings.lineUnit === "phrase" ? 4 : 1)) === 4 }} onPress={() => { setMeasuresDraft("4"); props.onSettings({ lineUnit: "phrase", measuresPerRow: 4 }); }} style={[styles.segmentButton, (settings.measuresPerRow ?? (settings.lineUnit === "phrase" ? 4 : 1)) === 4 && styles.segmentSelected]}><Text style={[styles.segmentText, (settings.measuresPerRow ?? (settings.lineUnit === "phrase" ? 4 : 1)) === 4 && styles.segmentTextSelected]}>{t.phrase}</Text></Pressable>
-        </View>
-        <Text style={styles.meta}>{ko ? "한 줄에 배치할 기본 마디 수입니다. 수동 마디선이 있는 줄은 수동 경계만 사용하며, 마지막 수동선을 지우면 이 설정으로 돌아갑니다. 음가 자체는 바뀌지 않습니다." : "Default measures per row. Rows with manual barlines use only those boundaries; removing the last manual line restores this setting. Note durations stay unchanged."}</Text>
-      </View>
       <View style={styles.fieldGroup}>
         <View style={styles.fieldLabelRow}><Text style={styles.fieldLabel}>{t.zoom}</Text><Text style={styles.value}>{settings.playbackZoom.toFixed(2)}×</Text></View>
         <View style={styles.zoomControls}>

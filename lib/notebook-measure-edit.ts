@@ -1,6 +1,7 @@
 import type { StaffNotebook, StaffStamp } from "./staff-notebook";
 import { notebookStampMeasure } from "./notebook-measures";
 import { indexNotebookSplits, restoreNotebookStamp } from "./notebook-splits";
+import { normalizeNotebookSections } from "./notebook-sections";
 
 /**
  * Refresh derived measure metadata against the edited geometry. Manual lines
@@ -69,6 +70,7 @@ export function prepareNotebookMeasureEdit(before: StaffNotebook, next: StaffNot
       };
     }) };
   }
+  next = normalizeNotebookSections(before, next);
   return {
     ...next,
     pages: next.pages.map((page) => ({

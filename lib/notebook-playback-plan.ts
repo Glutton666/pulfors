@@ -1,18 +1,35 @@
 import type { NotebookRow } from "./staff-notebook-layout";
 import { notebookRows } from "./staff-notebook-layout";
 import type { StaffNotebook } from "./staff-notebook";
-import { measuresInRow, measureDuration } from "./notebook-music-layout";
-import { notebookPlaybackRowCounts } from "./notebook-measures";
+import { meterLength, notebookSections } from "./notebook-sections";
 
 export type NotebookBar = { source: number; startMs: number; endMs: number; group?: string };
-export type NotebookChunk = NotebookBar & { row: number };
-export type NotebookPlan = { rows: NotebookRow[]; chunks: NotebookChunk[]; rowEnds: number[]; durationMs: number; positionRows?: number[] };
+export type NotebookChunk = NotebookBar & { row: number; measure?: number };
+export type NotebookPlan = { rows: NotebookRow[]; chunks: NotebookChunk[]; rowEnds: number[]; durationMs: number; positionRows?: number[]; chunkEnds?: number[] };
 
 /** Paper duration always comes from the same regions used by selection/layout. */
-export function buildNotebookNotationPlan(note: StaffNotebook, barMs = measureDuration(note.settings) * 60_000 / (note.settings?.bpm ?? 120)) {
+export function buildNotebookNotationPlan(note: StaffNotebook, barMs?: number): NotebookPlan {
   const rows = notebookRows(note);
-  return buildNotebookPlan(rows, [{ source: 0, startMs: 0, endMs: barMs }], measuresInRow(note.settings),
-    false, Math.random, notebookPlaybackRowCounts(note, rows));
+  const sectionsByPage = notebookSections(note);
+  if (!rows.length || !sectionsByPage.some((p) => p.length) || barMs !== undefined && !(barMs > 0)) throw new Error("EMPTY_PATTERN");
+  const chunks: NotebookChunk[] = [], rowEnds: number[] = [];
+  let durationMs = 0, row = -1;
+  note.pages.forEach((page, pi) => {
+    const source = sectionsByPage[pi];
+    let cursor = 0;
+    for (let r = 0; r < (page.staffCount ?? 7); r++) {
+      row++;
+      while (cursor < source.length && source[cursor].row === r) {
+        const region = source[cursor++];
+        const length = barMs ?? meterLength(region.meter) * 60_000 / (note.settings?.bpm ?? 120);
+        chunks.push({ row, measure: region.index, source: 0, startMs: 0, endMs: length });
+        durationMs += length;
+      }
+      rowEnds.push(durationMs);
+    }
+  });
+  if (durationMs > 600_000) throw new Error("NOTEBOOK_TOO_LONG");
+  return { rows, chunks, rowEnds, durationMs };
 }
 
 /** Shuffle whole paper units, joining units when a source block crosses their boundary. */
@@ -57,4 +74,20 @@ export function notebookPosition(rowEnds: number[], timeMs: number, positionRows
   if (row < 0) row = Math.max(0, rowEnds.length - 1);
   const start = row ? rowEnds[row - 1] : 0;
   return { row: positionRows?.[row] ?? row, progress: Math.max(0, Math.min(1, (timeMs - start) / ((rowEnds[row] ?? 1) - start))) };
+}
+
+/** A row can contain unequally timed measures or be visited with a repeat jump. */
+export function notebookMeasurePosition(plan: NotebookPlan, timeMs: number) {
+  let low = 0, high = plan.chunks.length;
+  const ends = plan.chunkEnds ?? notebookChunkEnds(plan.chunks);
+  while (low < high) {
+    const mid = (low + high) >>> 1;
+    if (timeMs < ends[mid]) high = mid; else low = mid + 1;
+  }
+  const chunk = plan.chunks[Math.min(low, plan.chunks.length - 1)];
+  return { ...notebookPosition(plan.rowEnds, timeMs, plan.positionRows), measure: chunk?.measure ?? 0 };
+}
+export function notebookChunkEnds(chunks: NotebookChunk[]) {
+  let end = 0;
+  return chunks.map((c) => end += c.endMs - c.startMs);
 }

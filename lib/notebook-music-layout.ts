@@ -2,13 +2,14 @@ import type { NotebookSettings, StaffNotebook, StaffPage, StaffStamp, StaffTuple
 import { ROW_HEIGHT, rowAt, inkInRow } from "./staff-notebook-layout";
 import { NOTEBOOK_LEFT, NOTEBOOK_SPAN, isManualBar, measuresInRow, naturalPaperWidth, notebookMeasureRegions } from "./notebook-measures";
 import { assertNotebookSplitsReflowable, identifyLegacyNotebookSplits, indexNotebookSplits, NOTEBOOK_VALUES as values, notebookSourceId, restoreNotebookStamp } from "./notebook-splits";
+import { defaultNotationMeter, meterLength, notebookSections, placeSectionStamp, type SectionMeasure } from "./notebook-sections";
 export { NOTEBOOK_LEFT, NOTEBOOK_SPAN, isManualBar, measuresInRow, naturalPaperWidth, notebookMeasureRegions } from "./notebook-measures";
 export type { NotebookMeasureRegion } from "./notebook-measures";
 export { notebookStampMeasure as notebookMeasureAt } from "./notebook-measures";
 
 const EPS = 1e-7;
 export const isMusic = (s: StaffStamp) => /^(rest-)?(whole|half|quarter|eighth|sixteenth|thirty_second)$/.test(s.glyph);
-export const notationMeter = (settings?: Partial<NotebookSettings>) => settings?.notationMeter ?? { beats: 4, unit: 4 as const };
+export const notationMeter = (settings?: Partial<NotebookSettings>) => settings?.notationMeter ?? defaultNotationMeter;
 export const measureDuration = (settings?: Partial<NotebookSettings>) => {
   const m = notationMeter(settings); return m.beats * 4 / m.unit;
 };
@@ -65,10 +66,16 @@ function fragmentGlyph(duration: number, rest: boolean) {
 export function layoutNotebookMusic(source: StaffNotebook, options: MusicLayoutOptions = {}): MusicLayoutResult {
   const input = identifyLegacyNotebookSplits(source);
   assertNotebookSplitsReflowable(input);
-  const settings = input.settings, capacity = measureDuration(settings), perRow = measuresInRow(settings);
+  const settings = input.settings, perRow = measuresInRow(settings);
   const rowsPerPage = settings?.rowsPerPage ?? input.pages[0]?.staffCount ?? 7;
   const rowOffsets: number[] = []; let totalRows = 0;
   input.pages.forEach((p) => { rowOffsets.push(totalRows); totalRows += p.staffCount ?? 7; });
+  const rowSections: SectionMeasure[][] = Array.from({ length: totalRows }, () => []);
+  notebookSections(input).forEach((regions, pi) => regions.forEach((region) => rowSections[rowOffsets[pi] + region.row].push(region)));
+  const finalMeter = rowSections.at(-1)?.at(-1)?.meter ?? notationMeter(settings);
+  const capacityAt = (r: number, m: number) => meterLength(rowSections[r]?.[m]?.meter ?? finalMeter);
+  const maxLater = new Array<number>(totalRows + 1).fill(meterLength(finalMeter));
+  for (let r = totalRows - 1; r >= 0; r--) maxLater[r] = Math.max(maxLater[r + 1], ...rowSections[r].map((v) => meterLength(v.meter)));
   const originals = input.pages.flatMap((p) => p.stamps ?? []);
   if (!originals.length) return { note: input, reason: "unchanged", requiredScale: 1 };
   const attachments = originals.filter((s) => !!s.attachTo);
@@ -107,7 +114,7 @@ export function layoutNotebookMusic(source: StaffNotebook, options: MusicLayoutO
     }
     p.completedRows?.forEach((r) => completed.add(rowOffsets[pi] + r));
     p.blankRows?.forEach((r) => blank.add(rowOffsets[pi] + r));
-    const stamps = (p.stamps ?? []).filter((s) => !s.generated && !s.attachTo && !isManualBar(s) && !s.split?.index).map(restoreNotebookStamp);
+    const stamps = (p.stamps ?? []).filter((s) => !s.generated && !s.attachTo && !isManualBar(s) && !s.split?.index && !s.sectionStart).map(restoreNotebookStamp);
     stamps.forEach((s) => sourceStamps.set(s.id, s));
     const byId = new Map(stamps.map((s) => [s.id, s]));
     const consumed = new Set<string>();
@@ -122,11 +129,11 @@ export function layoutNotebookMusic(source: StaffNotebook, options: MusicLayoutO
       const chordDurations = new Map<string, number>();
       members.forEach((m) => chordDurations.set(m.chordId ?? m.id, Math.max(chordDurations.get(m.chordId ?? m.id) ?? 0, musicalDuration(m, groups))));
       const localRow = sourceRow - rowOffsets[pi];
+      const position = regions.find((r) => r.row === localRow && s.x < r.right)?.index ?? rowCounts.get(sourceRow)! - 1;
       const sourceMeasure = manualRows.get(sourceRow)?.bars.some((s) => s.x > 1 / (naturalPaperWidth(p) - 76) && s.x < 1 - 1 / (naturalPaperWidth(p) - 76))
-        ? regions.find((r) => r.row === localRow && s.x < r.right)?.index ?? rowCounts.get(sourceRow)! - 1
-        : undefined;
+        ? position
+        : rowSections[sourceRow].findLast((region) => region.index <= position && (region.clefChange || region.meterChange))?.index;
       const unit: Unit = { stamps: members, groups, sourceRow, sourceMeasure, duration: [...chordDurations.values()].reduce((a, b) => a + b, 0) };
-      if (group && unit.duration > capacity + EPS) throw new Error("TUPLET_EXCEEDS_MEASURE");
       unitsByRow.set(sourceRow, [...(unitsByRow.get(sourceRow) ?? []), unit]);
     }
   });
@@ -148,18 +155,29 @@ export function layoutNotebookMusic(source: StaffNotebook, options: MusicLayoutO
         measure = unit.sourceMeasure; at = 0;
       }
       const startsBoundary = /^(repeat_start|segno|volta1|volta2)$/.test(unit.stamps[0].glyph);
-      if (at >= capacity - EPS && (unit.duration > 0 || startsBoundary)) { at = 0; measure++; }
+      if (at >= capacityAt(row, measure) - EPS && (unit.duration > 0 || startsBoundary)) { at = 0; measure++; }
       if (measure >= rowBars) { carry = [unit, ...queue]; break; }
-      if (unit.groups.length && at + unit.duration > capacity + EPS) {
-        measure++; at = 0;
+      if (unit.groups.length && at + unit.duration > capacityAt(row, measure) + EPS) {
+        const max = Math.max(maxLater[Math.min(row + 1, totalRows)], ...(rowSections[row] ?? []).slice(measure).map((v) => meterLength(v.meter)));
+        if (unit.duration > max + EPS) throw new Error("TUPLET_EXCEEDS_MEASURE");
+        do { measure++; at = 0; } while (measure < rowBars && unit.duration > capacityAt(row, measure) + EPS);
         if (measure >= rowBars) { carry = [unit, ...queue]; break; }
       }
+      const capacity = capacityAt(row, measure);
       if (unit.duration > capacity - at + EPS && !unit.groups.length && unit.stamps.length === 1 && isMusic(unit.stamps[0])) {
         const original = unit.stamps[0], rest = original.glyph.startsWith("rest-");
         let remaining = unit.duration, available = capacity - at;
+        let nextRow = row, nextMeasure = measure;
         const pieces: { stamp: StaffStamp; duration: number }[] = [];
         while (remaining > EPS) {
-          if (available <= EPS) available = capacity;
+          if (available <= EPS) {
+            nextMeasure++;
+            if (nextMeasure >= (rowCounts.get(nextRow) ?? perRow)) {
+              do { nextRow++; } while (blank.has(nextRow));
+              nextMeasure = 0;
+            }
+            available = capacityAt(nextRow, nextMeasure);
+          }
           const part = fragmentGlyph(Math.min(remaining, available), rest);
           const index = pieces.length, id = index ? allocateId(`${original.id}:split:${index}`) : original.id;
           const oldPart = previousSplits.get(original.id)?.[index]?.stamp;
@@ -185,7 +203,7 @@ export function layoutNotebookMusic(source: StaffNotebook, options: MusicLayoutO
     if (completed.has(row)) {
       for (let m = 0; m < rowBars; m++) {
         const used = placed.filter((p) => p.row === row && p.measure === m).reduce((max, p) => Math.max(max, p.start + p.duration), 0);
-        let remaining = capacity - used, start = used, i = 0;
+        let remaining = capacityAt(row, m) - used, start = used, i = 0;
         while (remaining > EPS) {
           const f = fragmentGlyph(remaining, true);
           const stamp: StaffStamp = { id: allocateId(`auto-rest:${input.id}:${row}:${m}:${i++}`), glyph: f.glyph, dotted: f.dotted, durationBeats: f.duration, generated: true, x: 0, y: 102 + row * ROW_HEIGHT, size: 26 };
@@ -199,6 +217,11 @@ export function layoutNotebookMusic(source: StaffNotebook, options: MusicLayoutO
   // Ordinary musical reflow leaves ink fixed. Visual spill inserts physical rows,
   // so the later original rows (including ink-only/blank rows) move as units.
   const structuralRows = new Map(Array.from({ length: rowCount }, (_, r) => [r, { first: r, last: r }]));
+  const sectionChanges = new Map<string, StaffStamp[]>();
+  rowSections.forEach((sections, r) => sections.forEach((s, m) => {
+    const marks = [s.clefChange, s.meterChange].filter((v): v is StaffStamp => !!v);
+    if (marks.length) sectionChanges.set(`${r}:${m}`, marks);
+  }));
   const regionFraction = (r: number, m: number) => {
     const bounds = manualRows.get(r)?.bounds;
     return bounds ? bounds[m + 1] - bounds[m] : 1 / (rowCounts.get(r) ?? perRow);
@@ -208,6 +231,7 @@ export function layoutNotebookMusic(source: StaffNotebook, options: MusicLayoutO
     const updatedCounts = new Map<number, number>();
     const updatedConfigured = new Map<number, number>();
     const updatedManual = new Map<number, { bounds: number[]; bars: StaffStamp[] }>();
+    const updatedSections = new Map<string, StaffStamp[]>();
     const sourceEntries = Array.from({ length: rowCount }, (_, r) => placed.filter((e) => e.row === r));
     for (let oldRow = 0; oldRow < rowCount; oldRow++) {
       const entries = sourceEntries[oldRow];
@@ -218,6 +242,10 @@ export function layoutNotebookMusic(source: StaffNotebook, options: MusicLayoutO
         updatedConfigured.set(targetRow, configuredCounts.get(oldRow) ?? perRow);
         const manual = manualRows.get(oldRow);
         if (manual) updatedManual.set(targetRow, manual);
+        for (let m = 0; m < (rowCounts.get(oldRow) ?? perRow); m++) {
+          const marks = sectionChanges.get(`${oldRow}:${m}`);
+          if (marks) updatedSections.set(`${targetRow}:${m}`, marks);
+        }
         continue;
       }
       const sourcePage = input.pages.find((_, i) => rowOffsets[i] <= oldRow && rowOffsets[i] + (input.pages[i].staffCount ?? 7) > oldRow);
@@ -250,6 +278,8 @@ export function layoutNotebookMusic(source: StaffNotebook, options: MusicLayoutO
           finishRow(m); targetRow++; extraRows++; bars = 0; maximumWidth = 0;
         }
         bar.forEach((e) => { e.row = targetRow; e.measure = bars; });
+        const marks = sectionChanges.get(`${oldRow}:${m}`);
+        if (marks) updatedSections.set(`${targetRow}:${bars}`, marks);
         bars++; maximumWidth = Math.max(maximumWidth, width / fraction);
       }
       finishRow(maxBars);
@@ -259,6 +289,7 @@ export function layoutNotebookMusic(source: StaffNotebook, options: MusicLayoutO
     updatedCounts.forEach((n, r) => rowCounts.set(r, n));
     configuredCounts.clear(); updatedConfigured.forEach((n, r) => configuredCounts.set(r, n));
     manualRows.clear(); updatedManual.forEach((v, r) => manualRows.set(r, v));
+    sectionChanges.clear(); updatedSections.forEach((v, k) => sectionChanges.set(k, v));
     rowCount += extraRows;
   }
   const pageCount = Math.ceil(rowCount / rowsPerPage);
@@ -332,6 +363,9 @@ export function layoutNotebookMusic(source: StaffNotebook, options: MusicLayoutO
     for (let m = 0; m < rowBars; m++) {
       const regionWidth = span * regionFraction(r, m);
       const regionLeft = NOTEBOOK_LEFT + span * (manual?.bounds[m] ?? m / rowBars);
+      sectionChanges.get(`${r}:${m}`)?.forEach((mark) => page.stamps.push(placeSectionStamp(mark, {
+        row: localRow, index: m, left: regionLeft, right: regionLeft + regionWidth,
+      })));
       const entries = placed.filter((x) => x.row === r && x.measure === m).sort((a, b) => a.start - b.start);
       const widths = entries.map((e) => unitWidth(e.unit, attachments));
       const slack = Math.max(0, regionWidth - 24 - widths.reduce((a, b) => a + b, 0));

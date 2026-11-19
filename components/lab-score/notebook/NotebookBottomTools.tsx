@@ -14,6 +14,8 @@ import { NotebookInkOptions } from "./NotebookInkOptions";
 import { NotebookInkToolbar } from "./NotebookInkToolbar";
 import { NotebookSelectionTools } from "./NotebookSelectionTools";
 import type { NotebookSelectionUnit } from "@/lib/notebook-editing";
+import { defaultNotationMeter, type NotebookMeter } from "@/lib/notebook-sections";
+import { NotebookMeterPicker } from "./NotebookMeterPicker";
 
 type Tool = "pen" | "erase" | "move" | "select";
 type Choice = { glyph: string; role: "normal" | "ghost" | "strong"; dotted: boolean };
@@ -43,6 +45,7 @@ type Props = {
   onAutoSpace: () => void;
   autoSpaceDisabled: boolean;
   onChoose: (choice: Choice) => void;
+  notationMeter?: NotebookMeter;
   onTuplet: () => void;
   tupletCount: number | null;
   selectionCount: number;
@@ -70,6 +73,7 @@ export function NotebookBottomTools(props: Props) {
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const [showAccessibleChooser, setShowAccessibleChooser] = useState(false);
   const [category, setCategory] = useState<NotesCategory>(null);
+  const [meterPicker, setMeterPicker] = useState(false);
   const dockRef = useRef<View>(null);
   const [dockPosition, setDockPosition] = useState({ x: 0, y: 0 });
   const [dockWidth, setDockWidth] = useState(0);
@@ -141,12 +145,7 @@ export function NotebookBottomTools(props: Props) {
       label: ko ? "박자표" : "Meters",
       literal: true,
       items: [
-        { id: "time-2-4", label: ko ? "2/4박자" : "2/4 meter" },
-        { id: "time-3-4", label: ko ? "3/4박자" : "3/4 meter" },
-        { id: "time-4-4", label: ko ? "4/4박자" : "4/4 meter" },
-        { id: "time-6-8", label: ko ? "6/8박자" : "6/8 meter" },
-        { id: "time-9-8", label: ko ? "9/8박자" : "9/8 meter" },
-        { id: "time-12-8", label: ko ? "12/8박자" : "12/8 meter" },
+        { id: "meter-picker", label: ko ? "박자표 만들기" : "Custom meter" },
       ],
     },
     { label: ko ? "임시표" : "Accidentals", items: ACCIDENTALS.map((item) => ({ id: item.value, label: item.labelKey })) },
@@ -258,8 +257,12 @@ export function NotebookBottomTools(props: Props) {
                     <Text style={styles.drawerEyebrow}>{group.label}</Text>
                     <View style={styles.drawerGlyphGrid}>
                       {group.items.map((item) => (
-                        <Pressable key={item.id} testID={`notebook-symbol-${item.id}`} accessibilityRole="button" accessibilityLabel={item.label.replace(/([A-Z])/g, " $1").replace(/_/g, " ")} onPress={() => { props.onChoose({ glyph: item.id, role: "normal", dotted: false }); setCategory(null); }} style={styles.drawerGlyphButton}>
-                          <NotebookGlyphPreview glyph={item.id} size={22} />
+                         <Pressable key={item.id} testID={`notebook-symbol-${item.id}`} accessibilityRole="button" accessibilityLabel={item.label.replace(/([A-Z])/g, " $1").replace(/_/g, " ")} onPress={() => {
+                           if (item.id === "meter-picker") setMeterPicker(true);
+                           else props.onChoose({ glyph: item.id, role: "normal", dotted: false });
+                           setCategory(null);
+                         }} style={styles.drawerGlyphButton}>
+                           <NotebookGlyphPreview glyph={item.id === "meter-picker" ? `time-${props.notationMeter?.beats ?? 4}-${props.notationMeter?.unit ?? 4}` : item.id} size={22} />
                           <Text numberOfLines={1} style={styles.drawerGlyphLabel}>{item.label.replace(/([A-Z])/g, " $1").replace(/_/g, " ")}</Text>
                         </Pressable>
                       ))}
@@ -269,6 +272,10 @@ export function NotebookBottomTools(props: Props) {
             </ScrollView>
           </View>
         ) : null}
+         {meterPicker && <NotebookMeterPicker ko={ko} initial={props.notationMeter ?? defaultNotationMeter}
+           onClose={() => setMeterPicker(false)} onCommit={(glyph) => {
+             setMeterPicker(false); props.onChoose({ glyph, role: "normal", dotted: false });
+           }} />}
         {showAccessibleChooser && !pickerActive && <ScrollView horizontal showsHorizontalScrollIndicator={false}
           style={[styles.accessibleChooser, chooserAbove ? { bottom: "100%", top: undefined } : { top: "100%", bottom: undefined }, { maxHeight: Math.max(44, Math.min(58, chooserAbove ? roomAbove : roomBelow)) }]}
           contentContainerStyle={styles.accessibleChooserContent}>

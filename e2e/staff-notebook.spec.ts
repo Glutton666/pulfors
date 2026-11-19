@@ -28,10 +28,9 @@ test("ink vertical drag selects a tool and cumulative right swipe opens that too
 
 test("portrait folds to one or two measures without changing wide layouts or losing notation", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await openNotebook(page);
-  await openSettings(page);
-  await page.getByTestId("notebook-measures-per-row").fill("4");
-  await page.getByTestId("notebook-measures-per-row").press("Enter");
+  await openLegacyMeasureCount(page, 4);
+  await expect(page.getByTestId("notebook-measures-per-row")).toHaveCount(0);
+  await expect(page.getByTestId("notebook-line-unit-phrase")).toHaveCount(0);
   await page.getByTestId("notebook-show-barlines").click();
   await page.getByTestId("notebook-panel-close").click();
   await expect(page.getByTestId("notebook-auto-barline")).toHaveCount(0);
@@ -48,6 +47,10 @@ test("portrait folds to one or two measures without changing wide layouts or los
   expect(await page.getByTestId("notebook-auto-barline").count()).toBeGreaterThan(0);
   await page.screenshot({ path: "generated-artifacts/notebook-portrait-two-measures.png" });
   await page.setViewportSize({ width: 844, height: 390 });
+  await openSettings(page);
+  await page.getByTestId("notebook-paper-zoom").fill("100");
+  await page.getByTestId("notebook-paper-zoom").press("Enter");
+  await page.getByTestId("notebook-panel-close").click();
   // Original four-bar geometry returns; display folding never overwrites settings.
   const bars = page.getByTestId("notebook-auto-barline");
   const firstY = await bars.first().getAttribute("y1");
@@ -58,8 +61,103 @@ test("portrait folds to one or two measures without changing wide layouts or los
   await chooseMode(page, "notes");
   await chooseGlyph(page, "clef-treble");
   await chooseGlyph(page, "time-6-8");
-  await expect(page.getByTestId("notebook-clef-treble")).toHaveCount(1);
+  await expect(page.getByTestId("notebook-clef-treble").first()).toBeVisible();
+  await expect(page.getByTestId("notebook-inherited-clef").first()).toBeVisible();
   await expect(page.getByTestId("notebook-meter-glyph")).toHaveCount(1);
+});
+
+test("meter wheel swipes, previews, and saves changes at the first bar of the targeted row", async ({ page }) => {
+  await page.setViewportSize({ width: 768, height: 1024 });
+  await openNotebook(page);
+  await chooseMode(page, "notes");
+  const paper = page.getByTestId("notebook-drawing");
+  const clickStaff = async (row: number) => {
+    const rule = paper.locator('line[stroke="#141414"]').nth(row * 5 + 2);
+    await rule.scrollIntoViewIfNeeded();
+    const box = (await rule.boundingBox())!;
+    await page.mouse.click(box.x + box.width * 0.28, box.y);
+  };
+  await clickStaff(1);
+  await page.getByTestId("notebook-category-marks").click();
+  await page.getByTestId("notebook-symbol-meter-picker").click();
+  const wheel = (await page.getByTestId("notebook-meter-numerator").boundingBox())!;
+  await page.mouse.move(wheel.x + wheel.width / 2, wheel.y + 87);
+  await page.mouse.down();
+  await page.mouse.move(wheel.x + wheel.width / 2, wheel.y - 9, { steps: 12 });
+  await page.mouse.up();
+  await expect(page.getByTestId("notebook-meter-numerator-value")).toHaveText("7");
+  await page.getByTestId("notebook-meter-denominator").press("ArrowUp");
+  await expect(page.getByTestId("notebook-meter-preview")).toHaveAttribute("aria-label", "7/8");
+  await expect(paper.getByTestId("notebook-meter-glyph")).toHaveCount(0);
+  await page.getByTestId("notebook-meter-picker-apply").click();
+  await expect(paper.getByTestId("notebook-meter-glyph")).toHaveCount(1);
+  await clickStaff(2);
+  await chooseGlyph(page, "time-3-4");
+  await openSettings(page);
+  await page.getByTestId("notebook-save").click();
+  await expect(page.getByTestId("web-alert")).toContainText(/Notebook saved|저장했습니다/);
+  await closeNotice(page);
+  const [saved] = await storedNotes(page);
+  expect(saved.pages[0].stamps?.map((s) => [s.glyph, s.y, s.sectionStart])).toEqual([
+    ["time-7-8", 257, true], ["time-3-4", 412, true],
+  ]);
+  expect(saved.settings?.beatsPerMeasure).toBe(DEFAULT_NOTEBOOK_SETTINGS.beatsPerMeasure);
+  await openSaved(page, saved.title);
+  await page.getByTestId("notebook-panel-close").click();
+  await expect(paper.getByTestId("notebook-meter-glyph")).toHaveCount(2);
+});
+
+for (const folded of [true, false]) test(`tapping a section does not move it and dragging targets another measure (${folded ? "folded" : "wide"})`, async ({ page }) => {
+  await page.setViewportSize(folded ? { width: 390, height: 960 } : { width: 1024, height: 768 });
+  const reference: StaffNotebook = {
+    id: "signature-hit", title: "Signature position", updatedAt: 1,
+    settings: { ...DEFAULT_NOTEBOOK_SETTINGS, autoSpacing: false, measuresPerRow: 3, rowsPerPage: 2 },
+    pages: [{ id: "score", staffCount: 2, strokes: [], stamps: [
+      { id: "first", glyph: "time-4-4", x: 80, y: 102, size: 26, measure: 0, sectionStart: true },
+      { id: "second", glyph: "time-7-8", x: 38 + 824 / 3 + 42, y: 102, size: 26, measure: 1, sectionStart: true },
+    ] }],
+  };
+  await page.addInitScript((n) => {
+    if (!localStorage.getItem("lab_staff_notebooks_v1")) localStorage.setItem("lab_staff_notebooks_v1", JSON.stringify([n]));
+  }, reference);
+  await openNotebook(page);
+  await openSettings(page);
+  await openSaved(page, reference.title);
+  await page.getByTestId("notebook-panel-close").click();
+  await chooseMode(page, "notes");
+  const second = page.getByTestId("notebook-stamp-second").getByTestId("notebook-meter-glyph");
+  const first = page.getByTestId("notebook-stamp-first");
+  const center = async () => {
+    const box = (await second.boundingBox())!;
+    return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+  };
+  await second.scrollIntoViewIfNeeded();
+  const start = await center();
+  await page.mouse.click(start.x + 3, start.y);
+  await expect(first).toBeVisible();
+  const selected = page.getByTestId("notebook-stamp-second").getByTestId("notebook-selection-highlight");
+  await expect(selected).toBeVisible();
+  expect((await center()).x).toBeCloseTo(start.x);
+  expect((await center()).y).toBeCloseTo(start.y);
+  const save = async () => {
+    await openSettings(page);
+    await page.getByTestId("notebook-save").click();
+    await expect(page.getByTestId("web-alert")).toContainText(/Notebook saved|저장했습니다/);
+    await closeNotice(page);
+    await page.getByTestId("notebook-panel-close").click();
+    return (await storedNotes(page))[0].pages[0].stamps;
+  };
+  expect(await save()).toEqual(reference.pages[0].stamps);
+  const rule = page.getByTestId("notebook-drawing").locator('line[stroke="#141414"]').nth(folded ? 12 : 2);
+  const box = (await rule.boundingBox())!;
+  const origin = await center();
+  await page.mouse.move(origin.x + 3, origin.y);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width * (folded ? 0.35 : 0.83), box.y, { steps: 12 });
+  await page.mouse.up();
+  const moved = await save();
+  expect(moved?.find((s) => s.id === "first")).toEqual(reference.pages[0].stamps![0]);
+  expect(moved?.find((s) => s.id === "second")).toMatchObject({ measure: 2, glyph: "time-7-8", sectionStart: true });
 });
 
 test("one continuous note gesture preserves strong role and left-swipe dot while placing exactly once", async ({ page }) => {
@@ -81,6 +179,37 @@ test("one continuous note gesture preserves strong role and left-swipe dot while
   await expect(paper.getByTestId("notebook-strong-mark")).toHaveCount(1);
   await expect(paper.getByTestId("notebook-dot")).toHaveCount(1);
   await page.screenshot({ path: "generated-artifacts/notebook-restored-note-gesture.png" });
+});
+
+test("a whole-note accent stays next to the head in the enlarged picker and on the staff", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await openNotebook(page);
+  await chooseMode(page, "notes");
+  await chooseGlyph(page, "whole");
+  const origin = (await page.getByTestId("notebook-note-origin").boundingBox())!;
+  const y = origin.y + origin.height / 2;
+  await page.mouse.move(origin.x + origin.width / 2, y);
+  await page.mouse.down();
+  const strong = page.getByTestId("notebook-note-role-strong");
+  const closeToHead = async (scope: import("@playwright/test").Locator) => {
+    const head = (await scope.getByTestId("notebook-note-head").boundingBox())!;
+    const accent = (await scope.getByTestId("notebook-strong-mark").boundingBox())!;
+    const gap = head.y - accent.y - accent.height;
+    expect(gap).toBeGreaterThan(0);
+    expect(gap).toBeLessThanOrEqual(4);
+  };
+  await closeToHead(strong);
+  const b = (await strong.boundingBox())!;
+  await page.mouse.move(b.x + b.width / 2, y, { steps: 8 });
+  await page.mouse.move(b.x + b.width / 2, y - 140, { steps: 14 });
+  const whole = (await page.getByTestId("notebook-note-duration-whole").boundingBox())!;
+  await page.mouse.move(whole.x + whole.width / 2, whole.y + whole.height / 2, { steps: 8 });
+  const plain = (await page.getByTestId("notebook-note-plain").boundingBox())!;
+  await page.mouse.move(plain.x + plain.width / 2, plain.y + plain.height / 2, { steps: 8 });
+  await page.mouse.up();
+  const paper = page.getByTestId("notebook-drawing");
+  await expect(paper.getByTestId("notebook-strong-mark")).toHaveCount(1);
+  await closeToHead(paper.locator('[data-testid^="notebook-stamp-"]').filter({ has: page.getByTestId("notebook-strong-mark") }));
 });
 
 for (const viewport of [{ width: 320, height: 568 }, { width: 568, height: 320 }]) {
@@ -144,10 +273,7 @@ for (const viewport of [{ width: 320, height: 568 }, { width: 568, height: 320 }
 
 for (const automatic of [false, true]) test(`one undo restores a new input and its ${automatic ? "automatic" : "manual"} spacing`, async ({ page }) => {
   await page.setViewportSize({ width: 768, height: 1024 });
-  await openNotebook(page);
-  await openSettings(page);
-  await page.getByTestId("notebook-measures-per-row").fill("2");
-  await page.getByTestId("notebook-measures-per-row").press("Enter");
+  await openLegacyMeasureCount(page, 2);
   if (automatic) await page.getByTestId("notebook-auto-spacing").click();
   await page.getByTestId("notebook-panel-close").click();
   await chooseMode(page, "notes");
@@ -727,7 +853,7 @@ for (const width of [390, 768, 844]) test(`musical-layout settings, group edit a
   await openNotebook(page);
   await openSettings(page);
   await openSaved(page, reference.title);
-  for (const id of ["notebook-auto-spacing", "notebook-auto-scale", "notebook-show-barlines", "notebook-measures-per-row", "notebook-random-unit-measure", "notebook-random-unit-row", "notebook-random-signs"]) {
+  for (const id of ["notebook-auto-spacing", "notebook-auto-scale", "notebook-show-barlines", "notebook-paper-zoom", "notebook-random-unit-measure", "notebook-random-unit-row", "notebook-random-signs"]) {
     await page.getByTestId(id).scrollIntoViewIfNeeded();
     await expect(page.getByTestId(id)).toBeVisible();
   }
@@ -816,6 +942,17 @@ async function chooseMode(page: Page, mode: "ink" | "notes" | "select" | "settin
   await page.getByTestId(`notebook-mode-${mode}`).click();
 }
 async function openSettings(page: Page) { await chooseMode(page, "settings"); }
+async function openLegacyMeasureCount(page: Page, count: number) {
+  const ref: StaffNotebook = { id: `legacy-layout-${count}`, title: `Legacy ${count}-measure layout`, updatedAt: 1,
+    pages: [{ id: "legacy-page", staffCount: 7, strokes: [] }],
+    settings: { ...DEFAULT_NOTEBOOK_SETTINGS, measuresPerRow: count } };
+  await page.addInitScript((notebook) => {
+    if (!localStorage.getItem("lab_staff_notebooks_v1")) localStorage.setItem("lab_staff_notebooks_v1", JSON.stringify([notebook]));
+  }, ref);
+  await openNotebook(page);
+  await openSettings(page);
+  await openSaved(page, ref.title);
+}
 async function noteAction(page: Page, id: string) {
   const action = page.getByTestId(id);
   if (!await action.isVisible()) await page.getByTestId("notebook-note-more").click();
@@ -838,7 +975,22 @@ async function chooseGlyph(page: Page, glyph: string) {
     await page.getByTestId(`notebook-rest-duration-${glyph.slice(5)}`).click();
   } else {
     await page.getByTestId(`notebook-category-${category}`).click();
-    await page.getByTestId(`notebook-symbol-${glyph}`).click();
+    if (!glyph.startsWith("time-")) await page.getByTestId(`notebook-symbol-${glyph}`).click();
+    else {
+      await page.getByTestId("notebook-symbol-meter-picker").click();
+      const [, numerator, denominator] = glyph.split("-");
+      for (const [type, allowed, target] of [
+        ["numerator", Array.from({ length: 12 }, (_, i) => i + 1), Number(numerator)],
+        ["denominator", [2, 4, 8, 16], Number(denominator)],
+      ] as const) {
+        const wheel = page.getByTestId(`notebook-meter-${type}`);
+        const initial = Number(await page.getByTestId(`notebook-meter-${type}-value`).textContent());
+        const delta = allowed.indexOf(target) - allowed.indexOf(initial);
+        for (let i = 0; i < Math.abs(delta); i++) await wheel.press(delta > 0 ? "ArrowUp" : "ArrowDown");
+      }
+      await expect(page.getByTestId("notebook-meter-preview")).toHaveAttribute("aria-label", `${numerator}/${denominator}`);
+      await page.getByTestId("notebook-meter-picker-apply").click();
+    }
   }
 }
 async function rowsTo(page: Page, value: number) {
@@ -1305,17 +1457,13 @@ test("paper fills tablet, dial does not exit, stamps preview and persist with in
   await page.getByTestId("notebook-note-duration-quarter").click();
   await expect(page.getByTestId("notebook-stamp-confirm")).toHaveCount(0);
   await openSettings(page);
-  await page.getByTestId("notebook-line-unit-phrase").click();
   await page.getByTestId("notebook-follow").click();
   await page.getByTestId("notebook-save").click();
-  await expect.poll(() => page.evaluate(() => {
-    const notes = JSON.parse(localStorage.getItem("lab_staff_notebooks_v1") ?? "[]");
-    return notes[0]?.pages[0]?.stamps?.length;
-  })).toBe(1);
-  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("lab_staff_notebooks_v1")!)[0]);
+  await expect.poll(async () => (await storedNotes(page))[0]?.pages[0]?.stamps?.length).toBe(1);
+  const [saved] = await storedNotes(page);
   expect(saved.pages[0].strokes).toHaveLength(1);
   expect(saved.pages[0].stamps[0].x).toBeGreaterThan(240);
-  expect(saved.settings.lineUnit).toBe("phrase");
+  expect(saved.settings.lineUnit).toBe(DEFAULT_NOTEBOOK_SETTINGS.lineUnit);
   expect(saved.settings.follow).toBe(true);
   await closeNotice(page);
   await page.getByTestId("notebook-panel-close").click();
@@ -1332,18 +1480,18 @@ test("phone imports real pattern, starts audio, stops on settings edits, and pla
   await openSettings(page);
   await page.getByText(/^패턴 불러오기$|^Load pattern$/).click();
   await page.getByText("Notebook 4/4 reference").click();
+  await page.getByTestId("notebook-panel-close").click();
   await page.getByTestId("notebook-play").click();
   await expect(page.getByTestId("notebook-play")).toHaveAttribute("aria-label", /정지|Stop/, { timeout: 30000 });
-  await page.getByTestId("notebook-line-unit-phrase").click();
+  await openSettings(page);
+  await page.getByTestId("notebook-show-barlines").click();
   await expect(page.getByTestId("notebook-play")).toHaveAttribute("aria-label", /재생|Play/);
   await page.getByTestId("notebook-save").click();
-  await expect.poll(() => page.evaluate(() => {
-    const notes = JSON.parse(localStorage.getItem("lab_staff_notebooks_v1") ?? "[]");
-    return notes[0]?.settings?.source?.id;
-  })).toBe("notebook-test-pattern");
-  const notes = await page.evaluate(() => JSON.parse(localStorage.getItem("lab_staff_notebooks_v1")!));
-  expect(notes[0].pages[0].stamps).toHaveLength(1);
-  expect(notes[0].pages[0].stamps[0].glyph).toBe("sharp");
+  await expect(page.getByTestId("web-alert")).toContainText(/Notebook saved|저장했습니다/);
+  await expect.poll(async () => (await storedNotes(page))[0]?.settings?.source?.id).toBe("notebook-test-pattern");
+  const [saved] = await storedNotes(page);
+  expect(saved.pages[0].stamps).toHaveLength(1);
+  expect(saved.pages[0].stamps?.[0].glyph).toBe("sharp");
   await closeNotice(page);
   await page.getByTestId("notebook-panel-close").click();
   await page.screenshot({ path: "/tmp/notebook-phone-verified.png" });
@@ -1516,7 +1664,6 @@ async function editGuardReference(page: Page) {
   await titleInput(page).fill(editedTitle);
   await page.getByTestId("notebook-bpm").fill("113");
   await page.getByTestId("notebook-bpm").press("Enter");
-  await page.getByTestId("notebook-line-unit-phrase").click();
   await page.getByTestId("notebook-follow").click();
   await page.getByTestId("notebook-random").click();
   await page.getByLabel(/^Decrease playback zoom$|^재생 확대 축소$/).click();
@@ -1570,7 +1717,7 @@ async function assertSavedEdits(page: Page) {
   expect(saved.pages[0].stamps![0]).toEqual(originalNote.pages[0].stamps![0]);
   expect(saved.pages[0].stamps![1]).toMatchObject({ glyph: "quarter", size: 26 });
   expect(saved.settings).toEqual({
-    ...DEFAULT_NOTEBOOK_SETTINGS, ...originalNote.settings, bpm: 113, follow: true, random: true, lineUnit: "phrase", playbackZoom: 0.75, rowsPerPage: 13,
+    ...DEFAULT_NOTEBOOK_SETTINGS, ...originalNote.settings, bpm: 113, follow: true, random: true, playbackZoom: 0.75, rowsPerPage: 13,
   });
   expect((await storedNotes(page)).find((note) => note.id === otherNote.id)).toEqual(otherNote);
   return saved;

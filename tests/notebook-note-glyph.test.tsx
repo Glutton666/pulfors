@@ -123,3 +123,18 @@ test.each(["normal", "ghost", "strong"] as const)("%s role and dot remain explic
   expect(view.queryByTestId("notebook-strong-mark") !== null).toBe(role === "strong");
   expect(view.getByTestId("notebook-dot")).toBeTruthy();
 });
+
+test.each([22, 26, 42, 52])("a strong whole note has a small, bounded head-to-accent gap at size %i", (size) => {
+  const view = render(<NotebookGlyphPreview glyph="whole" role="strong" size={size} />);
+  const mark = view.getByTestId("notebook-strong-mark");
+  const bottom = Number(mark.getAttribute("transform")!.match(/translate\(0 ([\d.-]+)\)/)![1]);
+  const gap = (-5 - bottom) * size / 26;
+  expect(gap).toBeGreaterThan(2);
+  expect(gap).toBeLessThanOrEqual(3.5 + 1e-8);
+});
+
+test.each([["up", 106, -22], ["down", 168, -3.85]] as const)("a strong beamed note stays next to the ink with an %s stem", (direction, stemY, top) => {
+  const view = render(<svg><NotebookGlyph glyph="eighth" x={80} y={150} size={52} role="strong"
+    beam={{ id: "note", stemX: 84, headY: 150, stemY, direction, scale: 2, levels: 1 }} /></svg>);
+  expect(view.getByTestId("notebook-strong-mark").getAttribute("transform")).toBe(`translate(0 ${top - 1.75})`);
+});

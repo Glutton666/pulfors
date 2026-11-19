@@ -13,7 +13,9 @@ export type NotebookSplit = {
   original: { glyph: string; dotted?: boolean; durationBeats?: number; tieTo?: string; tieFrom?: string };
 };
 export type StaffStamp = { id: string; glyph: string; x: number; y: number; size: number; role?: NotebookNoteRole; dotted?: boolean; attachTo?: string; erasures?: StaffErasure[];
-  durationBeats?: number; tieTo?: string; tieFrom?: string; chordId?: string; generated?: boolean; measure?: number; order?: number; split?: NotebookSplit };
+  durationBeats?: number; tieTo?: string; tieFrom?: string; chordId?: string; generated?: boolean; measure?: number; order?: number; split?: NotebookSplit;
+  /** Explicit opt-in. Older decorative clef and time glyphs have no section effect. */
+  sectionStart?: true };
 export type StaffTuplet = { id: string; stampIds: string[]; ratio?: { actual: number; normal: number } };
 export type StaffPage = { id: string; strokes: StaffStroke[]; staffCount?: number; stamps?: StaffStamp[]; anchor?: StaffPoint; tuplets?: StaffTuplet[];
   layoutScale?: number; completedRows?: number[]; blankRows?: number[]; measureCounts?: number[] };
@@ -103,6 +105,8 @@ export function isNotebook(value: unknown): value is StaffNotebook {
          (stamp.generated === undefined || typeof stamp.generated === "boolean") &&
          (stamp.measure === undefined || Number.isInteger(stamp.measure) && stamp.measure >= 0 && stamp.measure <= 100000) &&
          (stamp.order === undefined || Number.isFinite(stamp.order)) &&
+          (stamp.sectionStart === undefined || stamp.sectionStart === true && !stamp.attachTo && !stamp.generated &&
+            /^(clef-(treble|bass|alto|tenor|percussion)|time-([1-9]|1[0-2])-(2|4|8|16))$/.test(stamp.glyph)) &&
         (stamp.attachTo === undefined || typeof stamp.attachTo === "string" && page.stamps?.some((target) => target.id === stamp.attachTo && target.id !== stamp.id)))) &&
       (page.tuplets === undefined || Array.isArray(page.tuplets) && page.tuplets.every((group) =>
         !!group && typeof group.id === "string" && Array.isArray(group.stampIds) && group.stampIds.length >= 2 &&

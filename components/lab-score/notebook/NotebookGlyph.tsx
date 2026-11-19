@@ -2,9 +2,10 @@ import React from "react";
 import Svg, { Circle, G, Line, Path, Text as SvgText } from "react-native-svg";
 import { StaffRestGlyph } from "@/components/staff/StaffGlyphs";
 import { ALL_INSTR_SYMBOLS, ARTICULATIONS } from "@/components/ScorePalette";
-import { NotebookNoteGlyph } from "./NotebookNoteGlyph";
+import { NotebookNoteGlyph, notebookNoteTop, type NotebookNoteDuration } from "./NotebookNoteGlyph";
 import type { NotebookNoteRole } from "@/lib/staff-notebook";
 import type { NotebookBeamStem } from "@/lib/notebook-beaming";
+import { BRAVURA_CLEF_OUTLINES } from "./BravuraClefOutlines";
 
 const noteDenominator: Record<string, number> = { whole: 1, half: 2, quarter: 4, eighth: 8, sixteenth: 16, "thirty_second": 32 };
 const restDenominator: Record<string, number> = { "rest-whole": 1, "rest-half": 2, "rest-quarter": 4, "rest-eighth": 8, "rest-sixteenth": 16, "rest-thirty_second": 32 };
@@ -25,23 +26,28 @@ export function NotebookGlyph({ glyph, x, y, size, role = "normal", dotted = fal
     <SvgText x={0} y={-3} textAnchor="middle" fontFamily="serif" fontWeight="bold" fontSize={25} fill="#111">{meter[1]}</SvgText>
     <SvgText x={0} y={21} textAnchor="middle" fontFamily="serif" fontWeight="bold" fontSize={25} fill="#111">{meter[2]}</SvgText>
   </G>;
-  if (glyph.startsWith("clef-")) return <G testID={`notebook-${glyph}`} transform={`translate(${x} ${y}) scale(${size / 26})`}>
-    {glyph === "clef-treble" && <Path d="M2 28 C-14 31 -21 12 -12 1 C-5 -9 13 -12 12 -28 C11 -41 1 -43 -1 -29 C-5 -7 13 14 9 32 C6 45 -8 40 -6 33 C-5 27 2 29 1 34 M10 12 C9 -1 -9 -2 -10 10 C-11 20 2 23 7 17" fill="none" stroke="#111" strokeWidth={2.5} strokeLinecap="round" />}
-    {glyph === "clef-bass" && <><Path d="M-11 -7 C-11 -23 12 -20 10 -5 C8 7 -3 14 -13 19 C-2 10 4 4 4 -5 C4 -15 -4 -16 -7 -10" fill="#111" /><Circle cx={-9} cy={-9} r={3.8} fill="#111" /><Circle cx={17} cy={-11} r={2} fill="#111" /><Circle cx={17} cy={1} r={2} fill="#111" /></>}
-    {(glyph === "clef-alto" || glyph === "clef-tenor") && <G transform={glyph === "clef-tenor" ? "translate(0 -12)" : undefined}>
-      <Path d="M-13 -24 V24 M-8 -24 V24 M-3 0 L4 -8 V-23 C23 -25 23 -2 6 0 C23 2 23 25 4 23 V8 Z" fill="none" stroke="#111" strokeWidth={3} />
-    </G>}
-    {glyph === "clef-percussion" && <Path d="M-7 -14 V14 M7 -14 V14" stroke="#111" strokeWidth={5} />}
-  </G>;
+  if (glyph.startsWith("clef-")) {
+    const path = glyph === "clef-treble" ? BRAVURA_CLEF_OUTLINES.gClef
+      : glyph === "clef-bass" ? BRAVURA_CLEF_OUTLINES.fClef
+      : glyph === "clef-alto" || glyph === "clef-tenor" ? BRAVURA_CLEF_OUTLINES.cClef : undefined;
+    return <G testID={`notebook-${glyph}`} transform={`translate(${x} ${y}) scale(${size / 26})`}>
+      {path && <Path d={path} transform="translate(-16 0) scale(0.03315 -0.03315)" fill="#111" />}
+      {glyph === "clef-percussion" && <Path d="M-7 -14 V14 M7 -14 V14" stroke="#111" strokeWidth={5} />}
+    </G>;
+  }
   const noteValue = noteDenominator[glyph];
   if (noteValue) {
+    const duration = glyph as NotebookNoteDuration;
+    const scale = size / 26;
+    // Leave a small gap from the visible head, stem or beam, not from
+    // a presumed stem tip; cap the gap even in enlarged picker glyphs.
+    const accentBottom = notebookNoteTop(duration, y, scale, beam) - Math.min(3.5, 3.5 / scale);
     return <G>
-      <NotebookNoteGlyph duration={glyph as "whole" | "half" | "quarter" | "eighth" | "sixteenth" | "thirty_second"} x={x} y={y} size={size} beam={beam} />
-      <G transform={`translate(${x} ${y}) scale(${size / 26})`}>
+      <NotebookNoteGlyph duration={duration} x={x} y={y} size={size} beam={beam} />
+      <G transform={`translate(${x} ${y}) scale(${scale})`}>
         {role === "ghost" && <Path testID="notebook-ghost-mark" d="M-12 -9 Q-18 0 -12 9 M12 -9 Q18 0 12 9" fill="none" stroke="#111" strokeWidth={1.4} />}
-        {role === "strong" && <Path testID="notebook-strong-mark" d={beam?.direction === "up"
-          ? `M-8 ${((beam.stemY - y) / (size / 26)) - 20} L9 ${((beam.stemY - y) / (size / 26)) - 15} L-8 ${((beam.stemY - y) / (size / 26)) - 10}`
-          : "M-8 -50 L9 -45 L-8 -40"} transform={beam?.direction === "up" ? "translate(0 -4)" : undefined} fill="none" stroke="#111" strokeWidth={1.8} />}
+        {role === "strong" && <Path testID="notebook-strong-mark" d={`M-7 -7 L7 -3.5 L-7 0`}
+          transform={`translate(0 ${accentBottom})`} fill="none" stroke="#111" strokeWidth={1.8} strokeLinejoin="round" />}
         {dotted && <Circle testID="notebook-dot" cx={role === "ghost" ? 23 : 16} cy={-3} r={2.2} fill="#111" />}
       </G>
     </G>;
@@ -83,6 +89,10 @@ export function NotebookGlyph({ glyph, x, y, size, role = "normal", dotted = fal
 export function NotebookGlyphPreview({ glyph, size = 26, role, dotted }: { glyph: string; size?: number; role?: NotebookNoteRole; dotted?: boolean }) {
   if (noteDenominator[glyph]) {
     return <Svg width={size + 28} height={size + 38} viewBox="0 0 90 90"><NotebookGlyph glyph={glyph} x={45} y={53} size={size} role={role} dotted={dotted} /></Svg>;
+  }
+  if (glyph.startsWith("clef-")) {
+    const y = glyph === "clef-treble" ? 40 : glyph === "clef-bass" ? 21 : 29;
+    return <Svg width={size + 16} height={size + 12} viewBox="0 0 62 58"><NotebookGlyph glyph={glyph} x={31} y={y} size={size * 0.82} /></Svg>;
   }
   return <Svg width={size + 28} height={size + 24} viewBox="0 0 70 55"><NotebookGlyph glyph={glyph} x={35} y={28} size={size} dotted={dotted} /></Svg>;
 }

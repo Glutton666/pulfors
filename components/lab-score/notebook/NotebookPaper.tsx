@@ -13,6 +13,7 @@ import { paperErasures } from "@/lib/notebook-erasing";
 import { createNotebookPaperGesture } from "@/lib/notebook-paper-gesture";
 import { NotebookObjectMask } from "./NotebookObjectMask";
 import { naturalPaperWidth, notebookMeasureRegions } from "@/lib/notebook-music-layout";
+import type { NotebookMeasureRegion } from "@/lib/notebook-measures";
 
 type Props = {
   page: StaffPage; width: number; height: number; paperScale: number; zoom: number;
@@ -26,10 +27,12 @@ type Props = {
   onPan?: (delta: StaffPoint) => void;
   onZoomBy?: (ratio: number) => void;
   layoutScaleOverride?: number;
+  displayRegions?: NotebookMeasureRegion[];
+  inheritedClefs?: { glyph: string; x: number; y: number; size: number }[];
   onTouch?: (point: StaffPoint, phase: "start" | "move" | "end" | "cancel") => void;
 };
 
-export function NotebookPaper({ page, width, height, paperScale, zoom, offset, tool, lineWidth, lineColor = "#111111", drawing, pendingGlyph, preview, selectedStampId, selection, selectionBox, openTupletIds, pendingRole, pendingDotted, settings, externalTieIds, onTouch, onPan, onZoomBy, layoutScaleOverride }: Props) {
+export function NotebookPaper({ page, width, height, paperScale, zoom, offset, tool, lineWidth, lineColor = "#111111", drawing, pendingGlyph, preview, selectedStampId, selection, selectionBox, openTupletIds, pendingRole, pendingDotted, settings, externalTieIds, onTouch, onPan, onZoomBy, layoutScaleOverride, displayRegions, inheritedClefs }: Props) {
   const surface = useRef<View>(null);
   const zoomCallback = useRef({ tool, onZoomBy });
   zoomCallback.current = { tool, onZoomBy };
@@ -86,9 +89,10 @@ export function NotebookPaper({ page, width, height, paperScale, zoom, offset, t
           {Array.from({ length: page.staffCount ?? 7 }, (_, row) => Array.from({ length: 5 }, (_, line) => (
             <Line key={`${row}-${line}`} x1={38} x2={naturalPaperWidth(page) - 38} y1={STAFF_TOP + row * ROW_HEIGHT + line * STAFF_GAP} y2={STAFF_TOP + row * ROW_HEIGHT + line * STAFF_GAP} stroke="#141414" strokeWidth={1.1} />
           )))}
-          {settings?.showBarlines && notebookMeasureRegions(page, settings).filter((r) => r.index > 0 &&
+           {settings?.showBarlines && (displayRegions ?? notebookMeasureRegions(page, settings)).filter((r) => r.index > 0 &&
             !(page.stamps ?? []).some((s) => /^(barline|bar_line)$/.test(s.glyph) && Math.abs(s.x - r.left) < 1 && Math.floor(s.y / ROW_HEIGHT) === r.row))
             .map((r) => <Line testID="notebook-auto-barline" key={`${r.row}:${r.index}`} x1={r.left} x2={r.left} y1={r.row * ROW_HEIGHT + STAFF_TOP} y2={r.row * ROW_HEIGHT + STAFF_TOP + STAFF_GAP * 4} stroke="#333" strokeWidth={1} />)}
+           {inheritedClefs?.map((mark) => <G key={`clef:${mark.y}`} testID="notebook-inherited-clef"><NotebookGlyph {...mark} /></G>)}
           {(page.strokes ?? []).map((stroke) => <G key={stroke.id} testID={`notebook-ink-${stroke.id}`}>
             <NotebookObjectMask cuts={paperErasures(stroke)}>
             {selection?.strokeIds.includes(stroke.id) && <Path d={path(stroke.points)} fill="none" stroke="#d69e37" opacity={0.45} strokeWidth={stroke.width + 9} strokeLinecap="round" />}

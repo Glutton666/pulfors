@@ -187,6 +187,21 @@ test.each([1, 4] as const)("simple 3/4 meter drives actual PCM and %s-measure ro
   expect(result.current.position?.row).toBe(1);
   act(() => result.current.stop());
 });
+
+test("7/8 and 3/4 notation change row timing without shifting the 2/4 click loop", async () => {
+  const note = makeNote("measure", 3);
+  note.settings = { ...DEFAULT_NOTEBOOK_SETTINGS, bpm: 120, beatsPerMeasure: 2, notationMeter: { beats: 4, unit: 4 } };
+  note.pages[1].stamps!.push({ id: "seven", glyph: "time-7-8", x: 80, y: 102, size: 26, sectionStart: true });
+  note.pages[2].stamps!.push({ id: "three", glyph: "time-3-4", x: 80, y: 102, size: 26, sectionStart: true });
+  const { result } = renderHook(() => useNotebookPlayback(note, true));
+  await act(async () => { await result.current.start(note); });
+  const schedule = render.mock.calls[0][2] as NonNullable<Parameters<typeof audioExport.renderNotebookPatternPCM>[2]>;
+  expect(schedule.durationMs).toBe(6000); // five-and-a-quarter seconds of paper, six complete 2/4 clicks.
+  expect(schedule.ticks.filter((tick) => tick.type === "accent").map((tick) => tick.time)).toEqual([0, 1000, 2000, 3000, 4000, 5000]);
+  act(() => { presentedMs = 3750; jest.advanceTimersByTime(35); });
+  expect(result.current.position).toEqual({ row: 2, progress: 0 });
+  act(() => result.current.stop());
+});
 test.each([true, false])("manual boundary add/move/delete drives actual rendered duration (show=%s)", async (showBarlines) => {
   jest.mocked(renderer.loadAssetPCM).mockResolvedValue(new Float32Array([amplitude.normal]));
   const note = makeNote("phrase", 1);

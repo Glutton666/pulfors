@@ -30,6 +30,17 @@ const flagCountByDuration: Record<NotebookNoteDuration, number> = {
   thirty_second: 3,
 };
 
+const STEM_TOP = -42;
+const WHOLE_HEAD_TOP = -5;
+const NOTE_HEAD_RADIUS_Y = 3.85;
+
+/** Top of the actual ink in unscaled glyph coordinates, not the preview box. */
+export function notebookNoteTop(duration: NotebookNoteDuration, y: number, scale: number, beam?: NotebookBeamStem) {
+  if (duration === "whole") return WHOLE_HEAD_TOP;
+  if (!beam) return STEM_TOP;
+  return Math.min(-NOTE_HEAD_RADIUS_Y, (beam.stemY - y) / scale);
+}
+
 export function NotebookNoteGlyph({
   duration,
   x,
@@ -44,9 +55,9 @@ export function NotebookNoteGlyph({
   const scale = size / 26;
   const beamedStemX = beam ? (beam.direction === "up" ? 4.8 : -4.8) : 4.8;
   // A normal stem spans 3.5 staff spaces (12 units each).
-  const beamedStemEnd = beam ? (beam.stemY - y) / scale : -42;
+  const beamedStemEnd = beam ? (beam.stemY - y) / scale : STEM_TOP;
   // Bravura's 32nd flag origin is below its top; align that top to the stem.
-  const flagTop = -42 + (duration === "thirty_second" ? 215 * 0.025 : 0);
+  const flagTop = STEM_TOP + (duration === "thirty_second" ? 215 * 0.025 : 0);
 
   return (
     <G
@@ -87,7 +98,7 @@ export function NotebookNoteGlyph({
           cx={0}
           cy={0}
           rx={5.8}
-          ry={3.85}
+          ry={NOTE_HEAD_RADIUS_Y}
           transform="rotate(-24 0 0)"
           fill={isOpen ? "none" : color}
           stroke={color}

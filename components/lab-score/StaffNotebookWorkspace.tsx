@@ -23,7 +23,8 @@ import { randomizeNotebook } from "@/lib/notebook-random";
 import { insertSelectionBeforeFollowing, notebookWritingTail, selectedNotebookStamps } from "@/lib/notebook-editing";
 import { identifyLegacyNotebookSplits, notebookSourceId, restoreNotebookStamp } from "@/lib/notebook-splits";
 import { NotebookObjectEditor } from "@/components/lab-score/notebook/NotebookObjectEditor";
-import { notebookPortraitPolicy, projectNotebookPortrait } from "@/lib/notebook-portrait-layout";
+import { notebookDisplayColumns, notebookPortraitPolicy, projectNotebookPortrait } from "@/lib/notebook-portrait-layout";
+import { hasNotebookSections, materializedNotebookSections, measureAtPoint, meterLength, notebookSections, placeSectionStamp, sectionKind } from "@/lib/notebook-sections";
 
 type Tool = "pen" | "erase" | "move" | "select";
 const id = (prefix: string) => `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -73,6 +74,7 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
   const [toolPopup, setToolPopup] = useState<"pen" | "erase" | null>(null);
   const [eraseDraft, setEraseDraft] = useState<StaffPage | null>(null);
   const [pageIndex, setPageIndex] = useState(0);
+  const [sectionTarget, setSectionTarget] = useState<{ pageId: string; point: StaffPoint } | null>(null);
   const [panel, setPanel] = useState<"menu" | "settings" | null>(null);
   const [mode, setMode] = useState<NotebookMode>("ink");
   const [patterns, setPatterns] = useState<PracticeEntry[]>([]);
@@ -120,6 +122,7 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
     return () => cancelAnimationFrame(frame);
   }, [viewport.width, viewport.height]);
   const drawingRef = useRef<StaffPoint[]>([]);
+  const sectionGesture = useRef<{ id: string; screenStart: StaffPoint; target: (point: StaffPoint) => StaffPoint } | null>(null);
   const eraseGesture = useRef<{ base: StaffPage; points: StaffPoint[] } | null>(null);
   const editSnapshot = useRef<{ selection: NotebookSelection; draft: typeof dragDraft } | null>(null);
   const rightToggleRef = useRef<any>(null);
@@ -136,11 +139,19 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
   // Fold its measures into readable, screen-sized rows instead.
   const portraitBoost = portraitPolicy.portrait ? Math.max(1, 1 / paperScale) : 1;
   const editingNote = useMemo(() => fitNotebookPage(note, pageIndex,
-    Math.ceil(viewport.height / (ROW_HEIGHT * paperScale * scale))), [note, pageIndex, viewport.height, paperScale, scale]);
+    Math.ceil(viewport.height / (ROW_HEIGHT * Math.max(1, paperScale)))), [note, pageIndex, viewport.height, paperScale]);
   const page = editingNote.pages[pageIndex] ?? editingNote.pages[0];
-  const inputProjection = useMemo(() => portraitPolicy.columns
-    ? projectNotebookPortrait(page, settings, portraitPolicy.columns, portraitPolicy.zoom, portraitBoost) : null,
-  [page, settings, portraitPolicy.columns, portraitPolicy.zoom, portraitBoost]);
+  const inputSections = useMemo(() => notebookSections(editingNote), [editingNote]);
+  const hasSections = useMemo(() => hasNotebookSections(editingNote), [editingNote]);
+  const rowBase = measuresInRow(settings);
+  const inputProjection = useMemo(() => portraitPolicy.portrait || portraitPolicy.zoom !== 1 || hasSections
+    ? projectNotebookPortrait(page, settings, notebookDisplayColumns(portraitPolicy.zoom, rowBase, portraitPolicy.columns), portraitPolicy.zoom, portraitBoost,
+      inputSections[pageIndex], !portraitPolicy.portrait && portraitPolicy.zoom === 1) : null,
+  [page, settings, portraitPolicy.portrait, portraitPolicy.columns, portraitPolicy.zoom, portraitBoost, rowBase, inputSections, pageIndex, hasSections]);
+  const placementPoint = sectionTarget?.pageId === page.id ? sectionTarget.point : page.anchor ?? stampPosition(page, settings);
+  const visibleStartMeasure = inputProjection?.firstMeasureInRow(placementPoint);
+  const sectionRegion = ((visibleStartMeasure ?? inputSections[pageIndex]?.find((r) => r.row === rowAt(placementPoint.y, page.staffCount ?? 7)))
+    ?? inputSections[0][0]);
   const playback = useNotebookPlayback(editingNote, active);
   const randomized = useMemo(() => {
     try {
@@ -156,10 +167,17 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
   const performanceNote = randomized.note;
   const playbackPage = useMemo(() => playback.running ? materializeRows(performanceNote, playback.rows) : null, [playback.running, playback.rows, performanceNote]);
   const visiblePage = playbackPage ?? (settings.random ? performanceNote.pages[pageIndex] : page) ?? page;
+  const viewPolicy = notebookPortraitPolicy(windowSize.width, windowSize.height, playback.running && settings.follow ? settings.playbackZoom : scale);
+  const trackingProjection = useMemo(() => playbackPage && (viewPolicy.portrait || viewPolicy.zoom !== 1 || hasSections)
+    ? projectNotebookPortrait(playbackPage, settings, notebookDisplayColumns(viewPolicy.zoom, rowBase, viewPolicy.columns), viewPolicy.zoom, portraitBoost,
+      materializedNotebookSections(performanceNote, playback.rows, playbackPage), !viewPolicy.portrait && viewPolicy.zoom === 1) : null,
+  [playbackPage, playback.rows, performanceNote, settings, viewPolicy.portrait, viewPolicy.columns, viewPolicy.zoom, portraitBoost, hasSections, rowBase]);
   const resetTransient = () => {
     setSelection(emptySelection()); setSelectionBox(null); setDragDraft(null); selectionGesture.current = null; setUnitRows(null);
     setDrawing([]); drawingRef.current = []; setTupletIds(null); panStart.current = null;
     eraseGesture.current = null; setEraseDraft(null); editSnapshot.current = null; setObjectEditor(false);
+    sectionGesture.current = null;
+    setSectionTarget(null);
   };
   const updateSettings = (patch: Partial<NotebookSettings>) => {
     playback.stop();
@@ -295,15 +313,13 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
   }, [t.error]);
   useEffect(() => {
     if (!playback.running || !settings.follow || !playback.position) return;
-    const policy = notebookPortraitPolicy(windowSize.width, windowSize.height, settings.playbackZoom);
-    const view = policy.columns ? projectNotebookPortrait(visiblePage, settings, policy.columns, policy.zoom, portraitBoost) : null;
     const regions = notebookMeasureRegions(visiblePage, settings).filter((r) => r.row === playback.position.row);
-    const r = regions[Math.min(regions.length - 1, Math.floor(playback.position.progress * regions.length))];
+    const r = regions[Math.min(regions.length - 1, playback.measure)];
     const point = { x: r ? (r.left + r.right) / 2 : 38, y: playback.position.row * ROW_HEIGHT + 102 };
-    const y = view ? view.forward(point).y : point.y;
-    const ratio = paperScale * policy.zoom * (view ? portraitBoost : visiblePage.layoutScale ?? 1);
+    const y = trackingProjection ? trackingProjection.forward(point).y : point.y;
+    const ratio = paperScale * viewPolicy.zoom * (trackingProjection ? portraitBoost : visiblePage.layoutScale ?? 1);
     paperScroll.current?.scrollTo({ y: y * ratio, animated: false });
-  }, [playback.running, playback.position, settings, paperScale, viewport.height, visiblePage, windowSize.width, windowSize.height, portraitBoost]);
+  }, [playback.running, playback.position, playback.measure, settings, paperScale, visiblePage, viewPolicy.zoom, portraitBoost, trackingProjection]);
   const confirmReplace = (action: () => void) => {
     const changed = savedSnapshot.current !== JSON.stringify(note);
     const replace = () => { playback.stop(); resetTransient(); setOffset({ x: 0, y: 0 }); action(); };
@@ -353,16 +369,29 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
     if (phase === "cancel") {
       drawingRef.current = []; setDrawing([]); selectionGesture.current = null; setSelectionBox(null); panStart.current = null;
       eraseGesture.current = null; setEraseDraft(null);
+      sectionGesture.current = null;
       if (editSnapshot.current) { setSelection(editSnapshot.current.selection); setDragDraft(editSnapshot.current.draft); }
       editSnapshot.current = null; return;
     }
     if (toolPopup || panel || decision || objectEditor) return;
-    if (phase === "start") editSnapshot.current = { selection, draft: dragDraft };
+    if (phase === "start") { editSnapshot.current = { selection, draft: dragDraft }; sectionGesture.current = null; }
     const zoom = playback.running && settings.follow ? settings.playbackZoom : displayScale;
-    const layoutScale = portraitPolicy.portrait ? portraitBoost : page.layoutScale ?? 1;
+    const layoutScale = inputProjection ? portraitBoost : page.layoutScale ?? 1;
     let doc = screenToPaper({ x: screen.x / paperScale, y: screen.y / paperScale }, offset, zoom);
     doc.x /= layoutScale; doc.y /= layoutScale;
-    if (inputProjection) doc = inputProjection.inverse(doc);
+    if (inputProjection) {
+      const sectionHit = (tool === "select" && phase === "start" || tool === "erase") ? (inputProjection.page.stamps ?? [])
+        .filter((s) => s.sectionStart && Math.abs(doc.x - s.x) < Math.max(10, s.size * .55) && Math.abs(doc.y - s.y) < 34)
+        .sort((a, b) => Math.abs(doc.x - a.x) - Math.abs(doc.x - b.x))[0] : undefined;
+      const source = sectionHit && page.stamps?.find((s) => s.id === sectionHit.id);
+      if (source && sectionHit && tool === "select" && !dragDraft &&
+        (mode === "notes" || selectionUnit === "object")) {
+        const start = doc;
+        sectionGesture.current = { id: source.id, screenStart: screen, target: (p) => inputProjection.sectionDrag(source, sectionHit, start, p) };
+      }
+      doc = sectionGesture.current ? sectionGesture.current.target(doc)
+        : tool === "erase" && source ? source : inputProjection.inverse(doc);
+    }
     if (tool === "pen" || tool === "erase") {
       doc.x = Math.max(0, Math.min(naturalPaperWidth(page), doc.x));
       doc.y = Math.max(0, Math.min((page.staffCount ?? 7) * ROW_HEIGHT - 1, doc.y));
@@ -395,7 +424,7 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
       if (tool === "move") { panStart.current = { point: screen, offset }; return; }
       if (tool === "pen") { drawingRef.current = [doc]; setDrawing([doc]); setSelection(emptySelection()); return; }
       if (tool === "select") {
-        const hit = hitObject(page, doc);
+        const hit = sectionGesture.current ? { kind: "stamp" as const, id: sectionGesture.current.id } : hitObject(page, doc);
         if (mode === "select" && selectionUnit === "row" && unitRows && rowAt(doc.y, page.staffCount ?? 7) >= unitRows.first && rowAt(doc.y, page.staffCount ?? 7) <= unitRows.last) {
           selectionGesture.current = { kind: "drag", start: doc, selection, base: page }; return;
         }
@@ -407,7 +436,9 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
           return;
         }
         if (mode === "notes") {
-          const next = hit?.kind === "stamp" ? includeAttached(page, { stampIds: [hit.id], strokeIds: [] }) : selection;
+          setSectionTarget({ pageId: page.id, point: doc });
+          const next = hit?.kind === "stamp" ? includeAttached(page, { stampIds: [hit.id], strokeIds: [] }) : emptySelection();
+          setSelection(next);
           if (next.stampIds.length) {
             setSelection(next);
             selectionGesture.current = { kind: "drag", start: doc, selection: next, base: page };
@@ -432,7 +463,9 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
     }
     const gesture = selectionGesture.current;
     if ((phase === "move" || phase === "end") && tool === "select" && gesture) {
-      const distance = Math.hypot(doc.x - gesture.start.x, doc.y - gesture.start.y);
+      const section = sectionGesture.current;
+      const distance = section ? Math.hypot(screen.x - section.screenStart.x, screen.y - section.screenStart.y)
+        : Math.hypot(doc.x - gesture.start.x, doc.y - gesture.start.y);
       if (gesture.kind === "box") {
         const box = rectangle(gesture.start, doc);
         const rowRange = { first: Math.min(rowAt(gesture.start.y, page.staffCount ?? 7), rowAt(doc.y, page.staffCount ?? 7)),
@@ -444,7 +477,7 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
         setSelection(selectionUnit !== "object" && mode === "select"
           ? selectNotebookUnits(gesture.base, gesture.start, doc, selectionUnit, settings)
           : distance < 4 ? emptySelection() : selectRectangle(gesture.base, box));
-      } else if (distance > 4) {
+      } else if (distance > 4 && (!section || doc.x !== gesture.start.x || doc.y !== gesture.start.y)) {
         const delta = selectionDelta(gesture.base, gesture.selection, { x: doc.x - gesture.start.x, y: doc.y - gesture.start.y }, settings.snap);
         if (phase === "end" && mode === "notes") {
           finishMove(gesture.base, gesture.selection, delta, false);
@@ -465,11 +498,23 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
       commitDocument(pageDocument(pageIndex, next), !!settings.autoSpacing);
       drawingRef.current = []; setDrawing([]);
     }
-    if (phase === "end") { selectionGesture.current = null; panStart.current = null; editSnapshot.current = null; }
+    if (phase === "end") { selectionGesture.current = null; sectionGesture.current = null; panStart.current = null; editSnapshot.current = null; }
   };
   const beginStamp = (choice: { glyph: string; role: "normal" | "ghost" | "strong"; dotted: boolean }) => {
     playback.stop();
     setDragDraft(null); setSelection(emptySelection()); setSelectionBox(null);
+    if (sectionKind(choice.glyph)) {
+      const mark = placeSectionStamp({ id: id("stamp"), glyph: choice.glyph, size: 26, x: sectionRegion.left, y: sectionRegion.row * ROW_HEIGHT,
+        sectionStart: true }, sectionRegion);
+      const target = { ...page, anchor: page.anchor ?? placementPoint, stamps: [...(page.stamps ?? []), mark] };
+      commitDocument(pageDocument(pageIndex, target), !!settings.autoSpacing, (result) => {
+        const targetPage = result.pages.findIndex((p) => p.stamps?.some((s) => s.id === mark.id));
+        if (targetPage >= 0) setPageIndex(targetPage);
+        setSelection({ stampIds: [mark.id], strokeIds: [] }); setTool("select");
+      });
+      return;
+    }
+    setSectionTarget(null);
     const targetIndex = isAttachedMark(choice.glyph) && note.lastNote ? editingNote.pages.findIndex((p) => p.id === note.lastNote!.pageId) : pageIndex;
     const targetPage = editingNote.pages[targetIndex] ?? page;
     const attached = attachedPosition(targetPage, choice.glyph, note.lastNote?.stampId);
@@ -525,7 +570,8 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
     const ids = tupletIds.filter((id) => page.stamps?.some((s) => s.id === id && isTupletMember(s.glyph)));
     if (ids.length < 2) { Alert.alert(ko ? "음표·쉼표를 두 개 이상 넣어 주세요" : "Add at least two notes or rests"); return; }
     const group = { id: id("tuplet"), stampIds: ids, ratio: standardTupletRatio(ids.length) };
-    if ((page.stamps ?? []).filter((s) => ids.includes(s.id)).reduce((sum, s) => sum + musicalDuration(restoreNotebookStamp(s), [group]), 0) > measureDuration(settings) + 1e-7) {
+    const capacity = tupletCapacity(pageIndex, page, ids);
+    if ((page.stamps ?? []).filter((s) => ids.includes(s.id)).reduce((sum, s) => sum + musicalDuration(restoreNotebookStamp(s), [group]), 0) > capacity + 1e-7) {
       layoutError(new Error("TUPLET_EXCEEDS_MEASURE")); return;
     }
     commitDocument(pageDocument(pageIndex, { ...page, tuplets: [...(page.tuplets ?? []), group] }),
@@ -571,6 +617,8 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
           !!settings.autoSpacing, (committed) => {
             const sources = new Set((next.stamps ?? []).filter((s) => result.selection.stampIds.includes(s.id)).map(notebookSourceId));
             const current = committed.pages.find((p) => p.stamps?.some((s) => anchor && s.id === notebookSourceId(anchor))) ?? committed.pages[pageIndex];
+            const section = anchor?.sectionStart && current?.stamps?.find((s) => s.id === anchor.id);
+            if (section) setSectionTarget({ pageId: current.id, point: { x: section.x, y: section.y } });
             setSelection({ strokeIds: result.selection.strokeIds, stampIds: (current?.stamps ?? []).filter((s) => sources.has(notebookSourceId(s))).map((s) => s.id) });
             setDragDraft(null); if (detached.length) notify(ko ? "연결 해제 ↗" : "Attachment released ↗");
           });
@@ -658,7 +706,7 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
           glyph: edited.glyph, dotted: edited.dotted, durationBeats: edited.durationBeats } } };
       }) };
     const group = next.tuplets?.find((g) => g.id === selectedGroup?.id || g.stampIds.includes(stampId));
-    if (group && next.stamps!.filter((s) => group.stampIds.includes(s.id)).reduce((sum, s) => sum + musicalDuration(s, [group]), 0) > measureDuration(settings) + 1e-7) {
+    if (group && next.stamps!.filter((s) => group.stampIds.includes(s.id)).reduce((sum, s) => sum + musicalDuration(s, [group]), 0) > tupletCapacity(ownerIndex, next, group.stampIds) + 1e-7) {
       layoutError(new Error("TUPLET_EXCEEDS_MEASURE")); return;
     }
     commitDocument(pageDocument(ownerIndex, next), !!settings.autoSpacing, (committed) => {
@@ -666,11 +714,15 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
       setSelection((s) => ({ ...s, stampIds: committed.pages.flatMap((p) => p.stamps ?? []).filter((s) => selected.has(notebookSourceId(s))).map((s) => s.id) }));
     });
   };
+  function tupletCapacity(pi: number, source: StaffPage, ids: string[]) {
+    const first = source.stamps?.filter((s) => ids.includes(s.id)).sort((a, b) => rowAt(a.y, source.staffCount ?? 7) - rowAt(b.y, source.staffCount ?? 7) || a.x - b.x)[0];
+    return first && inputSections[pi] ? meterLength(measureAtPoint(inputSections[pi], first, source.staffCount ?? 7).meter) : measureDuration(settings);
+  }
   const editRatio = (actual: number, normal: number) => {
     if (!selectedGroup) return;
     const next = { ...page, tuplets: page.tuplets?.map((g) => g.id === selectedGroup.id ? { ...g, ratio: { actual, normal } } : g) };
     const group = next.tuplets!.find((g) => g.id === selectedGroup.id)!;
-    if (next.stamps!.filter((s) => group.stampIds.includes(s.id)).reduce((sum, s) => sum + musicalDuration(s, [group]), 0) > measureDuration(settings) + 1e-7) { layoutError(new Error("TUPLET_EXCEEDS_MEASURE")); return; }
+    if (next.stamps!.filter((s) => group.stampIds.includes(s.id)).reduce((sum, s) => sum + musicalDuration(s, [group]), 0) > tupletCapacity(pageIndex, next, group.stampIds) + 1e-7) { layoutError(new Error("TUPLET_EXCEEDS_MEASURE")); return; }
     commitDocument(pageDocument(pageIndex, next), !!settings.autoSpacing);
   };
   const following = playback.running && settings.follow;
@@ -684,13 +736,18 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
     setDockMoving(false);
     setDockLayoutVersion((version) => version + 1);
   };
-    const viewPolicy = notebookPortraitPolicy(windowSize.width, windowSize.height, following ? settings.playbackZoom : scale);
-    const zoom = viewPolicy.zoom;
+  const zoom = viewPolicy.zoom;
   const draftPage = dragDraft ? transformSelection(dragDraft.base, dragDraft.selection, dragDraft.delta).page : null;
   const sourcePaper = settings.random || playback.running ? visiblePage : eraseDraft ?? draftPage ?? page;
-  const projection = useMemo(() => viewPolicy.columns
-    ? sourcePaper === page && viewPolicy.zoom === portraitPolicy.zoom ? inputProjection : projectNotebookPortrait(sourcePaper, settings, viewPolicy.columns, viewPolicy.zoom, portraitBoost) : null,
-  [sourcePaper, page, settings, inputProjection, viewPolicy.columns, viewPolicy.zoom, portraitPolicy.zoom, portraitBoost]);
+  const projection = useMemo(() => {
+    if (playbackPage) return trackingProjection;
+    if (sourcePaper === page) return inputProjection;
+    if (!(viewPolicy.portrait || viewPolicy.zoom !== 1 || hasSections)) return null;
+    const source = settings.random ? performanceNote : { ...editingNote, pages: editingNote.pages.map((p, i) => i === pageIndex ? sourcePaper : p) };
+    return projectNotebookPortrait(sourcePaper, settings, notebookDisplayColumns(viewPolicy.zoom, rowBase, viewPolicy.columns), viewPolicy.zoom, portraitBoost,
+      notebookSections(source)[pageIndex], !viewPolicy.portrait && viewPolicy.zoom === 1);
+  }, [sourcePaper, page, pageIndex, settings, editingNote, performanceNote, playbackPage, trackingProjection, inputProjection,
+    viewPolicy.portrait, viewPolicy.columns, viewPolicy.zoom, portraitBoost, rowBase, hasSections]);
   const paperPage = projection?.page ?? sourcePaper;
   const externalTieIds = useMemo(() => new Set((settings.random || playback.running ? performanceNote : editingNote).pages
     .filter((p, i) => playback.running || i !== pageIndex).flatMap((p) => (p.stamps ?? []).map((s) => s.id))),
@@ -698,11 +755,14 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
   const drawingPoints = projection ? drawing.map(projection.forward) : drawing;
   const displayedSelection = projection ? { ...selection, strokeIds: [...projection.strokeOwners]
     .filter(([, owner]) => selection.strokeIds.includes(owner)).map(([key]) => key) } : selection;
-  const changeZoom = (value: number) => {
+  const changeZoom = (value: number | ((previous: number) => number)) => {
     if (toolPopup || panel === "menu" || decision || objectEditor) return;
     playback.stop();
     resetTransient();
-    setScale(notebookPortraitPolicy(windowSize.width, windowSize.height, value).zoom);
+    setScale((previous) => {
+      const bounds = notebookPortraitPolicy(windowSize.width, windowSize.height, previous);
+      return notebookPortraitPolicy(windowSize.width, windowSize.height, typeof value === "number" ? value : value(bounds.zoom)).zoom;
+    });
     setOffset({ x: 0, y: 0 });
   };
   return (
@@ -728,6 +788,8 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
             page={paperPage} width={PAPER_WIDTH * paperScale * (projection ? Math.max(1, zoom) : zoom)} height={(paperPage.staffCount ?? 7) * ROW_HEIGHT * paperScale * zoom * (projection ? portraitBoost : paperPage.layoutScale ?? 1)}
             paperScale={paperScale} zoom={zoom}
             layoutScaleOverride={projection ? portraitBoost : undefined}
+            displayRegions={projection?.regions}
+            inheritedClefs={projection?.inheritedClefs}
             offset={offset} tool={playback.running ? "move" : tool} lineWidth={lineWidth} lineColor={lineColor}
             drawing={drawingPoints} pendingGlyph={null} preview={null}
             selection={playback.running ? undefined : displayedSelection} selectionBox={projection && selectionBox ? (() => {
@@ -737,7 +799,7 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
             openTupletIds={tupletIds ?? undefined}
             onTouch={toolPopup || panel || dockMoving || decision || objectEditor ? undefined : onPaperTouch}
             onPan={(delta) => setOffset((old) => ({ x: old.x + delta.x / paperScale, y: old.y + delta.y / paperScale }))}
-            onZoomBy={toolPopup || panel || dockMoving || decision || objectEditor ? undefined : (ratio) => changeZoom(scale * ratio)}
+            onZoomBy={toolPopup || panel || dockMoving || decision || objectEditor ? undefined : (ratio) => changeZoom((current) => current * ratio)}
           />
         </ScrollView></ScrollView>
         {panel === "menu" ? (
@@ -782,7 +844,7 @@ export function StaffNotebookWorkspace({ active = true, onRegisterExit, onOpenCa
         canUndo={undoStack.current.length > 0} canRedo={redoStack.current.length > 0}
         onTool={(next) => { playback.stop(); setDragDraft(null); setTool(next); }} onWidth={setLineWidth}
         onZoom={changeZoom} onUndo={undo} onRedo={redo}
-        onChoose={beginStamp} onTuplet={closeTuplet} tupletCount={tupletIds?.length ?? null}
+        onChoose={beginStamp} notationMeter={sectionRegion.meter} onTuplet={closeTuplet} tupletCount={tupletIds?.length ?? null}
         selectionCount={selectionCount(selection) || (unitRows ? unitRows.last - unitRows.first + 1 : 0)} onClearSelection={() => { setSelection(emptySelection()); setDragDraft(null); setSelectionBox(null); setUnitRows(null); }}
         selectionUnit={selectionUnit} onSelectionUnit={(unit) => { setSelectionUnit(unit); setSelection(emptySelection()); setDragDraft(null); setUnitRows(null); setSelectionBox(null); }}
         onEditSelection={() => { playback.stop(); setObjectEditor(true); }}
