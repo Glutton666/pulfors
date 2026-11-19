@@ -42,6 +42,34 @@ test("dial reports selection, handles arrows/confirmation and restores trigger f
   await expect(trigger).toHaveAccessibleName(/Bar$/);
 });
 
+test("the opening dial captures a drag from its outer slots before the animation settles", async ({ page }) => {
+  // Check hit testing at mount, before a locator's usual wait for stability
+  // would let the opening animation hide the input gap.
+  await page.evaluate(() => {
+    const observer = new MutationObserver(() => {
+      const area = document.querySelector('[data-testid="mode-dial-swipe-area"]');
+      if (!area) return;
+      observer.disconnect();
+      const x = window.innerWidth / 2 + 54;
+      const hit = document.elementFromPoint(x, 87)?.closest('[data-testid="mode-dial-swipe-area"]');
+      area.setAttribute("data-captured-at-open", String(hit === area));
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+  });
+  const trigger = page.getByTestId("mode-cycle-label");
+  await trigger.click();
+  await expect(page.getByTestId("mode-dial-swipe-area")).toHaveAttribute("data-captured-at-open", "true");
+
+  const x = page.viewportSize()!.width / 2 + 54;
+  await page.mouse.move(x, 87);
+  await page.mouse.down();
+  await page.mouse.move(x - 38, 87, { steps: 8 });
+  await page.mouse.up();
+  await expect(page.getByTestId("mode-dial-touch-frame")).toHaveAttribute("aria-valuetext", "Bar");
+  await page.mouse.click(x, page.viewportSize()!.height * 0.7);
+  await expect(trigger).toHaveAccessibleName(/Bar$/);
+});
+
 test("Note controls stay below the measured header after keyboard selection and rotation", async ({ page }) => {
   const trigger = page.getByTestId("mode-cycle-label");
   await trigger.click();

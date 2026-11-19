@@ -15,6 +15,12 @@ Keep the entire rotating menu and its touch bounds below the cutout, not only th
 
 **How to apply:** Maintain a bounded, nonzero touch container around the fixed fan and keep its animation origin and gesture coordinates aligned. Do not claim a browser geometry check establishes physical iPhone touch behavior.
 
+Keep the dial's touch bounds independent of its opening scale. Animate only its visuals.
+
+**Why:** Scaling the responder along with the fan lets a quick initial drag hit the confirmation backdrop instead, so the dial either stays on the same mode or closes.
+
+**How to apply:** Test hit ownership as the fan mounts, not only after waiting for it to settle. Keep the stationary bounds aligned with the final radial slots and retain the same backdrop-confirmation behavior.
+
 ## Closed header placement
 
 Keep the mode trigger in the upper-center safe header band. Beat settings belong at upper-right in portrait and upper-left only in landscape, with space from the screen edges. Bar settings remain in the original lower editor toolbar.

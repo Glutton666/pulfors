@@ -696,7 +696,7 @@ function ModeSwitcherDial({
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,   // always claim — blocks overlay
       onPanResponderGrant: (e) => {
-        if (isConfirmingRef.current) return;
+        if (isConfirmingRef.current || closeTimerRef.current !== null) return;
         ++animationGenerationRef.current;
         cancelAnimation(scrollPosition);
         // A spring may still be moving toward an equivalent wrapped index.
@@ -712,7 +712,7 @@ function ModeSwitcherDial({
         };
       },
       onPanResponderMove: (e, gs) => {
-        if (isConfirmingRef.current) return;
+        if (isConfirmingRef.current || closeTimerRef.current !== null) return;
         if (Math.abs(gs.dx) > 5 || Math.abs(gs.dy) > 5) {
           swipeStart.current.moved = true;
           const { axis, sign } = SWIPE_CFG[wallRef.current];
@@ -725,7 +725,7 @@ function ModeSwitcherDial({
         }
       },
       onPanResponderRelease: (e) => {
-        if (isConfirmingRef.current) return;
+        if (isConfirmingRef.current || closeTimerRef.current !== null) return;
         if (!swipeStart.current.moved) {
           // TAP — find icon closest to tap position in anchor-space
           const anch   = anchorRef.current;
@@ -751,7 +751,7 @@ function ModeSwitcherDial({
       // Don't surrender gesture to parent ScrollViews
       onPanResponderTerminationRequest: () => false,
       onPanResponderTerminate: () => {
-        if (isConfirmingRef.current) return;
+        if (isConfirmingRef.current || closeTimerRef.current !== null) return;
         // Snap gracefully — do NOT close (terminate ≠ user intent to dismiss)
         settleToPositionRef.current(scrollPosRef.current);
       },
@@ -1009,20 +1009,28 @@ function ModeSwitcherDial({
             { name: "dismiss", label: t("switcher", "closeDial") },
           ]}
           onAccessibilityAction={handleDialAccessibilityAction}
-          style={[
-            {
-              position: "absolute",
-              zIndex: Z_FAN,
-              left: anchor.x + frameLeft, top: anchor.y + frameTop,
-              width: hideHandle ? bgLayout.w : 0,
-              height: hideHandle ? bgLayout.h - frameTop : 0,
-              transformOrigin: hideHandle ? `${-frameLeft}px ${-frameTop}px` : "center",
-              overflow: hideHandle ? "hidden" as const : "visible" as const,
-              pointerEvents: "box-none" as const,
-            },
-            fanStyle,
-          ]}
+          style={{
+            position: "absolute",
+            zIndex: Z_FAN,
+            left: anchor.x + frameLeft, top: anchor.y + frameTop,
+            width: hideHandle ? bgLayout.w : 0,
+            height: hideHandle ? bgLayout.h - frameTop : 0,
+            overflow: hideHandle ? "hidden" : "visible",
+            pointerEvents: "box-none",
+          }}
         >
+          {/* Animate only the visuals. Scaling the responder would hand a
+              quick first drag to the backdrop before the fan finishes opening. */}
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              {
+                position: "absolute", top: 0, right: 0, bottom: 0, left: 0,
+                transformOrigin: hideHandle ? `${-frameLeft}px ${-frameTop}px` : "center",
+              },
+              fanStyle,
+            ]}
+          >
           {/* Fan background — double rim */}
           <View
             style={{
@@ -1078,19 +1086,7 @@ function ModeSwitcherDial({
             />
           </View>
 
-          {/* Swipe-capture wrapper — claims all touches; tap/swipe detected on release */}
-          <View
-            {...fanSwipePR.panHandlers}
-            testID="mode-dial-swipe-area"
-            style={{
-              position: "absolute",
-              left: hideHandle ? 0 : bgLayout.left,
-              top: hideHandle ? 0 : bgLayout.top,
-              width: bgLayout.w, height: hideHandle ? bgLayout.h - frameTop : bgLayout.h,
-              overflow: "visible" as const,
-            }}
-          >
-            {/* Rotary dial icons — visual only; gesture handled by parent wrapper */}
+            {/* Rotary dial icons — visual only; gesture handled in the stable overlay below. */}
             {MODES.map((mode, index) => (
               <DialIconSlot
                 key={mode}
@@ -1101,14 +1097,25 @@ function ModeSwitcherDial({
                 selectionPulse={selectionPulse}
                 centAng={centAng}
                 halfSpan={halfSpan}
-                fanLeft={bgLayout.left}
-                fanTop={hideHandle ? frameTop : bgLayout.top}
+                fanLeft={frameLeft}
+                fanTop={frameTop}
                 colors={C}
                 iconSize={S.ms(25, 0.3)}
                 label={t("switcher", mode as "beat"|"bar"|"score"|"note"|"practice"|"stage"|"menu")}
               />
             ))}
-          </View>
+          </Animated.View>
+          <View
+            {...fanSwipePR.panHandlers}
+            testID="mode-dial-swipe-area"
+            style={{
+              position: "absolute",
+              left: hideHandle ? 0 : bgLayout.left,
+              top: hideHandle ? 0 : bgLayout.top,
+              width: bgLayout.w, height: hideHandle ? bgLayout.h - frameTop : bgLayout.h,
+              ...(Platform.OS === "web" ? { touchAction: "none" as const } : {}),
+            }}
+          />
         </Animated.View>
       )}
 
