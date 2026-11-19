@@ -13,14 +13,24 @@ type Props = {
   layoutKey?: number;
   pickerTop?: number;
   pickerBottom?: number;
+  keyboardRef?: React.RefObject<((event: KeyboardEvent) => boolean) | null>;
 };
 
 const meters = Array.from({ length: 12 }, (_, index) => index + 1);
 
-export function NotebookPlaybackBar({ ko, settings, running, preparing, onSettings, onToggle, layoutKey, pickerTop, pickerBottom }: Props) {
+export function NotebookPlaybackBar({ ko, settings, running, preparing, onSettings, onToggle, layoutKey, pickerTop, pickerBottom, keyboardRef }: Props) {
   const { height: windowHeight } = useWindowDimensions();
   const [collapsed, setCollapsed] = useState(false);
   const [meterOpen, setMeterOpen] = useState(false);
+  useEffect(() => {
+    if (!keyboardRef) return;
+    keyboardRef.current = (event) => {
+      if (!meterOpen) return false;
+      if (event.key === "Escape") { event.preventDefault(); setMeterOpen(false); }
+      return true;
+    };
+    return () => { keyboardRef.current = null; };
+  }, [keyboardRef, meterOpen]);
   const [barBox, setBarBox] = useState({ y: 0, height: 54, width: 0 });
   const shellRef = useRef<View>(null);
   const [bpmDraft, setBpmDraft] = useState(String(settings.source?.bpm ?? settings.bpm));

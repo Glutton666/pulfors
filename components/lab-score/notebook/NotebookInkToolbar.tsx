@@ -18,6 +18,7 @@ type Props = {
   onUndo: () => void;
   onRedo: () => void;
   onPreferredWidth?: (contentWidth: number) => void;
+  keyboardRef?: React.RefObject<((event: KeyboardEvent) => boolean) | null>;
 };
 
 const toolDetails: Record<InkTool, { icon: keyof typeof Ionicons.glyphMap; en: string; ko: string }> = {
@@ -48,6 +49,20 @@ export function NotebookInkToolbar(props: Props) {
   const rowRefs = useRef<Record<InkTool, View | null>>({ pen: null, erase: null, move: null });
   const rowBoxes = useRef<Partial<Record<InkTool, { y: number; height: number }>>>({});
   const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (!props.keyboardRef) return;
+    const ref = props.keyboardRef;
+    ref.current = (event) => {
+      if (!open) return false;
+      if (event.key === "Escape") {
+        event.preventDefault();
+        longPressed.current = false; verticalMoved.current = false;
+        setPreviewTool(null); setOpen(false);
+      }
+      return true;
+    };
+    return () => { ref.current = null; };
+  }, [open, props.keyboardRef]);
   const [previewTool, setPreviewTool] = useState<InkTool | null>(null);
   const [menuPosition, setMenuPosition] = useState<{ left: number; width: number; top?: number; bottom?: number } | null>(null);
   const [compact, setCompact] = useState(windowWidth < 600);

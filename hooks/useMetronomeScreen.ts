@@ -2200,6 +2200,7 @@ export function useMetronomeScreen() {
   }, [setCommandHandler]);
   const handleNoteTogglePlayRef = useRef<(() => void) | null>(null);
   const anyModalOpenRef = useRef(false);
+  const notebookOwnsKeyboardRef = useRef(false);
   useEffect(() => {
     // stageModeActive must count as "modal open" here too — otherwise global
     // shortcuts (Tab → menu, P → practice book, etc.) stay live while Stage
@@ -2385,7 +2386,7 @@ export function useMetronomeScreen() {
     keyBindingsRef, bpmRef, barBpmRef, updateBpmRef, handleBarBpmChangeRef,
     beatsPerMeasureRef, updateTimeSignatureRef,
     barModeRef, barStartBeatRef, noteModeRef, stopwatchTimerRef, stopwatchTimerLandscapeRef,
-    subdivisionPatternRef, beatTypesRef, dialConfigRef, handleNoteTogglePlayRef, anyModalOpenRef,
+    subdivisionPatternRef, beatTypesRef, dialConfigRef, handleNoteTogglePlayRef, anyModalOpenRef, notebookOwnsKeyboardRef,
     showKbShortcutsRef, showNativeKbHintRef, engineRef, isPreparingRef,
     togglePlayPauseRef, setNoteMode, handleBarModeChangeRef, setShowKbShortcuts, setShowNativeKbHint,
     handleAddBarRef: handleAddBarKeyboardRef,
@@ -4150,6 +4151,7 @@ export function useMetronomeScreen() {
     pickLandscapeImage,
     removeLandscapeImage,
     // Native keyboard handlers
+    notebookOwnsKeyboardRef,
     handleNativeKeyDown,
     handleNativeKeyUp,
     // Animation values / styles

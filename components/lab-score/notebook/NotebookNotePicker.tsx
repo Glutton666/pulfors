@@ -1,11 +1,12 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import { BackHandler, PanResponder, Platform, StyleSheet, View } from "react-native";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { BackHandler, PanResponder, Platform, StyleSheet, Text, View } from "react-native";
 import Svg, { Path } from "react-native-svg";
 import { layoutNotePicker, moveNotePickerDrag, startNotePickerDrag, type NotationPickerKind, type NotePickerChoice, type NotePickerDrag, type NotePickerLayout } from "@/lib/notebook-note-picker";
 import { NotebookGlyph } from "./NotebookGlyph";
 
 type Options = {
   kind: NotationPickerKind;
+  ko: boolean;
   dockRef: React.RefObject<View | null>;
   width: number; top: number; bottom: number;
   resetKey: string;
@@ -25,21 +26,21 @@ export function useNotebookNotationPicker(options: Options) {
   const [display, setDisplay] = useState<Session | null>(null);
   const suppressPointerPress = useRef(false);
   const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const suppressPress = () => {
+  const suppressPress = useCallback(() => {
     suppressPointerPress.current = true;
     if (pressTimer.current) clearTimeout(pressTimer.current);
     pressTimer.current = setTimeout(() => { suppressPointerPress.current = false; }, 250);
-  };
-  const cancel = () => {
+  }, []);
+  const cancel = useCallback(() => {
     if (session.current) suppressPress();
     session.current = null;
     setActive(false); setDisplay(null); setChoice(saved.current);
-  };
+  }, [suppressPress]);
   const setAccessibleChoice = (patch: Partial<NotePickerChoice>) => {
     saved.current = { ...saved.current, ...patch };
     setChoice(saved.current);
   };
-  useEffect(() => { cancel(); }, [options.resetKey]);
+  useEffect(() => { cancel(); }, [options.resetKey, cancel]);
   useEffect(() => () => {
     session.current = null;
     if (pressTimer.current) clearTimeout(pressTimer.current);
@@ -50,13 +51,9 @@ export function useNotebookNotationPicker(options: Options) {
       const back = BackHandler.addEventListener("hardwareBackPress", () => { cancel(); return true; });
       return () => back.remove();
     }
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") { event.preventDefault(); cancel(); }
-    };
-    window.addEventListener("keydown", onKey);
     window.addEventListener("blur", cancel);
-    return () => { window.removeEventListener("keydown", onKey); window.removeEventListener("blur", cancel); };
-  }, [active]);
+    return () => { window.removeEventListener("blur", cancel); };
+  }, [active, cancel]);
 
   const responder = useMemo(() => PanResponder.create({
     onStartShouldSetPanResponderCapture: () => true,
@@ -92,6 +89,7 @@ export function useNotebookNotationPicker(options: Options) {
     onPanResponderRelease: () => {
       const current = session.current;
       if (!current) return;
+      if (current.drag.cancelHovered) { cancel(); return; }
       suppressPress();
       saved.current = current.drag.choice;
       cancel();
@@ -99,9 +97,9 @@ export function useNotebookNotationPicker(options: Options) {
     },
     onPanResponderTerminate: cancel,
     onPanResponderTerminationRequest: () => false,
-  }), []);
+  }), [cancel, suppressPress]);
   return {
-    active, choice, originRef, panHandlers: responder.panHandlers,
+    active, choice, originRef, cancel, panHandlers: responder.panHandlers,
     consumePress: () => {
       const suppressed = suppressPointerPress.current;
       suppressPointerPress.current = false;
@@ -109,11 +107,11 @@ export function useNotebookNotationPicker(options: Options) {
     },
     setAccessibleChoice,
     overlay: display?.layout && display.dock
-      ? <NotationPicker layout={display.layout} dock={display.dock} drag={display.drag} /> : null,
+      ? <NotationPicker layout={display.layout} dock={display.dock} drag={display.drag} ko={options.ko} /> : null,
   };
 }
 
-function NotationPicker({ layout, dock, drag }: { layout: NotePickerLayout; dock: { x: number; y: number }; drag: NotePickerDrag }) {
+function NotationPicker({ layout, dock, drag, ko }: { layout: NotePickerLayout; dock: { x: number; y: number }; drag: NotePickerDrag; ko: boolean }) {
   const duration = drag.phase === "duration";
   const isRest = layout.kind === "rest";
   const points = duration ? layout.durations : isRest ? [layout.roles[1]] : layout.roles;
@@ -149,6 +147,11 @@ function NotationPicker({ layout, dock, drag }: { layout: NotePickerLayout; dock
           size={isRest ? 49 : 26} />
       </Svg>
     </View>)}
+    {drag.visitedDurations && <View testID={`notebook-${layout.kind}-cancel-zone`}
+      style={[styles.cancel, { left: layout.cancel.x - dock.x - layout.cancel.width / 2, top: layout.cancel.y - dock.y, width: layout.cancel.width, height: layout.cancel.height },
+        drag.cancelHovered && styles.cancelActive]}>
+      <Text style={styles.cancelText}>{ko ? "여기서 놓아 취소" : "Release to cancel"}</Text>
+    </View>}
   </View>;
 }
 
@@ -156,4 +159,7 @@ const styles = StyleSheet.create({
   layer: { ...StyleSheet.absoluteFillObject, overflow: "visible", zIndex: 80, elevation: 22 },
   glyph: { position: "absolute", alignItems: "center", justifyContent: "center", backgroundColor: "#fffdf7" },
   selected: { backgroundColor: "#f1e4c9", borderWidth: 1, borderColor: "#d2b994" },
+  cancel: { position: "absolute", backgroundColor: "#f5ece0", borderRadius: 6, alignItems: "center", justifyContent: "center", borderColor: "#cdbb9e", borderWidth: 1 },
+  cancelActive: { backgroundColor: "#eed2bd", borderColor: "#ad7456" },
+  cancelText: { color: "#634a38", fontSize: 8, fontWeight: "700" },
 });

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useCallback } from "react";
 import { Platform } from "react-native";
+import { getWebAlert } from "@/lib/alert";
 import {
   matchesBinding,
   isEditableTarget,
@@ -58,6 +59,7 @@ interface UseKeyboardShortcutsParams {
   dialConfigRef: React.MutableRefObject<DialConfig>;
   handleNoteTogglePlayRef: React.MutableRefObject<(() => void) | null>;
   anyModalOpenRef: React.MutableRefObject<boolean>;
+  notebookOwnsKeyboardRef?: React.MutableRefObject<boolean>;
   showKbShortcutsRef: React.MutableRefObject<boolean>;
   showNativeKbHintRef: React.MutableRefObject<boolean>;
   engineRef: React.MutableRefObject<MetronomeEngine | null>;
@@ -101,7 +103,7 @@ export function useKeyboardShortcuts(params: UseKeyboardShortcutsParams): UseKey
     beatsPerMeasureRef, updateTimeSignatureRef,
     barModeRef, barStartBeatRef, noteModeRef, stopwatchTimerRef, stopwatchTimerLandscapeRef,
     subdivisionPatternRef, beatTypesRef, dialConfigRef, handleNoteTogglePlayRef, anyModalOpenRef,
-    showKbShortcutsRef, showNativeKbHintRef, engineRef, isPreparingRef,
+    showKbShortcutsRef, showNativeKbHintRef, engineRef, isPreparingRef, notebookOwnsKeyboardRef,
     togglePlayPauseRef, setNoteMode, handleBarModeChangeRef, setShowKbShortcuts, setShowNativeKbHint,
     handleAddBarRef, applyCurrentBeatSubdivisionRef, appendBarSubdivisionRef, removeBarSubdivisionRef,
     barKeyboardActionsRef, noteNextRef, recorderKeyboardActionsRef,
@@ -128,7 +130,7 @@ export function useKeyboardShortcuts(params: UseKeyboardShortcutsParams): UseKey
     };
 
     const isPlaybackEditLocked = () =>
-      (engineRef.current?.getIsRunning() ?? false) || (isPreparingRef?.current ?? false);
+      (engineRef.current?.getIsRunning() ?? false) || (isPreparingRef?.current ?? false) || !!notebookOwnsKeyboardRef?.current;
 
     const applyActiveBpm = (nextBpm: number) => {
       if (isPlaybackEditLocked()) {
@@ -162,6 +164,7 @@ export function useKeyboardShortcuts(params: UseKeyboardShortcutsParams): UseKey
     const kb = () => keyBindingsRef.current;
 
     const handleKeyDown = (e: NormalizedKeyEvent) => {
+      if (notebookOwnsKeyboardRef?.current) { clearRepeat(); return; }
       const recorderKeyboard = recorderKeyboardActionsRef.current;
       if (recorderKeyboard?.isActive() && e.code === "Escape") {
         e.preventDefault();
@@ -670,7 +673,9 @@ export function useKeyboardShortcuts(params: UseKeyboardShortcutsParams): UseKey
     };
 
     if (Platform.OS === "web") {
-      const webKeyDown = (e: KeyboardEvent) => handleKeyDown(e);
+      const webKeyDown = (e: KeyboardEvent) => {
+        if (!e.defaultPrevented && !getWebAlert()) handleKeyDown(e);
+      };
       const webKeyUp = (e: KeyboardEvent) => handleKeyUp(e);
       window.addEventListener("keydown", webKeyDown);
       window.addEventListener("keyup", webKeyUp);

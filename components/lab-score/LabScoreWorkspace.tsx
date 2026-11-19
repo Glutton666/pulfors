@@ -13,9 +13,10 @@ type Props = {
   onClose: () => void; initialTab?: LabScoreTab; initialDocument?: RhythmDocument;
   onTabChange?: (tab: LabScoreTab) => void;
   onRegisterNotebookExit?: (handler: ((next: () => void) => void) | null) => void;
+  notebookKeyboardObscured?: boolean;
 };
 
-export function LabScoreWorkspace({ onClose, initialTab = "rhythm", initialDocument, onTabChange, onRegisterNotebookExit }: Props) {
+export function LabScoreWorkspace({ onClose, initialTab = "rhythm", initialDocument, onTabChange, onRegisterNotebookExit, notebookKeyboardObscured }: Props) {
   const { colors: C } = useTheme();
   const { language } = useLanguage();
   const ko = language === "ko";
@@ -56,7 +57,7 @@ export function LabScoreWorkspace({ onClose, initialTab = "rhythm", initialDocum
       </View></>}
       <View style={{ flex: 1, minHeight: 0, display: tab === "rhythm" ? "flex" : "none" }}><RhythmWorkspace active={tab === "rhythm"} initialDocument={initialDocument} /></View>
       <View style={{ flex: 1, minHeight: 0, display: tab === "notebook" ? "flex" : "none" }}><StaffNotebookWorkspace
-        active={tab === "notebook"} onRegisterExit={onRegisterNotebookExit}
+        active={tab === "notebook"} keyboardObscured={notebookKeyboardObscured || help} onRegisterExit={onRegisterNotebookExit}
         onOpenCapture={() => changeTab("rhythm")} /></View>
       <Modal transparent visible={help} animationType="fade" onRequestClose={() => setHelp(false)}>
         <View style={s.modalBackdrop}>

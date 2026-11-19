@@ -419,5 +419,6 @@ function codeToDisplay(code: string): string {
   if (code === "Minus") return "-";
   if (code === "Equal") return "=";
   if (code === "BracketLeft") return "[";
+  if (code === "Semicolon") return ";";
   return code;
 }

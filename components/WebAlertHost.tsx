@@ -13,22 +13,19 @@ export function WebAlertHost() {
     // after keydown dismisses the alert so one Escape cannot close two layers.
     let awaitingEscapeRelease = false;
     const keydown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
       const active = getWebAlert();
-      if (!active && !(awaitingEscapeRelease && event.key === "Escape")) return;
+      if (!active && !awaitingEscapeRelease) return;
       event.stopImmediatePropagation();
-      if (event.key === "Escape") {
-        event.preventDefault();
-        awaitingEscapeRelease = true;
-        if (active) cancelWebAlert(active.id);
-      }
+      event.preventDefault();
+      if (!awaitingEscapeRelease && active) cancelWebAlert(active.id);
+      awaitingEscapeRelease = true;
     };
     const keyup = (event: KeyboardEvent) => {
-      if (!getWebAlert() && !(awaitingEscapeRelease && event.key === "Escape")) return;
+      if (event.key !== "Escape" || (!getWebAlert() && !awaitingEscapeRelease)) return;
       event.stopImmediatePropagation();
-      if (event.key === "Escape") {
-        event.preventDefault();
-        awaitingEscapeRelease = false;
-      }
+      event.preventDefault();
+      awaitingEscapeRelease = false;
     };
     window.addEventListener("keydown", keydown, true);
     window.addEventListener("keyup", keyup, true);

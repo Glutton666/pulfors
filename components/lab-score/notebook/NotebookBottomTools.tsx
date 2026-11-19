@@ -16,6 +16,12 @@ import { NotebookSelectionTools } from "./NotebookSelectionTools";
 import type { NotebookSelectionUnit } from "@/lib/notebook-editing";
 import { defaultNotationMeter, type NotebookMeter } from "@/lib/notebook-sections";
 import { NotebookMeterPicker } from "./NotebookMeterPicker";
+import { symbolCategories, type NotebookSymbolCategory } from "@/lib/notebook-keyboard";
+
+export type NotebookToolsKeyboard = {
+  route: (event: KeyboardEvent) => boolean;
+  dismissHistory: () => boolean;
+};
 
 type Tool = "pen" | "erase" | "move" | "select";
 type Choice = { glyph: string; role: "normal" | "ghost" | "strong"; dotted: boolean };
@@ -59,6 +65,9 @@ type Props = {
   selectionUnit?: NotebookSelectionUnit;
   onSelectionUnit?: (unit: NotebookSelectionUnit) => void;
   onEditSelection?: () => void;
+  keyboardRef: React.RefObject<NotebookToolsKeyboard | null>;
+  symbolRequest?: { group: NotebookSymbolCategory };
+  onCloseKeyboardSymbols: () => void;
 };
 
 type NotesCategory = "note" | "marks" | null;
@@ -74,6 +83,11 @@ export function NotebookBottomTools(props: Props) {
   const [showAccessibleChooser, setShowAccessibleChooser] = useState(false);
   const [category, setCategory] = useState<NotesCategory>(null);
   const [meterPicker, setMeterPicker] = useState(false);
+  const symbolGroup = props.symbolRequest?.group;
+  const marksOpen = category === "marks" || !!symbolGroup;
+  const [focusedMark, setFocusedMark] = useState<string | null>(null);
+  const markButtons = useRef(new Map<string, View>());
+  const inkKeyboard = useRef<((event: KeyboardEvent) => boolean) | null>(null);
   const dockRef = useRef<View>(null);
   const [dockPosition, setDockPosition] = useState({ x: 0, y: 0 });
   const [dockWidth, setDockWidth] = useState(0);
@@ -83,9 +97,9 @@ export function NotebookBottomTools(props: Props) {
   const pickerBottom = props.pickerBottom ?? windowHeight - 8;
   const resetKey = `${mode}:${windowWidth}:${windowHeight}:${props.layoutKey}`;
   const gestureOptions = {
-    dockRef, width: windowWidth, top: pickerTop, bottom: Math.max(pickerTop, Math.min(windowHeight, pickerBottom)), resetKey,
+    dockRef, ko, width: windowWidth, top: pickerTop, bottom: Math.max(pickerTop, Math.min(windowHeight, pickerBottom)), resetKey,
     onChoose: props.onChoose,
-    onBegin: () => { setMoreActionsOpen(false); setShowAccessibleChooser(false); setCategory(null); },
+    onBegin: () => { setMoreActionsOpen(false); setShowAccessibleChooser(false); setCategory(null); props.onCloseKeyboardSymbols(); },
   };
   const notePicker = useNotebookNotationPicker({
     ...gestureOptions, kind: "note",
@@ -118,8 +132,21 @@ export function NotebookBottomTools(props: Props) {
   });
   const restGestureActive = restPicker.active;
   const pickerActive = notePicker.active || restGestureActive;
+  const closeMarks = () => { setCategory(null); props.onCloseKeyboardSymbols(); };
 
-  useEffect(() => { setShowAccessibleChooser(false); setCategory(null); }, [resetKey]);
+  useEffect(() => { setShowAccessibleChooser(false); setCategory(null); setMoreActionsOpen(false); }, [resetKey]);
+  useEffect(() => {
+    if (mode !== "notes" || !props.symbolRequest) return;
+    setFocusedMark(null); setMoreActionsOpen(false);
+  }, [mode, props.symbolRequest]);
+  useEffect(() => {
+    if (Platform.OS !== "web" || !moreActionsOpen) return;
+    const closeOutside = (event: PointerEvent) => {
+      if (!(event.target instanceof Element) || !event.target.closest("[data-notebook-history]")) setMoreActionsOpen(false);
+    };
+    document.addEventListener("pointerdown", closeOutside, true);
+    return () => document.removeEventListener("pointerdown", closeOutside, true);
+  }, [moreActionsOpen]);
 
   const chooseAccessibleNote = (choice: NotePickerChoice) => {
     notePicker.setAccessibleChoice(choice);
@@ -160,6 +187,57 @@ export function NotebookBottomTools(props: Props) {
       return true;
     }),
   }));
+  const visibleGroups = symbolGroup ? markGroups.filter((_, i) => symbolCategories[i] === symbolGroup) : markGroups;
+  const marks = visibleGroups.flatMap((group) => group.items);
+  const chooseMark = (glyph: string) => {
+    if (glyph === "meter-picker") setMeterPicker(true);
+    else props.onChoose({ glyph, role: "normal", dotted: false });
+    closeMarks();
+  };
+  const firstMarkId = marks[0]?.id;
+  useEffect(() => {
+    if (!marksOpen || !symbolGroup || focusedMark || !firstMarkId) return;
+    setFocusedMark(firstMarkId);
+    markButtons.current.get(firstMarkId)?.focus();
+  }, [marksOpen, symbolGroup, focusedMark, firstMarkId]);
+  const route = (event: KeyboardEvent) => {
+    if (mode !== "notes") return inkKeyboard.current?.(event) ?? false;
+    if (meterPicker) {
+      if (event.key === "Escape") { event.preventDefault(); setMeterPicker(false); }
+      return true;
+    }
+    if (event.key === "Escape") {
+      const close = notePicker.active || showAccessibleChooser ? () => { notePicker.cancel(); setShowAccessibleChooser(false); }
+        : restGestureActive || restPicker.showChooser ? restPicker.cancel
+          : marksOpen ? closeMarks : moreActionsOpen ? () => setMoreActionsOpen(false) : null;
+      if (!close) return false;
+      event.preventDefault(); close(); return true;
+    }
+    if (marksOpen) {
+      const key = event.key;
+      const target = event.target as HTMLElement | null;
+      const targetId = target?.closest?.("[data-notebook-mark]")?.getAttribute("data-notebook-mark");
+      const at = marks.findIndex((mark) => mark.id === (targetId ?? focusedMark));
+      if (key.startsWith("Arrow") && marks.length) {
+        event.preventDefault();
+        const index = at < 0 ? 0 : (at + (key === "ArrowLeft" || key === "ArrowUp" ? marks.length - 1 : 1)) % marks.length;
+        setFocusedMark(marks[index].id);
+        markButtons.current.get(marks[index].id)?.focus();
+      } else if (key === "Enter" && !event.repeat && (targetId || !target?.closest?.("button,[role=button]"))) {
+        if (at >= 0) { event.preventDefault(); chooseMark(marks[at].id); }
+      }
+      return true;
+    }
+    return pickerActive || showAccessibleChooser || restPicker.showChooser;
+  };
+  useEffect(() => {
+    props.keyboardRef.current = { route, dismissHistory: () => {
+      if (!moreActionsOpen) return false;
+      setMoreActionsOpen(false);
+      return true;
+    } };
+    return () => { props.keyboardRef.current = null; };
+  });
 
   if (mode === "ink") {
     return (
@@ -168,6 +246,7 @@ export function NotebookBottomTools(props: Props) {
           color={props.lineColor} width={props.lineWidth} onColor={props.onColor} onWidth={props.onWidth}
           eraserMode={props.eraserMode} onEraserMode={props.onEraserMode} />
         <NotebookInkToolbar
+          keyboardRef={inkKeyboard}
           ko={ko}
           tool={props.tool}
           scale={props.scale}
@@ -208,16 +287,16 @@ export function NotebookBottomTools(props: Props) {
                 </Pressable>
               </View>
               {restPicker.origin}
-              <Pressable testID="notebook-tuplet" disabled={pickerActive} accessibilityElementsHidden={pickerActive} accessibilityRole="button" accessibilityState={{ selected: props.tupletCount !== null }} onPress={props.onTuplet} style={[styles.categoryButton, props.tupletCount !== null && styles.categoryActive, pickerActive && styles.hiddenNeighbor]}>
+              <Pressable testID="notebook-tuplet" disabled={pickerActive} accessibilityElementsHidden={pickerActive} accessibilityRole="button" accessibilityState={{ selected: props.tupletCount !== null }} onPress={() => { setMoreActionsOpen(false); props.onTuplet(); }} style={[styles.categoryButton, props.tupletCount !== null && styles.categoryActive, pickerActive && styles.hiddenNeighbor]}>
                 <View style={styles.categoryIconFrame}><NotebookTupletPreview count={props.tupletCount ?? 3} /></View>
                 <Text style={styles.categoryLabel}>{ko ? "잇단음표" : "Tuplet"}</Text>
               </Pressable>
-              <Pressable testID="notebook-category-marks" disabled={pickerActive} accessibilityElementsHidden={pickerActive} accessibilityRole="button" accessibilityState={{ expanded: category === "marks", selected: category === "marks" }} onPress={() => setCategory(category === "marks" ? null : "marks")} style={[styles.categoryButton, category === "marks" && styles.categoryActive, pickerActive && styles.hiddenNeighbor]}>
+              <Pressable testID="notebook-category-marks" disabled={pickerActive} accessibilityElementsHidden={pickerActive} accessibilityRole="button" accessibilityState={{ expanded: marksOpen, selected: marksOpen }} onPress={() => { setMoreActionsOpen(false); setFocusedMark(null); if (marksOpen) closeMarks(); else setCategory("marks"); }} style={[styles.categoryButton, marksOpen && styles.categoryActive, pickerActive && styles.hiddenNeighbor]}>
                 <View style={styles.categoryIconFrame}><Ionicons name="musical-notes-outline" size={21} color="#725b3c" /></View>
                 <Text style={styles.categoryLabel}>{ko ? "기호" : "Marks"}</Text>
               </Pressable>
               {compactNoteActions ? (
-                <Pressable testID="notebook-note-more" disabled={pickerActive} accessibilityElementsHidden={pickerActive} accessibilityRole="button" accessibilityLabel={ko ? "더 많은 편집 도구" : "More editing tools"} accessibilityState={{ expanded: moreActionsOpen }} onPress={() => setMoreActionsOpen((open) => !open)} style={[styles.moreActionsButton, pickerActive && styles.hiddenNeighbor]}>
+                 <Pressable testID="notebook-note-more" dataSet={{ notebookHistory: "true" }} disabled={pickerActive} accessibilityElementsHidden={pickerActive} accessibilityRole="button" accessibilityLabel={ko ? "더 많은 편집 도구" : "More editing tools"} accessibilityState={{ expanded: moreActionsOpen }} onPress={() => setMoreActionsOpen((open) => !open)} style={[styles.moreActionsButton, pickerActive && styles.hiddenNeighbor]}>
                   <Ionicons name={moreActionsOpen ? "close" : "ellipsis-horizontal"} size={19} color="#675d50" />
                 </Pressable>
               ) : (
@@ -232,36 +311,34 @@ export function NotebookBottomTools(props: Props) {
             </View>
           </View>
 
-          {compactNoteActions && moreActionsOpen && !pickerActive && <View testID="notebook-note-more-menu" accessibilityRole="menu" style={[styles.moreActionsMenu, moreActionsAbove ? { bottom: "100%", top: undefined } : { top: "100%", bottom: undefined }]}>
+           {compactNoteActions && moreActionsOpen && !pickerActive && <View testID="notebook-note-more-menu" dataSet={{ notebookHistory: "true" }} accessibilityRole="menu" style={[styles.moreActionsMenu, moreActionsAbove ? { bottom: "100%", top: undefined } : { top: "100%", bottom: undefined }]}>
             <Pressable testID="notebook-auto-space" accessibilityRole="menuitem" accessibilityLabel={ko ? "같은 간격으로 정리" : "Space notes evenly"} disabled={props.autoSpaceDisabled} onPress={() => { props.onAutoSpace(); setMoreActionsOpen(false); }} style={[styles.moreMenuAction, props.autoSpaceDisabled && styles.disabled]}><Ionicons name="options-outline" size={17} color="#695538" /><Text style={styles.moreMenuLabel}>{ko ? "간격" : "Space"}</Text></Pressable>
-            <Pressable testID="notebook-note-undo" accessibilityRole="menuitem" accessibilityLabel={ko ? "실행 취소" : "Undo"} disabled={!props.canUndo} onPress={() => { props.onUndo(); setMoreActionsOpen(false); }} style={[styles.moreMenuAction, !props.canUndo && styles.disabled]}><Ionicons name="arrow-undo" size={17} color="#675d50" /><Text style={styles.moreMenuLabel}>{ko ? "취소" : "Undo"}</Text></Pressable>
-            <Pressable testID="notebook-note-redo" accessibilityRole="menuitem" accessibilityLabel={ko ? "다시 실행" : "Redo"} disabled={!props.canRedo} onPress={() => { props.onRedo(); setMoreActionsOpen(false); }} style={[styles.moreMenuAction, !props.canRedo && styles.disabled]}><Ionicons name="arrow-redo" size={17} color="#675d50" /><Text style={styles.moreMenuLabel}>{ko ? "다시" : "Redo"}</Text></Pressable>
+             <Pressable testID="notebook-note-undo" accessibilityRole="menuitem" accessibilityLabel={ko ? "실행 취소" : "Undo"} disabled={!props.canUndo} onPress={props.onUndo} style={[styles.moreMenuAction, !props.canUndo && styles.disabled]}><Ionicons name="arrow-undo" size={17} color="#675d50" /><Text style={styles.moreMenuLabel}>{ko ? "취소" : "Undo"}</Text></Pressable>
+             <Pressable testID="notebook-note-redo" accessibilityRole="menuitem" accessibilityLabel={ko ? "다시 실행" : "Redo"} disabled={!props.canRedo} onPress={props.onRedo} style={[styles.moreMenuAction, !props.canRedo && styles.disabled]}><Ionicons name="arrow-redo" size={17} color="#675d50" /><Text style={styles.moreMenuLabel}>{ko ? "다시" : "Redo"}</Text></Pressable>
           </View>}
 
         {notePicker.overlay}
 
         {restPicker.overlay}
 
-         {category && !pickerActive ? (
+         {marksOpen && !pickerActive ? (
           <View testID="notebook-symbol-drawer" style={[styles.categoryDrawer, drawerAbove
             ? { bottom: "100%", top: undefined }
             : { top: "100%", bottom: undefined },
           { height: drawerAvailable }]}>
             <View style={styles.drawerHeader}>
               <Text style={styles.drawerTitle}>{ko ? "악보 기호" : "Musical marks"}</Text>
-              <Pressable accessibilityRole="button" accessibilityLabel={ko ? "도구 닫기" : "Close tools"} onPress={() => setCategory(null)} style={styles.drawerClose}><Ionicons name="close" size={17} color="#796b55" /></Pressable>
+              <Pressable accessibilityRole="button" accessibilityLabel={ko ? "도구 닫기" : "Close tools"} onPress={closeMarks} style={styles.drawerClose}><Ionicons name="close" size={17} color="#796b55" /></Pressable>
             </View>
             <ScrollView style={[styles.drawerScroll, { flex: 1, minHeight: 0 }]} contentContainerStyle={styles.drawerContent} showsVerticalScrollIndicator keyboardShouldPersistTaps="handled">
-              {markGroups.map((group) => (
+               {visibleGroups.map((group) => (
                   <View key={group.label} style={styles.drawerMarkGroup}>
                     <Text style={styles.drawerEyebrow}>{group.label}</Text>
                     <View style={styles.drawerGlyphGrid}>
                       {group.items.map((item) => (
-                         <Pressable key={item.id} testID={`notebook-symbol-${item.id}`} accessibilityRole="button" accessibilityLabel={item.label.replace(/([A-Z])/g, " $1").replace(/_/g, " ")} onPress={() => {
-                           if (item.id === "meter-picker") setMeterPicker(true);
-                           else props.onChoose({ glyph: item.id, role: "normal", dotted: false });
-                           setCategory(null);
-                         }} style={styles.drawerGlyphButton}>
+                          <Pressable key={item.id} ref={(node) => { if (node) markButtons.current.set(item.id, node); else markButtons.current.delete(item.id); }} dataSet={{ notebookMark: item.id }}
+                            testID={`notebook-symbol-${item.id}`} accessibilityRole="button" accessibilityLabel={item.label.replace(/([A-Z])/g, " $1").replace(/_/g, " ")}
+                            onFocus={() => setFocusedMark(item.id)} onPress={() => chooseMark(item.id)} style={[styles.drawerGlyphButton, focusedMark === item.id && styles.drawerGlyphSelected]}>
                            <NotebookGlyphPreview glyph={item.id === "meter-picker" ? `time-${props.notationMeter?.beats ?? 4}-${props.notationMeter?.unit ?? 4}` : item.id} size={22} />
                           <Text numberOfLines={1} style={styles.drawerGlyphLabel}>{item.label.replace(/([A-Z])/g, " $1").replace(/_/g, " ")}</Text>
                         </Pressable>

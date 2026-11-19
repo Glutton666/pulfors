@@ -31,6 +31,8 @@ type Props = {
   onZoom: (scale: number) => void;
   scale: number;
   portraitLayout?: boolean;
+  onKeyboardGuide?: () => void;
+  onKeyboardEdit?: () => void;
 };
 
 export function NotebookSettingsPanel(props: Props) {
@@ -83,6 +85,8 @@ export function NotebookSettingsPanel(props: Props) {
 
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      {props.onKeyboardGuide && <Pressable testID="notebook-keyboard-guide" accessibilityRole="button" onPress={props.onKeyboardGuide} style={styles.outlineButton}><Text style={styles.buttonText}>{ko ? "단축키 안내" : "Shortcut guide"}</Text></Pressable>}
+      {props.onKeyboardEdit && <Pressable testID="notebook-keyboard-edit" accessibilityRole="button" onPress={props.onKeyboardEdit} style={[styles.outlineButton, { marginTop: 5, marginBottom: 12 }]}><Text style={styles.buttonText}>{ko ? "단축키 변경·기본값 복원" : "Customize or reset shortcuts"}</Text></Pressable>}
       <Text style={styles.eyebrow}>{ko ? "연습 소스" : "PRACTICE SOURCE"}</Text>
       <Text style={styles.sectionTitle}>{t.source}</Text>
       <View style={styles.sourceCard}>

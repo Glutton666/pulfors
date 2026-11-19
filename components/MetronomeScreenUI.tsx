@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from "react";
+import React, { useCallback, useLayoutEffect, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -202,7 +202,7 @@ export function MetronomeScreenUI(props: Props) {
     landscapeContentType, setLandscapeContentType,
     landscapeStats, landscapeStatsLogs, formatStatMinutes,
     pickLandscapeImage, removeLandscapeImage,
-    handleNativeKeyDown, handleNativeKeyUp,
+    handleNativeKeyDown, handleNativeKeyUp, notebookOwnsKeyboardRef,
     flashOpacity, beatProgress, flashStyle, halfTimeFlashStyle, modeSlideStyle, fullScreenResetFlashStyle,
     currentMode, cycleToNextMode, switchToMode,
     completedGoalPopups, dismissGoalPopup,
@@ -231,6 +231,11 @@ export function MetronomeScreenUI(props: Props) {
     allPlayersRef,
     outputOwner,
   } = props;
+  useLayoutEffect(() => {
+    if (!notebookOwnsKeyboardRef) return;
+    notebookOwnsKeyboardRef.current = labScoreTab === "notebook";
+    return () => { notebookOwnsKeyboardRef.current = false; };
+  }, [labScoreTab, notebookOwnsKeyboardRef]);
   const isDesktopWeb = Platform.OS === "web" && S.isWideWebDesktop === true;
   const showMainModeHeader = activeModal === null
     && !stageModeActive
@@ -490,6 +495,7 @@ export function MetronomeScreenUI(props: Props) {
           paddingBottom: insets.bottom,
         }]}>
           <LabScoreWorkspace initialTab={labScoreTab} initialDocument={labRhythmDocument}
+            notebookKeyboardObscured={isModeDialOpen || (activeModal !== null && activeModal !== "menu") || showKbShortcuts}
             onTabChange={setLabScoreTab} onRegisterNotebookExit={registerNotebookExit} onClose={() => {
             setLabScoreTab(null);
             setLabRhythmDocument(undefined);
@@ -1387,6 +1393,7 @@ export function MetronomeScreenUI(props: Props) {
           noteMode && { justifyContent: "flex-start" as const },
           S.contentMaxWidth != null && { maxWidth: S.contentMaxWidth, alignSelf: "center" as const, width: "100%" as const },
           modeSlideStyle,
+          Platform.OS === "web" && labScoreTab === "notebook" && { display: "none" },
         ]}
       >
         {noteMode ? (

@@ -25,7 +25,8 @@ export function layoutNotePicker(anchor: StaffPoint, width: number, top: number,
     glyph, x,
     y: anchor.y + direction * (near + step * i),
   }));
-  return { anchor, kind, roles, durations, direction, radius, roleRadius, step, branchSpace, near };
+  const cancel = { x: clamp(anchor.x, 46, width - 46), y: direction < 0 ? anchor.y + roleRadius + 2 : anchor.y - roleRadius - 19, width: 84, height: 17 };
+  return { anchor, kind, roles, durations, direction, radius, roleRadius, step, branchSpace, near, cancel };
 }
 export type NotePickerLayout = ReturnType<typeof layoutNotePicker>;
 export type NotePickerDrag = {
@@ -33,17 +34,24 @@ export type NotePickerDrag = {
   last: StaffPoint; roleX: number; branchArmed: boolean; enteredLane: boolean;
   furthest: number; peakChoice: NotePickerChoice;
   focus: "glyph" | "variant";
+  visitedDurations: boolean;
+  cancelHovered: boolean;
 };
 
 export const startNotePickerDrag = (choice: NotePickerChoice, start: StaffPoint): NotePickerDrag => ({
   choice, phase: "role", last: start, roleX: start.x, branchArmed: false, enteredLane: false, furthest: 0, peakChoice: choice, focus: "glyph",
+  visitedDurations: false, cancelHovered: false,
 });
 
 export function moveNotePickerDrag(state: NotePickerDrag, layout: NotePickerLayout, point: StaffPoint): NotePickerDrag {
   const { anchor, direction, near, step, branchSpace } = layout;
   const travel = (point.y - anchor.y) * direction;
   const enter = clamp(near * .58, 10, 18);
-  const next = { ...state, last: point };
+  const targetBox = layout.cancel;
+  const cancelHovered = state.visitedDurations && Math.abs(point.x - targetBox.x) <= targetBox.width / 2 &&
+    point.y >= targetBox.y && point.y <= targetBox.y + targetBox.height;
+  const next = { ...state, last: point, cancelHovered };
+  if (cancelHovered) return next;
   if (state.phase === "role") {
     if (travel >= enter || (direction === 1 && point.y < anchor.y - enter)) {
       Object.assign(next, { phase: "duration", branchArmed: false, enteredLane: false, furthest: 0, peakChoice: state.choice, focus: "glyph" });
@@ -55,6 +63,7 @@ export function moveNotePickerDrag(state: NotePickerDrag, layout: NotePickerLayo
     return { ...next, phase: "role", roleX: point.x, choice: state.peakChoice, branchArmed: false, enteredLane: false };
   }
   if (next.phase !== "duration" || travel < Math.max(enter, near - step * .5)) return next;
+  next.visitedDurations = true;
   const target = layout.durations[clamp(Math.round((travel - near) / step), 0, layout.durations.length - 1)];
   const dx = point.x - target.x;
   const horizontal = Math.abs(point.x - state.last.x) >= Math.abs(point.y - state.last.y);

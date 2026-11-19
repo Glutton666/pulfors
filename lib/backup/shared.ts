@@ -53,6 +53,7 @@ export const ALL_KEYS = [
   "@practice_book_view_mode",
   "metronome_keyboard_bindings_v1",
   "metronome_keyboard_bindings_by_mode_v1",
+  "lab_notebook_keyboard_v1",
   "metronome_quick_add_v1",
   "metronome_theme_mode",
   "metronome_landscape_image",

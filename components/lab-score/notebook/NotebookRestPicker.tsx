@@ -89,7 +89,7 @@ export function useNotebookRestPicker(props: PickerProps) {
       </Pressable>)}
     </ScrollView>}
   </>;
-  return { origin, overlay, active: picker.active };
+  return { origin, overlay, active: picker.active, showChooser, cancel: () => { setShowChooser(false); picker.cancel(); } };
 }
 
 const styles = StyleSheet.create({
