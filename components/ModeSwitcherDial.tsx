@@ -44,6 +44,7 @@ export type { ModeSlot } from "@/lib/mode-dial-logic";
 
 type Wall = "top" | "right" | "bottom" | "left";
 type WallPos = { wall: Wall; t: number };
+type DialSwipe = { startScroll: number; wall: Wall; moved: boolean; pageX: number; pageY: number };
 
 const MODES = MODE_DIAL_SLOTS;
 const WALL_KEY = "metronome_dial_wall_v2";
@@ -477,8 +478,8 @@ function ModeSwitcherDial({
   const confirmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const swipeStart = useRef({ coord: 0, startScroll: 0, moved: false,
-                               pageX: 0, pageY: 0 });
+  const swipeStart = useRef<DialSwipe | null>(null);
+  const webPointerIdRef = useRef<number | null>(null);
 
   // Refs for PanResponder tap-detection (updated each render)
   const anchorRef    = useRef({ x: 0, y: 0 });
@@ -533,13 +534,8 @@ function ModeSwitcherDial({
     setSelectedIndex(session.selectedIndex);
     scrollPosition.value = session.scrollPosition;
     selectionPulse.value = 0;
-    swipeStart.current = {
-      coord: 0,
-      startScroll: session.scrollPosition,
-      moved: false,
-      pageX: 0,
-      pageY: 0,
-    };
+    swipeStart.current = null;
+    webPointerIdRef.current = null;
   }, [scrollPosition, selectionPulse]);
 
   // A mode can change while the fan is closed (for example, from the menu or
@@ -590,6 +586,8 @@ function ModeSwitcherDial({
   }, [fanScale, fanOpacity, overlayOp, resetDialSession, reduceMotion]);
 
   const doClose = useCallback(() => {
+    swipeStart.current = null;
+    webPointerIdRef.current = null;
     if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
     cancelAnimation(fanScale);
     cancelAnimation(fanOpacity);
@@ -689,74 +687,97 @@ function ModeSwitcherDial({
     })
   ).current;
 
-  // ── Fan swipe PanResponder (rotary dial) ──────────────────────────────────
-  // Claims ALL starts so the overlay below can never steal the touch on web.
-  // Tap vs swipe is distinguished by movement distance on release.
-  const fanSwipePR = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,   // always claim — blocks overlay
-      onPanResponderGrant: (e) => {
-        if (isConfirmingRef.current || closeTimerRef.current !== null) return;
-        ++animationGenerationRef.current;
-        cancelAnimation(scrollPosition);
-        // A spring may still be moving toward an equivalent wrapped index.
-        // New input always owns the canonical logical position before moving.
-        scrollPosition.value = scrollPosRef.current;
-        const { axis } = SWIPE_CFG[wallRef.current];
-        swipeStart.current = {
-          coord:       axis === "x" ? e.nativeEvent.pageX : e.nativeEvent.pageY,
-          startScroll: scrollPosRef.current,
-          moved:       false,
-          pageX:       e.nativeEvent.pageX,
-          pageY:       e.nativeEvent.pageY,
-        };
-      },
-      onPanResponderMove: (e, gs) => {
-        if (isConfirmingRef.current || closeTimerRef.current !== null) return;
-        if (Math.abs(gs.dx) > 5 || Math.abs(gs.dy) > 5) {
-          swipeStart.current.moved = true;
-          const { axis, sign } = SWIPE_CFG[wallRef.current];
-          const coord = axis === "x" ? e.nativeEvent.pageX : e.nativeEvent.pageY;
-          const delta = (coord - swipeStart.current.coord) / PX_PER_STEP * sign;
-          const next  = wrapModeDialPosition(swipeStart.current.startScroll + delta);
-          scrollPosRef.current = next;
-          scrollPosition.value = next;
-          highlightPositionRef.current(next);
-        }
-      },
-      onPanResponderRelease: (e) => {
-        if (isConfirmingRef.current || closeTimerRef.current !== null) return;
-        if (!swipeStart.current.moved) {
-          // TAP — find icon closest to tap position in anchor-space
-          const anch   = anchorRef.current;
-          const ax     = e.nativeEvent.pageX - anch.x;
-          const ay     = e.nativeEvent.pageY - anch.y;
-          const slots  = iconSlotsRef.current;
-          let best = -1, bestDist = Infinity;
-          slots.forEach(({ i, dx, dy }) => {
-            const d = Math.hypot(dx - ax, dy - ay);
-            if (d < bestDist) { bestDist = d; best = i; }
-          });
-          if (best >= 0 && bestDist <= ICON_S) {
-            settleToPositionRef.current(
-              shortestModeDialTarget(scrollPosRef.current, best),
-            );
-          }
-          // else: tap on empty bg — do nothing (keep current selection)
-        } else {
-          // SWIPE — snap to nearest; fan stays open for overlay-tap to confirm
-          settleToPositionRef.current(scrollPosRef.current);
-        }
-      },
-      // Don't surrender gesture to parent ScrollViews
-      onPanResponderTerminationRequest: () => false,
-      onPanResponderTerminate: () => {
-        if (isConfirmingRef.current || closeTimerRef.current !== null) return;
-        // Snap gracefully — do NOT close (terminate ≠ user intent to dismiss)
-        settleToPositionRef.current(scrollPosRef.current);
-      },
-    })
-  ).current;
+  const beginFanSwipe = useCallback((pageX: number, pageY: number) => {
+    if (!isOpenRef.current || isConfirmingRef.current || closeTimerRef.current !== null) return false;
+    ++animationGenerationRef.current;
+    cancelAnimation(scrollPosition);
+    // New input starts from the logical position, not a spring's intermediate value.
+    scrollPosition.value = scrollPosRef.current;
+    swipeStart.current = { pageX, pageY, startScroll: scrollPosRef.current, wall: wallRef.current, moved: false };
+    return true;
+  }, [scrollPosition]);
+
+  const moveFanSwipe = useCallback((pageX: number, pageY: number) => {
+    const swipe = swipeStart.current;
+    if (!swipe) return;
+    const dx = pageX - swipe.pageX;
+    const dy = pageY - swipe.pageY;
+    if (!swipe.moved && Math.max(Math.abs(dx), Math.abs(dy)) <= 5) return;
+    swipe.moved = true;
+    const { axis, sign } = SWIPE_CFG[swipe.wall];
+    const next = wrapModeDialPosition(swipe.startScroll + (axis === "x" ? dx : dy) / PX_PER_STEP * sign);
+    scrollPosRef.current = next;
+    scrollPosition.value = next;
+    highlightPositionRef.current(next);
+  }, [scrollPosition]);
+
+  const finishFanSwipe = useCallback((point?: { pageX: number; pageY: number }) => {
+    const swipe = swipeStart.current;
+    if (!swipe) return;
+    if (point) moveFanSwipe(point.pageX, point.pageY);
+    swipeStart.current = null;
+    if (!point || swipe.moved) {
+      // Snap without closing when a drag ends or the OS interrupts it.
+      settleToPositionRef.current(scrollPosRef.current);
+      return;
+    }
+    const ax = point.pageX - anchorRef.current.x;
+    const ay = point.pageY - anchorRef.current.y;
+    let best = -1, bestDist = Infinity;
+    for (const { i, dx, dy } of iconSlotsRef.current) {
+      const distance = Math.hypot(dx - ax, dy - ay);
+      if (distance < bestDist) { bestDist = distance; best = i; }
+    }
+    if (best >= 0 && bestDist <= ICON_S) {
+      settleToPositionRef.current(shortestModeDialTarget(scrollPosRef.current, best));
+    }
+  }, [moveFanSwipe]);
+
+  const [fanSwipePR] = useState(() => PanResponder.create({
+    onStartShouldSetPanResponder: () => true,
+    onPanResponderGrant: ({ nativeEvent }) => { beginFanSwipe(nativeEvent.pageX, nativeEvent.pageY); },
+    onPanResponderMove: ({ nativeEvent }) => moveFanSwipe(nativeEvent.pageX, nativeEvent.pageY),
+    onPanResponderRelease: ({ nativeEvent }) => finishFanSwipe(nativeEvent),
+    onPanResponderTerminationRequest: () => false,
+    onPanResponderTerminate: () => finishFanSwipe(),
+  }));
+
+  // RN Web's document-wide touch/mouse responder can ignore the first real
+  // mouse press after an unclaimed touch is cancelled. Own one pointer here.
+  const cancelWebSwipe = useCallback(() => {
+    if (webPointerIdRef.current === null) return;
+    webPointerIdRef.current = null;
+    finishFanSwipe();
+  }, [finishFanSwipe]);
+  useEffect(() => {
+    if (Platform.OS !== "web" || !isOpen) return;
+    window.addEventListener("blur", cancelWebSwipe);
+    return () => window.removeEventListener("blur", cancelWebSwipe);
+  }, [isOpen, cancelWebSwipe]);
+
+  const webSwipeHandlers = {
+    onPointerDown: (event: React.PointerEvent<HTMLElement>) => {
+      if (!event.isPrimary || event.button !== 0 || webPointerIdRef.current !== null) return;
+      if (!beginFanSwipe(event.pageX, event.pageY)) return;
+      webPointerIdRef.current = event.pointerId;
+      event.currentTarget.setPointerCapture(event.pointerId);
+      event.preventDefault();
+    },
+    onPointerMove: (event: React.PointerEvent<HTMLElement>) => {
+      if (webPointerIdRef.current === event.pointerId) moveFanSwipe(event.pageX, event.pageY);
+    },
+    onPointerUp: (event: React.PointerEvent<HTMLElement>) => {
+      if (webPointerIdRef.current !== event.pointerId) return;
+      webPointerIdRef.current = null;
+      finishFanSwipe(event);
+    },
+    onPointerCancel: (event: React.PointerEvent<HTMLElement>) => {
+      if (webPointerIdRef.current === event.pointerId) cancelWebSwipe();
+    },
+    onLostPointerCapture: (event: React.PointerEvent<HTMLElement>) => {
+      if (webPointerIdRef.current === event.pointerId) cancelWebSwipe();
+    },
+  };
 
   // ── Animated styles ───────────────────────────────────────────────────────
   const overlayStyle = useAnimatedStyle(() => ({ opacity: overlayOp.value }));
@@ -1106,14 +1127,16 @@ function ModeSwitcherDial({
             ))}
           </Animated.View>
           <View
-            {...fanSwipePR.panHandlers}
+            {...(Platform.OS === "web"
+              ? webSwipeHandlers as unknown as React.ComponentProps<typeof View>
+              : fanSwipePR.panHandlers)}
             testID="mode-dial-swipe-area"
             style={{
               position: "absolute",
               left: hideHandle ? 0 : bgLayout.left,
               top: hideHandle ? 0 : bgLayout.top,
               width: bgLayout.w, height: hideHandle ? bgLayout.h - frameTop : bgLayout.h,
-              ...(Platform.OS === "web" ? { touchAction: "none" as const } : {}),
+              ...(Platform.OS === "web" ? { touchAction: "none" as const, userSelect: "none" as const } : {}),
             }}
           />
         </Animated.View>

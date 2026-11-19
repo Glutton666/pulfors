@@ -21,3 +21,11 @@ React Native Web's Modal dismisses on Escape **keyup**, while the app's global s
 **Why:** A browser regression check caught the practice book disappearing after Escape even though touch navigation already passed.
 
 **How to apply:** Nested navigation must own handled keys before global shortcuts and consume the matching Escape release even after its keydown closes the nested control. Native Modals have a separate presentation layer; render navigation within that layer rather than closing its host just to reveal an app-level overlay. Verify touch and Escape separately.
+
+## Web drag ownership
+
+The web dial should use captured Pointer Events, not the document-wide mouse/touch responder. This does not require changing native gesture ownership.
+
+**Why:** A cancelled touch on a non-interactive document surface can leave React Native Web expecting emulated mouse events. It can swallow the first real mouse drag even though the fan is open and its touch bounds are correct. An ordinary drag, or a cancelled touch that started on the dial and had an active responder, does not reproduce this.
+
+**How to apply:** Capture the initiating pointer on the independent hit surface. End that session on release, cancellation, lost capture or window blur without closing the fan. Regression coverage should cancel an unclaimed touch before attempting the next mouse drag and confirming the result.
