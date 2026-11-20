@@ -1,26 +1,26 @@
 import React from "react";
 import Svg, { G, Path, Text as SvgText } from "react-native-svg";
-import type { NotebookTupletSpan } from "@/lib/notebook-tuplet-layout";
+import { tupletNumberGap, type NotebookTupletSpan } from "@/lib/notebook-tuplet-layout";
 
 type Props = Pick<NotebookTupletSpan, "left" | "right" | "y" | "count"> &
-  Partial<Pick<NotebookTupletSpan, "fontSize" | "below" | "continuedLeft" | "continuedRight" | "open" | "numberOnly">>;
+  Partial<Pick<NotebookTupletSpan, "fontSize" | "below" | "continuedLeft" | "continuedRight" | "open" | "numberOnly" | "numberY">>;
 
 /** Conventional tuplet: short inward hooks, two strokes and an unboxed numeral.
  * Leaving a real gap preserves staff lines and handwritten objects behind it. */
 export function NotebookTupletGlyph({
   left, right, y, count, fontSize = 14, below = false,
   continuedLeft = false, continuedRight = false, open = false,
-  numberOnly = false,
+  numberOnly = false, numberY = y,
 }: Props) {
   const middle = (left + right) / 2;
-  const halfGap = count > 0 ? (String(count).length * fontSize * 0.65 + 8) / 2 : 0;
+  const halfGap = count > 0 && numberY === y ? tupletNumberGap(count, fontSize) / 2 : 0;
   const tick = (below ? -1 : 1) * 6;
   const start = continuedLeft ? `M${left} ${y}` : `M${left} ${y + tick} V${y}`;
   const end = continuedRight || open ? "" : ` V${y + tick}`;
   return <G testID={open ? "notebook-open-tuplet" : "notebook-tuplet-bracket"} opacity={open ? 0.55 : 1}>
-    {!numberOnly && <Path testID="notebook-tuplet-left" d={`${start} H${middle - halfGap}`} stroke="#111" strokeWidth={1.2} fill="none" strokeLinejoin="miter" />}
-    {!numberOnly && <Path testID="notebook-tuplet-right" d={`M${middle + halfGap} ${y} H${right}${end}`} stroke="#111" strokeWidth={1.2} fill="none" strokeLinejoin="miter" />}
-    {count > 0 && <SvgText testID="notebook-tuplet-number" x={middle} y={y + fontSize * 0.34} textAnchor="middle"
+    {!numberOnly && <Path testID="notebook-tuplet-left" d={halfGap ? `${start} H${middle - halfGap}` : `${start} H${right}${end}`} stroke="#111" strokeWidth={1.2} fill="none" strokeLinejoin="miter" />}
+    {!numberOnly && halfGap > 0 && <Path testID="notebook-tuplet-right" d={`M${middle + halfGap} ${y} H${right}${end}`} stroke="#111" strokeWidth={1.2} fill="none" strokeLinejoin="miter" />}
+    {count > 0 && <SvgText testID="notebook-tuplet-number" x={middle} y={numberY + fontSize * 0.34} textAnchor="middle"
       fontFamily="serif" fontStyle="italic" fontWeight="500" fontSize={fontSize} fill="#111">{count}</SvgText>}
   </G>;
 }

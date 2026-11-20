@@ -3,6 +3,7 @@ import React from "react";
 import { render } from "@testing-library/react";
 import { NotebookTupletGlyph, NotebookTupletPreview } from "@/components/lab-score/notebook/NotebookTupletGlyph";
 import { notebookTupletSpans } from "@/lib/notebook-tuplet-layout";
+import { notebookBeaming } from "@/lib/notebook-beaming";
 import type { StaffPage } from "@/lib/staff-notebook";
 
 jest.mock("react-native-svg", () => {
@@ -42,8 +43,48 @@ test("bracket clears stems, strong markings and attached articulations", () => {
   p.stamps![1].role = "strong";
   const accented = notebookTupletSpans(p)[0];
   expect(accented.y).toBeLessThan(normal.y);
-  p.stamps!.push({ id: "fermata", glyph: "fermata", attachTo: "n1", x: 145, y: 45, size: 26 });
-  expect(notebookTupletSpans(p)[0].y).toBeLessThan(45 - 20.8);
+  p.stamps!.push({ id: "fermata", glyph: "fermata", attachTo: "n1", x: 145, y: 65, size: 26 });
+  expect(notebookTupletSpans(p)[0].y).toBeLessThan(65 - 20.8);
+  p.stamps!.at(-1)!.y = 45;
+  const crowded = notebookTupletSpans(p)[0];
+  expect(crowded.below).toBe(true);
+  expect(crowded.stemJoins!.every((stem) => stem.direction === "down" && stem.stemY === crowded.y)).toBe(true);
+});
+
+test("four quarters join the thin tuplet rule without adding a rhythmic beam", () => {
+  const p = page();
+  p.stamps = [120, 114, 108, 108, 108].map((y, i) =>
+    ({ id: `n${i}`, glyph: "quarter", x: 75 + i * 80, y, size: 26 }));
+  p.tuplets![0].stampIds = ["n0", "n1", "n2", "n3"];
+  const before = JSON.stringify(p);
+  const beaming = notebookBeaming(p);
+  const span = notebookTupletSpans(p, undefined, beaming)[0];
+  expect(beaming.groups).toHaveLength(0);
+  expect(span.count).toBe(4);
+  expect(span.stemJoins!.map((stem) => stem.id)).toEqual(["n0", "n1", "n2", "n3"]);
+  expect(span.stemJoins!.every((stem) => stem.stemY === span.y && stem.direction === "up")).toBe(true);
+  expect(span.numberY).toBeUndefined();
+  expect(JSON.stringify(p)).toBe(before);
+});
+
+test("a centered stem stays connected by moving the numeral off the rule", () => {
+  const span = notebookTupletSpans(page())[0];
+  const view = render(<svg><NotebookTupletGlyph {...span} /></svg>);
+  expect(span.stemJoins).toHaveLength(3);
+  expect(span.numberY).toBeLessThan(span.y);
+  expect(view.getByTestId("notebook-tuplet-left").getAttribute("d")).toContain(`H${span.right}`);
+  expect(view.queryByTestId("notebook-tuplet-right")).toBeNull();
+  expect(Number(view.getByTestId("notebook-tuplet-number").getAttribute("y"))).toBeLessThan(span.y);
+});
+
+test("whole notes and rests count toward the same rule without gaining stems", () => {
+  const p = page();
+  p.stamps![0].glyph = "half";
+  p.stamps![1].glyph = "rest-quarter";
+  p.stamps![2].glyph = "whole";
+  const span = notebookTupletSpans(p)[0];
+  expect(span.count).toBe(3);
+  expect(span.stemJoins!.map((stem) => stem.id)).toEqual(["n0"]);
 });
 
 test("whole notes and rests keep the bracket outside the staff, with enough numeral clearance", () => {

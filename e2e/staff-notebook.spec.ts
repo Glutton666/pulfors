@@ -742,9 +742,9 @@ test("tuplet toggle bounds beams, including leading/middle/trailing rests and ca
   await page.getByTestId("notebook-note-redo").click();
   await expect(paper.locator('[data-testid^="notebook-stamp-"]')).toHaveCount(11);
   await openSettings(page); await page.getByTestId("notebook-save").click(); await closeNotice(page);
-  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("lab_staff_notebooks_v1")!)[0]);
+  const saved = await latestSavedNotebook(page);
   expect(saved.pages[0].tuplets).toHaveLength(1);
-  expect(saved.pages[0].tuplets[0].stampIds).toEqual(saved.pages[0].stamps.slice(3, 8).map((stamp: { id: string }) => stamp.id));
+  expect(saved.pages[0].tuplets![0].stampIds).toEqual(saved.pages[0].stamps!.slice(3, 8).map((stamp) => stamp.id));
   await page.reload();
   await page.getByTestId("mode-cycle-label").waitFor();
   await enterNotebook(page); await openSettings(page); await openSaved(page, saved.title);
@@ -753,6 +753,32 @@ test("tuplet toggle bounds beams, including leading/middle/trailing rests and ca
   await expect(paper.getByTestId("notebook-beam-group")).toHaveCount(1);
   await expect(paper.getByTestId("notebook-note-flag-0")).toHaveCount(6);
   await page.screenshot({ path: "generated-artifacts/notebook-explicit-rest-beams.png" });
+});
+
+test("four quarter-note stems meet the tuplet rule without beaming the ordinary note", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const reference: StaffNotebook = {
+    id: "quarter-joins", title: "Quarter-note tuplet", updatedAt: 1,
+    settings: { ...DEFAULT_NOTEBOOK_SETTINGS, measuresPerRow: 1 },
+    pages: [{ id: "p", staffCount: 7, strokes: [], stamps: [120, 114, 108, 108, 108].map((y, i) =>
+      ({ id: `q${i}`, glyph: "quarter", x: 64 + i * 135, y, size: 26 })),
+      tuplets: [{ id: "four", stampIds: ["q0", "q1", "q2", "q3"] }] }],
+  };
+  await page.addInitScript((note) => localStorage.setItem("lab_staff_notebooks_v1", JSON.stringify([note])), reference);
+  await openNotebook(page);
+  await openSettings(page); await openSaved(page, reference.title);
+  await page.getByTestId("notebook-panel-close").click();
+  const paper = page.getByTestId("notebook-drawing");
+  await expect(paper.getByTestId("notebook-tuplet-number")).toHaveText("4");
+  await expect(paper.getByTestId("notebook-beam-level-1")).toHaveCount(0);
+  const rule = await paper.getByTestId("notebook-tuplet-left").getAttribute("d");
+  const ruleY = Number(rule!.match(/V([\d.]+) H/)![1]);
+  for (const [i, stamp] of reference.pages[0].stamps!.slice(0, 4).entries()) {
+    const stem = paper.getByTestId(`notebook-stamp-q${i}`).getByTestId("notebook-note-stem");
+    await expect(stem).toHaveAttribute("d", `M 4.8 0 L 4.8 ${ruleY - stamp.y}`);
+  }
+  await expect(paper.getByTestId("notebook-stamp-q4").getByTestId("notebook-note-stem")).toHaveAttribute("d", "M 4.8 0 L 4.8 -42");
+  await page.screenshot({ path: "generated-artifacts/notebook-quarter-tuplet-joins.png" });
 });
 
 test("whole-note engraved silhouette is shared by paper and the picker", async ({ page }) => {
@@ -975,10 +1001,10 @@ for (const viewport of [{ width: 390, height: 844 }, { width: 768, height: 1024 
     await expect.poll(firstRowBeams).toBe(0);
     await openSettings(page);
     await page.getByTestId("notebook-save").click(); await closeNotice(page);
-    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("lab_staff_notebooks_v1")!)[0]);
-    expect(saved.settings.notationMeter).toEqual({ beats: 6, unit: 8 });
-    expect(saved.settings.beatsPerMeasure).toBe(4);
-    expect(saved.settings.bpm).toBe(84);
+    const saved = await latestSavedNotebook(page);
+    expect(saved.settings?.notationMeter).toEqual({ beats: 6, unit: 8 });
+    expect(saved.settings?.beatsPerMeasure).toBe(4);
+    expect(saved.settings?.bpm).toBe(84);
     await page.reload();
     await page.getByTestId("mode-cycle-label").waitFor();
     await enterNotebook(page); await openSettings(page); await openSaved(page, "Explicit tuplet beams");

@@ -1,5 +1,6 @@
 import type { StaffPage, StaffStamp } from "./staff-notebook";
-import { PAPER_WIDTH, ROW_HEIGHT, STAFF_TOP, STAFF_GAP, rowAt } from "./staff-notebook-layout";
+import { ROW_HEIGHT, STAFF_TOP, STAFF_GAP, rowAt } from "./staff-notebook-layout";
+import { naturalPaperWidth } from "./notebook-measures";
 import { isNotebookNote } from "./notebook-editing";
 import type { NotebookBeaming, NotebookBeamGroup, NotebookBeamStem } from "./notebook-beaming";
 
@@ -8,7 +9,11 @@ export type NotebookTupletSpan = {
   count: number; fontSize: number; below: boolean;
   continuedLeft: boolean; continuedRight: boolean; open: boolean;
   numberOnly?: boolean;
+  numberY?: number;
+  stemJoins?: NotebookBeamStem[];
 };
+
+export const tupletNumberGap = (count: number, fontSize: number) => String(count).length * fontSize * 0.65 + 8;
 
 function inkTop(stamp: StaffStamp, beam?: NotebookBeamStem): number {
   const scale = stamp.size / 26;
@@ -17,6 +22,7 @@ function inkTop(stamp: StaffStamp, beam?: NotebookBeamStem): number {
   if (beam?.direction === "down") return stamp.y - (stamp.role === "strong" ? 51 : 6) * scale;
   if (stamp.role === "strong") return stamp.y - 51 * scale;
   if (stamp.glyph === "whole") return stamp.y - (stamp.role === "ghost" ? 10 : 5) * scale;
+  if (stamp.glyph === "quarter" || stamp.glyph === "half") return stamp.y - 42 * scale;
   return stamp.y - 32 * scale;
 }
 
@@ -25,6 +31,7 @@ function inkTop(stamp: StaffStamp, beam?: NotebookBeamStem): number {
  * never inferred from the number of nearby notes. */
 export function notebookTupletSpans(page: StaffPage, openIds?: string[], beaming?: NotebookBeaming): NotebookTupletSpan[] {
   const staffCount = page.staffCount ?? 7;
+  const paperWidth = naturalPaperWidth(page);
   const stamps = page.stamps ?? [];
   const groups = [...(page.tuplets ?? []), ...(openIds?.length ? [{ id: "open", stampIds: openIds }] : [])];
   const beamByMember = new Map<string, NotebookBeamGroup>();
@@ -51,10 +58,10 @@ export function notebookTupletSpans(page: StaffPage, openIds?: string[], beaming
       const fontSize = Math.max(12, Math.min(22, items.reduce((sum, stamp) => sum + stamp.size, 0) / items.length * 0.54));
       const continuedLeft = row !== rows[0], continuedRight = row !== rows[rows.length - 1];
       const rawLeft = continuedLeft ? 38 : Math.min(...items.map((stamp) => stamp.x - stamp.size * 0.3)) - 5;
-      const rawRight = continuedRight ? PAPER_WIDTH - 38 : Math.max(...items.map((stamp) => stamp.x + stamp.size * (stamp.dotted ? 0.7 : 0.4))) + 5;
-      const gap = String(members.length).length * fontSize * 0.65 + 8;
-      const half = Math.min((PAPER_WIDTH - 12) / 2, Math.max((rawRight - rawLeft) / 2, (gap + 16) / 2));
-      const center = Math.max(6 + half, Math.min(PAPER_WIDTH - 6 - half, (rawRight + rawLeft) / 2));
+      const rawRight = continuedRight ? paperWidth - 38 : Math.max(...items.map((stamp) => stamp.x + stamp.size * (stamp.dotted ? 0.7 : 0.4))) + 5;
+      const gap = tupletNumberGap(members.length, fontSize);
+      const half = Math.min((paperWidth - 12) / 2, Math.max((rawRight - rawLeft) / 2, (gap + 16) / 2));
+      const center = Math.max(6 + half, Math.min(paperWidth - 6 - half, (rawRight + rawLeft) / 2));
       const top = Math.min(...items.map((stamp) => inkTop(stamp, beaming?.stems.get(stamp.id))),
         ...attachments.map((stamp) => stamp.y - stamp.size * 0.8));
       // Rest-spanning and partial beams still need clearance even though they
@@ -69,17 +76,37 @@ export function notebookTupletSpans(page: StaffPage, openIds?: string[], beaming
         candidate.segments.map((segment) => Math.max(segment.y1, segment.y2) + segment.thickness / 2)));
       const labelClearance = fontSize * 0.6 + 4;
       const aboveY = Math.min(top - 9, beamTop - labelClearance, row * ROW_HEIGHT + STAFF_TOP - 14);
-      const below = numberOnly ? beam!.direction === "down" : aboveY < row * ROW_HEIGHT + fontSize * 0.7 + 4;
+      // Join unflagged stems to the thin tuplet rule, not to a rhythmic
+      // beam (which would make a quarter/half read as a shorter value).
+      // Use the innermost bracket only so two levels never share a stem.
+      const innerDepth = nestedDepth(group);
+      const joinable = !numberOnly && !innerDepth && rows.length === 1 && members.length > 1
+        ? items.filter((stamp) => stamp.glyph === "quarter" || stamp.glyph === "half") : [];
+      const joinX = (stamp: StaffStamp, below: boolean) => stamp.x + (below ? -4.8 : 4.8) * stamp.size / 26;
+      const blocksNumeral = (below: boolean) => joinable.some((stamp) =>
+        Math.abs(joinX(stamp, below) - center) <= gap / 2 + 2 * stamp.size / 26);
+      const numberOffset = fontSize * 0.7 + 9;
+      const aboveSpace = fontSize * 0.7 + 4 + (blocksNumeral(false) ? numberOffset : 0);
+      const below = numberOnly ? beam!.direction === "down" : aboveY < row * ROW_HEIGHT + aboveSpace;
       const belowY = Math.max(row * ROW_HEIGHT + STAFF_TOP + STAFF_GAP * 4 + 15,
         ...items.map((stamp) => stamp.y + stamp.size * 0.4 + 10));
-      let y = below ? Math.min(staffCount * ROW_HEIGHT - fontSize * 0.5 - 3,
+      const outsideOffset = blocksNumeral(below) ? numberOffset : 0;
+      let y = below ? Math.min(staffCount * ROW_HEIGHT - fontSize * 0.5 - 3 - outsideOffset,
         Math.max(belowY, relatedBeams.length ? beamBottom + labelClearance : 0)) : aboveY;
       // Properly contained nested groups occupy separate notation levels.
-      const innerDepth = nestedDepth(group);
       if (innerDepth) y += (below ? 1 : -1) * (fontSize + 8) * innerDepth;
+      const stemJoins = joinable.flatMap((stamp): NotebookBeamStem[] => {
+        const stemX = joinX(stamp, below);
+        if (stemX < center - half || stemX > center + half || (below ? y <= stamp.y : y >= stamp.y)) return [];
+        return [{ id: stamp.id, stemX, headY: stamp.y, stemY: y, direction: below ? "down" : "up", scale: stamp.size / 26, levels: 0 }];
+      });
+      // If a stem lands at the numeral, keep the rule intact and move the
+      // numeral outside it. A gap here would leave that stem disconnected.
+      const numberY = outsideOffset ? y + (below ? 1 : -1) * outsideOffset : undefined;
       return {
         id: group.id, row, left: center - half, right: center + half, y,
         count: members.length, fontSize, below, continuedLeft, continuedRight, open: group.id === "open", numberOnly,
+        numberY, stemJoins,
       };
     });
   });

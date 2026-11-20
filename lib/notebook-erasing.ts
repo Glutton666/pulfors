@@ -1,6 +1,6 @@
 import type { NotebookSettings, StaffPage, StaffPoint, StaffStamp, StaffStroke } from "./staff-notebook";
 import { removeSelection, strokeIntersects, type NotebookBounds } from "./notebook-editing";
-import { notebookBeaming } from "./notebook-beaming";
+import { notebookBeaming, type NotebookBeamStem } from "./notebook-beaming";
 import { notebookTupletSpans } from "./notebook-tuplet-layout";
 import { objectFrame, strokeTouchesEraser, type NotebookInkObject } from "./notebook-ink";
 export { paperErasures, inkPath } from "./notebook-ink";
@@ -17,9 +17,12 @@ export function eraseNotebookGesture(page: StaffPage, points: StaffPoint[], mode
   }]]));
   // Derived beams and brackets are visual parts of their members, not new notes.
   const beams = notebookBeaming(page, settings);
-  beams.stems.forEach((stem, key) => stampAreas.get(key)?.push({
+  const tuplets = notebookTupletSpans(page, undefined, beams);
+  const addStem = (stem: NotebookBeamStem) => stampAreas.get(stem.id)?.push({
     x: stem.stemX - 2, y: Math.min(stem.headY, stem.stemY), width: 4, height: Math.abs(stem.headY - stem.stemY),
-  }));
+  });
+  beams.stems.forEach(addStem);
+  tuplets.forEach((span) => span.stemJoins?.forEach(addStem));
   // A shared beam/bracket is NOT a whole-object deletion target. Only a
   // member's own glyph/stem can delete that note. Partial cuts, in contrast,
   // must cover the shared decoration without changing musical membership.
@@ -31,10 +34,12 @@ export function eraseNotebookGesture(page: StaffPage, points: StaffPoint[], mode
         height: Math.abs(segment.y2 - segment.y1) + 2 * segment.thickness };
       group.memberIds.forEach((key) => stampAreas.get(key)?.push(area));
     }));
-    notebookTupletSpans(page, undefined, beams).forEach((span) => {
+    tuplets.forEach((span) => {
       const group = page.tuplets?.find((t) => t.id === span.id);
+      const labelY = span.numberY ?? span.y;
       group?.stampIds.forEach((key) => stampAreas.get(key)?.push({
-        x: span.left, y: span.y - span.fontSize, width: span.right - span.left, height: span.fontSize * 2,
+        x: span.left, y: Math.min(labelY, span.y) - span.fontSize, width: span.right - span.left,
+        height: Math.abs(labelY - span.y) + span.fontSize * 2,
       }));
     });
   }
