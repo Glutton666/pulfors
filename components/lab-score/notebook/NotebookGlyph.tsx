@@ -1,14 +1,13 @@
 import React from "react";
 import Svg, { Circle, G, Line, Path, Text as SvgText } from "react-native-svg";
-import { StaffRestGlyph } from "@/components/staff/StaffGlyphs";
 import { ALL_INSTR_SYMBOLS, ARTICULATIONS } from "@/components/ScorePalette";
 import { NotebookNoteGlyph, notebookNoteTop, type NotebookNoteDuration } from "./NotebookNoteGlyph";
 import type { NotebookNoteRole } from "@/lib/staff-notebook";
 import type { NotebookBeamStem } from "@/lib/notebook-beaming";
 import { BRAVURA_CLEF_OUTLINES } from "./BravuraClefOutlines";
+import { notebookRestEngraving } from "@/lib/notebook-rest-engraving";
 
 const noteDenominator: Record<string, number> = { whole: 1, half: 2, quarter: 4, eighth: 8, sixteenth: 16, "thirty_second": 32 };
-const restDenominator: Record<string, number> = { "rest-whole": 1, "rest-half": 2, "rest-quarter": 4, "rest-eighth": 8, "rest-sixteenth": 16, "rest-thirty_second": 32 };
 const typography: Record<string, string> = {
   sharp: "♯", flat: "♭", natural: "♮", double_sharp: "𝄪", double_flat: "𝄫",
   repeat_start: "||:", repeat_end: ":||", repeat_both: ":||:", segno: "𝄋", coda: "𝄌",
@@ -20,7 +19,7 @@ const typography: Record<string, string> = {
   da_capo: "D.C.", dal_segno: "D.S.", dal_segno_coda: "D.S. al Coda", da_capo_coda: "D.C. al Coda", fine: "Fine", volta1: "1.", volta2: "2.",
 };
 
-export function NotebookGlyph({ glyph, x, y, size, role = "normal", dotted = false, beam }: { glyph: string; x: number; y: number; size: number; role?: NotebookNoteRole; dotted?: boolean; beam?: NotebookBeamStem }) {
+export function NotebookGlyph({ glyph, x, y, size, role = "normal", dotted = false, beam, onStaff = true }: { glyph: string; x: number; y: number; size: number; role?: NotebookNoteRole; dotted?: boolean; beam?: NotebookBeamStem; onStaff?: boolean }) {
   const meter = /^time-(\d+)-(\d+)$/.exec(glyph);
   if (meter) return <G testID="notebook-meter-glyph" transform={`translate(${x} ${y}) scale(${size / 26})`}>
     <SvgText x={0} y={-3} textAnchor="middle" fontFamily="serif" fontWeight="bold" fontSize={25} fill="#111">{meter[1]}</SvgText>
@@ -52,11 +51,12 @@ export function NotebookGlyph({ glyph, x, y, size, role = "normal", dotted = fal
       </G>
     </G>;
   }
-  const restValue = restDenominator[glyph];
-  if (restValue) {
-    return <G transform={`translate(${x} ${y}) scale(${size / 26})`}>
-      <StaffRestGlyph index={0} x={0} beamCount={Math.max(0, Math.round(Math.log2(restValue)) - 2)} grouped={false} noteValueDenominator={restValue} color="#111111" noteY={0} stemTop={-31} beamGap={5} />
-      {dotted && <Circle testID="notebook-rest-dot" cx={11} cy={-3} r={2.2} fill="#111" />}
+  const rest = notebookRestEngraving({ glyph, x, y, size, dotted }, onStaff);
+  if (rest) {
+    return <G testID={`notebook-${glyph}`}>
+      <Path testID="notebook-rest-outline" d={rest.path} fill="#111111"
+        transform={`translate(${rest.left} ${rest.originY}) scale(${rest.scale} ${-rest.scale})`} />
+      {rest.dot && <Circle testID="notebook-rest-dot" cx={rest.dot.x} cy={rest.dot.y} r={rest.dot.r} fill="#111111" />}
     </G>;
   }
   if (glyph === "barline" || glyph === "bar_line") return <Line x1={x} x2={x} y1={y - 24} y2={y + 24} stroke="#111" strokeWidth={1.5} />;
@@ -94,5 +94,5 @@ export function NotebookGlyphPreview({ glyph, size = 26, role, dotted }: { glyph
     const y = glyph === "clef-treble" ? 40 : glyph === "clef-bass" ? 21 : 29;
     return <Svg width={size + 16} height={size + 12} viewBox="0 0 62 58"><NotebookGlyph glyph={glyph} x={31} y={y} size={size * 0.82} /></Svg>;
   }
-  return <Svg width={size + 28} height={size + 24} viewBox="0 0 70 55"><NotebookGlyph glyph={glyph} x={35} y={28} size={size} dotted={dotted} /></Svg>;
+  return <Svg width={size + 28} height={size + 24} viewBox="0 0 70 55"><NotebookGlyph glyph={glyph} x={35} y={28} size={size} dotted={dotted} onStaff={false} /></Svg>;
 }

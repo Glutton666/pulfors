@@ -15,7 +15,7 @@ import { NotebookPlaybackBar } from "@/components/lab-score/notebook/NotebookPla
 import { NotebookFloatingDock } from "@/components/lab-score/notebook/NotebookFloatingDock";
 import { NotebookSettingsPanel } from "@/components/lab-score/notebook/NotebookSettingsPanel";
 import { NotebookPaper } from "@/components/lab-score/notebook/NotebookPaper";
-import { attachedPosition, captureSelection, emptySelection, hitObject, includeAttached, isAttachedMark, isNotebookNote, isTupletMember, paginateNotebook, rectangle, removeSelection, reorderNotebookRows, selectRectangle, selectNotebookUnits, selectionBounds, selectionCount, selectionDelta, transformSelection, type NotebookClipboard, type NotebookSelection, type NotebookBounds, type NotebookSelectionUnit } from "@/lib/notebook-editing";
+import { attachedPosition, captureSelection, emptySelection, hitObject, includeAttached, isAttachedMark, isNotebookNote, isNotebookRest, isTupletMember, paginateNotebook, rectangle, removeSelection, reorderNotebookRows, selectRectangle, selectNotebookUnits, selectionBounds, selectionCount, selectionDelta, transformSelection, type NotebookClipboard, type NotebookSelection, type NotebookBounds, type NotebookSelectionUnit } from "@/lib/notebook-editing";
 import { eraseNotebookGesture, type NotebookEraserMode } from "@/lib/notebook-erasing";
 import { layoutNotebookMusic, measuresInRow, naturalPaperWidth, notebookMeasureRegions, standardTupletRatio, isManualBar, isMusic, measureDuration, musicalDuration } from "@/lib/notebook-music-layout";
 import { prepareNotebookMeasureEdit } from "@/lib/notebook-measure-edit";
@@ -746,6 +746,11 @@ export function StaffNotebookWorkspace({ active = true, keyboardObscured, onRegi
       const next = stamps.filter((s) => rowAt(s.y, destination.staffCount ?? 7) === sourceRow && s.x > previous.x && !s.attachTo && !s.generated).sort((a, b) => a.x - b.x)[0];
       stamp.x = next ? (previous.x + next.x) / 2 : previous.x + 28;
       stamp.y = previous.y; anchor.x = stamp.x; anchor.y = stamp.y;
+    }
+    if (isNotebookRest(stamp.glyph)) {
+      // A rest starts at the staff's neutral position rather than inheriting
+      // the previous note's pitch. It can still be moved by the user.
+      stamp.y = rowAt(stamp.y, destination.staffCount ?? 7) * ROW_HEIGHT + STAFF_TOP + STAFF_GAP * 2;
     }
     const apply = () => {
       const parent = attached && stamps.find((s) => s.id === attached.attachTo);

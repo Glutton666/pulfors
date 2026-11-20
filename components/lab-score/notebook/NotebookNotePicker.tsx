@@ -143,8 +143,8 @@ function NotationPicker({ layout, dock, drag, ko }: { layout: NotePickerLayout; 
       <Svg width={radius * 1.9} height={radius * 1.9} viewBox="0 0 54 60">
         <NotebookGlyph glyph={isRest ? `rest-${item.glyph}` : item.glyph} role={item.role} dotted={item.dotted}
           x={isRest ? 25 : 24}
-          y={isRest ? (item.glyph === "thirty_second" ? 27 : 30) : item.glyph === "whole" && item.role !== "strong" ? 37 : item.role === "strong" ? 52 : 46}
-          size={isRest ? 49 : 26} />
+          y={isRest ? 30 : item.glyph === "whole" && item.role !== "strong" ? 37 : item.role === "strong" ? 52 : 46}
+          size={isRest ? 28 : 26} onStaff={false} />
       </Svg>
     </View>)}
     {drag.visitedDurations && <View testID={`notebook-${layout.kind}-cancel-zone`}

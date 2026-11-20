@@ -3,6 +3,8 @@ import React from "react";
 import { render } from "@testing-library/react";
 import { NotebookGlyph, NotebookGlyphPreview } from "@/components/lab-score/notebook/NotebookGlyph";
 import { StaffNoteGlyph } from "@/components/staff/StaffGlyphs";
+import { notebookRestEngraving } from "@/lib/notebook-rest-engraving";
+import { STAFF_TOP, STAFF_GAP, ROW_HEIGHT } from "@/lib/staff-notebook-layout";
 
 jest.mock("@/components/ScorePalette", () => ({ ALL_INSTR_SYMBOLS: [], ARTICULATIONS: [] }));
 jest.mock("react-native-svg", () => {
@@ -22,10 +24,32 @@ test.each(["whole", "half", "quarter", "eighth", "sixteenth", "thirty_second"])(
   const view = render(<svg><NotebookGlyph glyph={glyph} x={100} y={102} size={26} dotted /></svg>);
   expect(view.getByTestId("notebook-rest-dot")).toBeTruthy();
   expect(view.queryByTestId("notebook-strong-mark")).toBeNull();
-  if (duration === "thirty_second") expect(view.container.querySelectorAll('[data-testid^="bar-rest-flag-"]')).toHaveLength(3);
+  const outline = view.getByTestId("notebook-rest-outline").getAttribute("d");
+  expect(outline).toMatch(/^M.*C.*Z$/);
   view.unmount();
   const preview = render(<NotebookGlyphPreview glyph={glyph} dotted />);
   expect(preview.getByTestId("notebook-rest-dot")).toBeTruthy();
+  expect(preview.getByTestId("notebook-rest-outline").getAttribute("d")).toBe(outline);
+});
+
+test("whole rests hang from the fourth line and half rests sit on the middle line in every row", () => {
+  const top = STAFF_TOP + ROW_HEIGHT;
+  const place = (glyph: string) => notebookRestEngraving({ glyph, x: 120, y: top + STAFF_GAP * 2, size: 26 })!;
+  const whole = place("rest-whole");
+  const half = place("rest-half");
+  expect(whole.originY).toBe(top + STAFF_GAP);
+  expect(half.originY).toBe(top + STAFF_GAP * 2);
+  expect(whole.bounds.y + whole.bounds.height / 2).toBeGreaterThan(whole.originY);
+  expect(half.bounds.y + half.bounds.height / 2).toBeLessThan(half.originY);
+});
+
+test("short rests use distinct filled outlines with space to the right for the dot", () => {
+  const shapes = ["eighth", "sixteenth", "thirty_second"].map((name) =>
+    notebookRestEngraving({ glyph: `rest-${name}`, x: 0, y: 102, size: 26, dotted: true })!);
+  expect(new Set(shapes.map((rest) => rest.path)).size).toBe(3);
+  expect(shapes[2].bounds.height).toBeGreaterThan(shapes[1].bounds.height);
+  expect(shapes[1].bounds.height).toBeGreaterThan(shapes[0].bounds.height);
+  for (const rest of shapes) expect(rest.dot!.x - rest.dot!.r).toBeGreaterThan(-rest.left);
 });
 
 test.each([
@@ -108,13 +132,13 @@ test("a placed meter renders its numerator and denominator separately", () => {
   const view = render(<svg><NotebookGlyph glyph="time-6-8" x={20} y={60} size={26} /></svg>);
   expect([...view.getByTestId("notebook-meter-glyph").querySelectorAll("text")].map((node) => node.textContent)).toEqual(["6", "8"]);
 });
-test("rest notation and Beat/Bar's intentional normal ghost glyph remain unchanged", () => {
+test("Notebook rest engraving stays separate from Beat/Bar's intentional normal ghost glyph", () => {
   const view = render(<svg>
     <NotebookGlyph glyph="rest-eighth" x={0} y={0} size={26} />
     <StaffNoteGlyph type="normal" active index={9} x={50} beamCount={0} grouped={false}
       noteValueDenominator={4} colors={{ accent: "#111111" }} noteY={0} stemTop={-31} beamGap={5} />
   </svg>);
-  expect(view.getByTestId("bar-rest-eighth-0")).toBeTruthy();
+  expect(view.getByTestId("notebook-rest-eighth")).toBeTruthy();
   expect(view.getByTestId("bar-note-normal-9").querySelectorAll("path")).toHaveLength(2);
 });
 test.each(["normal", "ghost", "strong"] as const)("%s role and dot remain explicit rather than becoming default ghost notes", (role) => {

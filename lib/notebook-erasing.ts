@@ -3,6 +3,7 @@ import { removeSelection, strokeIntersects, type NotebookBounds } from "./notebo
 import { notebookBeaming, type NotebookBeamStem } from "./notebook-beaming";
 import { notebookTupletSpans } from "./notebook-tuplet-layout";
 import { objectFrame, strokeTouchesEraser, type NotebookInkObject } from "./notebook-ink";
+import { notebookRestEngraving } from "./notebook-rest-engraving";
 export { paperErasures, inkPath } from "./notebook-ink";
 
 export type NotebookEraserMode = "object" | "partial";
@@ -12,7 +13,7 @@ export function eraseNotebookGesture(page: StaffPage, points: StaffPoint[], mode
   width = 22, settings?: Partial<NotebookSettings>): StaffPage {
   if (!points.length) return page;
   const hitStroke = (s: StaffStroke) => strokeTouchesEraser(s, points, width);
-  const stampAreas = new Map((page.stamps ?? []).map((s) => [s.id, [{
+  const stampAreas = new Map((page.stamps ?? []).map((s) => [s.id, [notebookRestEngraving(s)?.bounds ?? {
     x: s.x - s.size * 0.8, y: s.y - s.size * 2.1, width: s.size * 1.6, height: s.size * 2.8,
   }]]));
   // Derived beams and brackets are visual parts of their members, not new notes.

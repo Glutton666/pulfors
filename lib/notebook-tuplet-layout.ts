@@ -2,6 +2,7 @@ import type { StaffPage, StaffStamp } from "./staff-notebook";
 import { ROW_HEIGHT, STAFF_TOP, STAFF_GAP, rowAt } from "./staff-notebook-layout";
 import { naturalPaperWidth } from "./notebook-measures";
 import { isNotebookNote } from "./notebook-editing";
+import { notebookRestEngraving } from "./notebook-rest-engraving";
 import type { NotebookBeaming, NotebookBeamGroup, NotebookBeamStem } from "./notebook-beaming";
 
 export type NotebookTupletSpan = {
@@ -17,7 +18,7 @@ export const tupletNumberGap = (count: number, fontSize: number) => String(count
 
 function inkTop(stamp: StaffStamp, beam?: NotebookBeamStem): number {
   const scale = stamp.size / 26;
-  if (!isNotebookNote(stamp.glyph)) return stamp.y - 6 * scale;
+  if (!isNotebookNote(stamp.glyph)) return notebookRestEngraving(stamp)?.bounds.y ?? stamp.y - 6 * scale;
   if (beam?.direction === "up") return beam.stemY - (stamp.role === "strong" ? 25 : 2) * scale;
   if (beam?.direction === "down") return stamp.y - (stamp.role === "strong" ? 51 : 6) * scale;
   if (stamp.role === "strong") return stamp.y - 51 * scale;
@@ -89,7 +90,10 @@ export function notebookTupletSpans(page: StaffPage, openIds?: string[], beaming
       const aboveSpace = fontSize * 0.7 + 4 + (blocksNumeral(false) ? numberOffset : 0);
       const below = numberOnly ? beam!.direction === "down" : aboveY < row * ROW_HEIGHT + aboveSpace;
       const belowY = Math.max(row * ROW_HEIGHT + STAFF_TOP + STAFF_GAP * 4 + 15,
-        ...items.map((stamp) => stamp.y + stamp.size * 0.4 + 10));
+        ...items.map((stamp) => {
+          const rest = notebookRestEngraving(stamp)?.bounds;
+          return (rest ? rest.y + rest.height : stamp.y + stamp.size * 0.4) + 10;
+        }));
       const outsideOffset = blocksNumeral(below) ? numberOffset : 0;
       let y = below ? Math.min(staffCount * ROW_HEIGHT - fontSize * 0.5 - 3 - outsideOffset,
         Math.max(belowY, relatedBeams.length ? beamBottom + labelClearance : 0)) : aboveY;

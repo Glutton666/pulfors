@@ -1551,6 +1551,31 @@ for (const viewport of [{ width: 768, height: 1024 }, { width: 844, height: 390 
   });
 }
 
+test("notebook paper shows all six engraved rest shapes with their standard staff anchors", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const names = ["whole", "half", "quarter", "eighth", "sixteenth", "thirty_second"];
+  const reference: StaffNotebook = {
+    id: "engraved-rests", title: "Engraved rests", updatedAt: 1,
+    settings: { ...DEFAULT_NOTEBOOK_SETTINGS, measuresPerRow: 1 },
+    pages: [{ id: "p", staffCount: 7, strokes: [], stamps: names.map((name, i) => ({
+      id: name, glyph: `rest-${name}`, x: 140 + i * 118, y: 102, size: 26, dotted: i === 5,
+    })) }],
+  };
+  await page.addInitScript((note) => localStorage.setItem("lab_staff_notebooks_v1", JSON.stringify([note])), reference);
+  await openNotebook(page);
+  await openSettings(page); await openSaved(page, reference.title);
+  await page.getByTestId("notebook-panel-close").click();
+  const paper = page.getByTestId("notebook-drawing");
+  await expect(paper.getByTestId("notebook-rest-outline")).toHaveCount(6);
+  const rest = (name: string) => paper.getByTestId(`notebook-rest-${name}`).getByTestId("notebook-rest-outline");
+  await expect(rest("whole")).toHaveAttribute("transform", /^translate\(\S+ 90\)/);
+  await expect(rest("half")).toHaveAttribute("transform", /^translate\(\S+ 102\)/);
+  const outlines = await paper.getByTestId("notebook-rest-outline").evaluateAll((paths) => paths.map((path) => path.getAttribute("d")));
+  expect(new Set(outlines).size).toBe(6);
+  await expect(paper.getByTestId("notebook-rest-dot")).toHaveCount(1);
+  await page.screenshot({ path: "generated-artifacts/notebook-engraved-rests.png" });
+});
+
 for (const viewport of [{ width: 390, height: 844 }, { width: 768, height: 1024 }, { width: 844, height: 390 }]) {
   test(`rest gestures place once, preserve dots and form conventional tuplets at ${viewport.width}x${viewport.height}`, async ({ page }) => {
     await page.setViewportSize(viewport);
@@ -1586,6 +1611,15 @@ for (const viewport of [{ width: 390, height: 844 }, { width: 768, height: 1024 
     const dotBox = (await dotted.boundingBox())!;
     await page.mouse.move(dotBox.x + dotBox.width / 2, dotBox.y + dotBox.height / 2, { steps: 8 });
     await expect(dotted).toHaveAttribute("data-selected", "true");
+    const previewFits = await dotted.evaluate((choice) => {
+      const svg = choice.querySelector("svg")!.getBoundingClientRect();
+      return [...choice.querySelectorAll("path, circle")].every((shape) => {
+        const ink = shape.getBoundingClientRect();
+        return ink.width > 0 && ink.height > 0 && ink.left >= svg.left && ink.right <= svg.right
+          && ink.top >= svg.top && ink.bottom <= svg.bottom;
+      });
+    });
+    expect(previewFits).toBe(true);
     await page.screenshot({ path: `generated-artifacts/rest-picker-${viewport.width}.png` });
     await page.mouse.up();
     await expect(paper.locator('[data-testid^="notebook-stamp-"]')).toHaveCount(2);

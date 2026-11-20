@@ -3,6 +3,7 @@ import { ROW_HEIGHT, snapStaffY, inkInRow, rowAt } from "./staff-notebook-layout
 import { erasedAt } from "./notebook-ink";
 import { naturalPaperWidth, notebookMeasureRegions, standardTupletRatio } from "./notebook-music-layout";
 import { indexNotebookSplits, notebookSourceId, restoreNotebookStamp } from "./notebook-splits";
+import { notebookRestEngraving } from "./notebook-rest-engraving";
 
 export type NotebookSelection = { strokeIds: string[]; stampIds: string[] };
 export type NotebookBounds = { x: number; y: number; width: number; height: number };
@@ -27,7 +28,14 @@ export function rectangle(a: StaffPoint, b: StaffPoint): NotebookBounds {
 }
 const intersects = (a: NotebookBounds, b: NotebookBounds) =>
   a.x <= b.x + b.width && a.x + a.width >= b.x && a.y <= b.y + b.height && a.y + a.height >= b.y;
-const stampBounds = (stamp: StaffStamp): NotebookBounds => ({ x: stamp.x - stamp.size * 0.75, y: stamp.y - stamp.size * 1.4, width: stamp.size * 1.5, height: stamp.size * 1.9 });
+const stampBounds = (stamp: StaffStamp): NotebookBounds => {
+  const rest = notebookRestEngraving(stamp)?.bounds;
+  if (rest) {
+    const margin = stamp.size * 0.3;
+    return { x: rest.x - margin, y: rest.y - margin, width: rest.width + 2 * margin, height: rest.height + 2 * margin };
+  }
+  return { x: stamp.x - stamp.size * 0.75, y: stamp.y - stamp.size * 1.4, width: stamp.size * 1.5, height: stamp.size * 1.9 };
+};
 const pointIn = (p: StaffPoint, r: NotebookBounds) => p.x >= r.x && p.x <= r.x + r.width && p.y >= r.y && p.y <= r.y + r.height;
 function segmentHits(a: StaffPoint, b: StaffPoint, r: NotebookBounds) {
   let low = 0, high = 1;

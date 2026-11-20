@@ -953,3 +953,17 @@ mtime_ms = 1791846883253
 storage_uri = "gcs://replit-rams-assets-pike/rams/assets/repl:93f1fe32-983d-4024-b65a-6bb27a9b1eb8/ee17a5c7-3849-4bc7-9c0d-e09e72b286dc/25db19e9-0581-4b90-81bc-c7f129684fd2"
 storage_version_token = "1791846917257835"
 content_type = "text/html"
+
+[[outputs]]
+id = "W8LWXyNhzgE_fyoYNmsY6"
+uri = "file://generated-artifacts/notebook-rest-shapes.png"
+type = "image"
+title = "오선노트에 적용한 표준 쉼표"
+description = "왼쪽부터 온쉼표, 2분쉼표, 4분쉼표, 8분쉼표, 16분쉼표, 점32분쉼표입니다."
+logical_id = "87fc2003-fe89-43c6-89a8-0d603396d0da"
+content_hash = "sha256:01cca5d1349b159066183c868ed30958683a02819b842d75d2a6079684e2c79f"
+size = 5054
+mtime_ms = 1795170629056
+storage_uri = "gcs://replit-rams-assets-pike/rams/assets/repl:93f1fe32-983d-4024-b65a-6bb27a9b1eb8/87fc2003-fe89-43c6-89a8-0d603396d0da/0699fc15-39f4-4b99-aab5-2bced87edac7"
+storage_version_token = "1795170644531265"
+content_type = "image/png"

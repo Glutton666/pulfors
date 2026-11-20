@@ -1,6 +1,7 @@
 import type { NotebookSettings, StaffPage, StaffStamp } from "./staff-notebook";
 import { isNotebookNote, isTupletMember } from "./notebook-editing";
 import { ROW_HEIGHT, STAFF_GAP, STAFF_TOP, rowAt } from "./staff-notebook-layout";
+import { notebookRestEngraving } from "./notebook-rest-engraving";
 
 export type NotebookBeamStem = {
   id: string; stemX: number; headY: number; stemY: number;
@@ -86,9 +87,12 @@ function engrave(events: Event[], compound: boolean, quantum: number): NotebookB
     noteDx > 0 ? (notes[notes.length - 1].stamp.y - notes[0].stamp.y) / noteDx : 0));
   const maxLevel = Math.max(...events.map((event) => event.level));
   const starts = events.map((item, index) => {
+    const unitScale = item.stamp.size / 26;
+    const rest = item.rest ? notebookRestEngraving(item.stamp)?.bounds : undefined;
+    const restExtent = !rest ? 0 : direction === "up" ? item.stamp.y - rest.y : rest.y + rest.height - item.stamp.y;
     const minStem = item.rest
-      ? (direction === "up" ? 36 : 18) * item.stamp.size / 26 + (maxLevel - 1) * gap + thickness
-      : Math.max(3.5 * STAFF_GAP * item.stamp.size / 26, (item.level - 1) * gap + thickness + 14 * item.stamp.size / 26);
+      ? Math.max((direction === "up" ? 36 : 18) * unitScale, restExtent + 3 * unitScale) + (maxLevel - 1) * gap + thickness
+      : Math.max(3.5 * STAFF_GAP * unitScale, (item.level - 1) * gap + thickness + 14 * unitScale);
     return item.stamp.y - sign * minStem - slope * (xs[index] - xs[0]);
   });
   const anchorY = direction === "up" ? Math.min(...starts) : Math.max(...starts);
