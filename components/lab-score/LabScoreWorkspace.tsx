@@ -57,8 +57,7 @@ export function LabScoreWorkspace({ onClose, initialTab = "rhythm", initialDocum
       </View></>}
       <View style={{ flex: 1, minHeight: 0, display: tab === "rhythm" ? "flex" : "none" }}><RhythmWorkspace active={tab === "rhythm"} initialDocument={initialDocument} /></View>
       <View style={{ flex: 1, minHeight: 0, display: tab === "notebook" ? "flex" : "none" }}><StaffNotebookWorkspace
-        active={tab === "notebook"} keyboardObscured={notebookKeyboardObscured || help} onRegisterExit={onRegisterNotebookExit}
-        onOpenCapture={() => changeTab("rhythm")} /></View>
+        active={tab === "notebook"} keyboardObscured={notebookKeyboardObscured || help} onRegisterExit={onRegisterNotebookExit} /></View>
       <Modal transparent visible={help} animationType="fade" onRequestClose={() => setHelp(false)}>
         <View style={s.modalBackdrop}>
           <ScrollView style={[s.helpCard, { backgroundColor: C.surface, borderColor: C.border, maxHeight: "82%" }]} contentContainerStyle={{ flexGrow: 1 }}>

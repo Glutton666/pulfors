@@ -1030,12 +1030,81 @@ test("manual boundary editing refreshes effective measures without moving notes 
   await expect(page.getByText("마디선 위치를 변경합니다", { exact: true })).toBeVisible();
   await page.getByText("계속", { exact: true }).last().click();
   await openSettings(page); await page.getByTestId("notebook-save").click(); await closeNotice(page);
-  const saved: StaffNotebook = await page.evaluate(() => JSON.parse(localStorage.getItem("lab_staff_notebooks_v1")!).find((n: StaffNotebook) => n.id === "boundary-ownership"));
+  const readSaved = async () => (await storedNotes(page)).find((n) => n.id === reference.id);
+  await expect.poll(async () => (await readSaved())?.pages[0].stamps?.find((s) => s.id === "b")?.measure).toBe(0);
+  const saved = (await readSaved())!;
   const savedStamps = saved.pages[0].stamps!;
   expect(savedStamps.find((s) => s.id === "a")).toEqual(reference.pages[0].stamps![0]);
   expect(savedStamps.find((s) => s.id === "b")).toEqual({ ...reference.pages[0].stamps![1], measure: 0 });
   expect(Math.abs(savedStamps.find((s) => s.id === "bar")!.x - 500)).toBeLessThan(1 / ratio);
   expect(savedStamps.find((s) => s.id === "bar")!.measure).toBe(1);
+});
+
+test("notebook measure actions: held automatic and manual barlines delete one chosen side and undo", async ({ page }) => {
+  await page.setViewportSize({ width: 768, height: 1024 });
+  const reference: StaffNotebook = {
+    id: "bar-actions", title: "Adjacent measures", updatedAt: 1,
+    settings: { ...DEFAULT_NOTEBOOK_SETTINGS, autoSpacing: false, measuresPerRow: 4, showBarlines: true },
+    pages: [{ id: "p", staffCount: 7, strokes: [{ id: "memo", width: 3, points: [{ x: 405, y: 134 }, { x: 520, y: 138 }] }],
+      stamps: [150, 330, 530, 730].map((x, i) => ({ id: String.fromCharCode(97 + i), glyph: "quarter", x, y: 102, size: 26 })) }],
+  };
+  await page.addInitScript((ref) => localStorage.setItem("lab_staff_notebooks_v1", JSON.stringify([ref])), reference);
+  await openNotebook(page); await openSettings(page); await openSaved(page, reference.title);
+  await expect(page.getByText(/Open rhythm capture|리듬 기록으로/)).toHaveCount(0);
+  await page.getByTestId("notebook-panel-close").click();
+  await chooseMode(page, "notes");
+  const box = (await page.getByTestId("notebook-drawing").boundingBox())!;
+  const point = (x: number) => ({ x: box.x + x * box.width / 900, y: box.y + 102 * box.width / 900 });
+  const hold = async (x: number) => {
+    const p = point(x);
+    await page.mouse.move(p.x, p.y); await page.mouse.down(); await page.waitForTimeout(550); await page.mouse.up();
+    await expect(page.getByText(/Which measure should be deleted|어느 마디를 지울까요/)).toBeVisible();
+  };
+  await hold(450);
+  await page.getByRole("button", { name: /Delete preceding measure|앞 마디 삭제/ }).click();
+  await expect(page.getByText(/Handwriting crosses this barline|마디선을 가로지르는 필기가 있습니다/)).toBeVisible();
+  await page.getByTestId("notebook-layout-cancel").click();
+  await expect(page.getByTestId("notebook-stamp-b")).toBeVisible();
+  await hold(450);
+  await page.getByRole("button", { name: /Delete following measure|뒤 마디 삭제/ }).click();
+  await page.getByRole("button", { name: /Delete this measure|이 마디 삭제/ }).click();
+  await expect(page.getByTestId("notebook-stamp-c")).toHaveCount(0);
+  for (const id of ["a", "b", "d"]) await expect(page.getByTestId(`notebook-stamp-${id}`)).toBeVisible();
+  await noteAction(page, "notebook-note-undo");
+  await expect(page.getByTestId("notebook-stamp-c")).toBeVisible();
+  const p = point(490);
+  await page.mouse.click(p.x, p.y);
+  await chooseGlyph(page, "barline");
+  await expect(page.getByText(/This splits only the current measure|현재 마디만 둘로 나눕니다/)).toContainText(/crossing the barline|마디선을 가로지르는 필기/);
+  await page.getByRole("button", { name: /^Place barline$|^마디선 놓기$/ }).click();
+  await hold(490);
+  await page.getByRole("button", { name: /Delete following measure|뒤 마디 삭제/ }).click();
+  await page.getByRole("button", { name: /Delete this measure|이 마디 삭제/ }).click();
+  await expect(page.getByTestId("notebook-stamp-c")).toHaveCount(0);
+  await expect(page.getByTestId("notebook-stamp-d")).toBeVisible();
+});
+
+test("notebook measure actions: zoom warns before splitting handwriting and leaves the saved stroke intact", async ({ page }) => {
+  await page.setViewportSize({ width: 768, height: 1024 });
+  const stroke = { id: "memo", width: 3, points: [{ x: 625, y: 130 }, { x: 680, y: 132 }] };
+  const reference: StaffNotebook = {
+    id: "bar-zoom", title: "Long handwriting", updatedAt: 1,
+    settings: { ...DEFAULT_NOTEBOOK_SETTINGS, measuresPerRow: 4 },
+    pages: [{ id: "p", staffCount: 7, strokes: [stroke] }],
+  };
+  await page.addInitScript((ref) => localStorage.setItem("lab_staff_notebooks_v1", JSON.stringify([ref])), reference);
+  await openNotebook(page); await openSettings(page); await openSaved(page, reference.title);
+  const zoom = page.getByTestId("notebook-paper-zoom");
+  await zoom.fill("110"); await zoom.press("Enter");
+  await expect(page.getByText(/At this zoom the handwriting|배율을 바꾸면 필기가/)).toBeVisible();
+  await page.getByTestId("notebook-layout-cancel").click();
+  await expect(zoom).toHaveValue("100");
+  await zoom.fill("110"); await zoom.press("Enter");
+  await page.getByRole("button", { name: /^Change zoom$|^배율 변경$/ }).click();
+  await expect(zoom).toHaveValue("110");
+  await page.getByTestId("notebook-save").click(); await closeNotice(page);
+  await expect.poll(async () => (await latestSavedNotebook(page)).updatedAt).toBeGreaterThan(1);
+  expect((await latestSavedNotebook(page)).pages[0].strokes).toEqual([stroke]);
 });
 
 for (const width of [390, 768, 844]) test(`musical-layout settings, group edit and random copy at ${width}px`, async ({ page }) => {
@@ -1063,12 +1132,13 @@ for (const width of [390, 768, 844]) test(`musical-layout settings, group edit a
   }
   await page.getByTestId("notebook-auto-spacing").click();
   await expect(page.getByTestId("notebook-layout-choice")).toBeVisible();
-  await page.getByTestId("notebook-layout-option-2").click();
+  await page.getByRole("button", { name: /Move overflow to next row|넘치는 부분 다음 줄로/ }).click();
   await expect(page.getByTestId("notebook-layout-choice")).not.toBeVisible();
   await page.getByTestId("notebook-show-barlines").click();
   await page.getByTestId("notebook-save").click();
   await closeNotice(page);
-  const read = () => page.evaluate(() => JSON.parse(localStorage.getItem("lab_staff_notebooks_v1")!));
+  const read = () => storedNotes(page);
+  await expect.poll(async () => (await read()).find((n: StaffNotebook) => n.id === reference.id)?.settings?.autoSpacing).toBe(true);
   const arranged = (await read()).find((n: StaffNotebook) => n.id === reference.id) as StaffNotebook;
   expect(arranged.settings!.measuresPerRow).toBe(2);
   expect(arranged.settings!.autoSpacing).toBe(true);
@@ -1078,6 +1148,7 @@ for (const width of [390, 768, 844]) test(`musical-layout settings, group edit a
   await page.getByTestId("notebook-auto-spacing").click();
   await page.getByTestId("notebook-save").click();
   await closeNotice(page);
+  await expect.poll(async () => (await read()).find((n: StaffNotebook) => n.id === reference.id)?.settings?.autoSpacing).toBe(false);
   const disabled = (await read()).find((n: StaffNotebook) => n.id === reference.id) as StaffNotebook;
   expect(disabled.pages).toEqual(arranged.pages);
   await page.getByTestId("notebook-panel-close").click();
@@ -1128,6 +1199,7 @@ async function enterNotebook(page: Page) {
     await page.getByTestId("menu-lab").click();
   });
   await test.step("Open the notebook and wait for its drawing surface", async () => {
+    await expect(page.getByTestId("menu-rhythm-lab")).toHaveCount(0);
     await page.getByTestId("menu-staff-notebook").click();
     await expect(page.getByTestId("notebook-drawing")).toBeVisible();
   });

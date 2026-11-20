@@ -3,6 +3,8 @@ import { createRhythmDocument } from "../lib/rhythm-lab/engine";
 
 test.use({ baseURL: process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : undefined });
 test.setTimeout(90000);
+test.skip(process.env.TEST_LEGACY_RHYTHM_CAPTURE !== "1",
+  "New rhythm capture is paused; run against a build with its Lab entry when resuming it.");
 async function enter(page: Page, embedded = false) {
   await page.addInitScript(() => {
     localStorage.setItem("metronome_onboarding_done", "1");

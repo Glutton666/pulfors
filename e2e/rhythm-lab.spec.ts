@@ -7,6 +7,8 @@ test.use({
 test.setTimeout(90000);
 
 async function enterLab(page: Page, entry: "rhythm" | "notebook") {
+  test.skip(entry === "rhythm" && process.env.TEST_LEGACY_RHYTHM_CAPTURE !== "1",
+    "New rhythm capture is paused; run against a build with its Lab entry when resuming it.");
   await page.addInitScript(() => {
     localStorage.setItem("metronome_onboarding_done", "1");
     localStorage.setItem("metronome_onboarding_lang_done", "1");

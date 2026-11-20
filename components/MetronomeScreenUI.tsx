@@ -834,12 +834,6 @@ export function MetronomeScreenUI(props: Props) {
                 setScoreMode("list");
               });
             }}
-            onRhythmLab={() => {
-              if (isPlaying || isPreparing || noteIsPlaying) return;
-              setLabRhythmDocument(undefined);
-              rhythmReturnToBookRef.current = false;
-              setLabScoreTab("rhythm");
-            }}
             onStaffNotebook={() => {
               if (isPlaying || isPreparing || noteIsPlaying) return;
               setLabRhythmDocument(undefined);

@@ -19,6 +19,7 @@ import { attachedPosition, captureSelection, emptySelection, hitObject, includeA
 import { eraseNotebookGesture, type NotebookEraserMode } from "@/lib/notebook-erasing";
 import { layoutNotebookMusic, measuresInRow, naturalPaperWidth, notebookMeasureRegions, standardTupletRatio, isManualBar, isMusic, measureDuration, musicalDuration } from "@/lib/notebook-music-layout";
 import { prepareNotebookMeasureEdit } from "@/lib/notebook-measure-edit";
+import { deleteNotebookBar, insertNotebookBarline, notebookInkCrossesBoundary, notebookInkWraps } from "@/lib/notebook-measure-actions";
 import { randomizeNotebook } from "@/lib/notebook-random";
 import { insertSelectionBeforeFollowing, notebookWritingTail, selectedNotebookStamps } from "@/lib/notebook-editing";
 import { identifyLegacyNotebookSplits, notebookSourceId, restoreNotebookStamp } from "@/lib/notebook-splits";
@@ -46,10 +47,9 @@ type Props = {
   active?: boolean;
   keyboardObscured?: boolean;
   onRegisterExit?: (handler: ((next: () => void) => void) | null) => void;
-  onOpenCapture?: () => void;
 };
 
-export function StaffNotebookWorkspace({ active = true, keyboardObscured, onRegisterExit, onOpenCapture }: Props) {
+export function StaffNotebookWorkspace({ active = true, keyboardObscured, onRegisterExit }: Props) {
   const { colors: C } = useTheme();
   const { language } = useLanguage();
   const ko = language === "ko";
@@ -182,6 +182,9 @@ export function StaffNotebookWorkspace({ active = true, keyboardObscured, onRegi
     return () => cancelAnimationFrame(frame);
   }, [viewport.width, viewport.height]);
   const drawingRef = useRef<StaffPoint[]>([]);
+  const barHold = useRef<{ timer: ReturnType<typeof setTimeout>; start: StaffPoint } | null>(null);
+  const stopBarHold = () => { if (barHold.current) clearTimeout(barHold.current.timer); barHold.current = null; };
+  useEffect(() => () => { if (barHold.current) clearTimeout(barHold.current.timer); }, []);
   const sectionGesture = useRef<{ id: string; screenStart: StaffPoint; target: (point: StaffPoint) => StaffPoint } | null>(null);
   const eraseGesture = useRef<{ base: StaffPage; points: StaffPoint[] } | null>(null);
   const editSnapshot = useRef<{ selection: NotebookSelection; draft: typeof dragDraft } | null>(null);
@@ -240,6 +243,7 @@ export function StaffNotebookWorkspace({ active = true, keyboardObscured, onRegi
       materializedNotebookSections(performanceNote, playback.rows, playbackPage), !viewPolicy.portrait && viewPolicy.zoom === 1) : null,
   [playbackPage, playback.rows, performanceNote, settings, viewPolicy.portrait, viewPolicy.columns, viewPolicy.zoom, portraitBoost, hasSections, rowBase]);
   const resetTransient = () => {
+    stopBarHold();
     flam.close(); setSticking(null);
     percussionFocus.current = null;
     setSelection(emptySelection()); setSelectionBox(null); setDragDraft(null); selectionGesture.current = null; setUnitRows(null);
@@ -300,14 +304,9 @@ export function StaffNotebookWorkspace({ active = true, keyboardObscured, onRegi
         const result = arrange ? layoutNotebookMusic(candidate, { openGroup, ...opts }) : { note: candidate, reason: "changed" as const };
         if (result.reason !== "crowded") { commit(result.note); return; }
         setDecision({ title: ko ? "한 줄에 객체가 많습니다" : "This row is crowded", message: ko ? "음악적 길이는 유지하면서 배치 방법을 선택해 주세요." : "Choose a layout without changing musical durations.", options: [
-          { label: ko ? "줄당 마디 수 변경" : "Fewer measures per row", action: () => {
-            const n = measuresInRow(candidate.settings);
-            if (n === 1) { Alert.alert(ko ? "이미 한 줄에 한 마디입니다" : "Already one measure per row", ko ? "음가·비율을 수정하거나 추가 축소를 선택해 주세요." : "Edit the content or choose extra shrinking."); return; }
-            run({ ...candidate, settings: { ...candidate.settings!, measuresPerRow: n - 1 } });
-          } },
           { label: ko ? "현재 줄에 맞추기·추가 축소" : "Fit here · shrink further", action: () => {
             const fitted = layoutNotebookMusic(candidate, { openGroup, allowCrowded: true });
-            if (fitted.requiredScale < .2) { Alert.alert(ko ? "읽을 수 있는 크기를 넘습니다" : "Too small to read", ko ? "마디 수나 기보 내용을 조정해 주세요." : "Change the bar count or notation."); return; }
+            if (fitted.requiredScale < .2) { Alert.alert(ko ? "읽을 수 있는 크기를 넘습니다" : "Too small to read", ko ? "다음 줄로 넘기거나 기보 내용을 조정해 주세요." : "Move overflow to the next row or edit the notation."); return; }
             commit(fitted.note);
           } },
           { label: ko ? "넘치는 부분 다음 줄로" : "Move overflow to next row", action: () => {
@@ -324,6 +323,34 @@ export function StaffNotebookWorkspace({ active = true, keyboardObscured, onRegi
     ...editingNote, pages: editingNote.pages.map((p, i) => i === index ? next : p),
     lastNote: lastId ? { pageId: next.id, stampId: lastId } : editingNote.lastNote && !editingNote.pages.some((p, i) => (i === index ? next : p).stamps?.some((s) => s.id === editingNote.lastNote!.stampId)) ? undefined : editingNote.lastNote,
   });
+  const chooseBarToDelete = (ordinal: number) => {
+    stopBarHold();
+    selectionGesture.current = null; sectionGesture.current = null; editSnapshot.current = null;
+    setSelectionBox(null); setDragDraft(null); setEraseDraft(null);
+    const regions = inputSections[pageIndex];
+    const sides = [regions[ordinal - 1], regions[ordinal]];
+    setDecision({
+      title: ko ? "어느 마디를 지울까요?" : "Which measure should be deleted?",
+      message: ko ? "고른 마디의 음표·기호·필기가 지워집니다. 경계를 걸친 붙임줄 음표는 한 음표로 처리합니다. 실행 취소로 복원할 수 있습니다." : "The chosen measure’s notation and handwriting are deleted. A split tied note is treated as one note. You can undo this.",
+      options: sides.flatMap((region, i) => !region ? [] : [{
+        label: i === 0 ? (ko ? "앞 마디 삭제" : "Delete preceding measure") : (ko ? "뒤 마디 삭제" : "Delete following measure"),
+        action: () => {
+          const result = deleteNotebookBar(page, settings, region);
+          const apply = () => commitDocument(pageDocument(pageIndex, result.page), false, () => {
+            setSelection(emptySelection()); setDragDraft(null);
+          });
+          if (!result.crossesInk) { apply(); return; }
+          setDecision({
+            title: ko ? "마디선을 가로지르는 필기가 있습니다" : "Handwriting crosses this barline",
+            message: ko ? "선택한 마디 안의 필기만 지우고 바깥 부분은 남깁니다." : "Only the parts inside the selected measure are removed. The rest stays.",
+            options: [{ label: ko ? "이 마디 삭제" : "Delete this measure", action: apply }],
+          });
+        },
+      }]),
+    });
+  };
+  const boundaryOrdinal = (stamp: StaffStamp) => inputSections[pageIndex].findIndex((r) =>
+    r.row === rowAt(stamp.y, page.staffCount ?? 7) && Math.abs(r.left - stamp.x) <= 1);
   const closeSticking = () => setSticking(null);
   const focusPercussion = (target: typeof percussionItem | undefined) => {
     if (target && target.pageIndex !== pageIndex) { setPageIndex(target.pageIndex); setOffset({ x: 0, y: 0 }); }
@@ -489,6 +516,7 @@ export function StaffNotebookWorkspace({ active = true, keyboardObscured, onRegi
       return;
     }
     if (phase === "cancel") {
+      stopBarHold();
       flam.close();
       drawingRef.current = []; setDrawing([]); selectionGesture.current = null; setSelectionBox(null); panStart.current = null;
       eraseGesture.current = null; setEraseDraft(null);
@@ -497,6 +525,8 @@ export function StaffNotebookWorkspace({ active = true, keyboardObscured, onRegi
       editSnapshot.current = null; return;
     }
     if (toolPopup || panel || decision || objectEditor) return;
+    if (phase === "end" || phase === "move" && barHold.current &&
+      Math.hypot(screen.x - barHold.current.start.x, screen.y - barHold.current.start.y) > 8) stopBarHold();
     if (phase === "start") { editSnapshot.current = { selection, draft: dragDraft }; sectionGesture.current = null; setKeyboardCursor(null); toolsKeyboard.current?.dismissHistory(); }
     const zoom = playback.running && settings.follow ? settings.playbackZoom : displayScale;
     const layoutScale = inputProjection ? portraitBoost : page.layoutScale ?? 1;
@@ -536,6 +566,22 @@ export function StaffNotebookWorkspace({ active = true, keyboardObscured, onRegi
           }, !!flam.draft);
       }
       if (flam.draft) return;
+      if (!hit) {
+        const regions = inputProjection?.regions ?? inputSections[pageIndex];
+        const tolerance = Math.max(8, 9 / (paperScale * zoom * layoutScale));
+        const row = rowAt(doc.y, displayed.staffCount ?? 7);
+        const y = doc.y - row * ROW_HEIGHT;
+        if (y >= STAFF_TOP - 10 && y <= STAFF_TOP + 4 * STAFF_GAP + 10) {
+          const lines = regions.flatMap((r, i) => r.row === row ? [
+            { x: r.left, ordinal: i },
+            ...(regions[i + 1]?.row !== row ? [{ x: r.right, ordinal: i + 1 }] : []),
+          ] : []);
+          const line = lines.sort((a, b) => Math.abs(a.x - doc.x) - Math.abs(b.x - doc.x))[0];
+          if (line && Math.abs(line.x - doc.x) <= tolerance) {
+            barHold.current = { start: screen, timer: setTimeout(() => chooseBarToDelete(line.ordinal), 500) };
+          }
+        }
+      }
     }
     if (inputProjection) {
       const sectionHit = (tool === "select" && phase === "start" || tool === "erase") ? (inputProjection.page.stamps ?? [])
@@ -569,9 +615,10 @@ export function StaffNotebookWorkspace({ active = true, keyboardObscured, onRegi
       const next = eraseNotebookGesture(gesture.base, gesture.points, eraserMode, 22, settings);
       if (phase === "end") {
         if (next !== gesture.base) {
-          const boundary = gesture.base.stamps?.some((s) => isManualBar(s) && !next.stamps?.some((v) => v.id === s.id));
+          const boundary = gesture.base.stamps?.find((s) => isManualBar(s) && !next.stamps?.some((v) => v.id === s.id));
           const apply = () => commitDocument(pageDocument(pageIndex, next), !!settings.autoSpacing);
-          if (boundary) Alert.alert(ko ? "마디선을 지울까요?" : "Delete barline?", ko ? "남은 경계로 마디와 재생 길이를 다시 계산합니다. 마지막 수동선을 지우면 설정한 마디 수로 돌아갑니다." : "Measures and playback duration will use the remaining boundaries. Removing the last manual barline restores the configured count.", [{ text: t.cancel, style: "cancel" }, { text: ko ? "삭제" : "Delete", onPress: apply }]);
+          const ordinal = boundary ? boundaryOrdinal(boundary) : -1;
+          if (ordinal >= 0) chooseBarToDelete(ordinal);
           else apply();
         }
         eraseGesture.current = null; setEraseDraft(null); editSnapshot.current = null;
@@ -675,6 +722,8 @@ export function StaffNotebookWorkspace({ active = true, keyboardObscured, onRegi
       });
       return;
     }
+    const barPoint = /^(barline|bar_line)$/.test(choice.glyph) && (caret?.point ??
+      (sectionTarget?.pageId === page.id ? sectionTarget.point : undefined));
     setSectionTarget(null);
     const targetIndex = isAttachedMark(choice.glyph) && note.lastNote ? editingNote.pages.findIndex((p) => p.id === note.lastNote!.pageId) : pageIndex;
     const targetPage = editingNote.pages[targetIndex] ?? page;
@@ -683,7 +732,7 @@ export function StaffNotebookWorkspace({ active = true, keyboardObscured, onRegi
     const index = attached && targetIndex >= 0 ? targetIndex : writingTail?.pageIndex ?? pageIndex;
     const destination = attached ? targetPage : editingNote.pages[index] ?? page;
     // Change pages only after the edit commits so undo restores the prior cursor.
-    const point = attached?.point ?? (caret && !caret.id ? caret.point : stampPosition(destination, { ...settings, snap: isTupletMember(choice.glyph) && settings.snap }, caret?.point ?? writingTail?.stamp));
+    const point = (barPoint || attached?.point) ?? (caret && !caret.id ? caret.point : stampPosition(destination, { ...settings, snap: isTupletMember(choice.glyph) && settings.snap }, caret?.point ?? writingTail?.stamp));
     const anchor = constrainStaffPoint(destination, point, isTupletMember(choice.glyph) && settings.snap);
     const stamp: StaffStamp = { id: id("stamp"), glyph: choice.glyph, ...anchor, size: 26,
       role: isNotebookNote(choice.glyph) ? choice.role : undefined, dotted: isTupletMember(choice.glyph) ? choice.dotted : undefined, attachTo: attached?.attachTo };
@@ -714,12 +763,17 @@ export function StaffNotebookWorkspace({ active = true, keyboardObscured, onRegi
       }, nextOpen);
     };
     if (isManualBar(stamp)) {
-      Alert.alert(ko ? "실제 마디 경계를 놓습니다" : "Place a musical barline", ko ? "이 줄은 자동 경계 대신 수동 마디선으로 나눕니다. 마디 수와 재생 길이, 음악적 배치가 바뀌며 마지막 수동선을 지우면 설정한 마디 수로 돌아갑니다." : "This row will use manual boundaries instead of automatic divisions, changing its measure count, playback duration and layout. Removing the last manual barline restores the configured count.", [
-        { text: t.cancel, style: "cancel" }, { text: ko ? "놓기" : "Place", onPress: () => {
-          const candidate = pageDocument(index, { ...destination, anchor, stamps: [...stamps, stamp] });
-          commitDocument(candidate, !!settings.autoSpacing);
-        } },
-      ]);
+      const split = insertNotebookBarline(destination, settings, { ...stamp, y: rowAt(stamp.y, destination.staffCount ?? 7) * ROW_HEIGHT + STAFF_TOP + 2 * STAFF_GAP });
+      if (split.error) {
+        notify(split.error === "tuplet" ? (ko ? "잇단음표 묶음 안에는 마디선을 놓을 수 없습니다." : "A barline cannot split a tuplet.")
+          : (ko ? "기존 경계에서 떨어진 위치에 마디선을 놓아 주세요." : "Place the barline away from an existing boundary."));
+        return;
+      }
+      const explanation = ko ? "현재 마디만 둘로 나눕니다. 두 마디 모두 기존 기보 박자를 유지합니다." : "This splits only the current measure. Both measures keep the existing time signature.";
+      setDecision({ title: ko ? "이 위치에 마디선을 놓을까요?" : "Place a barline here?",
+        message: explanation + (split.crossesInk ? (ko ? "\n마디선을 가로지르는 필기는 줄이 바뀌면 화면에서 나뉩니다. 원본 획은 남습니다." : "\nHandwriting crossing the barline may be split across rows on-screen. The original stroke is kept.") : ""),
+        options: [{ label: ko ? "마디선 놓기" : "Place barline", action: () =>
+          commitDocument(pageDocument(index, { ...split.page, anchor }), !!settings.autoSpacing) }] });
     } else apply();
   };
   const changeMode = (next: NotebookMode) => {
@@ -753,11 +807,14 @@ export function StaffNotebookWorkspace({ active = true, keyboardObscured, onRegi
     ]);
   };
   const finishMove = (base: StaffPage, chosen: NotebookSelection, delta: StaffPoint, copy: boolean, paste = false, boundaryConfirmed = false) => {
-    const boundary = base.stamps?.some((s) => chosen.stampIds.includes(s.id) && isManualBar(s));
-    if (boundary && !boundaryConfirmed) {
-      Alert.alert(ko ? "마디선 위치를 변경합니다" : "Move barline", ko ? "옮긴 경계를 기준으로 음표의 마디를 다시 해석합니다. 음가는 유지하고 자동 조정이 켜져 있을 때만 배치를 조정합니다." : "Note membership will follow the moved boundary. Durations stay unchanged; spacing changes only when automatic spacing is enabled.", [
-        { text: t.cancel, style: "cancel" }, { text: ko ? "계속" : "Continue", onPress: () => finishMove(base, chosen, delta, copy, paste, true) },
-      ]); return;
+    const boundaries = base.stamps?.filter((s) => chosen.stampIds.includes(s.id) && isManualBar(s));
+    if (boundaries?.length && !boundaryConfirmed) {
+      const crossesInk = boundaries.some((s) => notebookInkCrossesBoundary(base, rowAt(s.y + delta.y, base.staffCount ?? 7), s.x + delta.x));
+      const message = ko ? "옮긴 경계를 기준으로 음표의 마디를 다시 계산합니다. 음가는 유지됩니다." : "Note membership will follow the moved boundary. Written durations stay unchanged.";
+      setDecision({ title: ko ? "마디선 위치를 변경합니다" : "Move barline",
+        message: message + (crossesInk ? (ko ? "\n마디선을 가로지르는 필기는 줄이 바뀌면 화면에서 나뉩니다." : "\nHandwriting crossing the boundary may be split across rows on-screen.") : ""),
+        options: [{ label: ko ? "계속" : "Continue", action: () => finishMove(base, chosen, delta, copy, paste, true) }] });
+      return;
     }
     withInkChoice(chosen, (picked) => {
       if (mode === "select" && selectionUnit === "row" && unitRows && !copy && !paste) {
@@ -838,9 +895,10 @@ export function StaffNotebookWorkspace({ active = true, keyboardObscured, onRegi
     setTool("select");
   };
   const deleteSelection = () => {
-    const boundary = page.stamps?.some((s) => selection.stampIds.includes(s.id) && isManualBar(s));
+    const boundary = page.stamps?.find((s) => selection.stampIds.includes(s.id) && isManualBar(s));
     const apply = () => { playback.stop(); commitDocument(pageDocument(pageIndex, removeSelection(page, selection)), !!settings.autoSpacing, () => { setSelection(emptySelection()); setDragDraft(null); }); };
-    if (boundary) Alert.alert(ko ? "마디선을 지울까요?" : "Delete barline?", ko ? "남은 경계로 마디와 재생 길이를 다시 계산합니다. 마지막 수동선을 지우면 설정한 마디 수로 돌아갑니다. 자동 조정 OFF에서는 음표 위치와 음가를 유지합니다." : "Measures and playback duration will use the remaining boundaries. Removing the last manual barline restores the configured count. With auto spacing off, note positions and durations stay unchanged.", [{ text: t.cancel, style: "cancel" }, { text: ko ? "삭제" : "Delete", onPress: apply }]);
+    const ordinal = boundary ? boundaryOrdinal(boundary) : -1;
+    if (ordinal >= 0) chooseBarToDelete(ordinal);
     else apply();
   };
   const resizeSelection = (factor: number) => {
@@ -929,14 +987,22 @@ export function StaffNotebookWorkspace({ active = true, keyboardObscured, onRegi
     .filter(([, owner]) => selection.strokeIds.includes(owner)).map(([key]) => key) } : selection;
   const changeZoom = (value: number | ((previous: number) => number)) => {
     if (toolPopup || panel === "menu" || decision || objectEditor) return;
-    playback.stop();
-    resetTransient();
-    if (sticking) setSticking(sticking);
-    setScale((previous) => {
-      const bounds = notebookPortraitPolicy(windowSize.width, windowSize.height, previous);
-      return notebookPortraitPolicy(windowSize.width, windowSize.height, typeof value === "number" ? value : value(bounds.zoom)).zoom;
-    });
-    setOffset({ x: 0, y: 0 });
+    const next = notebookPortraitPolicy(windowSize.width, windowSize.height, typeof value === "number" ? value : value(displayScale));
+    if (next.zoom === displayScale) return;
+    const apply = () => {
+      playback.stop(); resetTransient();
+      if (sticking) setSticking(sticking);
+      setScale(next.zoom); setOffset({ x: 0, y: 0 });
+    };
+    const columns = (policy: typeof portraitPolicy) => !policy.portrait && policy.zoom === 1 ? null
+      : notebookDisplayColumns(policy.zoom, rowBase, policy.columns);
+    if (editingNote.pages.some((p, i) => notebookInkWraps(p, inputSections[i], columns(portraitPolicy), columns(next)))) {
+      setDecision({ title: ko ? "마디선을 가로지르는 필기가 있습니다" : "Handwriting crosses a barline",
+        message: ko ? "배율을 바꾸면 필기가 다른 줄에 나뉘어 보입니다. 원본 획은 그대로입니다." : "At this zoom the handwriting will appear on separate rows. The original stroke is kept.",
+        options: [{ label: ko ? "배율 변경" : "Change zoom", action: apply }] });
+      return;
+    }
+    apply();
   };
   const editingPaper = inputProjection?.page ?? page;
   const displayWritingCursor = (currentKeyboardCursor && inputProjection?.forward(currentKeyboardCursor.point)) ?? currentKeyboardCursor?.point;
@@ -1175,7 +1241,7 @@ export function StaffNotebookWorkspace({ active = true, keyboardObscured, onRegi
               ko={ko} t={t} note={note} settings={settings} patterns={patterns} patternLoading={patternLoading} patternError={patternError}
               notebooks={notebooks} error={error}
               onSettings={updateSettings} onPattern={loadPattern}
-              onRefresh={() => void refresh()} onNew={fresh} onSave={() => void saveNow()} onOpenCapture={onOpenCapture ? () => requestExit(onOpenCapture) : undefined}
+              onRefresh={() => void refresh()} onNew={fresh} onSave={() => void saveNow()}
               onLoad={(saved) => confirmReplace(() => { const loaded = withDefaults(saved); savedSnapshot.current = JSON.stringify(loaded); setNote(loaded); setPageIndex(0); undoStack.current = []; redoStack.current = []; })}
               onDelete={(saved) => Alert.alert(t.notes, ko ? "이 노트를 삭제할까요?" : "Delete this notebook?", [{ text: t.cancel, style: "cancel" }, { text: ko ? "삭제" : "Delete", style: "destructive", onPress: () => void remove(saved.id) }])}
               onTitle={(title) => setNote((prev) => ({ ...prev, title }))}
@@ -1201,7 +1267,7 @@ export function StaffNotebookWorkspace({ active = true, keyboardObscured, onRegi
             <Text accessibilityRole="header" style={{ fontSize: 17, fontWeight: "700", marginBottom: 8 }}>{decision?.title}</Text>
             <Text style={{ fontSize: 13, lineHeight: 20, marginBottom: 14 }}>{decision?.message}</Text>
             <ScrollView>{decision?.options.map((option, i) => <Pressable key={i} testID={`notebook-layout-option-${i}`} accessibilityRole="button" onPress={() => { setDecision(null); option.action(); }} style={{ minHeight: 46, justifyContent: "center", padding: 10, marginBottom: 6, borderRadius: 9, backgroundColor: "#eee7db" }}><Text>{option.label}</Text></Pressable>)}</ScrollView>
-            <Pressable accessibilityRole="button" onPress={() => setDecision(null)} style={{ minHeight: 44, justifyContent: "center", alignItems: "center" }}><Text>{t.cancel}</Text></Pressable>
+            <Pressable testID="notebook-layout-cancel" accessibilityRole="button" onPress={() => setDecision(null)} style={{ minHeight: 44, justifyContent: "center", alignItems: "center" }}><Text>{t.cancel}</Text></Pressable>
           </View>
         </View>
       </Modal>

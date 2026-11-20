@@ -109,7 +109,8 @@ export function NotebookPaper({ page, width, height, paperScale, zoom, offset, t
             </NotebookObjectMask>
           </G>)}
           {drawing.length > 0 && <Path testID="notebook-live-ink" d={path(drawing)} fill="none" stroke={lineColor} strokeWidth={lineWidth} strokeLinecap="round" strokeLinejoin="round" />}
-           {(displayedPage.stamps ?? []).map((stamp) => {
+           {(displayedPage.stamps ?? []).filter((stamp) => settings?.showBarlines ||
+             !stamp.generated || !/^(barline|bar_line)$/.test(stamp.glyph)).map((stamp) => {
              const editingFlam = flamDraft?.id === stamp.id;
              const flam = editingFlam ? flamDraft.flam : stamp.flam;
              const activePart = percussionTarget?.id === stamp.id ? percussionTarget.part : undefined;

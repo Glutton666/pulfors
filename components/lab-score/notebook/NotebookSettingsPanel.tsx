@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import type { NotebookSettings, StaffNotebook } from "@/lib/staff-notebook";
@@ -23,7 +23,6 @@ type Props = {
   onLoad: (note: StaffNotebook) => void;
   onDelete: (note: StaffNotebook) => void;
   onTitle: (title: string) => void;
-  onOpenCapture?: () => void;
   pageIndex: number;
   onPage: (index: number) => void;
   onAddPage: () => void;
@@ -42,6 +41,7 @@ export function NotebookSettingsPanel(props: Props) {
   const meter = settings.notationMeter ?? { beats: 4, unit: 4 as const };
   const [rowsDraft, setRowsDraft] = useState(String(currentRows));
   const [zoomDraft, setZoomDraft] = useState(String(Math.round(props.scale * 100)));
+  const zoomSubmitted = useRef(false);
   const [beatsDraft, setBeatsDraft] = useState(String(meter.beats));
 
   useEffect(() => setRowsDraft(String(currentRows)), [currentRows, note.id]);
@@ -73,7 +73,8 @@ export function NotebookSettingsPanel(props: Props) {
   const commitZoom = (text = zoomDraft) => {
     const parsed = Number(text);
     const value = Number.isFinite(parsed) ? Math.max(props.portraitLayout ? 50 : 35, Math.min(250, Math.round(parsed))) : Math.round(props.scale * 100);
-    setZoomDraft(String(value));
+    // A cross-barline warning may cancel the requested zoom.
+    setZoomDraft(String(Math.round(props.scale * 100)));
     props.onZoom(value / 100);
   };
   const commitMeterBeats = (text = beatsDraft) => {
@@ -218,7 +219,11 @@ export function NotebookSettingsPanel(props: Props) {
         <View style={styles.fieldLabelRow}><Text style={styles.fieldLabel}>{ko ? "종이 확대" : "Paper zoom"}</Text><Text style={styles.value}>{Math.round(props.scale * 100)}%</Text></View>
         <View style={styles.zoomControls}>
           <Pressable accessibilityRole="button" accessibilityLabel={ko ? "축소" : "Zoom out"} onPress={() => props.onZoom(Math.max(0.35, +(props.scale - 0.1).toFixed(2)))} style={styles.zoomButton}><Ionicons name="remove" size={17} color="#625849" /></Pressable>
-          <TextInput testID="notebook-paper-zoom" value={zoomDraft} onChangeText={setZoomDraft} onBlur={() => commitZoom()} onSubmitEditing={(e) => commitZoom(e.nativeEvent.text)} keyboardType="number-pad" returnKeyType="done" style={styles.zoomInput} accessibilityLabel={ko ? "확대 비율" : "Zoom percentage"} />
+          <TextInput testID="notebook-paper-zoom" value={zoomDraft}
+            onChangeText={(text) => { zoomSubmitted.current = false; setZoomDraft(text); }}
+            onBlur={() => { if (!zoomSubmitted.current) commitZoom(); zoomSubmitted.current = false; }}
+            onSubmitEditing={(e) => { zoomSubmitted.current = true; commitZoom(e.nativeEvent.text); }}
+            keyboardType="number-pad" returnKeyType="done" style={styles.zoomInput} accessibilityLabel={ko ? "확대 비율" : "Zoom percentage"} />
           <Text style={styles.value}>%</Text>
           <Pressable accessibilityRole="button" accessibilityLabel={ko ? "확대" : "Zoom in"} onPress={() => props.onZoom(Math.min(2.5, +(props.scale + 0.1).toFixed(2)))} style={styles.zoomButton}><Ionicons name="add" size={17} color="#625849" /></Pressable>
         </View>
@@ -275,11 +280,6 @@ export function NotebookSettingsPanel(props: Props) {
           <Pressable accessibilityRole="button" accessibilityLabel={ko ? `${saved.title} 삭제` : `Delete ${saved.title}`} onPress={() => props.onDelete(saved)} style={styles.rowIcon}><Ionicons name="trash-outline" size={17} color="#897e6f" /></Pressable>
         </View>
       ))}
-      {props.onOpenCapture ? (
-        <Pressable accessibilityRole="button" onPress={props.onOpenCapture} style={styles.outlineButton}>
-          <Ionicons name="musical-notes-outline" size={17} color="#5f5346" /><Text style={styles.buttonText}>{ko ? "리듬 기록으로" : "Open rhythm capture"}</Text>
-        </Pressable>
-      ) : null}
     </ScrollView>
   );
 }
