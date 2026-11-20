@@ -228,6 +228,8 @@ function copyableStamps(page: StaffPage, selection: NotebookSelection, note?: St
   for (const continuation of representatives) if (continuation.split?.index) {
     const source = splits.get(continuation.split.sourceId)?.[0];
     if (source?.stamp.id !== continuation.split.sourceId) continue;
+    const copied = stamps.find((item) => item.id === source.stamp.id);
+    if (copied) { copied.flam = source.stamp.flam; copied.sticking = source.stamp.sticking; }
     for (const mark of note.pages[source.pageIndex].stamps ?? []) if (mark.attachTo === source.stamp.id) {
       stamps.push({ ...mark, x: continuation.x + mark.x - source.stamp.x, y: continuation.y + mark.y - source.stamp.y });
     }

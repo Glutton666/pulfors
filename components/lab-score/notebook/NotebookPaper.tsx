@@ -14,6 +14,8 @@ import { createNotebookPaperGesture } from "@/lib/notebook-paper-gesture";
 import { NotebookObjectMask } from "./NotebookObjectMask";
 import { naturalPaperWidth, notebookMeasureRegions } from "@/lib/notebook-music-layout";
 import type { NotebookMeasureRegion } from "@/lib/notebook-measures";
+import { flamPosition, type NotebookFlam, type PercussionTarget } from "@/lib/notebook-percussion";
+import { NotebookFlamGlyph, NotebookStickingGlyph } from "./NotebookPercussionGlyphs";
 
 type Props = {
   page: StaffPage; width: number; height: number; paperScale: number; zoom: number;
@@ -30,10 +32,12 @@ type Props = {
   displayRegions?: NotebookMeasureRegion[];
   inheritedClefs?: { glyph: string; x: number; y: number; size: number }[];
   keyboardCursor?: StaffPoint;
+  percussionTarget?: PercussionTarget | null;
+  flamDraft?: { id: string; flam: NotebookFlam } | null;
   onTouch?: (point: StaffPoint, phase: "start" | "move" | "end" | "cancel") => void;
 };
 
-export function NotebookPaper({ page, width, height, paperScale, zoom, offset, tool, lineWidth, lineColor = "#111111", drawing, pendingGlyph, preview, selectedStampId, selection, selectionBox, openTupletIds, pendingRole, pendingDotted, settings, externalTieIds, onTouch, onPan, onZoomBy, layoutScaleOverride, displayRegions, inheritedClefs, keyboardCursor }: Props) {
+export function NotebookPaper({ page, width, height, paperScale, zoom, offset, tool, lineWidth, lineColor = "#111111", drawing, pendingGlyph, preview, selectedStampId, selection, selectionBox, openTupletIds, pendingRole, pendingDotted, settings, externalTieIds, onTouch, onPan, onZoomBy, layoutScaleOverride, displayRegions, inheritedClefs, keyboardCursor, percussionTarget, flamDraft }: Props) {
   const surface = useRef<View>(null);
   const zoomCallback = useRef({ tool, onZoomBy });
   zoomCallback.current = { tool, onZoomBy };
@@ -77,6 +81,8 @@ export function NotebookPaper({ page, width, height, paperScale, zoom, offset, t
   const displayedPage = page;
   const beaming = useMemo(() => notebookBeaming(displayedPage, settings, openTupletIds), [displayedPage, settings, openTupletIds]);
   const tuplets = notebookTupletSpans(displayedPage, openTupletIds, beaming);
+  const paperWidth = naturalPaperWidth(page);
+  const staffCount = page.staffCount ?? 7;
   const byId = useMemo(() => new Map((page.stamps ?? []).map((s) => [s.id, s])), [page.stamps]);
   return (
     <View
@@ -103,14 +109,26 @@ export function NotebookPaper({ page, width, height, paperScale, zoom, offset, t
             </NotebookObjectMask>
           </G>)}
           {drawing.length > 0 && <Path testID="notebook-live-ink" d={path(drawing)} fill="none" stroke={lineColor} strokeWidth={lineWidth} strokeLinecap="round" strokeLinejoin="round" />}
-          {(displayedPage.stamps ?? []).map((stamp) => (
+           {(displayedPage.stamps ?? []).map((stamp) => {
+             const editingFlam = flamDraft?.id === stamp.id;
+             const flam = editingFlam ? flamDraft.flam : stamp.flam;
+             const activePart = percussionTarget?.id === stamp.id ? percussionTarget.part : undefined;
+             const below = (x: number) => tuplets.reduce((bottom, span) => span.below && span.row === Math.floor(stamp.y / ROW_HEIGHT)
+               && span.left <= x && x <= span.right ? Math.max(bottom, span.y + span.fontSize * .7) : bottom, 0);
+             return (
             <G key={stamp.id} testID={`notebook-stamp-${stamp.id}`}>
-              {(selection?.stampIds.includes(stamp.id) || stamp.id === selectedStampId) && <Rect testID="notebook-selection-highlight" x={stamp.x - stamp.size} y={stamp.y - stamp.size * 1.5} width={stamp.size * 2} height={stamp.size * 2.1} fill="#ebc871" fillOpacity={0.3} stroke="#a36f36" strokeWidth={1} strokeDasharray="3 3" />}
+               {(activePart === "note" || !percussionTarget && (selection?.stampIds.includes(stamp.id) || stamp.id === selectedStampId)) && <Rect testID="notebook-selection-highlight" x={stamp.x - stamp.size} y={stamp.y - stamp.size * 1.5} width={stamp.size * 2} height={stamp.size * 2.1} fill="#ebc871" fillOpacity={0.3} stroke="#a36f36" strokeWidth={1} strokeDasharray="3 3" />}
               <NotebookObjectMask cuts={paperErasures(stamp)}>
                 <NotebookGlyph glyph={stamp.glyph} x={stamp.x} y={stamp.y} size={stamp.size} role={stamp.role} dotted={stamp.dotted} beam={beaming.stems.get(stamp.id)} />
               </NotebookObjectMask>
+               {flam && <NotebookFlamGlyph stamp={stamp} flam={flam} width={paperWidth} pending={editingFlam} active={activePart === "flam"} />}
+               {stamp.sticking && <NotebookStickingGlyph stamp={stamp} value={stamp.sticking} x={stamp.x} count={staffCount} bracketBottom={below(stamp.x)} part="note" />}
+               {flam?.sticking && (() => {
+                 const { x } = flamPosition(stamp, flam, paperWidth);
+                 return <NotebookStickingGlyph stamp={stamp} value={flam.sticking} x={x} count={staffCount} bracketBottom={below(x)} part="flam" />;
+               })()}
             </G>
-          ))}
+           ); })}
           {beaming.groups.map((group) => <NotebookObjectMask key={group.id} cuts={(page.stamps ?? []).filter((s) => group.memberIds.includes(s.id)).flatMap(paperErasures)}>
             <NotebookBeamLayer groups={[group]} />
           </NotebookObjectMask>)}

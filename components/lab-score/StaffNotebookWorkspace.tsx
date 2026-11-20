@@ -28,6 +28,9 @@ import { hasNotebookSections, materializedNotebookSections, measureAtPoint, mete
 import { isEditableTarget } from "@/lib/keyboard-bindings";
 import { defaultNotebookBindings, loadNotebookBindings, notebookKeyAction, saveNotebookBindings, type NotebookBindings, type NotebookSymbolCategory } from "@/lib/notebook-keyboard";
 import { NotebookKeyboardDialog } from "@/components/lab-score/notebook/NotebookKeyboardDialog";
+import { NotebookFlamTools, NotebookStickingTools } from "@/components/lab-score/notebook/NotebookPercussionTools";
+import { useNotebookFlamGesture } from "@/hooks/useNotebookFlamGesture";
+import { defaultFlam, flamPosition, notebookPercussionOrder, samePercussionTarget, updateSticking, type NotebookFlam, type NotebookSticking, type PercussionTarget } from "@/lib/notebook-percussion";
 
 type Tool = "pen" | "erase" | "move" | "select";
 const keyboardTools: Tool[] = ["pen", "erase", "move", "select"];
@@ -144,6 +147,9 @@ export function StaffNotebookWorkspace({ active = true, keyboardObscured, onRegi
   const [selectionUnit, setSelectionUnit] = useState<NotebookSelectionUnit>("object");
   const [unitRows, setUnitRows] = useState<{ first: number; last: number } | null>(null);
   const [objectEditor, setObjectEditor] = useState(false);
+  const flam = useNotebookFlamGesture();
+  const [sticking, setSticking] = useState<{ target: PercussionTarget | null } | null>(null);
+  const percussionFocus = useRef<PercussionTarget | null>(null);
   const [decision, setDecision] = useState<{ title: string; message: string; options: { label: string; action: () => void }[] } | null>(null);
   const [feedback, setFeedback] = useState("");
   const feedbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -195,6 +201,12 @@ export function StaffNotebookWorkspace({ active = true, keyboardObscured, onRegi
   const editingNote = useMemo(() => fitNotebookPage(note, pageIndex,
     Math.ceil(viewport.height / (ROW_HEIGHT * Math.max(1, paperScale)))), [note, pageIndex, viewport.height, paperScale]);
   const page = editingNote.pages[pageIndex] ?? editingNote.pages[0];
+  const percussionOpen = sticking !== null;
+  const percussionOrder = useMemo(() => percussionOpen ? notebookPercussionOrder(editingNote) : [], [editingNote, percussionOpen]);
+  const percussionIndex = sticking?.target ? percussionOrder.findIndex((item) => samePercussionTarget(item, sticking.target!)) : percussionOrder.length;
+  const percussionItem = percussionOrder[percussionIndex];
+  const flamOwner = flam.draft && editingNote.pages.find((p) => p.stamps?.some((s) => s.id === flam.draft!.id));
+  const existingFlam = flamOwner?.stamps?.some((s) => s.id === flam.draft?.id && !!s.flam) ?? false;
   const inputSections = useMemo(() => notebookSections(editingNote), [editingNote]);
   const hasSections = useMemo(() => hasNotebookSections(editingNote), [editingNote]);
   const rowBase = measuresInRow(settings);
@@ -228,6 +240,8 @@ export function StaffNotebookWorkspace({ active = true, keyboardObscured, onRegi
       materializedNotebookSections(performanceNote, playback.rows, playbackPage), !viewPolicy.portrait && viewPolicy.zoom === 1) : null,
   [playbackPage, playback.rows, performanceNote, settings, viewPolicy.portrait, viewPolicy.columns, viewPolicy.zoom, portraitBoost, hasSections, rowBase]);
   const resetTransient = () => {
+    flam.close(); setSticking(null);
+    percussionFocus.current = null;
     setSelection(emptySelection()); setSelectionBox(null); setDragDraft(null); selectionGesture.current = null; setUnitRows(null);
     setDrawing([]); drawingRef.current = []; setTupletIds(null); panStart.current = null;
     eraseGesture.current = null; setEraseDraft(null); editSnapshot.current = null; setObjectEditor(false);
@@ -310,6 +324,43 @@ export function StaffNotebookWorkspace({ active = true, keyboardObscured, onRegi
     ...editingNote, pages: editingNote.pages.map((p, i) => i === index ? next : p),
     lastNote: lastId ? { pageId: next.id, stampId: lastId } : editingNote.lastNote && !editingNote.pages.some((p, i) => (i === index ? next : p).stamps?.some((s) => s.id === editingNote.lastNote!.stampId)) ? undefined : editingNote.lastNote,
   });
+  const closeSticking = () => setSticking(null);
+  const focusPercussion = (target: typeof percussionItem | undefined) => {
+    if (target && target.pageIndex !== pageIndex) { setPageIndex(target.pageIndex); setOffset({ x: 0, y: 0 }); }
+    setSticking({ target: target ? { id: target.id, part: target.part } : null });
+  };
+  const startSticking = () => {
+    if (settings.random) {
+      notify(ko ? "무작위 재생을 끈 뒤 연주법을 편집해 주세요." : "Turn off random play before editing sticking.");
+      return;
+    }
+    playback.stop(); flam.close(); setDragDraft(null); setObjectEditor(false); setFrontDock("tools");
+    const order = notebookPercussionOrder(editingNote);
+    const selected = new Set((page.stamps ?? []).filter((s) => selection.stampIds.includes(s.id)).map(notebookSourceId));
+    const aimed = currentKeyboardCursor?.id;
+    const clicked = percussionFocus.current;
+    const selectedNote = (aimed && order.find((p) => p.id === aimed && p.part === "note"))
+      || (clicked && selected.has(clicked.id) && order.find((p) => samePercussionTarget(p, clicked)))
+      || order.find((p) => p.part === "note" && selected.has(p.id));
+    focusPercussion(selectedNote || order.find((p) => p.pageIndex === pageIndex) || order[0]);
+  };
+  const stepSticking = (delta: number) => focusPercussion(percussionOrder[percussionIndex + delta]);
+  const commitPercussion = (stampId: string, update: (stamp: StaffStamp) => StaffStamp, after: () => void) => {
+    const index = editingNote.pages.findIndex((p) => p.stamps?.some((s) => s.id === stampId && !s.split?.index));
+    if (index < 0) return;
+    const owner = editingNote.pages[index];
+    commitDocument(pageDocument(index, { ...owner, stamps: owner.stamps?.map((s) => s.id === stampId ? update(s) : s) }), false, () => {
+      setPageIndex(pageIndex); after();
+    });
+  };
+  const saveFlam = (value?: NotebookFlam) => {
+    if (flam.draft) commitPercussion(flam.draft.id, (s) => ({ ...s, flam: value }), flam.close);
+  };
+  const saveSticking = (value: NotebookSticking, advance: boolean) => {
+    if (percussionItem) commitPercussion(percussionItem.id, (s) => updateSticking(s, percussionItem.part, value), () => {
+      if (advance) stepSticking(1);
+    });
+  };
   const undo = () => {
     playback.stop();
     const previous = undoStack.current.at(-1);
@@ -318,6 +369,11 @@ export function StaffNotebookWorkspace({ active = true, keyboardObscured, onRegi
     undoStack.current = undoStack.current.slice(0, -1);
     spacingMayJoinInput.current = null;
     resetTransient(); setNote(previous.note); setPageIndex(previous.pageIndex);
+    if (sticking) {
+      const item = sticking.target && notebookPercussionOrder(previous.note).find((p) => samePercussionTarget(p, sticking.target!));
+      setSticking({ target: item || null });
+      if (item) setPageIndex(item.pageIndex);
+    }
   };
   const redo = () => {
     playback.stop();
@@ -326,11 +382,24 @@ export function StaffNotebookWorkspace({ active = true, keyboardObscured, onRegi
     undoStack.current = [...undoStack.current, { note, pageIndex }];
     redoStack.current = redoStack.current.slice(0, -1);
     resetTransient(); setNote(next.note); setPageIndex(next.pageIndex);
+    if (sticking) {
+      const item = sticking.target && notebookPercussionOrder(next.note).find((p) => samePercussionTarget(p, sticking.target!));
+      setSticking({ target: item || null });
+      if (item) setPageIndex(item.pageIndex);
+    }
   };
   const openPanel = (next: "menu" | "settings") => {
+    flam.close(); closeSticking();
     toolsKeyboard.current?.dismissHistory();
     setPanel((old) => old === next ? null : next);
   };
+  useEffect(() => {
+    if ((!flam.draft && !percussionOpen) || Platform.OS === "web") return;
+    const sub = BackHandler.addEventListener("hardwareBackPress", () => {
+      flam.close(); setSticking(null); return true;
+    });
+    return () => sub.remove();
+  }, [flam.draft?.id, flam.close, percussionOpen]);
   const requestExit = (next: () => void) => {
       const changed = savedSnapshot.current !== JSON.stringify(note);
       const continueExit = () => { playback.stop(); next(); };
@@ -420,6 +489,7 @@ export function StaffNotebookWorkspace({ active = true, keyboardObscured, onRegi
       return;
     }
     if (phase === "cancel") {
+      flam.close();
       drawingRef.current = []; setDrawing([]); selectionGesture.current = null; setSelectionBox(null); panStart.current = null;
       eraseGesture.current = null; setEraseDraft(null);
       sectionGesture.current = null;
@@ -432,6 +502,41 @@ export function StaffNotebookWorkspace({ active = true, keyboardObscured, onRegi
     const layoutScale = inputProjection ? portraitBoost : page.layoutScale ?? 1;
     let doc = screenToPaper({ x: screen.x / paperScale, y: screen.y / paperScale }, offset, zoom);
     doc.x /= layoutScale; doc.y /= layoutScale;
+    const displayed = inputProjection?.page ?? page;
+    const isPercussionTap = (s: StaffStamp) => !s.generated && isNotebookNote(s.glyph);
+    const hitPercussion = () => {
+      const width = naturalPaperWidth(displayed);
+      return (displayed.stamps ?? []).filter(isPercussionTap).flatMap((stamp) => {
+        const parent = notebookSourceId(stamp);
+        const main = { id: parent, part: "note" as const, d: Math.hypot(doc.x - stamp.x, doc.y - stamp.y) };
+        const value = flam.draft?.id === stamp.id ? flam.draft.flam : stamp.flam;
+        const point = value && flamPosition(stamp, value, width);
+        return [main, ...(point ? [{ id: parent, part: "flam" as const, d: Math.hypot(doc.x - point.x, doc.y - point.y) }] : [])];
+      }).filter((hit) => hit.d <= Math.max(12, 12 / (paperScale * zoom * layoutScale))).sort((a, b) => a.d - b.d)[0];
+    };
+    if (sticking) {
+      if (phase === "end") {
+        const hit = hitPercussion();
+        const target = hit && percussionOrder.find((item) => samePercussionTarget(hit, item));
+        if (target) focusPercussion(target);
+      }
+      return;
+    }
+    if (phase !== "start" && flam.moveOrEnd(screen, phase === "end")) return;
+    if (flam.draft && phase !== "start") return;
+    if (phase === "start" && tool === "select" && !dragDraft && !settings.random) {
+      const hit = hitPercussion();
+      percussionFocus.current = hit ?? null;
+      const source = mode === "notes" && hit && page.stamps?.find((s) => s.id === hit.id);
+      if (source && displayed.stamps?.some((s) => s.id === source.id) && (!flam.draft || flam.draft.id === source.id)) {
+        flam.begin(screen, 26 / (source.size * paperScale * zoom * layoutScale),
+          { id: source.id, flam: flam.draft?.flam ?? source.flam ?? defaultFlam }, hit.part === "flam", () => {
+            selectionGesture.current = null; sectionGesture.current = null; editSnapshot.current = null;
+            setSelectionBox(null); setDragDraft(null); setSelection({ stampIds: [source.id], strokeIds: [] }); setFrontDock("tools");
+          }, !!flam.draft);
+      }
+      if (flam.draft) return;
+    }
     if (inputProjection) {
       const sectionHit = (tool === "select" && phase === "start" || tool === "erase") ? (inputProjection.page.stamps ?? [])
         .filter((s) => s.sectionStart && Math.abs(doc.x - s.x) < Math.max(10, s.size * .55) && Math.abs(doc.y - s.y) < 34)
@@ -806,6 +911,16 @@ export function StaffNotebookWorkspace({ active = true, keyboardObscured, onRegi
   }, [sourcePaper, page, pageIndex, settings, editingNote, performanceNote, playbackPage, trackingProjection, inputProjection,
     viewPolicy.portrait, viewPolicy.columns, viewPolicy.zoom, portraitBoost, rowBase, hasSections]);
   const paperPage = projection?.page ?? sourcePaper;
+  const percussionStamp = percussionItem && paperPage.stamps?.find((s) => s.id === percussionItem.id);
+  const targetY = percussionStamp?.y;
+  const effectiveScale = paperScale * zoom * (projection ? portraitBoost : paperPage.layoutScale ?? 1);
+  useEffect(() => {
+    if (targetY === undefined) return;
+    const y = 72 + targetY * effectiveScale + offset.y * paperScale;
+    const current = paperScrollOffset.current.y;
+    if (y < current + 72 || y > current + viewport.height - 202)
+      paperScroll.current?.scrollTo({ y: Math.max(0, y - viewport.height * .38), animated: false });
+  }, [targetY, pageIndex, effectiveScale, offset.y, paperScale, viewport.height]);
   const externalTieIds = useMemo(() => new Set((settings.random || playback.running ? performanceNote : editingNote).pages
     .filter((p, i) => playback.running || i !== pageIndex).flatMap((p) => (p.stamps ?? []).map((s) => s.id))),
   [settings.random, playback.running, performanceNote, editingNote, pageIndex]);
@@ -816,6 +931,7 @@ export function StaffNotebookWorkspace({ active = true, keyboardObscured, onRegi
     if (toolPopup || panel === "menu" || decision || objectEditor) return;
     playback.stop();
     resetTransient();
+    if (sticking) setSticking(sticking);
     setScale((previous) => {
       const bounds = notebookPortraitPolicy(windowSize.width, windowSize.height, previous);
       return notebookPortraitPolicy(windowSize.width, windowSize.height, typeof value === "number" ? value : value(bounds.zoom)).zoom;
@@ -874,6 +990,8 @@ export function StaffNotebookWorkspace({ active = true, keyboardObscured, onRegi
     if (event.key === "Escape") {
       if (event.repeat) return;
       if (decision) setDecision(null);
+      else if (flam.draft) flam.close();
+      else if (sticking) closeSticking();
       else if (objectEditor) setObjectEditor(false);
       else if (panel) closePanel();
       else if (toolPopup) setToolPopup(null);
@@ -888,6 +1006,7 @@ export function StaffNotebookWorkspace({ active = true, keyboardObscured, onRegi
     if (objectEditor || toolPopup || toolsKeyboard.current?.route(event) || playbackKeyboard.current?.(event)) return;
     const action = notebookKeyAction(event, keyboardBindings);
     if (!action || (panel && !["help", "save"].includes(action))) return;
+    if ((sticking || flam.draft) && !["undo", "redo", "save", "zoomIn", "zoomOut"].includes(action)) return;
     const focused = (event.target as HTMLElement | null)?.closest?.("button,[role=button],[role=menuitem],[role=switch],[role=radio],[role=checkbox],a[href]");
     if (focused && ["Space", "Enter"].includes(event.code) && !event.ctrlKey && !event.metaKey && !event.altKey) return;
     event.preventDefault();
@@ -960,12 +1079,14 @@ export function StaffNotebookWorkspace({ active = true, keyboardObscured, onRegi
           <NotebookPaper
             settings={settings}
             externalTieIds={externalTieIds}
-            page={paperPage} width={PAPER_WIDTH * paperScale * (projection ? Math.max(1, zoom) : zoom)} height={(paperPage.staffCount ?? 7) * ROW_HEIGHT * paperScale * zoom * (projection ? portraitBoost : paperPage.layoutScale ?? 1)}
+            page={paperPage} width={PAPER_WIDTH * paperScale * (projection ? Math.max(1, zoom) : zoom)} height={((paperPage.staffCount ?? 7) * ROW_HEIGHT +
+              (paperPage.stamps?.some((s) => s.sticking?.lines.some(Boolean) || s.flam?.sticking?.lines.some(Boolean)) ? 75 : 0)) * effectiveScale}
             paperScale={paperScale} zoom={zoom}
             layoutScaleOverride={projection ? portraitBoost : undefined}
             displayRegions={projection?.regions}
             inheritedClefs={projection?.inheritedClefs}
             keyboardCursor={!playback.running && !currentKeyboardCursor?.id ? displayWritingCursor : undefined}
+            percussionTarget={sticking?.target} flamDraft={flam.draft}
             offset={offset} tool={playback.running ? "move" : tool} lineWidth={lineWidth} lineColor={lineColor}
             drawing={drawingPoints} pendingGlyph={null} preview={null}
             selection={playback.running ? undefined : displayedSelection} selectionBox={projection && selectionBox ? (() => {
@@ -1012,8 +1133,16 @@ export function StaffNotebookWorkspace({ active = true, keyboardObscured, onRegi
         <Pressable accessibilityLabel={t.undo} disabled={!undoStack.current.length} onPress={undo} style={{ padding: 10, opacity: undoStack.current.length ? 1 : 0.35 }}><Ionicons name="arrow-undo" size={18} color="#675d50" /></Pressable>
         <Pressable accessibilityLabel={t.redo} disabled={!redoStack.current.length} onPress={redo} style={{ padding: 10, opacity: redoStack.current.length ? 1 : 0.35 }}><Ionicons name="arrow-redo" size={18} color="#675d50" /></Pressable>
       </View>}
+      {flam.draft ? <NotebookFlamTools ko={ko} offset={flam.draft.flam.offset} existing={existingFlam}
+        onOffset={flam.setOffset} onApply={() => saveFlam(flam.draft?.flam)} onClose={flam.close} onDelete={() => saveFlam()} /> :
+      sticking ? <NotebookStickingTools ko={ko} part={percussionItem?.part}
+        value={percussionItem?.part === "flam" ? percussionItem.stamp.flam?.sticking : percussionItem?.stamp.sticking}
+        index={Math.max(0, percussionIndex)} count={percussionOrder.length} onStep={stepSticking} onChange={saveSticking} onClose={closeSticking}
+        onUndo={undo} onRedo={redo} canUndo={undoStack.current.length > 0} canRedo={redoStack.current.length > 0} /> : null}
+      <View style={(flam.draft || sticking) ? { display: "none" } : undefined}>
       <NotebookBottomTools ko={ko} mode={mode} tool={tool} lineWidth={lineWidth} scale={portraitPolicy.zoom} pickerTop={paperTop}
         keyboardRef={toolsKeyboard} symbolRequest={symbolRequest} onCloseKeyboardSymbols={() => setSymbolRequest(undefined)}
+        onSticking={startSticking}
         onPreferredWidth={mode === "ink" ? fitInkDock : undefined}
         pickerBottom={paperTop + viewport.height} layoutKey={dockLayoutKey}
         onAutoSpace={autoSpace} autoSpaceDisabled={playback.running || playback.preparing || !!dragDraft}
@@ -1028,6 +1157,7 @@ export function StaffNotebookWorkspace({ active = true, keyboardObscured, onRegi
         onEditSelection={() => { playback.stop(); setObjectEditor(true); }}
         onSaveClipboard={saveClipboard} onDeleteSelection={deleteSelection} onResizeSelection={resizeSelection}
         clipboard={clipboard} onPaste={pasteClipboard} />
+      </View>
       </NotebookFloatingDock>
       </View>
       {panel === "settings" ? (
@@ -1058,7 +1188,12 @@ export function StaffNotebookWorkspace({ active = true, keyboardObscured, onRegi
       ) : null}
       {objectEditor && <View style={{ position: "absolute", bottom: 82, left: 8, right: 8, maxHeight: "70%", zIndex: 48 }}>
         <NotebookObjectEditor ko={ko} stamps={selectedNotebookStamps(page, selection)} group={selectedGroup}
-          onChange={editObject} onRatio={editRatio} onDelete={(stampId) => editObject(stampId, {}, true)} onClose={() => setObjectEditor(false)} />
+          onChange={editObject} onRatio={editRatio} onDelete={(stampId) => editObject(stampId, {}, true)}
+          onFlam={(stamp) => {
+            const sourcePage = editingNote.pages.findIndex((p) => p.stamps?.some((s) => s.id === stamp.id));
+            if (sourcePage >= 0) { setPageIndex(sourcePage); setMode("notes"); setTool("select"); setObjectEditor(false);
+              flam.open({ id: stamp.id, flam: editingNote.pages[sourcePage].stamps?.find((s) => s.id === stamp.id)?.flam ?? defaultFlam }); }
+          }} onClose={() => setObjectEditor(false)} />
       </View>}
       <Modal visible={!!decision} transparent animationType="fade" onRequestClose={() => setDecision(null)}>
         <View style={{ flex: 1, justifyContent: "center", alignItems: "center", padding: 24, backgroundColor: "rgba(0,0,0,.4)" }}>

@@ -42,6 +42,10 @@ function sameLayout(a: unknown, b: unknown): boolean {
 function envelope(s: StaffStamp, attachments: StaffStamp[]) {
   const scale = s.size / 26;
   let left = 12 * scale, right = (s.dotted || s.role === "ghost" ? 29 : 23) * scale;
+  if (s.flam) {
+    if (s.flam.offset < 0) left = Math.max(left, (-s.flam.offset + 8) * scale);
+    else right = Math.max(right, (s.flam.offset + 12) * scale);
+  }
   for (const a of attachments.filter((a) => a.attachTo === s.id)) {
     const half = Math.max(15, a.glyph.length > 12 ? 40 : 15) * a.size / 26;
     left = Math.max(left, s.x - a.x + half); right = Math.max(right, a.x - s.x + half);
@@ -185,6 +189,7 @@ export function layoutNotebookMusic(source: StaffNotebook, options: MusicLayoutO
             glyph: original.glyph, dotted: original.dotted, durationBeats: original.durationBeats, tieTo: original.tieTo, tieFrom: original.tieFrom,
           } };
           pieces.push({ stamp: { ...original, glyph: part.glyph, dotted: part.dotted, durationBeats: part.duration, id, split,
+            flam: index ? undefined : original.flam, sticking: index ? undefined : original.sticking,
             tieTo: undefined, tieFrom: undefined, erasures: index ? oldPart?.erasures : original.erasures }, duration: part.duration });
           remaining -= part.duration; available -= part.duration;
         }

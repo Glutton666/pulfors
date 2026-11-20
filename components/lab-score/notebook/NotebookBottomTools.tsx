@@ -68,6 +68,7 @@ type Props = {
   keyboardRef: React.RefObject<NotebookToolsKeyboard | null>;
   symbolRequest?: { group: NotebookSymbolCategory };
   onCloseKeyboardSymbols: () => void;
+  onSticking: () => void;
 };
 
 type NotesCategory = "note" | "marks" | null;
@@ -178,10 +179,13 @@ export function NotebookBottomTools(props: Props) {
     { label: ko ? "임시표" : "Accidentals", items: ACCIDENTALS.map((item) => ({ id: item.value, label: item.labelKey })) },
     { label: ko ? "아티큘레이션" : "Articulations", items: ARTICULATIONS.map((item) => ({ id: item.id, label: item.labelKey })) },
     { label: ko ? "반복 · 이동 부호" : "Repeats & navigation", items: [{ id: "barline", label: ko ? "마디선" : "Barline" }, ...REPEAT_SIGNS.map((item) => ({ id: item.id, label: item.labelKey }))] },
-    { label: ko ? "악기 기호" : "Instrument marks", items: ALL_INSTR_SYMBOLS.map((item) => ({ id: item.id, label: item.labelKey })) },
+    { label: ko ? "악기 기호" : "Instrument marks", items: [
+      { id: "percussion-sticking", label: ko ? "타악기 연주법" : "Percussion sticking" },
+      ...ALL_INSTR_SYMBOLS.map((item) => ({ id: item.id, label: item.labelKey })),
+    ] },
   ].map((group) => ({
     ...group,
-    items: group.items.map((item) => ({ ...item, label: item.id === "barline" || ("literal" in group && group.literal) ? item.label : t("scoreMode", item.label as any) })).filter((item) => {
+    items: group.items.map((item) => ({ ...item, label: ["barline", "percussion-sticking"].includes(item.id) || ("literal" in group && group.literal) ? item.label : t("scoreMode", item.label as any) })).filter((item) => {
       if (usedMarkIds.has(item.id)) return false;
       usedMarkIds.add(item.id);
       return true;
@@ -191,6 +195,7 @@ export function NotebookBottomTools(props: Props) {
   const marks = visibleGroups.flatMap((group) => group.items);
   const chooseMark = (glyph: string) => {
     if (glyph === "meter-picker") setMeterPicker(true);
+    else if (glyph === "percussion-sticking") props.onSticking();
     else props.onChoose({ glyph, role: "normal", dotted: false });
     closeMarks();
   };
@@ -339,8 +344,9 @@ export function NotebookBottomTools(props: Props) {
                           <Pressable key={item.id} ref={(node) => { if (node) markButtons.current.set(item.id, node); else markButtons.current.delete(item.id); }} dataSet={{ notebookMark: item.id }}
                             testID={`notebook-symbol-${item.id}`} accessibilityRole="button" accessibilityLabel={item.label.replace(/([A-Z])/g, " $1").replace(/_/g, " ")}
                             onFocus={() => setFocusedMark(item.id)} onPress={() => chooseMark(item.id)} style={[styles.drawerGlyphButton, focusedMark === item.id && styles.drawerGlyphSelected]}>
-                           <NotebookGlyphPreview glyph={item.id === "meter-picker" ? `time-${props.notationMeter?.beats ?? 4}-${props.notationMeter?.unit ?? 4}` : item.id} size={22} />
-                          <Text numberOfLines={1} style={styles.drawerGlyphLabel}>{item.label.replace(/([A-Z])/g, " $1").replace(/_/g, " ")}</Text>
+                            {item.id === "percussion-sticking" ? <Ionicons name="text-outline" size={23} color="#725b3c" /> :
+                              <NotebookGlyphPreview glyph={item.id === "meter-picker" ? `time-${props.notationMeter?.beats ?? 4}-${props.notationMeter?.unit ?? 4}` : item.id} size={22} />}
+                           <Text numberOfLines={item.id === "percussion-sticking" ? 2 : 1} style={styles.drawerGlyphLabel}>{item.label.replace(/([A-Z])/g, " $1").replace(/_/g, " ").trim()}</Text>
                         </Pressable>
                       ))}
                     </View>

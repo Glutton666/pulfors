@@ -1525,6 +1525,144 @@ for (const viewport of [{ width: 390, height: 844 }, { width: 768, height: 1024 
   });
 }
 
+test("percussion: holding a note previews a flam and applies, adjusts and removes it separately", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await openNotebook(page);
+  await chooseMode(page, "notes");
+  await page.keyboard.press("3");
+  const main = page.getByTestId("notebook-drawing").locator('[data-testid^="notebook-stamp-"]').first();
+  await expect(main).toBeVisible();
+  const id = (await main.getAttribute("data-testid"))!.replace("notebook-stamp-", "");
+  const grace = page.getByTestId(`notebook-flam-${id}`);
+  const graceX = async () => (await grace.getByTestId("notebook-note-head").boundingBox())?.x ?? 0;
+  const head = async () => {
+    const { x, y, width, height } = (await main.getByTestId("notebook-note-head").first().boundingBox())!;
+    return { x: x + width / 2, y: y + height / 2 };
+  };
+  const at = await head();
+  await page.mouse.move(at.x, at.y);
+  await page.mouse.down();
+  await page.mouse.move(at.x + 32, at.y, { steps: 6 });
+  await page.mouse.up();
+  await expect(page.getByTestId("notebook-flam-tools")).toHaveCount(0);
+  await expect(grace).toHaveCount(0);
+  const moved = await head();
+  expect(moved.x - at.x).toBeGreaterThan(20);
+  const hold = async () => {
+    const center = await head();
+    await page.mouse.move(center.x, center.y);
+    await page.mouse.down();
+    await expect(page.getByTestId("notebook-flam-tools")).toBeVisible();
+    return center;
+  };
+  const center = await hold();
+  await page.mouse.move(center.x + 32, center.y, { steps: 6 });
+  await page.mouse.up();
+  await expect(grace.getByTestId("notebook-flam-slash")).toBeVisible();
+  const initial = await graceX();
+  expect(initial).toBeGreaterThan(center.x);
+  await page.getByTestId("notebook-flam-farther").click();
+  await expect.poll(graceX).toBeGreaterThan(initial);
+  await page.getByTestId("notebook-flam-cancel").click();
+  await expect(grace).toHaveCount(0);
+  await hold();
+  await page.mouse.up();
+  await page.getByTestId("notebook-flam-apply").click();
+  await expect.poll(graceX).toBeLessThan(center.x);
+  await hold();
+  await page.mouse.up();
+  await page.getByTestId("notebook-flam-right").click();
+  await page.getByTestId("notebook-flam-apply").click();
+  await expect.poll(graceX).toBeGreaterThan(center.x);
+  await hold();
+  await page.mouse.up();
+  await page.getByTestId("notebook-flam-remove").click();
+  await expect(grace).toHaveCount(0);
+  await expect(main).toBeVisible();
+  await page.keyboard.press("Control+z");
+  await expect(grace).toBeVisible();
+  await page.keyboard.press("Control+Shift+z");
+  await expect(grace).toHaveCount(0);
+});
+
+test("percussion: enter and edit both lines on tuplet and flam notes, then reopen them", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.addInitScript(() => {
+    if (localStorage.getItem("percussion-fixture-seeded")) return;
+    localStorage.setItem("percussion-fixture-seeded", "yes");
+    localStorage.setItem("lab_staff_notebooks_v1", JSON.stringify([{
+      id: "percussion", title: "Percussion", updatedAt: 1, pages: [{ id: "p", staffCount: 4, strokes: [],
+        stamps: [
+          { id: "a", glyph: "eighth", x: 140, y: 102, size: 26 },
+          { id: "r", glyph: "rest-eighth", x: 212, y: 102, size: 26 },
+          { id: "b", glyph: "eighth", x: 300, y: 102, size: 26, flam: { offset: -28 } },
+          { id: "c", glyph: "quarter", x: 400, y: 102, size: 26 },
+        ], tuplets: [{ id: "t", stampIds: ["a", "r", "b"] }] }],
+    }]));
+  });
+  const load = async () => {
+    await openNotebook(page); await openSettings(page); await openSaved(page, "Percussion");
+    await page.getByTestId("notebook-panel-close").click();
+    await chooseMode(page, "notes");
+  };
+  await load();
+  const openSticking = async () => {
+    await page.getByTestId("notebook-category-marks").click();
+    await page.getByTestId("notebook-symbol-percussion-sticking").click();
+    await expect(page.getByTestId("notebook-sticking-tools")).toBeVisible();
+  };
+  await openSticking();
+  const key = (key: string) => page.getByTestId(`notebook-sticking-${key}`);
+  const position = key("position");
+  await expect(position).toContainText("1/4");
+  await key("R").click();
+  await expect(position).toContainText(/2\/4 · (Grace|꾸밈음)/);
+  await key("L").click();
+  await expect(position).toContainText(/3\/4 · (Note|본음)/);
+  await key("K").click();
+  await expect(position).toContainText("4/4");
+  await key("skip").click();
+  await expect(position).toContainText(/End|입력 끝/);
+  await key("previous").click();
+  await key("previous").click();
+  await key("line-2").click();
+  await key("custom").click();
+  await key("custom-input").fill("손");
+  await key("custom-apply").click();
+  await expect(key("b-note-1")).toHaveText("K");
+  await expect(key("b-note-2")).toHaveText("손");
+  await key("previous").click();
+  await key("size-up").click();
+  await expect(key("b-note-2")).toHaveCSS("font-size", "16px");
+  await key("clear").click();
+  await expect(key("b-note-2")).toHaveCount(0);
+  await expect(key("b-note-1")).toHaveText("K");
+  await key("undo").click();
+  await expect(key("b-note-2")).toHaveText("손");
+  await key("redo").click();
+  await expect(key("b-note-2")).toHaveCount(0);
+  await key("undo").click();
+  await key("close").click();
+  await page.keyboard.press("Minus");
+  await expect(key("b-flam-1")).toHaveText("L");
+  await expect(key("b-note-2")).toHaveText("손");
+  await page.keyboard.press("Control+s");
+  await expect(page.getByTestId("web-alert")).toContainText(/Notebook saved|저장했습니다/);
+  await page.reload();
+  await load();
+  await expect(key("b-flam-1")).toHaveText("L");
+  await expect(key("b-note-1")).toHaveText("K");
+  await expect(key("b-note-2")).toHaveText("손");
+  await expect(key("b-note-2")).toHaveCSS("font-size", "16px");
+  await expect(key("r-note-1")).toHaveCount(0);
+  await expect(key("c-note-1")).toHaveCount(0);
+  const main = page.getByTestId("notebook-stamp-b").getByTestId("notebook-note-head").first();
+  const { x, y, width, height } = (await main.boundingBox())!;
+  await page.mouse.click(x + width / 2, y + height / 2);
+  await openSticking();
+  await expect(position).toContainText(/3\/4 · (Note|본음)/);
+});
+
 test("mixed selection previews, cancels, copies and pastes an independent clipboard bundle", async ({ page }) => {
   await page.setViewportSize({ width: 768, height: 1024 });
   await page.addInitScript(() => localStorage.setItem("lab_staff_notebooks_v1", JSON.stringify([{

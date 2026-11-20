@@ -3,6 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-
 import { Ionicons } from "@expo/vector-icons";
 import type { StaffStamp, StaffTuplet } from "@/lib/staff-notebook";
 import { standardTupletRatio } from "@/lib/notebook-music-layout";
+import { isNotebookNote } from "@/lib/notebook-editing";
 
 type Props = {
   ko: boolean;
@@ -11,6 +12,7 @@ type Props = {
   onChange: (id: string, patch: Partial<StaffStamp>) => void;
   onRatio: (actual: number, normal: number) => void;
   onDelete: (id: string) => void;
+  onFlam?: (stamp: StaffStamp) => void;
   onClose: () => void;
 };
 
@@ -21,7 +23,7 @@ const durationLabels = {
 };
 const normalForCount = (count: number) => standardTupletRatio(count).normal;
 
-export function NotebookObjectEditor({ ko, stamps, group, onChange, onRatio, onDelete, onClose }: Props) {
+export function NotebookObjectEditor({ ko, stamps, group, onChange, onRatio, onDelete, onFlam, onClose }: Props) {
   const members = useMemo(() => group ? group.stampIds.map((id) => stamps.find((stamp) => stamp.id === id)).filter((stamp): stamp is StaffStamp => !!stamp) : stamps, [group, stamps]);
   const [currentId, setCurrentId] = useState(members[0]?.id ?? "");
   const selected = members.find((stamp) => stamp.id === currentId) ?? members[0];
@@ -103,6 +105,9 @@ export function NotebookObjectEditor({ ko, stamps, group, onChange, onRatio, onD
             <View style={[styles.checkbox, selected.dotted && styles.checkboxChecked]}>{selected.dotted ? <Ionicons name="checkmark" size={12} color="#fffaf2" /> : null}</View>
             <Text style={styles.dotLabel}>{ko ? "점음표" : "Dotted"}</Text>
           </Pressable>
+          {onFlam && isNotebookNote(selected.glyph) && <Pressable testID="notebook-edit-flam" accessibilityRole="button" onPress={() => onFlam(selected)} style={[styles.dotRow, { justifyContent: "center" }]}>
+            <Text style={styles.dotLabel}>{ko ? "플램 편집" : "Edit flam"}</Text>
+          </Pressable>}
           <Pressable accessibilityRole="button" onPress={() => onDelete(selected.id)} style={styles.deleteButton}>
             <Ionicons name="trash-outline" size={15} color="#9a5547" />
             <Text style={styles.deleteText}>{ko ? "구성원 삭제" : "Delete member"}</Text>
