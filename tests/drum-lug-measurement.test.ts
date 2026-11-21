@@ -9,6 +9,13 @@ function strike(rate: number, tones: [number, number][], { attack = 0, sustain =
   });
 }
 
+function dampedStrike(rate: number, tones: [hz: number, gain: number, decay: number][], seconds = 0.5) {
+  return Float32Array.from({ length: Math.round(rate * seconds) }, (_, i) => {
+    const t = i / rate;
+    return tones.reduce((sum, [hz, gain, decay]) => sum + gain * Math.exp(-decay * t) * Math.sin(2 * Math.PI * hz * t), 0);
+  });
+}
+
 function run(rate = 48000) {
   const detector = createDrumLugMeasurement();
   const send = (samples: Float32Array, sensitivity = 1) => {
@@ -50,6 +57,50 @@ test("the locked band can pick a real weaker lug partial despite a louder peak o
   expect(input.tap([[195.2, 0.16]])).toEqual([
     { kind: "measuring" }, { kind: "hit", frequency: 195.2 },
   ]);
+});
+
+test.each([44100, 48000])("keeps actual weak low resonances around 100 Hz next to strong overtones at %d Hz", (rate) => {
+  const discovery = createDrumLugDiscovery();
+  const tones: Parameters<typeof dampedStrike>[1] = [[98, 0.009, 12], [210, 0.45, 4]];
+  for (let i = 0; i < 2; i++) {
+    discovery.push(new Float32Array(Math.round(rate * 0.12)), rate, 1);
+    discovery.push(dampedStrike(rate, tones), rate, 1);
+  }
+  expect(discovery.finish()).toEqual([
+    { frequency: 98, strikes: 2 },
+    { frequency: 210, strikes: 2 },
+  ]);
+
+  const input = run(rate);
+  input.detector.setReference(100);
+  input.quiet();
+  expect(input.send(dampedStrike(rate, [[102.6, 0.009, 12], [210, 0.45, 4]])).at(-1))
+    .toEqual({ kind: "hit", frequency: 102.6 });
+  // Do not infer an octave below the strongest peak if it isn't present.
+  expect(input.tap([[210, 0.45]]).at(-1)).toEqual({ kind: "retry" });
+  expect(input.tap([[95, 0.15], [113, 0.14]]).at(-1)).toEqual({ kind: "retry" });
+});
+
+test.each([44100, 48000])("detects the true low cutoff and rejects below-range leakage at %d Hz", (rate) => {
+  const candidates = (tones: Parameters<typeof dampedStrike>[1]) => {
+    const discovery = createDrumLugDiscovery();
+    discovery.push(new Float32Array(Math.round(rate * 0.1)), rate, 1);
+    discovery.push(dampedStrike(rate, tones), rate, 1);
+    return discovery.finish();
+  };
+  expect(candidates([[25, 0.22, 6]])).toEqual([]);
+  expect(candidates([[30, 0.22, 6]])).toEqual([{ frequency: 30, strikes: 1 }]);
+  expect(candidates([[50, 0.04, 9], [210, 0.6, 4]])).toEqual([
+    { frequency: 50, strikes: 1 }, { frequency: 210, strikes: 1 },
+  ]);
+});
+
+test("keeps a short-lived low partial when release cuts the analysis window short", () => {
+  const rate = 48000;
+  const discovery = createDrumLugDiscovery();
+  discovery.push(new Float32Array(rate / 10), rate, 1);
+  discovery.push(dampedStrike(rate, [[105, 0.10, 30], [210, 0.44, 4]], 0.18), rate, 1);
+  expect(discovery.finish()).toEqual(expect.arrayContaining([{ frequency: 105, strikes: 1 }]));
 });
 
 test("rejects a wrong mode, two similarly strong candidates, or a short attack without resonance", () => {

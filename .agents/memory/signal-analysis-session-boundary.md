@@ -38,3 +38,9 @@ A candidate observed once must still be selectable. Add the nearest note name be
 **Why:** The user could only see one-hit candidates and the previous two-hit minimum prevented them from selecting any reference.
 
 **How to apply:** Recommend repeated readings without enforcing them. Count distinct attacks over a ringing tail, and test with overlapping decays as well as silence-separated hits.
+
+For drum lug measurement, analyze low resonances separately instead of just raising microphone sensitivity or treating all spectral peaks alike. Preserve both measured low and high partials, the locked comparison band, and the general tuner's preference for the strongest measured partial.
+
+**Why:** The user reported misses even near 100 Hz. A strong overtone can hide a real low resonance, and relaxing the threshold without rejecting spectral sidelobes can turn sound below range into a false in-range candidate.
+
+**How to apply:** Validate both weak and short low resonances beside louder overtones, and test below-range input with no real in-range resonance before relaxing bass thresholds.

@@ -21,6 +21,10 @@ const HIT_SECONDS = 0.36;
 const MIN_HIT_INTERVAL_BLOCKS = 16; // 160 ms between distinct attacks
 const LONG_FRAMES = { seconds: 0.13, offsets: [0.025, 0.075, 0.125, 0.175, 0.225] };
 const SHORT_FRAMES = { seconds: 0.085, offsets: [0.025, 0.045, 0.065, 0.085, 0.105] };
+const LOW_LONG_FRAMES = { seconds: 0.19, offsets: [0.02, 0.05, 0.08, 0.12, 0.16] };
+const LOW_SHORT_FRAMES = { seconds: 0.11, offsets: [0.02, 0.035, 0.05, 0.075, 0.10] };
+const LOW_BAND_END_HZ = 150;
+const LOWER_EDGE_TOLERANCE_HZ = 0.15;
 const roundHz = (hz: number) => Math.round(hz * 10) / 10;
 const nearby = (a: number, b: number) => Math.abs(a - b) <= Math.max(2, a * 0.012);
 const median = (values: number[]) => {
@@ -37,14 +41,28 @@ export function lugFrequencyBand(reference: number | null): [number, number] {
 }
 
 /** Find a recurring resonance after the attack, not the spectrum maximum of one frame. */
-function scanRing(pcm: Float32Array, rate: number, gate: number, reference: number | null, frames: typeof LONG_FRAMES) {
+function scanRing(
+  pcm: Float32Array, rate: number, gate: number, range: [number, number],
+  frames: typeof LONG_FRAMES, lowBand = false,
+) {
   const length = Math.round(rate * frames.seconds);
   if (Math.round(rate * frames.offsets[1]) + length > pcm.length) return [];
+  const [minHz, maxHz] = range;
+  if (minHz > maxHz) return [];
   const fftSize = 2 ** Math.ceil(Math.log2(length * 4));
   const binHz = rate / fftSize;
-  const [minHz, maxHz] = lugFrequencyBand(reference);
   const clusters: { frequencies: number[]; levels: number[]; lastFrame: number }[] = [];
-  const window = Float32Array.from({ length }, (_, i) => 0.5 - 0.5 * Math.cos(2 * Math.PI * i / (length - 1)));
+  const window = Float32Array.from({ length }, (_, i) => {
+    const phase = 2 * Math.PI * i / (length - 1);
+    // Blackman-Harris keeps sidelobes of strong harmonics and sub-30 Hz
+    // energy from masquerading as real peaks when the low band is weaker.
+    return lowBand ? 0.35875 - 0.48829 * Math.cos(phase) + 0.14128 * Math.cos(2 * phase) - 0.01168 * Math.cos(3 * phase)
+      : 0.5 - 0.5 * Math.cos(phase);
+  });
+  // Correct for different window gains and FFT sizes before ranking
+  // low- and higher-frequency peaks against each other.
+  const levelOffset = 10 * Math.log10(fftSize) - 20 * Math.log10(window.reduce((sum, value) => sum + value, 0));
+  const searchMin = lowBand && minHz === LUG_MIN_HZ ? minHz - LOWER_EDGE_TOLERANCE_HZ : minHz;
   for (let frame = 0; frame < frames.offsets.length; frame++) {
     const from = Math.round(rate * frames.offsets[frame]);
     if (from + length > pcm.length) break;
@@ -66,17 +84,17 @@ function scanRing(pcm: Float32Array, rate: number, gate: number, reference: numb
     let strongest = -Infinity;
     // Compare against out-of-band leakage too; a loud wrong note must not
     // produce a reading from one of its quiet spectral sidelobes.
-    for (let i = low; i <= Math.min(magnitude.length - 2, Math.ceil(3000 / binHz)); i++) {
+    for (let i = Math.max(2, Math.floor(10 / binHz)); i <= Math.min(magnitude.length - 2, Math.ceil(3000 / binHz)); i++) {
       strongest = Math.max(strongest, magnitude[i]);
     }
-    const floor = Math.max(noise + 16, strongest - 30);
+    const floor = lowBand ? Math.max(noise + 19, strongest - 46) : Math.max(noise + 16, strongest - 30);
     const peaks: { hz: number; db: number }[] = [];
-    for (let i = Math.max(low, Math.floor(minHz / binHz)); i <= Math.min(high, Math.ceil(maxHz / binHz)); i++) {
+    for (let i = Math.max(2, Math.floor(searchMin / binHz)); i <= Math.min(high, Math.ceil(maxHz / binHz)); i++) {
       const left = magnitude[i - 1], db = magnitude[i], right = magnitude[i + 1];
       if (db < floor || db <= left || db < right) continue;
       const curvature = left - 2 * db + right;
       const hz = (i + Math.max(-0.5, Math.min(0.5, curvature === 0 ? 0 : 0.5 * (left - right) / curvature))) * binHz;
-      if (hz >= minHz && hz <= maxHz) peaks.push({ hz, db });
+      if (hz >= searchMin && hz <= maxHz) peaks.push({ hz: Math.max(minHz, hz), db: db + levelOffset });
     }
     for (const { hz, db } of peaks.sort((a, b) => b.db - a.db).slice(0, 6)) {
       const cluster = clusters.find(({ frequencies }) => nearby(median(frequencies), hz));
@@ -95,10 +113,34 @@ function scanRing(pcm: Float32Array, rate: number, gate: number, reference: numb
 }
 
 function analyzeHit(pcm: Float32Array, rate: number, gate: number, reference: number | null) {
-  // Prefer the longer, more precise scan. A fresh attack can end a strike's
-  // window early, in which case inspect only the ring available before it.
-  const peaks = scanRing(pcm, rate, gate, reference, LONG_FRAMES);
-  return peaks.some(({ count }) => count >= 3) ? peaks : scanRing(pcm, rate, gate, reference, SHORT_FRAMES);
+  const [minHz, maxHz] = lugFrequencyBand(reference);
+  const upperRange: [number, number] = [Math.max(minHz, LOW_BAND_END_HZ), maxHz];
+  const upper = scanRing(pcm, rate, gate, upperRange, LONG_FRAMES);
+  const upperPeaks = upper.some(({ count }) => count >= 3)
+    ? upper : scanRing(pcm, rate, gate, upperRange, SHORT_FRAMES);
+  if (minHz > LOW_BAND_END_HZ) return upperPeaks;
+
+  const lowMax = Math.min(maxHz, LOW_BAND_END_HZ);
+  const lower = scanRing(pcm, rate, gate, [minHz, lowMax], LOW_LONG_FRAMES, true);
+  // Also check an earlier window for a real resonance that decays before
+  // the late frames. Require enough cycles rather than extending this short
+  // fallback down to the rumble cutoff.
+  const short = scanRing(pcm, rate, gate, [Math.max(55, minHz), lowMax], LOW_SHORT_FRAMES, true);
+  const lowPeaks = [...lower.filter(({ count }) => count >= 3)];
+  for (const peak of short) {
+    if (!lowPeaks.some((long) => nearby(long.hz, peak.hz))) lowPeaks.push(peak);
+  }
+  for (const peak of lower) {
+    if (!lowPeaks.some((kept) => nearby(kept.hz, peak.hz))) lowPeaks.push(peak);
+  }
+  // A peak close to the band boundary can appear in both scans. Prefer
+  // stable evidence so a two-frame duplicate cannot veto a valid reading.
+  const merged: typeof upperPeaks = [];
+  for (const peak of [...lowPeaks, ...upperPeaks].sort((a, b) =>
+    Number(b.count >= 3) - Number(a.count >= 3) || b.db - a.db)) {
+    if (!merged.some((other) => nearby(other.hz, peak.hz))) merged.push(peak);
+  }
+  return merged.sort((a, b) => b.db - a.db);
 }
 
 type Peak = ReturnType<typeof analyzeHit>[number];

@@ -183,7 +183,7 @@ async function installLugTestInput(page: Page) {
 test.describe("SignalGeneratorModal microphone lifecycle", () => {
   test.use({ viewport: VIEWPORT });
 
-  test("held analysis lets the user choose a repeated partial and compare it in the same tuner", async ({ page }) => {
+  test("held analysis can choose a weak low partial and compare it in the same tuner", async ({ page }) => {
     await installLugTestInput(page);
     await openSignalGenerator(page);
     await page.getByTestId("signal-target-edit").click();
@@ -200,15 +200,15 @@ test.describe("SignalGeneratorModal microphone lifecycle", () => {
     await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
     await page.mouse.down();
     await expect(page.getByTestId("signal-tuner-panel").getByText(/^(Listening|감지 중)$/)).toBeVisible();
-    await tap([[200, 0.12], [315, 0.19], [372, 0.09]]);
+    await tap([[100, 0.009], [315, 0.38], [372, 0.09]]);
     await page.waitForTimeout(760);
-    await tap([[200.2, 0.12], [315, 0.19]]);
+    await tap([[100.2, 0.009], [315, 0.38]]);
     await page.waitForTimeout(760);
     await page.mouse.up();
     await expect(page.getByTestId("signal-analysis-timeline")).toBeVisible();
     await expect(page.getByTestId("signal-lug-comparison")).toHaveCount(0);
     const candidates = page.getByTestId("signal-lug-candidates");
-    await expect(candidates.getByTestId("signal-lug-candidate-0")).toHaveText(/200\.\d Hz · G3\s*(?:2 hits|2번 감지)/);
+    await expect(candidates.getByTestId("signal-lug-candidate-0")).toHaveText(/100\.\d Hz · G2\s*(?:2 hits|2번 감지)/);
     await expect(candidates.getByTestId("signal-lug-candidate-1")).toHaveText(/315\.\d Hz · D#4\s*(?:2 hits|2번 감지)/);
     const oneHit = candidates.getByTestId("signal-lug-candidate-2");
     await expect(oneHit).toHaveText(/372\.\d Hz · F#4\s*(?:1 hit|1번 감지)/);
@@ -221,13 +221,13 @@ test.describe("SignalGeneratorModal microphone lifecycle", () => {
     await confirm.click();
     await expect(page.getByTestId("signal-lug-status")).toHaveText(/Tap each lug|비교할 러그/);
     const reference = Number.parseFloat(await page.getByTestId("signal-lug-reference").innerText());
-    expect(reference).toBeCloseTo(200.1, 0);
-    await expect(page.getByTestId("signal-lug-reference-note")).toHaveText("G3");
+    expect(reference).toBeCloseTo(100.1, 0);
+    await expect(page.getByTestId("signal-lug-reference-note")).toHaveText("G2");
     await expect(page.getByTestId("signal-target-frequency")).toHaveText(/442\.5/);
     const measuredHz = async () => Number.parseFloat(await page.getByTestId("signal-lug-reading").innerText());
-    await tap([[202.4, 0.11], [315, 0.29]]);
-    await expect.poll(measuredHz).toBeCloseTo(202.4, 0);
-    await expect(page.getByTestId("signal-lug-reading-note")).toHaveText("G#3");
+    await tap([[102.4, 0.011], [315, 0.29]]);
+    await expect.poll(measuredHz).toBeCloseTo(102.4, 0);
+    await expect(page.getByTestId("signal-lug-reading-note")).toHaveText("G#2");
     const reading = await measuredHz();
     await expect(page.getByTestId("signal-lug-difference")).toHaveText(`+${(reading - reference).toFixed(1)} Hz`);
     await page.waitForTimeout(500);
