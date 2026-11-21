@@ -605,7 +605,7 @@ export const translations = {
     lugBand: { ko: "감지 범위", en: "Detection band" },
     lugCandidates: { ko: "러그 기준 후보", en: "Lug reference candidates" },
     lugCandidatesUnavailable: { ko: "이 환경에서는 타격별 주파수 후보를 가져올 수 없습니다.", en: "Per-hit frequencies are unavailable in this environment." },
-    lugChoose: { ko: "두 번 이상 잡힌 주파수 중 기준으로 삼을 값을 고르세요.", en: "Choose a frequency detected in at least two hits." },
+    lugChoose: { ko: "1회 감지된 음도 선택할 수 있어요. 여러 번 잡힌 음을 기준으로 쓰면 더 안정적입니다.", en: "You can select any candidate. A frequency detected in multiple hits is a more reliable reference." },
     lugRepeat: { ko: "후보를 잡으려면 마이크를 길게 누른 채 같은 러그를 두세 번 간격을 두고 쳐 주세요.", en: "Hold the mic button and tap the same lug two or three times, with a pause between hits." },
     lugLockCandidate: { ko: "러그 기준으로 쓰기", en: "Use as lug reference" },
     lugNext: { ko: "비교할 러그를 하나씩 쳐 주세요.", en: "Tap each lug to compare." },

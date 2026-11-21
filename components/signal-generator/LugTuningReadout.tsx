@@ -5,6 +5,12 @@ import { FontSize, Radius, Spacing } from "@/constants/tokens";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import { lugFrequencyBand, type LugReading, type LugReferenceCandidate } from "@/lib/drum-lug-measurement";
+import { frequencyToNote } from "@/lib/signal-analysis";
+
+function noteLabel(hz: number) {
+  const note = frequencyToNote(hz);
+  return `${note.name}${note.octave}`;
+}
 
 export function LugComparison({
   reference, reading, listening, micStatus, hasMicError, sensitivity, onUnlock,
@@ -34,10 +40,12 @@ export function LugComparison({
         <View style={styles.metric}>
           <Text style={styles.hint}>{t("signalGenerator", "lugReference")}</Text>
           <Text testID="signal-lug-reference" style={styles.value}>{reference.toFixed(1)} Hz</Text>
+          <Text testID="signal-lug-reference-note" style={[styles.label, styles.accent]}>{noteLabel(reference)}</Text>
         </View>
         <View style={styles.metric}>
           <Text style={styles.hint}>{t("signalGenerator", "lugThisHit")}</Text>
           <Text testID="signal-lug-reading" style={styles.value}>{hit === null ? "—" : `${hit.toFixed(1)} Hz`}</Text>
+          <Text testID="signal-lug-reading-note" style={[styles.label, styles.accent]}>{hit === null ? "—" : noteLabel(hit)}</Text>
         </View>
         <View style={styles.metric}>
           <Text style={styles.hint}>{t("signalGenerator", "lugDifference")}</Text>
@@ -73,7 +81,7 @@ export function LugReferenceCandidates({ candidates, available, reference, onLoc
         <Text style={styles.hint}>{t("signalGenerator", "lugCandidatesUnavailable")}</Text>
       ) : (
         <>
-          <Text style={styles.hint}>{t("signalGenerator", candidates.some((c) => c.strikes >= 2) ? "lugChoose" : "lugRepeat")}</Text>
+          <Text style={styles.hint}>{t("signalGenerator", candidates.length > 0 ? "lugChoose" : "lugRepeat")}</Text>
           {candidates.map(({ frequency, strikes }, index) => {
             const chosen = selected === frequency || selected === null && reference === frequency;
             const count = language === "ko" ? `${strikes}번 감지` : `${strikes} ${strikes === 1 ? "hit" : "hits"}`;
@@ -82,12 +90,11 @@ export function LugReferenceCandidates({ candidates, available, reference, onLoc
                 key={frequency}
                 testID={`signal-lug-candidate-${index}`}
                 accessibilityRole="button"
-                accessibilityState={{ selected: chosen, disabled: strikes < 2 }}
-                disabled={strikes < 2}
+                accessibilityState={{ selected: chosen }}
                 onPress={() => setSelected(frequency)}
-                style={[styles.button, styles.choice, chosen && styles.chosen, strikes < 2 && styles.disabled]}
+                style={[styles.button, styles.choice, chosen && styles.chosen]}
               >
-                <Text style={styles.label}>{frequency.toFixed(1)} Hz</Text>
+                <Text style={styles.label}>{frequency.toFixed(1)} Hz · <Text style={styles.accent}>{noteLabel(frequency)}</Text></Text>
                 <Text style={styles.hint}>{count}</Text>
               </Pressable>
             );

@@ -32,3 +32,9 @@ The user chose the existing hold-to-analyze screen to pick a lug reference. Show
 **Why:** The user wanted to see which resonance was actually being compared without switching to a separate screen.
 
 **How to apply:** Keep recording, playback, and the comparison microphone separate. Locking a reference must cancel pending replay too, so a delayed seek cannot restart audio into the live microphone.
+
+A candidate observed once must still be selectable. Add the nearest note name beside the measured Hz, not instead of it. Drum resonance can outlast the pause between strikes, so silence-only strike detection is not sufficient.
+
+**Why:** The user could only see one-hit candidates and the previous two-hit minimum prevented them from selecting any reference.
+
+**How to apply:** Recommend repeated readings without enforcing them. Count distinct attacks over a ringing tail, and test with overlapping decays as well as silence-separated hits.

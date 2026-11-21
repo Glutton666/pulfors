@@ -18,8 +18,9 @@ const WAITING: LugReading = { kind: "waiting" };
 const MEASURING: LugReading = { kind: "measuring" };
 const RETRY: LugReading = { kind: "retry" };
 const HIT_SECONDS = 0.36;
-const FRAME_SECONDS = 0.13;
-const FRAME_OFFSETS = [0.025, 0.075, 0.125, 0.175, 0.225];
+const MIN_HIT_INTERVAL_BLOCKS = 16; // 160 ms between distinct attacks
+const LONG_FRAMES = { seconds: 0.13, offsets: [0.025, 0.075, 0.125, 0.175, 0.225] };
+const SHORT_FRAMES = { seconds: 0.085, offsets: [0.025, 0.045, 0.065, 0.085, 0.105] };
 const roundHz = (hz: number) => Math.round(hz * 10) / 10;
 const nearby = (a: number, b: number) => Math.abs(a - b) <= Math.max(2, a * 0.012);
 const median = (values: number[]) => {
@@ -36,15 +37,16 @@ export function lugFrequencyBand(reference: number | null): [number, number] {
 }
 
 /** Find a recurring resonance after the attack, not the spectrum maximum of one frame. */
-function analyzeHit(pcm: Float32Array, rate: number, gate: number, reference: number | null) {
-  const length = Math.round(rate * FRAME_SECONDS);
+function scanRing(pcm: Float32Array, rate: number, gate: number, reference: number | null, frames: typeof LONG_FRAMES) {
+  const length = Math.round(rate * frames.seconds);
+  if (Math.round(rate * frames.offsets[1]) + length > pcm.length) return [];
   const fftSize = 2 ** Math.ceil(Math.log2(length * 4));
   const binHz = rate / fftSize;
   const [minHz, maxHz] = lugFrequencyBand(reference);
   const clusters: { frequencies: number[]; levels: number[]; lastFrame: number }[] = [];
   const window = Float32Array.from({ length }, (_, i) => 0.5 - 0.5 * Math.cos(2 * Math.PI * i / (length - 1)));
-  for (let frame = 0; frame < FRAME_OFFSETS.length; frame++) {
-    const from = Math.round(rate * FRAME_OFFSETS[frame]);
+  for (let frame = 0; frame < frames.offsets.length; frame++) {
+    const from = Math.round(rate * frames.offsets[frame]);
     if (from + length > pcm.length) break;
     const spectrumInput = new Float32Array(fftSize);
     let sum = 0;
@@ -92,6 +94,13 @@ function analyzeHit(pcm: Float32Array, rate: number, gate: number, reference: nu
     .sort((a, b) => b.db - a.db);
 }
 
+function analyzeHit(pcm: Float32Array, rate: number, gate: number, reference: number | null) {
+  // Prefer the longer, more precise scan. A fresh attack can end a strike's
+  // window early, in which case inspect only the ring available before it.
+  const peaks = scanRing(pcm, rate, gate, reference, LONG_FRAMES);
+  return peaks.some(({ count }) => count >= 3) ? peaks : scanRing(pcm, rate, gate, reference, SHORT_FRAMES);
+}
+
 type Peak = ReturnType<typeof analyzeHit>[number];
 
 /** Sample-clock based; neither path depends on UI updates or recorder chunks. */
@@ -99,7 +108,8 @@ function createStrikeStream(onStrike: (peaks: Peak[]) => void) {
   let rate = 0;
   let lastSensitivity = -1;
   let quietBlocks = 0;
-  let armed = false;
+  let envelope = 0;
+  let blocksSinceAttack = Infinity;
   let blockSamples = 0;
   let blockPower = 0;
   let block: Float32Array = new Float32Array(0);
@@ -110,7 +120,8 @@ function createStrikeStream(onStrike: (peaks: Peak[]) => void) {
     rate = 0;
     lastSensitivity = -1;
     quietBlocks = 0;
-    armed = false;
+    envelope = 0;
+    blocksSinceAttack = Infinity;
     blockSamples = 0;
     blockPower = 0;
     hit = null;
@@ -128,6 +139,12 @@ function createStrikeStream(onStrike: (peaks: Peak[]) => void) {
     }
     const gate = signalGateRms(sensitivity);
     if (!Number.isFinite(gate)) return;
+    function finishHit() {
+      if (!hit) return;
+      const pcm = hit.subarray(0, hitSamples);
+      hit = null;
+      onStrike(analyzeHit(pcm, rate, gate, reference));
+    }
     for (let i = 0; i < samples.length; i++) {
       const sample = Number.isFinite(samples[i]) ? samples[i] : 0;
       block[blockSamples++] = sample;
@@ -136,27 +153,25 @@ function createStrikeStream(onStrike: (peaks: Peak[]) => void) {
       const rms = Math.sqrt(blockPower / block.length);
       blockSamples = 0;
       blockPower = 0;
-      if (hit) {
+      blocksSinceAttack++;
+      // A clear amplitude jump can be another strike even while the last
+      // strike is still ringing above the silence threshold.
+      const freshAttack = rms >= gate && blocksSinceAttack >= MIN_HIT_INTERVAL_BLOCKS &&
+        (quietBlocks >= 4 || rms >= envelope * 2.25 && rms - envelope >= gate * 0.65);
+      envelope += (rms - envelope) * (rms > envelope ? 0.45 : 0.18);
+      quietBlocks = rms < gate * 0.7 ? Math.min(quietBlocks + 1, 4) : 0;
+      if (freshAttack) {
+        finishHit();
+        hit = new Float32Array(Math.round(rate * HIT_SECONDS));
+        hit.set(block);
+        hitSamples = block.length;
+        blocksSinceAttack = 0;
+        onState?.(MEASURING);
+      } else if (hit) {
         const count = Math.min(block.length, hit.length - hitSamples);
         hit.set(block.subarray(0, count), hitSamples);
         hitSamples += count;
-        if (hitSamples !== hit.length) continue;
-        const pcm = hit;
-        hit = null;
-        onStrike(analyzeHit(pcm, rate, gate, reference));
-        continue;
-      }
-      if (rms < gate * 0.7) {
-        if (++quietBlocks >= 4) armed = true;
-      } else {
-        quietBlocks = 0;
-        if (armed && rms >= gate) {
-          hit = new Float32Array(Math.round(rate * HIT_SECONDS));
-          hit.set(block);
-          hitSamples = block.length;
-          armed = false;
-          onState?.(MEASURING);
-        }
+        if (hitSamples === hit.length) finishHit();
       }
     }
   }
@@ -199,16 +214,25 @@ export function createDrumLugDiscovery() {
   let strike = 0;
   const stream = createStrikeStream((peaks) => {
     strike++;
-    for (const peak of peaks.filter(({ count }) => count >= 3).slice(0, 6)) {
-      const group = groups.find(({ frequencies }) => nearby(median(frequencies), peak.hz));
-      if (!group) {
-        groups.push({ frequencies: [peak.hz], strikes: 1, lastStrike: strike });
-      } else if (group.lastStrike !== strike) {
-        group.strikes++;
-        group.lastStrike = strike;
-        // Count all distinct hits, but keep the median sample bounded.
-        group.frequencies = [...group.frequencies.slice(-14), peak.hz];
-      }
+    const eligible = peaks.filter(({ count }) => count >= 3).slice(0, 6);
+    // Match closest pairs first: a newly louder peak must not take a
+    // neighboring candidate's count. Each group counts at most once per hit.
+    const centers = groups.map((group) => ({ group, center: median(group.frequencies) }));
+    const pairs = eligible.flatMap((peak) => centers.flatMap(({ group, center }) => {
+      const distance = Math.abs(center - peak.hz);
+      return distance <= Math.max(3, center * 0.02) ? [{ peak, group, distance }] : [];
+    })).sort((a, b) => a.distance - b.distance);
+    const matched = new Set<Peak>();
+    for (const { peak, group } of pairs) {
+      if (matched.has(peak) || group.lastStrike === strike) continue;
+      matched.add(peak);
+      group.strikes++;
+      group.lastStrike = strike;
+      // Count all distinct hits, but keep the median sample bounded.
+      group.frequencies = [...group.frequencies.slice(-14), peak.hz];
+    }
+    for (const peak of eligible) {
+      if (!matched.has(peak)) groups.push({ frequencies: [peak.hz], strikes: 1, lastStrike: strike });
     }
   });
   return {

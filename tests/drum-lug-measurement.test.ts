@@ -92,6 +92,28 @@ test("one long sound is one hit, while unpitched attack and disabled detection g
   expect(discovery.finish()).toEqual([{ frequency: 200, strikes: 1 }]);
 });
 
+test.each([44100, 48000])("counts prompt attacks on a ringing head separately at %d Hz", (rate) => {
+  const discovery = createDrumLugDiscovery();
+  const hits = [
+    { at: 0.06, hz: 197.8 },
+    { at: 0.30, hz: 200.4 },
+    { at: 0.54, hz: 199.2 },
+  ];
+  const pcm = Float32Array.from({ length: Math.round(rate * 0.87) }, (_, i) => {
+    const time = i / rate;
+    return hits.reduce((sum, { at, hz }) => {
+      const t = time - at;
+      if (t < 0) return sum;
+      // Leave a real, above-gate tail underneath the very next hit.
+      return sum + (0.24 * Math.exp(-10 * t) + 0.045 * Math.exp(-2 * t)) * Math.sin(2 * Math.PI * hz * t)
+        + (t < 0.01 ? 0.16 * Math.sin(2 * Math.PI * 642 * t) : 0);
+    }, 0);
+  });
+  for (let i = 0; i < pcm.length; i += 1024) discovery.push(pcm.subarray(i, i + 1024), rate, 1);
+  const candidate = discovery.finish().find(({ frequency }) => frequency > 194 && frequency < 204);
+  expect(candidate?.strikes).toBe(3);
+});
+
 test("a long ring returns one result, and zero sensitivity accepts no hits", () => {
   const input = run();
   expect(input.tap([[200, 0.2]], { sustain: true })).toEqual([

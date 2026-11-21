@@ -1844,7 +1844,7 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
   };
   const lockLugCandidate = (hz: number) => {
     if (captureRequest || analysisPhase !== "results" ||
-      !lugCandidates?.options.some(({ frequency, strikes }) => frequency === hz && strikes >= 2)) return;
+      !lugCandidates?.options.some(({ frequency }) => frequency === hz)) return;
     clearMicToggleDebounce();
     stopPlayback();
     pauseAnalysis();
