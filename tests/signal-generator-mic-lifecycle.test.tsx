@@ -232,29 +232,49 @@ describe("SignalGeneratorModal native microphone lifecycle", () => {
     expect(view.getByText("signalGenerator.micStartFailed")).toBeTruthy();
   });
 
-  test("native lug measurement locks a reference and compares new hits without changing the general tuner", async () => {
+  test("native held analysis offers separate partials before comparing a chosen lug reference", async () => {
+    let resolveSeek: () => void = () => {};
+    const replay = {
+      seekTo: jest.fn(() => new Promise<void>((resolve) => { resolveSeek = resolve; })),
+      play: jest.fn(), pause: jest.fn(), remove: jest.fn(),
+    };
+    require("expo-audio").createAudioPlayer.mockReturnValueOnce(replay);
     const view = render(<SignalGeneratorModal {...makeProps()} />);
-    fireEvent.click(view.getByTestId("signal-lug-mode"));
-    fireEvent.click(view.getByTestId("signal-lug-edit-reference"));
-    fireEvent.change(view.getByTestId("signal-lug-reference-input"), { target: { value: "200" } });
-    fireEvent.click(view.getByTestId("signal-lug-lock"));
-    expect(view.getByTestId("signal-lug-reference").textContent).toBe("200.0 Hz");
-    await act(async () => { fireEvent.click(view.getByTestId("signal-lug-mic")); });
+    const mic = view.getByTestId("signal-mic-toggle");
+    await act(async () => { fireEvent.mouseDown(mic); fireEvent.contextMenu(mic); });
     const rate = 48000;
-    const samples = Float32Array.from({ length: rate * 0.52 }, (_, i) => {
+    const hit = (hz: number) => Float32Array.from({ length: rate * 0.64 }, (_, i) => {
       const time = i / rate - 0.08;
-      return time < 0 ? 0 : (0.11 * Math.sin(2 * Math.PI * 197.6 * time) +
+      return time < 0 ? 0 : (0.11 * Math.sin(2 * Math.PI * hz * time) +
         0.29 * Math.sin(2 * Math.PI * 310 * time)) * Math.exp(-6 * time);
     });
-    act(() => {
+    const send = (samples: Float32Array) => {
       for (let i = 0; i < samples.length; i += 2048) AudioRecord.__emit(samples.subarray(i, i + 2048), rate);
+    };
+    act(() => {
+      send(hit(200));
+      send(hit(200));
     });
+    await act(async () => { fireEvent.mouseUp(mic); });
+    expect(view.getByTestId("signal-lug-candidate-0").textContent).toContain("200.0 Hz");
+    expect(view.getByTestId("signal-lug-candidate-1").textContent).toContain("310.0 Hz");
+    expect(view.queryByTestId("signal-lug-reference")).toBeNull();
+    fireEvent.click(view.getByTestId("signal-analysis-play"));
+    expect(replay.seekTo).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      fireEvent.click(view.getByTestId("signal-lug-candidate-0"));
+    });
+    await act(async () => { fireEvent.click(view.getByTestId("signal-lug-lock-candidate")); });
+    await act(async () => { resolveSeek(); });
+    expect(replay.play).not.toHaveBeenCalled();
+    expect(view.getByTestId("signal-lug-reference").textContent).toBe("200.0 Hz");
+    act(() => send(hit(197.6)));
     expect(view.getByTestId("signal-lug-reading").textContent).toBe("197.6 Hz");
     expect(view.getByTestId("signal-lug-difference").textContent).toBe("-2.4 Hz");
-    await act(async () => { fireEvent.click(view.getByTestId("signal-lug-mode")); });
-    expect(mockAudioRecordListeners.size).toBe(0);
+    await act(async () => { fireEvent.click(view.getByTestId("signal-lug-unlock")); });
+    expect(mockAudioRecordListeners.size).toBe(1);
     expect(view.getByTestId("signal-target-frequency").textContent).toContain("440.0");
-    expect(view.queryByTestId("signal-lug-panel")).toBeNull();
+    expect(view.queryByTestId("signal-lug-comparison")).toBeNull();
   });
 
   test("missing native callbacks reach the watchdog state and stop removes the subscription", async () => {

@@ -26,3 +26,9 @@ Drum lug measurement is a third, opt-in path. A locked reference constrains dete
 **Why:** Matching identical numbers is not meaningful when different lugs are being measured against different resonances. An apparently stable frequency can still be the wrong partial.
 
 **How to apply:** Keep the result tied to a single strike and use contiguous microphone samples on both platforms; do not reconstruct strike timing by polling the live analyser. Report repeatability on real drums separately from synthetic signal tests.
+
+The user chose the existing hold-to-analyze screen to pick a lug reference. Show actual Hz and count distinct successful strikes rather than borrowing the timeline’s note labels or averaging its buckets. Do not auto-select the strongest partial; a reference the user locks must enable post-strike comparison in the tuner without editing the general target.
+
+**Why:** The user wanted to see which resonance was actually being compared without switching to a separate screen.
+
+**How to apply:** Keep recording, playback, and the comparison microphone separate. Locking a reference must cancel pending replay too, so a delayed seek cannot restart audio into the live microphone.

@@ -9,7 +9,7 @@ React Native Web FlatList can change its actual scrollTop under a mouse wheel wi
 
 **How to apply:** Commit web wheel selection from a debounced onScroll offset, cancel that debounce on controlled selection changes and unmount, and retain native drag/momentum completion handling.
 
-When switching to another tuner mode, keep the general tuner's controlled wheels mounted but hidden from pointer, keyboard, and accessibility navigation. Remounting can report the default scroll position before restoring the saved octave and overwrite an unrelated target.
+When switching between cents and lug comparison, keep the general tuner's controlled wheels mounted in the same panel. Remounting can report the default scroll position before restoring the saved octave and overwrite an unrelated target.
 
 **Why:** On Chrome, entering and leaving drum lug measurement remounted the wheel and changed the general target to the first octave.
 

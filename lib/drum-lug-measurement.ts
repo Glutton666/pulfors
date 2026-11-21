@@ -7,7 +7,12 @@ export const LUG_FILTER_FRACTION = 0.2;
 
 export type LugReading =
   | { kind: "waiting" | "measuring" | "retry" }
-  | { kind: "hit"; frequency: number; suggestedReference: number | null };
+  | { kind: "hit"; frequency: number };
+
+export interface LugReferenceCandidate {
+  frequency: number;
+  strikes: number;
+}
 
 const WAITING: LugReading = { kind: "waiting" };
 const MEASURING: LugReading = { kind: "measuring" };
@@ -23,13 +28,6 @@ const median = (values: number[]) => {
   return sorted.length % 2 ? sorted[center] : (sorted[center - 1] + sorted[center]) / 2;
 };
 
-export function parseLugReference(text: string): number | null {
-  const normalized = text.trim().replace(",", ".");
-  if (!/^\d+(?:\.\d)?$/.test(normalized)) return null;
-  const hz = Number(normalized);
-  return hz >= LUG_MIN_HZ && hz <= LUG_MAX_HZ ? hz : null;
-}
-
 export function lugFrequencyBand(reference: number | null): [number, number] {
   return reference === null ? [LUG_MIN_HZ, LUG_MAX_HZ] : [
     Math.max(LUG_MIN_HZ, reference * (1 - LUG_FILTER_FRACTION)),
@@ -38,7 +36,7 @@ export function lugFrequencyBand(reference: number | null): [number, number] {
 }
 
 /** Find a recurring resonance after the attack, not the spectrum maximum of one frame. */
-function measureHit(pcm: Float32Array, rate: number, gate: number, reference: number | null): number | null {
+function analyzeHit(pcm: Float32Array, rate: number, gate: number, reference: number | null) {
   const length = Math.round(rate * FRAME_SECONDS);
   const fftSize = 2 ** Math.ceil(Math.log2(length * 4));
   const binHz = rate / fftSize;
@@ -47,6 +45,7 @@ function measureHit(pcm: Float32Array, rate: number, gate: number, reference: nu
   const window = Float32Array.from({ length }, (_, i) => 0.5 - 0.5 * Math.cos(2 * Math.PI * i / (length - 1)));
   for (let frame = 0; frame < FRAME_OFFSETS.length; frame++) {
     const from = Math.round(rate * FRAME_OFFSETS[frame]);
+    if (from + length > pcm.length) break;
     const spectrumInput = new Float32Array(fftSize);
     let sum = 0;
     let power = 0;
@@ -88,20 +87,15 @@ function measureHit(pcm: Float32Array, rate: number, gate: number, reference: nu
       }
     }
   }
-  const stable = clusters.filter(({ frequencies }) => frequencies.length >= 2)
+  return clusters.filter(({ frequencies }) => frequencies.length >= 2)
     .map(({ frequencies, levels }) => ({ hz: median(frequencies), count: frequencies.length, db: median(levels) }))
     .sort((a, b) => b.db - a.db);
-  const best = stable[0];
-  // Do not select the numerically closest candidate when two have comparable
-  // strength: that would bias the reading toward the locked reference.
-  if (!best || best.count < 3 || (stable[1] && best.db - stable[1].db < 6)) return null;
-  return roundHz(best.hz);
 }
 
-/** Sample-clock based; callers may deliver arbitrary chunk sizes on web/native. */
-export function createDrumLugMeasurement() {
-  let reference: number | null = null;
-  let previous: number[] = [];
+type Peak = ReturnType<typeof analyzeHit>[number];
+
+/** Sample-clock based; neither path depends on UI updates or recorder chunks. */
+function createStrikeStream(onStrike: (peaks: Peak[]) => void) {
   let rate = 0;
   let lastSensitivity = -1;
   let quietBlocks = 0;
@@ -113,7 +107,6 @@ export function createDrumLugMeasurement() {
   let hitSamples = 0;
 
   function resetCapture() {
-    previous = [];
     rate = 0;
     lastSensitivity = -1;
     quietBlocks = 0;
@@ -124,23 +117,17 @@ export function createDrumLugMeasurement() {
     hitSamples = 0;
   }
 
-  function setReference(next: number | null) {
-    resetCapture();
-    reference = next;
-  }
-
-  function push(samples: Float32Array, sampleRate: number, sensitivity: number): LugReading | null {
-    if (!Number.isFinite(sampleRate) || sampleRate < 8000 || sampleRate > 192000) return null;
-    let event: LugReading | null = null;
+  function push(samples: Float32Array, sampleRate: number, sensitivity: number, reference: number | null, onState?: (state: LugReading) => void) {
+    if (!Number.isFinite(sampleRate) || sampleRate < 8000 || sampleRate > 192000) return;
     if (rate !== sampleRate || lastSensitivity !== sensitivity) {
-      if (rate !== 0) event = WAITING;
+      if (rate !== 0) onState?.(WAITING);
       resetCapture();
       rate = sampleRate;
       lastSensitivity = sensitivity;
       block = new Float32Array(Math.round(rate / 100));
     }
     const gate = signalGateRms(sensitivity);
-    if (!Number.isFinite(gate)) return event;
+    if (!Number.isFinite(gate)) return;
     for (let i = 0; i < samples.length; i++) {
       const sample = Number.isFinite(samples[i]) ? samples[i] : 0;
       block[blockSamples++] = sample;
@@ -154,20 +141,9 @@ export function createDrumLugMeasurement() {
         hit.set(block.subarray(0, count), hitSamples);
         hitSamples += count;
         if (hitSamples !== hit.length) continue;
-        const frequency = measureHit(hit, rate, gate, reference);
+        const pcm = hit;
         hit = null;
-        if (frequency === null) {
-          previous = [];
-          event = RETRY;
-        } else {
-          let suggestedReference = null;
-          if (reference === null) {
-            if (previous.some((hz) => !nearby(hz, frequency))) previous = [];
-            previous = [...previous.slice(-2), frequency];
-            if (previous.length >= 2) suggestedReference = roundHz(median(previous));
-          }
-          event = { kind: "hit", frequency, suggestedReference };
-        }
+        onStrike(analyzeHit(pcm, rate, gate, reference));
         continue;
       }
       if (rms < gate * 0.7) {
@@ -179,12 +155,70 @@ export function createDrumLugMeasurement() {
           hit.set(block);
           hitSamples = block.length;
           armed = false;
-          event = MEASURING;
+          onState?.(MEASURING);
         }
       }
     }
-    return event;
   }
+  function flush() {
+    if (!hit) return;
+    const pcm = hit.subarray(0, hitSamples + blockSamples);
+    pcm.set(block.subarray(0, pcm.length - hitSamples), hitSamples);
+    hit = null;
+    onStrike(analyzeHit(pcm, rate, signalGateRms(lastSensitivity), null));
+  }
+  return { push, resetCapture, flush };
+}
 
-  return { push, setReference, resetCapture };
+export function createDrumLugMeasurement() {
+  let reference: number | null = null;
+  let event: LugReading | null = null;
+  const stream = createStrikeStream((peaks) => {
+    const [best, second] = peaks;
+    // Selecting the closest value when two peaks are comparable would bias
+    // measured differences toward zero instead of reporting ambiguity.
+    event = best && best.count >= 3 && (!second || best.db - second.db >= 6)
+      ? { kind: "hit", frequency: roundHz(best.hz) } : RETRY;
+  });
+  return {
+    push(samples: Float32Array, sampleRate: number, sensitivity: number) {
+      event = null;
+      stream.push(samples, sampleRate, sensitivity, reference, (reading) => { event = reading; });
+      return event as LugReading | null;
+    },
+    setReference(next: number | null) {
+      stream.resetCapture();
+      reference = next;
+    },
+    resetCapture: stream.resetCapture,
+  };
+}
+
+export function createDrumLugDiscovery() {
+  const groups: { frequencies: number[]; strikes: number; lastStrike: number }[] = [];
+  let strike = 0;
+  const stream = createStrikeStream((peaks) => {
+    strike++;
+    for (const peak of peaks.filter(({ count }) => count >= 3).slice(0, 6)) {
+      const group = groups.find(({ frequencies }) => nearby(median(frequencies), peak.hz));
+      if (!group) {
+        groups.push({ frequencies: [peak.hz], strikes: 1, lastStrike: strike });
+      } else if (group.lastStrike !== strike) {
+        group.strikes++;
+        group.lastStrike = strike;
+        // Count all distinct hits, but keep the median sample bounded.
+        group.frequencies = [...group.frequencies.slice(-14), peak.hz];
+      }
+    }
+  });
+  return {
+    push(samples: Float32Array, sampleRate: number, sensitivity: number) {
+      stream.push(samples, sampleRate, sensitivity, null);
+    },
+    finish(): LugReferenceCandidate[] {
+      stream.flush();
+      return groups.map(({ frequencies, strikes }) => ({ frequency: roundHz(median(frequencies)), strikes }))
+        .sort((a, b) => b.strikes - a.strikes || a.frequency - b.frequency).slice(0, 8);
+    },
+  };
 }

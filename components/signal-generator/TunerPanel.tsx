@@ -16,8 +16,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { onAccentColor } from "@/lib/color-contrast";
 
 interface TunerPanelProps {
-  headerAccessory?: React.ReactNode;
-  hidden?: boolean;
+  lugComparison?: React.ReactNode;
   detectedFrequency: number | null;
   detectedNote: string | null;
   listening: boolean;
@@ -63,8 +62,7 @@ function formatFrequency(value: number): string {
 }
 
 export function TunerPanel({
-  headerAccessory,
-  hidden = false,
+  lugComparison,
   detectedFrequency,
   detectedNote,
   listening,
@@ -139,20 +137,12 @@ export function TunerPanel({
   const increaseDisabled = targetFrequency >= MAX_FREQUENCY;
 
   return (
-    <View
-      testID="signal-tuner-panel"
-      style={[styles.panel, hidden && styles.hidden]}
-      pointerEvents={hidden ? "none" : "auto"}
-      aria-hidden={hidden || undefined}
-      accessibilityElementsHidden={hidden}
-      importantForAccessibility={hidden ? "no-hide-descendants" : "auto"}
-    >
-      <View style={[styles.header, headerAccessory ? { paddingRight: 34 } : undefined]}>
+    <View testID="signal-tuner-panel" style={styles.panel}>
+      <View style={styles.header}>
         <View style={styles.headingGroup}>
           <Text style={styles.eyebrow}>{t("signalGenerator", "detectedPitch")}</Text>
           <Text style={styles.title}>{t("signalGenerator", "tunerTitle")}</Text>
         </View>
-        {headerAccessory}
         <View style={[styles.listeningBadge, listening && styles.listeningBadgeActive]}>
           <View style={[styles.statusDot, listening && styles.statusDotActive]} />
           <Text style={styles.statusText} numberOfLines={1}>{t("signalGenerator", listening ? "micActive" : "micInactive")}</Text>
@@ -161,6 +151,7 @@ export function TunerPanel({
 
       <View style={{ flexDirection: sideBySide ? "row" : "column", gap: Spacing.md }}>
       <View style={{ flex: sideBySide ? 1 : undefined, minWidth: 0, gap: Spacing.md }}>
+      {lugComparison ?? <>
       <View style={styles.pitchReadout}>
         <View style={styles.readoutMain}>
           <Text
@@ -229,6 +220,7 @@ export function TunerPanel({
           </View>
         </View>
       </View>
+      </>}
 
       </View>
       <View style={{ flex: sideBySide ? 1 : undefined, minWidth: 0, gap: Spacing.md, justifyContent: sideBySide ? "center" : undefined }}>
@@ -385,7 +377,7 @@ export function TunerPanel({
             </Text>
           )}
         </Pressable>
-        <Pressable
+        {!lugComparison && <Pressable
           testID="signal-use-detected"
           accessibilityRole="button"
           accessibilityLabel={t("signalGenerator", "useDetected")}
@@ -400,11 +392,11 @@ export function TunerPanel({
         >
           <Ionicons name="return-down-forward-outline" size={16} color={C.accent} />
           <Text style={styles.secondaryActionText}>{t("signalGenerator", "useDetected")}</Text>
-        </Pressable>
+        </Pressable>}
       </View>
 
       <View style={styles.footerActions}>
-        <Pressable
+        {!lugComparison && <Pressable
           testID="signal-toggle"
           accessibilityRole="button"
           accessibilityLabel={t("signalGenerator", referencePlaying ? "referenceStop" : "referencePlay")}
@@ -421,7 +413,7 @@ export function TunerPanel({
           <Text style={styles.footerButtonText}>
             {t("signalGenerator", referencePlaying ? "referenceStop" : "referencePlay")}
           </Text>
-        </Pressable>
+        </Pressable>}
         <Pressable
           testID="signal-tuning-guide"
           accessibilityRole="button"
@@ -543,12 +535,6 @@ const makeStyles = (C: typeof Colors) => StyleSheet.create({
     alignSelf: "stretch",
     padding: 0,
     gap: Spacing.md,
-  },
-  // Keep the note wheels mounted at their measured width when changing modes,
-  // so mounting a new wheel cannot overwrite the unrelated target frequency.
-  hidden: {
-    position: "absolute", top: 0, height: 0, overflow: "hidden", opacity: 0,
-    ...Platform.select({ web: { visibility: "hidden" }, default: {} }),
   },
   header: {
     flexDirection: "row",
