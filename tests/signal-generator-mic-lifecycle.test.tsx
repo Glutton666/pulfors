@@ -232,6 +232,31 @@ describe("SignalGeneratorModal native microphone lifecycle", () => {
     expect(view.getByText("signalGenerator.micStartFailed")).toBeTruthy();
   });
 
+  test("native lug measurement locks a reference and compares new hits without changing the general tuner", async () => {
+    const view = render(<SignalGeneratorModal {...makeProps()} />);
+    fireEvent.click(view.getByTestId("signal-lug-mode"));
+    fireEvent.click(view.getByTestId("signal-lug-edit-reference"));
+    fireEvent.change(view.getByTestId("signal-lug-reference-input"), { target: { value: "200" } });
+    fireEvent.click(view.getByTestId("signal-lug-lock"));
+    expect(view.getByTestId("signal-lug-reference").textContent).toBe("200.0 Hz");
+    await act(async () => { fireEvent.click(view.getByTestId("signal-lug-mic")); });
+    const rate = 48000;
+    const samples = Float32Array.from({ length: rate * 0.52 }, (_, i) => {
+      const time = i / rate - 0.08;
+      return time < 0 ? 0 : (0.11 * Math.sin(2 * Math.PI * 197.6 * time) +
+        0.29 * Math.sin(2 * Math.PI * 310 * time)) * Math.exp(-6 * time);
+    });
+    act(() => {
+      for (let i = 0; i < samples.length; i += 2048) AudioRecord.__emit(samples.subarray(i, i + 2048), rate);
+    });
+    expect(view.getByTestId("signal-lug-reading").textContent).toBe("197.6 Hz");
+    expect(view.getByTestId("signal-lug-difference").textContent).toBe("-2.4 Hz");
+    await act(async () => { fireEvent.click(view.getByTestId("signal-lug-mode")); });
+    expect(mockAudioRecordListeners.size).toBe(0);
+    expect(view.getByTestId("signal-target-frequency").textContent).toContain("440.0");
+    expect(view.queryByTestId("signal-lug-panel")).toBeNull();
+  });
+
   test("missing native callbacks reach the watchdog state and stop removes the subscription", async () => {
     const view = await startNativeMic();
 

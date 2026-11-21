@@ -20,3 +20,9 @@ The user wants noise gating in both live detection and held-session analysis, no
 **Why:** The user requested a gate and a dominant-note live display, then repeated that noise must also be excluded from analysis.
 
 **How to apply:** Keep noise rejection consistent across web/native analysis paths, preserve quiet timeline gaps and actual chords, and leave original replay audio intact. This is detection filtering, not a promise to remove all noise from the recorded waveform.
+
+Drum lug measurement is a third, opt-in path. A locked reference constrains detected candidates, not just the displayed difference. Measure the ring after each hit, reject ambiguous hits, and do not reuse a lock across head/drum changes or fall back to the unrestricted live peak.
+
+**Why:** Matching identical numbers is not meaningful when different lugs are being measured against different resonances. An apparently stable frequency can still be the wrong partial.
+
+**How to apply:** Keep the result tied to a single strike and use contiguous microphone samples on both platforms; do not reconstruct strike timing by polling the live analyser. Report repeatability on real drums separately from synthetic signal tests.

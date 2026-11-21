@@ -114,31 +114,20 @@ async function installFakeMic(page: Page, mode: MicMode) {
   }, mode);
 }
 
-async function skipOnboarding(page: Page) {
-  for (let i = 0; i < 8; i++) {
-    const skip = page.getByText(/건너뛰기|skip/i);
-    if (await skip.count() === 0) break;
-    await skip.first().click();
-    await page.waitForTimeout(300);
-  }
-}
-
 async function openSignalGenerator(page: Page) {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
-  await page.locator('[data-testid="mode-cycle-label"]').waitFor({
-    state: "visible",
-    timeout: 20000,
+  await page.addInitScript(() => {
+    localStorage.setItem("metronome_onboarding_done", "1");
+    localStorage.setItem("metronome_onboarding_lang_done", "1");
   });
-  await skipOnboarding(page);
-
-  const viewport = page.viewportSize();
-  if (!viewport) throw new Error("viewportSize() is unavailable");
-  await page.locator('[data-testid="mode-cycle-label"]').click();
-  await page.waitForTimeout(400);
-  await page.mouse.click(viewport.width / 2 - 58, 86);
-  await page.waitForTimeout(300);
-  await page.mouse.click(viewport.width / 2, viewport.height * 0.7);
-  await page.waitForTimeout(600);
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.getByTestId("mode-cycle-label").click();
+  const dial = page.getByTestId("mode-dial-touch-frame");
+  await expect(dial).toBeVisible();
+  for (let step = 0; step < 5 && !/^(Menu|메뉴)$/.test(await dial.getAttribute("aria-valuetext") ?? ""); step += 1) {
+    await page.keyboard.press("ArrowLeft");
+  }
+  await expect(dial).toHaveAttribute("aria-valuetext", /^(Menu|메뉴)$/);
+  await page.keyboard.press("Enter");
   await page.getByRole("menuitem", {
     name: /signal generator|시그널 제너레이터/i,
   }).click();
@@ -156,8 +145,92 @@ async function getProbe(page: Page): Promise<MicProbe> {
   });
 }
 
+type LugTones = [hz: number, amplitude: number][];
+
+async function installLugTestInput(page: Page) {
+  await page.addInitScript(() => {
+    let sourceContext: AudioContext | null = null;
+    let input: MediaStreamAudioDestinationNode | null = null;
+    Object.defineProperty(navigator, "mediaDevices", {
+      configurable: true,
+      value: {
+        async getUserMedia() {
+          if (sourceContext) await sourceContext.close();
+          sourceContext = new AudioContext({ sampleRate: 48000 });
+          await sourceContext.resume();
+          input = sourceContext.createMediaStreamDestination();
+          return input.stream;
+        },
+      },
+    });
+    (window as typeof window & { strikeLug: (tones: LugTones) => void }).strikeLug = (tones) => {
+      if (!sourceContext || !input) throw new Error("Microphone did not start");
+      const context = sourceContext;
+      const buffer = context.createBuffer(1, Math.round(context.sampleRate * 0.5), context.sampleRate);
+      const samples = buffer.getChannelData(0);
+      for (let i = 0; i < samples.length; i++) {
+        const t = i / context.sampleRate;
+        samples[i] = tones.reduce((sum, [hz, gain]) => sum + gain * Math.sin(2 * Math.PI * hz * t), 0) * Math.exp(-6 * t);
+      }
+      const strike = context.createBufferSource();
+      strike.buffer = buffer;
+      strike.connect(input);
+      strike.start(context.currentTime + 0.12);
+    };
+  });
+}
+
 test.describe("SignalGeneratorModal microphone lifecycle", () => {
   test.use({ viewport: VIEWPORT });
+
+  test("lug tuning locks repeated hits, rejects unrelated tones, and keeps the general tuner unchanged", async ({ page }) => {
+    await installLugTestInput(page);
+    await openSignalGenerator(page);
+    await page.getByTestId("signal-target-edit").click();
+    const generalTarget = page.getByTestId("signal-frequency-input");
+    await generalTarget.fill("442.5");
+    await generalTarget.press("Enter");
+    await expect(page.getByTestId("signal-target-frequency")).toHaveText(/442\.5/);
+    await page.getByTestId("signal-lug-mode").click();
+    await expect(page.getByTestId("signal-lug-panel")).toBeVisible();
+    await page.getByTestId("signal-lug-edit-reference").click();
+    const manual = page.getByTestId("signal-lug-reference-input");
+    await manual.fill("499");
+    await page.getByTestId("signal-lug-lock").click();
+    await expect(page.getByTestId("signal-lug-invalid")).toBeVisible();
+    await manual.fill("215.4");
+    await manual.press("Enter");
+    await expect(page.getByTestId("signal-lug-reference")).toHaveText("215.4 Hz");
+    await page.getByTestId("signal-lug-unlock").click();
+
+    await page.getByTestId("signal-lug-mic").click();
+    await expect(page.getByTestId("signal-lug-status")).toHaveText(/Tap a lug|기준으로 삼을 러그/);
+    const tap = (tones: LugTones) => page.evaluate((data) => {
+      (window as typeof window & { strikeLug: (values: LugTones) => void }).strikeLug(data);
+    }, tones);
+    const measuredHz = async () => Number.parseFloat(await page.getByTestId("signal-lug-reading").innerText());
+    await tap([[200, 0.22], [315, 0.025]]);
+    await expect.poll(measuredHz).toBeCloseTo(200, 0);
+    await expect(page.getByTestId("signal-lug-use-reading")).toBeDisabled();
+    await tap([[200.3, 0.24]]);
+    await expect(page.getByTestId("signal-lug-use-reading")).toBeEnabled();
+    await page.getByTestId("signal-lug-use-reading").click();
+    const reference = Number((await page.getByTestId("signal-lug-reference").innerText()).split(" ")[0]);
+    expect(reference).toBeCloseTo(200.2, 0);
+    await tap([[202.4, 0.11], [315, 0.29]]);
+    await expect.poll(measuredHz).toBeCloseTo(202.4, 0);
+    const reading = await measuredHz();
+    await expect(page.getByTestId("signal-lug-difference")).toHaveText(`+${(reading - reference).toFixed(1)} Hz`);
+    await page.waitForTimeout(500);
+    expect(await measuredHz()).toBe(reading);
+    await tap([[315, 0.35]]);
+    await expect(page.getByTestId("signal-lug-status")).toHaveText(/Please tap again|다시 쳐 주세요/);
+    await expect(page.getByTestId("signal-lug-reading")).toHaveText("—");
+    await expect(page.getByTestId("signal-lug-reference")).toHaveText(`${reference.toFixed(1)} Hz`);
+    await page.getByTestId("signal-lug-mode").click();
+    await expect(page.getByTestId("signal-target-frequency")).toHaveText(/442\.5/);
+    await expect(page.getByTestId("signal-lug-panel")).toHaveCount(0);
+  });
 
   test("detects a tone, releases resources, and can restart cleanly", async ({ page }) => {
     await installFakeMic(page, "tone");

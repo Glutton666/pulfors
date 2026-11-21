@@ -42,6 +42,7 @@ import {
 import { TUNING_DATA } from "@/lib/tuning-data";
 import { SIGNAL_SENSITIVITY_KEY, parseSignalSensitivity, signalGateRms } from "@/lib/signal-noise-gate";
 import { createDominantTuner } from "@/lib/signal-dominant-tuner";
+import { createDrumLugMeasurement, type LugReading } from "@/lib/drum-lug-measurement";
 import {
   NOTE_NAMES,
   realFFT,
@@ -59,6 +60,7 @@ import {
 } from "@/lib/signal-analysis-session";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { TunerPanel } from "@/components/signal-generator/TunerPanel";
+import { DrumLugPanel } from "@/components/signal-generator/DrumLugPanel";
 import { SensitivityControl } from "@/components/signal-generator/SensitivityControl";
 import { CustomTuningSetsPanel } from "@/components/signal-generator/CustomTuningSetsPanel";
 
@@ -787,6 +789,30 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
   const sensitivityRef = useRef(1);
   const sensitivityWriteEpochRef = useRef(0);
   const dominantTunerRef = useRef(createDominantTuner());
+  const lugMeasurementRef = useRef(createDrumLugMeasurement());
+  const lugModeRef = useRef(false);
+  const lugStartupRef = useRef<object | null>(null);
+  const lugWorkletRef = useRef<AudioWorkletNode | null>(null);
+  const [lugMode, setLugMode] = useState(false);
+  const [lugReference, setLugReference] = useState<number | null>(null);
+  const [lugReading, setLugReading] = useState<LugReading>({ kind: "waiting" });
+  const acceptLugPcm = useCallback((samples: Float32Array, sampleRate: number) => {
+    const result = lugMeasurementRef.current.push(samples, sampleRate, sensitivityRef.current);
+    if (result) setLugReading(result);
+  }, []);
+  const closeLugWorklet = useCallback(() => {
+    const node = lugWorkletRef.current;
+    if (!node) return;
+    lugWorkletRef.current = null;
+    node.port.onmessage = null;
+    node.port.close();
+    node.disconnect();
+  }, []);
+  const updateLugReference = useCallback((hz: number | null) => {
+    lugMeasurementRef.current.setReference(hz);
+    setLugReference(hz);
+    setLugReading({ kind: "waiting" });
+  }, []);
   const [captureSaving, setCaptureSaving] = useState(false);
   const captureSavingRef = useRef(false);
   const [captureError, setCaptureError] = useState(false);
@@ -813,6 +839,10 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
     await AsyncStorage.setItem(SIGNAL_SENSITIVITY_KEY, value.toFixed(1));
     sensitivityRef.current = value;
     dominantTunerRef.current.reset();
+    if (lugModeRef.current) {
+      lugMeasurementRef.current.resetCapture();
+      setLugReading({ kind: "waiting" });
+    }
     setSensitivity(value);
     setMicDetectedFreq(null);
     setMicDetectedNote(null);
@@ -1047,6 +1077,7 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
       stopNativeSound();
       micActiveRef.current = false;
       micStartupEpochRef.current++;
+      closeLugWorklet();
       if (micRafRef.current) cancelAnimationFrame(micRafRef.current);
       if (micSourceRef.current) { try { micSourceRef.current.disconnect(); } catch {} micSourceRef.current = null; }
       if (micAudioCtxRef.current) { try { micAudioCtxRef.current.close(); } catch {} micAudioCtxRef.current = null; }
@@ -1081,6 +1112,10 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
     micStartupEpochRef.current++;
     micActiveRef.current = false;
     dominantTunerRef.current.reset();
+    lugStartupRef.current = null;
+    closeLugWorklet();
+    lugMeasurementRef.current.resetCapture();
+    setLugReading({ kind: "waiting" });
     setMicListening(false);
     setMicError(null);
     setMicNoInput(false);
@@ -1104,7 +1139,7 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
     setMicAnalyzed(false);
     spectrumDataRef.current = null;
     spectrumPeakBinRef.current = -1;
-  }, []);
+  }, [closeLugWorklet]);
 
   const clearMicToggleDebounce = useCallback(() => {
     if (micToggleDebounceRef.current) {
@@ -1248,8 +1283,13 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
     if (!visible) {
       cancelAnalysis();
       stopPlayback();
+      if (lugModeRef.current) {
+        lugModeRef.current = false;
+        setLugMode(false);
+        updateLugReference(null);
+      }
     }
-  }, [visible, cancelAnalysis, stopPlayback]);
+  }, [visible, cancelAnalysis, stopPlayback, updateLugReference]);
 
   useEffect(() => {
     if (Platform.OS !== "web") return;
@@ -1363,6 +1403,7 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
 
   const startMicWeb = useCallback(async () => {
     const epoch = ++micStartupEpochRef.current;
+    const isLugCapture = lugModeRef.current;
     try {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         logger.warn("[MicTuner] getUserMedia not available");
@@ -1399,6 +1440,27 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
         return;
       }
       micAudioCtxRef.current = audioCtx;
+      if (isLugCapture) {
+        if (!audioCtx.audioWorklet || typeof AudioWorkletNode !== "function") {
+          throw new Error("Lug measurement requires Web Audio microphone capture support");
+        }
+        await audioCtx.audioWorklet.addModule("/audio-worklets/drum-lug-pcm.js");
+        if (epoch !== micStartupEpochRef.current) return;
+        const node = new AudioWorkletNode(audioCtx, "drum-lug-pcm", { channelCount: 1, channelCountMode: "explicit" });
+        lugWorkletRef.current = node;
+        node.port.onmessage = ({ data }) => {
+          if (micActiveRef.current && epoch === micStartupEpochRef.current && data instanceof Float32Array) {
+            acceptLugPcm(data, audioCtx.sampleRate);
+          }
+        };
+        const source = audioCtx.createMediaStreamSource(stream);
+        micSourceRef.current = source;
+        source.connect(node);
+        node.connect(audioCtx.destination);
+        micActiveRef.current = true;
+        setMicListening(true);
+        return;
+      }
       const analyser = audioCtx.createAnalyser();
       analyser.fftSize = 8192;
       analyser.smoothingTimeConstant = 0;
@@ -1505,6 +1567,7 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
     } catch (e) {
       if (epoch !== micStartupEpochRef.current) return;
       logger.warn("[MicTuner] Web mic error:", e);
+      closeLugWorklet();
       if (micStreamRef.current) {
         micStreamRef.current.getTracks().forEach((t: any) => t.stop());
         micStreamRef.current = null;
@@ -1528,10 +1591,11 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
         : "";
       setMicError(errorName === "NotAllowedError" || errorName === "PermissionDeniedError" ? "permission" : "startFailed");
     }
-  }, []);
+  }, [acceptLugPcm, closeLugWorklet]);
 
   const startNativeMic = useCallback(async () => {
     const epoch = ++micStartupEpochRef.current;
+    const isLugCapture = lugModeRef.current;
     const ok = await ensurePermission("mic", t);
     if (epoch !== micStartupEpochRef.current) return;
     if (!ok) {
@@ -1563,6 +1627,10 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
         if (micInputWatchdogRef.current) {
           clearTimeout(micInputWatchdogRef.current);
           micInputWatchdogRef.current = null;
+        }
+        if (isLugCapture) {
+          acceptLugPcm(samples, sampleRate);
+          return;
         }
         const analysisCapture = analysisActiveRef.current ? analysisCaptureRef.current : null;
         if (analysisCapture) {
@@ -1654,24 +1722,31 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
         micInputWatchdogRef.current = null;
       }
     }
-  }, [t]);
+  }, [acceptLugPcm, t]);
 
   const startMic = useCallback(async () => {
     if (Platform.OS === "web") {
-      startMicWeb();
+      await startMicWeb();
     } else {
-      startNativeMic();
+      await startNativeMic();
     }
   }, [startMicWeb, startNativeMic]);
   startMicRef.current = startMic;
+  const captureRequestId = captureRequest?.id;
   useEffect(() => {
     setCaptureError(false);
-    if (!visible || !captureRequest) return;
+    if (!visible || !captureRequestId) return;
+    if (lugModeRef.current) {
+      stopMic();
+      lugModeRef.current = false;
+      setLugMode(false);
+      updateLugReference(null);
+    }
     const timer = setTimeout(() => {
       if (!micActiveRef.current) startMicRef.current();
     }, 250);
     return () => clearTimeout(timer);
-  }, [visible, captureRequest?.id]);
+  }, [visible, captureRequestId, stopMic, updateLugReference]);
 
   const toggleMic = useCallback(() => {
     hapticFeedback();
@@ -1702,6 +1777,30 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
       toggleMic();
     }, 260);
   }, [onMicTap, stopPlayback, stopMic, toggleMic, clearMicToggleDebounce]);
+
+  const handleLugMicPress = () => {
+    hapticFeedback();
+    if (micListening || lugStartupRef.current || nativeMicRef.current) {
+      stopMic();
+      return;
+    }
+    const token = {};
+    lugStartupRef.current = token;
+    void startMic().finally(() => {
+      if (lugStartupRef.current === token) lugStartupRef.current = null;
+    });
+  };
+  const toggleLugMode = () => {
+    if (analysisActiveRef.current || analysisPhase === "processing" || captureRequest) return;
+    clearMicToggleDebounce();
+    stopPlayback();
+    if (analysisPlaying) pauseAnalysis();
+    stopMic();
+    setEditingFreq(false);
+    updateLugReference(null);
+    lugModeRef.current = !lugModeRef.current;
+    setLugMode(lugModeRef.current);
+  };
 
   const handleClose = useCallback(() => {
     clearMicToggleDebounce();
@@ -2014,6 +2113,24 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
     </View>
   );
 
+  const lugModeButton = !captureRequest && (
+    <Pressable
+      testID="signal-lug-mode"
+      accessibilityRole="button"
+      accessibilityState={{ selected: lugMode }}
+      disabled={analysisPhase === "recording" || analysisPhase === "processing"}
+      onPress={toggleLugMode}
+      style={{
+        flexShrink: 0, minHeight: 40, paddingHorizontal: 9, justifyContent: "center",
+        borderRadius: 9, borderWidth: 1, borderColor: C.border, backgroundColor: lugMode ? C.accentDim : C.surfaceLight,
+      }}
+    >
+      <Text style={{ color: C.text, fontSize: 12, fontWeight: "600" }}>
+        {t("signalGenerator", lugMode ? "lugBack" : "lugMode")}
+      </Text>
+    </Pressable>
+  );
+
   return (
     <AnimatedModal
       visible={visible}
@@ -2044,6 +2161,7 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
               <View style={styles.header}>
                 <MaterialCommunityIcons name="waveform" size={S.ms(20, 0.4)} color={C.accent} />
                 <Text style={[styles.title, { color: C.accent }]}>{t("signalGenerator", "title")}</Text>
+                {lugModeButton}
                 <Pressable
                   onPress={handleClose}
                   hitSlop={12}
@@ -2070,7 +2188,22 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
             keyboardDismissMode="on-drag"
             testID="signal-scroll"
           >
+          {isLandscape && lugMode && <View style={{ alignSelf: "flex-start" }}>{lugModeButton}</View>}
+          {lugMode && (
+            <DrumLugPanel
+              reference={lugReference}
+              reading={lugReading}
+              listening={micListening}
+              micStatus={microphoneStatus}
+              hasMicError={micError !== null || micNoInput}
+              sensitivity={sensitivity}
+              onToggleMic={handleLugMicPress}
+              onSetReference={updateLugReference}
+            />
+          )}
           <TunerPanel
+            hidden={lugMode}
+            headerAccessory={isLandscape && !lugMode ? lugModeButton : undefined}
             detectedFrequency={liveFrequency}
             detectedNote={liveFrequency === null ? null : micDetectedNote}
             listening={micListening}
@@ -2144,7 +2277,7 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
               </Pressable>
             </View>
           )}
-          {analysisPhase !== "idle" && analysisPanel}
+          {!lugMode && analysisPhase !== "idle" && analysisPanel}
           </ScrollView>
           </View>
 
