@@ -44,3 +44,9 @@ For drum lug measurement, analyze low resonances separately instead of just rais
 **Why:** The user reported misses even near 100 Hz. A strong overtone can hide a real low resonance, and relaxing the threshold without rejecting spectral sidelobes can turn sound below range into a false in-range candidate.
 
 **How to apply:** Validate both weak and short low resonances beside louder overtones, and test below-range input with no real in-range resonance before relaxing bass thresholds.
+
+Do not silently discard held analysis when the microphone permission prompt takes focus. Distinguish connecting from listening, and surface the result (or an explanation if released before connection) on the same screen after release.
+
+**Why:** The user reported that no analysis result appeared. A microphone permission prompt can blur a still-visible web page before PCM starts, and on a short screen the analysis panel can be below the current scroll position.
+
+**How to apply:** RN Web can fire `onPressOut` on window blur while the pointer remains down; finish an active web hold on actual pointer release or cancellation, not that callback. Test delayed permission with a focus change, early release, and results entering a phone-sized viewport. Drain the worklet's queued PCM before stopping; fallback input must also use continuous samples, not the live display frames.

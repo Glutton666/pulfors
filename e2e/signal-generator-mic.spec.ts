@@ -17,8 +17,8 @@ type MicProbe = {
   sourcesDisconnected: number;
 };
 
-async function installFakeMic(page: Page, mode: MicMode) {
-  await page.addInitScript((micMode: MicMode) => {
+async function installFakeMic(page: Page, mode: MicMode, permissionDelayMs = 0) {
+  await page.addInitScript(({ micMode, permissionDelayMs }) => {
     const probe: MicProbe = {
       inputMode: micMode,
       contextsCreated: 0,
@@ -97,6 +97,7 @@ async function installFakeMic(page: Page, mode: MicMode) {
       configurable: true,
       value: {
         getUserMedia: async () => {
+          if (permissionDelayMs > 0) await new Promise((resolve) => setTimeout(resolve, permissionDelayMs));
           if (micMode === "denied") {
             throw Object.assign(new Error("denied"), { name: "NotAllowedError" });
           }
@@ -111,7 +112,7 @@ async function installFakeMic(page: Page, mode: MicMode) {
         },
       },
     });
-  }, mode);
+  }, { micMode: mode, permissionDelayMs });
 }
 
 async function openSignalGenerator(page: Page) {
@@ -147,14 +148,16 @@ async function getProbe(page: Page): Promise<MicProbe> {
 
 type LugTones = [hz: number, amplitude: number][];
 
-async function installLugTestInput(page: Page) {
-  await page.addInitScript(() => {
+async function installLugTestInput(page: Page, options: { permissionDelayMs?: number; noWorklet?: boolean } = {}) {
+  await page.addInitScript(({ permissionDelayMs, noWorklet }) => {
     let sourceContext: AudioContext | null = null;
     let input: MediaStreamAudioDestinationNode | null = null;
+    if (noWorklet) Object.defineProperty(window, "AudioWorkletNode", { configurable: true, value: undefined });
     Object.defineProperty(navigator, "mediaDevices", {
       configurable: true,
       value: {
         async getUserMedia() {
+          if (permissionDelayMs) await new Promise((resolve) => setTimeout(resolve, permissionDelayMs));
           if (sourceContext) await sourceContext.close();
           sourceContext = new AudioContext({ sampleRate: 48000 });
           await sourceContext.resume();
@@ -177,7 +180,7 @@ async function installLugTestInput(page: Page) {
       strike.connect(input);
       strike.start(context.currentTime + 0.12);
     };
-  });
+  }, options);
 }
 
 test.describe("SignalGeneratorModal microphone lifecycle", () => {
@@ -332,6 +335,46 @@ test.describe("SignalGeneratorModal microphone lifecycle", () => {
     await expect(page.getByTestId("signal-analysis-panel")).toContainText(/G#4|A4|E4/);
     const probe = await getProbe(page);
     expect(probe.trackStops).toBe(probe.streamsCreated);
+  });
+
+  test("permission focus changes and an unavailable worklet do not hide the held result", async ({ page }) => {
+    await installLugTestInput(page, { permissionDelayMs: 1300, noWorklet: true });
+    await openSignalGenerator(page);
+    const mic = page.getByTestId("signal-mic-toggle");
+    await mic.scrollIntoViewIfNeeded();
+    const box = (await mic.boundingBox())!;
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    await expect(page.getByTestId("signal-analysis-status")).toHaveText(/Connecting microphone|마이크 연결 중/);
+    // Browser permission popups can take focus while the same page is visible.
+    await page.evaluate(() => window.dispatchEvent(new Event("blur")));
+    await expect(page.getByTestId("signal-analysis-status")).toHaveText(/Listening|소리를 듣고/);
+    expect(await mic.evaluate((node) => !node.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true })))).toBe(true);
+    await page.evaluate(() => {
+      (window as typeof window & { strikeLug: (values: LugTones) => void }).strikeLug([[100, 0.16]]);
+    });
+    await page.waitForTimeout(550);
+    await page.mouse.up();
+    const result = page.getByTestId("signal-lug-candidates");
+    await expect(result).toBeInViewport();
+    await expect(result.getByTestId("signal-lug-candidate-0")).toHaveText(/100\.0 Hz · G2/);
+    await result.getByTestId("signal-lug-candidate-0").click();
+    await result.getByTestId("signal-lug-lock-candidate").click();
+    await expect(page.getByTestId("signal-lug-status")).toHaveText(/Tap each lug|비교할 러그/);
+  });
+
+  test("release during connection shows an explanation and stops the late microphone", async ({ page }) => {
+    await installFakeMic(page, "tone", 1300);
+    await openSignalGenerator(page);
+    const mic = page.getByTestId("signal-mic-toggle");
+    await mic.scrollIntoViewIfNeeded();
+    const box = (await mic.boundingBox())!;
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    await expect(page.getByTestId("signal-analysis-status")).toHaveText(/Connecting microphone|마이크 연결 중/);
+    await page.mouse.up();
+    await expect(page.getByTestId("signal-analysis-panel")).toContainText(/released before the mic connected|마이크가 연결되기 전에/);
+    await expect.poll(async () => (await getProbe(page)).trackStops).toBe(1);
   });
 
   test("shows no signal for a live but silent input", async ({ page }) => {

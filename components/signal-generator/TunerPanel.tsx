@@ -7,6 +7,7 @@ import {
   Text,
   View,
   useWindowDimensions,
+  type ViewStyle,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
@@ -52,6 +53,11 @@ const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", 
 const OCTAVES = [0, 1, 2, 3, 4, 5, 6, 7, 8];
 const PICKER_ITEM_HEIGHT = 30;
 const PICKER_HEIGHT = PICKER_ITEM_HEIGHT * 3;
+const micWebProps = Platform.OS === "web" ? {
+  onContextMenu: (event: { preventDefault(): void }) => event.preventDefault(),
+} : {};
+const micWebStyle = Platform.OS === "web"
+  ? ({ touchAction: "none", userSelect: "none", WebkitTouchCallout: "none" } as ViewStyle) : undefined;
 
 function formatFrequency(value: number): string {
   if (!Number.isFinite(value)) return "—";
@@ -102,6 +108,21 @@ export function TunerPanel({
   const analysisEndRef = useRef(onAnalysisHoldEnd);
   referenceEndRef.current = onReferenceHoldEnd;
   analysisEndRef.current = onAnalysisHoldEnd;
+  const endAnalysisHold = useCallback(() => {
+    if (!analysisHoldActive.current) return;
+    analysisHoldActive.current = false;
+    analysisEndRef.current();
+  }, []);
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+    // RN Web sends onPressOut on blur/context menus, even though the finger is
+    // still down. Listen for the physical release after long press starts.
+    const events = "PointerEvent" in window ? ["pointerup", "pointercancel"] : ["mouseup", "touchend", "touchcancel"];
+    for (const event of events) window.addEventListener(event, endAnalysisHold, true);
+    return () => {
+      for (const event of events) window.removeEventListener(event, endAnalysisHold, true);
+    };
+  }, [endAnalysisHold]);
   useEffect(() => () => {
     if (referenceHoldActive.current) referenceEndRef.current();
     if (analysisHoldActive.current) analysisEndRef.current();
@@ -315,13 +336,16 @@ export function TunerPanel({
 
       <View style={styles.actions}>
         <Pressable
+          {...micWebProps}
           testID="signal-mic-toggle"
           accessibilityRole="button"
           accessibilityLabel={
             analysisBusy
               ? t("signalGenerator", "analysisProcessing")
               : analysisHolding
-                ? `${t("signalGenerator", "analysisRecording")} ${Math.max(0, analysisElapsedMs / 1000).toFixed(1)}s`
+                ? listening
+                  ? `${t("signalGenerator", "analysisRecording")} ${Math.max(0, analysisElapsedMs / 1000).toFixed(1)}s`
+                  : t("signalGenerator", "analysisConnecting")
                 : t("signalGenerator", listening ? "micStop" : "micStart")
           }
           accessibilityHint={t("signalGenerator", "analysisReadyHint")}
@@ -338,10 +362,7 @@ export function TunerPanel({
             onAnalysisHoldStart();
           }}
           onPressOut={() => {
-            if (analysisHoldActive.current) {
-              analysisHoldActive.current = false;
-              onAnalysisHoldEnd();
-            }
+            if (Platform.OS !== "web") endAnalysisHold();
           }}
           onPress={() => {
             if (analysisLongPress.current) {
@@ -352,6 +373,7 @@ export function TunerPanel({
           }}
           style={({ pressed }) => [
             styles.primaryAction,
+            micWebStyle,
             { backgroundColor: analysisHolding ? C.accentDim : listening ? C.surfaceLight : C.accent },
             (pressed || (analysisBusy && !analysisHolding)) && styles.pressedButton,
           ]}
@@ -368,7 +390,9 @@ export function TunerPanel({
             {analysisBusy
               ? t("signalGenerator", "analysisProcessing")
               : analysisHolding
-                ? `${t("signalGenerator", "analysisRecording")} · ${(Math.max(0, analysisElapsedMs) / 1000).toFixed(1)}s`
+                ? listening
+                  ? `${t("signalGenerator", "analysisRecording")} · ${(Math.max(0, analysisElapsedMs) / 1000).toFixed(1)}s`
+                  : t("signalGenerator", "analysisConnecting")
                 : t("signalGenerator", listening ? "micStop" : "micStart")}
           </Text>
           {!analysisHolding && !analysisBusy && (

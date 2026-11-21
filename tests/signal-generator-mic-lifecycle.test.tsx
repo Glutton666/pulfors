@@ -368,7 +368,8 @@ describe("SignalGeneratorModal native microphone lifecycle", () => {
       await Promise.resolve();
     });
     expect(NativeApi.AudioRecorder).not.toHaveBeenCalled();
-    expect(view.queryByTestId("signal-analysis-panel")).toBeNull();
+    expect(view.getByTestId("signal-analysis-panel").textContent).toContain("signalGenerator.analysisTooShort");
+    expect(view.queryByTestId("signal-analysis-timeline")).toBeNull();
   });
 
   test("closing while held stops capture and discards late results", async () => {

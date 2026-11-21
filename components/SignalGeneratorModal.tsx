@@ -43,6 +43,7 @@ import { TUNING_DATA } from "@/lib/tuning-data";
 import { SIGNAL_SENSITIVITY_KEY, parseSignalSensitivity, signalGateRms } from "@/lib/signal-noise-gate";
 import { createDominantTuner } from "@/lib/signal-dominant-tuner";
 import { createDrumLugDiscovery, createDrumLugMeasurement, type LugReading, type LugReferenceCandidate } from "@/lib/drum-lug-measurement";
+import { openWebLugPcmInput, type WebLugPcmInput } from "@/lib/web-lug-pcm-input";
 import {
   NOTE_NAMES,
   realFFT,
@@ -87,7 +88,7 @@ const MIN_FREQ = 20;
 const MAX_FREQ = 20000;
 const VOLUME_LINEAR = 0.3;
 
-type AnalysisPhase = "idle" | "recording" | "processing" | "results";
+type AnalysisPhase = "idle" | "recording" | "processing" | "results" | "tooShort";
 
 interface AnalysisCapture {
   sampleRate: number;
@@ -96,6 +97,7 @@ interface AnalysisCapture {
   samples: number[];
   lugDiscovery: ReturnType<typeof createDrumLugDiscovery> | null;
   lugPcmAvailable: boolean;
+  drainingLugPcm: boolean;
 }
 
 function freqToNorm(freq: number): number {
@@ -794,8 +796,10 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
   const lugMeasurementRef = useRef(createDrumLugMeasurement());
   const lugReferenceRef = useRef<number | null>(null);
   const lugStartupRef = useRef<object | null>(null);
-  const lugWorkletRef = useRef<AudioWorkletNode | null>(null);
+  const lugInputRef = useRef<WebLugPcmInput | null>(null);
   const scrollRef = useRef<ScrollView>(null);
+  const analysisPanelYRef = useRef(0);
+  const analysisScrollEpochRef = useRef(-1);
   const [lugReference, setLugReference] = useState<number | null>(null);
   const [lugReading, setLugReading] = useState<LugReading>({ kind: "waiting" });
   const [lugCandidates, setLugCandidates] = useState<{ available: boolean; options: LugReferenceCandidate[] } | null>(null);
@@ -803,14 +807,10 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
     const result = lugMeasurementRef.current.push(samples, sampleRate, sensitivityRef.current);
     if (result) setLugReading(result);
   }, []);
-  const closeLugWorklet = useCallback(() => {
-    const node = lugWorkletRef.current;
-    if (!node) return;
-    lugWorkletRef.current = null;
-    node.onprocessorerror = null;
-    node.port.onmessage = null;
-    node.port.close();
-    node.disconnect();
+  const closeLugInput = useCallback(() => {
+    const input = lugInputRef.current;
+    lugInputRef.current = null;
+    input?.close();
   }, []);
   const updateLugReference = useCallback((hz: number | null) => {
     lugReferenceRef.current = hz;
@@ -1085,7 +1085,7 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
       analysisPlaybackEpochRef.current++;
       micActiveRef.current = false;
       micStartupEpochRef.current++;
-      closeLugWorklet();
+      closeLugInput();
       if (micRafRef.current) cancelAnimationFrame(micRafRef.current);
       if (micSourceRef.current) { try { micSourceRef.current.disconnect(); } catch {} micSourceRef.current = null; }
       if (micAudioCtxRef.current) { try { micAudioCtxRef.current.close(); } catch {} micAudioCtxRef.current = null; }
@@ -1121,7 +1121,7 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
     micActiveRef.current = false;
     dominantTunerRef.current.reset();
     lugStartupRef.current = null;
-    closeLugWorklet();
+    closeLugInput();
     lugMeasurementRef.current.resetCapture();
     setLugReading({ kind: "waiting" });
     setMicListening(false);
@@ -1147,7 +1147,7 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
     setMicAnalyzed(false);
     spectrumDataRef.current = null;
     spectrumPeakBinRef.current = -1;
-  }, [closeLugWorklet]);
+  }, [closeLugInput]);
 
   const clearMicToggleDebounce = useCallback(() => {
     if (micToggleDebounceRef.current) {
@@ -1164,8 +1164,9 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
       analysisActiveRef.current = false;
       if (analysisAnalysisTimerRef.current) clearInterval(analysisAnalysisTimerRef.current);
       analysisAnalysisTimerRef.current = null;
+      analysisCaptureRef.current = null;
       stopMic();
-      setAnalysisPhase("idle");
+      setAnalysisPhase("tooShort");
       return;
     }
     const epoch = analysisEpochRef.current;
@@ -1176,6 +1177,13 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
       analysisAnalysisTimerRef.current = null;
     }
     setAnalysisPhase("processing");
+
+    if (capture.lugDiscovery && lugInputRef.current) {
+      capture.drainingLugPcm = true;
+      await lugInputRef.current.flush();
+      capture.drainingLugPcm = false;
+      if (epoch !== analysisEpochRef.current) return;
+    }
 
     const recorder = analysisRecorderRef.current;
     const blobPromise = recorder && recorder.state !== "inactive"
@@ -1258,6 +1266,7 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
       samples: [],
       lugDiscovery: captureRequest ? null : createDrumLugDiscovery(),
       lugPcmAvailable: false,
+      drainingLugPcm: false,
     };
     analysisActiveRef.current = true;
     setAnalysisSummary(null);
@@ -1306,15 +1315,16 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
 
   useEffect(() => {
     if (Platform.OS !== "web") return;
-    const cancelHeldInput = () => {
-      if (analysisActiveRef.current) cancelAnalysis();
+    const cancelHeldInput = (visibilityChanged = false) => {
+      if (analysisActiveRef.current && (visibilityChanged || micActiveRef.current)) cancelAnalysis();
       if (referenceHeldRef.current) stopPlayback();
     };
-    const onVisibility = () => { if (document.hidden) cancelHeldInput(); };
-    window.addEventListener("blur", cancelHeldInput);
+    const onBlur = () => cancelHeldInput();
+    const onVisibility = () => { if (document.hidden) cancelHeldInput(true); };
+    window.addEventListener("blur", onBlur);
     document.addEventListener("visibilitychange", onVisibility);
     return () => {
-      window.removeEventListener("blur", cancelHeldInput);
+      window.removeEventListener("blur", onBlur);
       document.removeEventListener("visibilitychange", onVisibility);
     };
   }, [cancelAnalysis, stopPlayback]);
@@ -1466,38 +1476,31 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
       micSourceRef.current = source;
       if (isLugCapture || heldCapture?.lugDiscovery) {
         try {
-          if (!audioCtx.audioWorklet || typeof AudioWorkletNode !== "function") {
-            throw new Error("Per-hit measurement requires Web Audio microphone capture support");
-          }
-          await audioCtx.audioWorklet.addModule("/audio-worklets/drum-lug-pcm.js");
-          if (epoch !== micStartupEpochRef.current) return;
-          const node = new AudioWorkletNode(audioCtx, "drum-lug-pcm", { channelCount: 1, channelCountMode: "explicit" });
-          lugWorkletRef.current = node;
-          source.connect(node);
-          node.connect(audioCtx.destination);
-          node.port.onmessage = ({ data }) => {
-            if (!micActiveRef.current || epoch !== micStartupEpochRef.current || !(data instanceof Float32Array)) return;
-            if (isLugCapture) acceptLugPcm(data, audioCtx.sampleRate);
-            else if (heldCapture?.lugDiscovery && analysisActiveRef.current && analysisCaptureRef.current === heldCapture) {
-              heldCapture.lugPcmAvailable = true;
-              heldCapture.lugDiscovery.push(data, audioCtx.sampleRate, sensitivityRef.current);
-            }
-          };
-          node.onprocessorerror = () => {
-            if (epoch !== micStartupEpochRef.current) return;
-            if (isLugCapture) {
-              stopMic();
-              setMicError("startFailed");
-            } else {
-              if (heldCapture) heldCapture.lugPcmAvailable = false;
-              closeLugWorklet();
-            }
-          };
+          const input = await openWebLugPcmInput(audioCtx, source, {
+            isCurrent: () => epoch === micStartupEpochRef.current,
+            onPcm: (data) => {
+              if (!micActiveRef.current || epoch !== micStartupEpochRef.current) return;
+              if (isLugCapture) acceptLugPcm(data, audioCtx.sampleRate);
+              else if (heldCapture?.lugDiscovery && (analysisActiveRef.current || heldCapture.drainingLugPcm)
+                && analysisCaptureRef.current === heldCapture) {
+                heldCapture.lugPcmAvailable = true;
+                heldCapture.lugDiscovery.push(data, audioCtx.sampleRate, sensitivityRef.current);
+              }
+            },
+            onError: () => {
+              if (epoch !== micStartupEpochRef.current) return;
+              if (isLugCapture) {
+                stopMic();
+                setMicError("startFailed");
+              } else closeLugInput();
+            },
+          });
+          if (epoch !== micStartupEpochRef.current) { input?.close(); return; }
+          lugInputRef.current = input;
         } catch (error) {
           if (epoch !== micStartupEpochRef.current) return;
           if (isLugCapture) throw error;
-          // A browser without a worklet can still provide ordinary analysis.
-          closeLugWorklet();
+          closeLugInput();
           logger.warn("[SignalAnalysis] Per-hit microphone input unavailable:", error);
         }
         if (isLugCapture) {
@@ -1610,7 +1613,7 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
     } catch (e) {
       if (epoch !== micStartupEpochRef.current) return;
       logger.warn("[MicTuner] Web mic error:", e);
-      closeLugWorklet();
+      closeLugInput();
       if (micStreamRef.current) {
         micStreamRef.current.getTracks().forEach((t: any) => t.stop());
         micStreamRef.current = null;
@@ -1634,7 +1637,7 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
         : "";
       setMicError(errorName === "NotAllowedError" || errorName === "PermissionDeniedError" ? "permission" : "startFailed");
     }
-  }, [acceptLugPcm, closeLugWorklet, stopMic]);
+  }, [acceptLugPcm, closeLugInput, stopMic]);
 
   const startNativeMic = useCallback(async () => {
     const epoch = ++micStartupEpochRef.current;
@@ -2018,8 +2021,19 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
     const safe = Math.max(0, seconds);
     return `${Math.floor(safe)}.${Math.floor((safe % 1) * 10)}s`;
   };
+  const showAnalysisResult = () => {
+    if ((analysisPhase === "results" || analysisPhase === "tooShort") &&
+        analysisScrollEpochRef.current !== analysisEpochRef.current && analysisPanelYRef.current > 0) {
+      analysisScrollEpochRef.current = analysisEpochRef.current;
+      scrollRef.current?.scrollTo?.({ y: Math.max(0, analysisPanelYRef.current - Spacing.sm), animated: true });
+    }
+  };
   const analysisPanel = (
-    <View style={styles.analysisPanel} testID="signal-analysis-panel">
+    <View
+      style={styles.analysisPanel}
+      testID="signal-analysis-panel"
+      onLayout={({ nativeEvent }) => { analysisPanelYRef.current = nativeEvent.layout.y; showAnalysisResult(); }}
+    >
       <View style={styles.analysisHeader}>
         <View style={styles.analysisTitleRow}>
           <MaterialCommunityIcons name="waveform" size={S.ms(20, 0.4)} color={C.accent} />
@@ -2039,7 +2053,7 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
 
       {analysisPhase === "recording" && (
         <View style={styles.analysisRecording}>
-          <Text style={styles.analysisHeadline}>{t("signalGenerator", "analysisRecording")}</Text>
+          <Text style={styles.analysisHeadline}>{t("signalGenerator", micListening ? "analysisRecording" : "analysisConnecting")}</Text>
           <Text style={[styles.analysisTimer, { color: C.accent }]}>
             {analysisTimeLabel(analysisElapsedMs / 1000)}
           </Text>
@@ -2052,8 +2066,13 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
         </Text>
       )}
 
+      {analysisPhase === "tooShort" && (
+        <Text onLayout={showAnalysisResult} accessibilityLiveRegion="polite" style={styles.analysisDescription}>
+          {t("signalGenerator", "analysisTooShort")}
+        </Text>
+      )}
       {analysisPhase === "results" && (
-        <View style={styles.analysisResultsContent}>
+        <View style={styles.analysisResultsContent} onLayout={showAnalysisResult}>
           <View style={styles.analysisResultSummary}>
             <Text style={styles.analysisEyebrow}>{t("signalGenerator", "analysisResult")}</Text>
             <Text style={[styles.analysisResultDuration, { color: C.accent }]}>
