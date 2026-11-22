@@ -116,5 +116,6 @@
 - [Bar playback panel](bar-playback-panel-behavior.md) — 재생 중 편집 조작만 숨기고 재생·정지는 유지한다. 정지하면 재생 전 편집 선택으로 돌아간다.
 - [Local profile runtime boundary](local-profile-runtime-boundary.md) — keep each runtime bound to one profile; flush and reload on handoff so late callbacks cannot target a different profile.
 - [노트 큐 반복 범위](note-queue-repeat-policy.md) — 비트와 반복 바는 직접 넘길 때까지 반복한다. 항목 반복과 큐 전체 반복은 별개다.
+- [노트 큐 영상 기준](note-queue-video.md) — 영상은 기존 항목에 첨부한다. 연습 시작, 첫 박, 영상 전에 들리는 예비박을 분리한다.
 - [오선노트 분할 음표의 원본](notebook-split-ownership.md) — 표시 조각은 독립 입력이 아니다. 편집·복사·재배치는 원본을 사용하고, 불명확한 예전 연결은 추측하지 않는다.
 - [오선노트 구간과 표시 배율](notebook-section-layout.md) — 기보 박자와 클릭 박자를 분리하고, 화면에 접힌 줄이 아니라 원본 마디에 구간을 연결한다.

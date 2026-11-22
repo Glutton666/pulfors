@@ -760,6 +760,8 @@ export interface PracticeEntry {
   noteQueueEntryIds?: string[];
   notePlayMode?: "once" | "loop" | "random";
   noteQueueEntries?: PracticeEntry[];
+  /** Video belongs to this queue item snapshot, not the source practice entry. */
+  noteVideo?: import("./note-video").NoteVideoAttachment;
   imageUri?: string;
   /** Normalized framing used by Note mode's practice image. */
   imageCrop?: NoteImageCrop;

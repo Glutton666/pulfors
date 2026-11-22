@@ -63,6 +63,13 @@ jest.mock("@/components/ScoreRenderer", () => ({
   ScoreRenderer: () => null,
 }));
 
+// The beat UI test doesn't mount a video. The real browser transport is
+// exercised separately in note-video.spec.ts.
+jest.mock("@/components/NoteVideoPlatform", () => ({
+  NoteVideoLocal: () => null,
+  NoteVideoFrame: () => null,
+}));
+
 jest.mock("@/components/HintTooltip", () => ({
   HintBanner: () => null,
 }));

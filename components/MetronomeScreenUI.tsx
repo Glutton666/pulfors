@@ -182,6 +182,7 @@ export function MetronomeScreenUI(props: Props) {
     handleNoteAddToQueue, handleNoteRemoveFromQueue, handleNoteReorderQueue, handleNoteInsertNext,
     handleNoteTogglePlay, handleNoteManualNext, handleNoteManualNextImmediate,
     handleNoteSave, handleNoteReset, handleNoteQueueItemImageChange,
+    handleNoteQueueItemVideoChange, noteVideoSession, seekNoteVideo, onNoteVideoDriver, onNoteVideoReading, handleCloseNoteVideo,
     handleNoteLoadPracticeSources, handleNoteSourceSelectionChange,
     noteSamples, noteSampleNames, noteSampleSources, noteSampleChannels, noteSampleVolumes, noteSampleSpeeds, noteSampleMetroChannels,
     recorderTarget, setRecorderTarget, recorderKeyboardActionsRef,
@@ -1415,6 +1416,12 @@ export function MetronomeScreenUI(props: Props) {
             onReset={handleNoteReset}
             onExitNoteMode={handleExitNoteMode}
             onQueueItemImageChange={handleNoteQueueItemImageChange}
+            onQueueItemVideoChange={handleNoteQueueItemVideoChange}
+            videoSession={noteVideoSession}
+            onVideoDriver={onNoteVideoDriver}
+            onVideoReading={onNoteVideoReading}
+            onVideoSeek={seekNoteVideo}
+            onVideoClose={handleCloseNoteVideo}
             onLoadPracticeSources={handleNoteLoadPracticeSources}
             onSourceSelectionChange={handleNoteSourceSelectionChange}
             onOpenSettings={() => openScopedSettings("note")}

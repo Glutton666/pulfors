@@ -36,7 +36,7 @@ export interface ImportPracticeResult {
 
 export async function sharePracticeEntry(entry: PracticeEntry): Promise<boolean> {
   try {
-    if (entry.mode === "note" && entry.noteQueueEntryIds?.length) {
+    if (entry.mode === "note" && !entry.noteQueueEntries?.length && entry.noteQueueEntryIds?.length) {
       const book = await loadPracticeBook();
       const queueEntries = entry.noteQueueEntryIds
         .map((id) => book.find((e) => e.id === id))

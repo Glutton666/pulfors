@@ -33,6 +33,9 @@ import { reconcileNoteSources } from "@/lib/note-mode-sources";
 import { noteQueueEntryRepeats } from "@/lib/note-queue-helpers";
 import { clampNoteImageCropToFrame, fitNoteImageFrame, normalizeNoteImageCrop } from "@/lib/note-image-crop";
 import { BarPlayButton } from "@/components/BarPlayButton";
+import { NoteVideoEditor, NoteVideoStage, useVideoText } from "@/components/NoteVideoControls";
+import { readNoteVideo, type NoteVideoAttachment, type VideoDriver, type VideoReading } from "@/lib/note-video";
+import type { NoteVideoPlayback } from "@/hooks/useNoteVideoPlayback";
 
 interface NoteModeViewProps {
   queue: PracticeEntry[];
@@ -56,6 +59,12 @@ interface NoteModeViewProps {
   onReset: () => void;
   onExitNoteMode: () => void;
   onQueueItemImageChange?: (index: number, imageUri: string | undefined, crop?: NoteImageCrop) => void;
+  onQueueItemVideoChange?: (index: number, video?: NoteVideoAttachment) => void;
+  videoSession?: NoteVideoPlayback | null;
+  onVideoDriver?: (key: number, driver: VideoDriver | null) => void;
+  onVideoReading?: (key: number, reading: VideoReading) => void;
+  onVideoSeek?: (seconds: number) => void;
+  onVideoClose?: () => void;
   onLoadPracticeSources?: () => Promise<PracticeEntry[]>;
   onSourceSelectionChange?: (entries: PracticeEntry[]) => void;
   onOpenSettings?: () => void;
@@ -279,6 +288,7 @@ function QueueItem({
   onMoveDown,
   onImageChange,
   onImageFrame,
+  onVideo,
   imageCrop,
   currentMeasureIdx,
   previewUnit,
@@ -295,6 +305,7 @@ function QueueItem({
   onMoveDown: () => void;
   onImageChange?: (imageUri: string | undefined) => void;
   onImageFrame?: (imageUri: string | undefined, crop?: NoteImageCrop) => void;
+  onVideo?: () => void;
   imageCrop?: NoteImageCrop;
   currentMeasureIdx?: number;
   previewUnit?: "measure" | "phrase";
@@ -307,6 +318,7 @@ function QueueItem({
   const [frameVisible, setFrameVisible] = useState(false);
   const [pendingUri, setPendingUri] = useState<string | null>(entry.imageUri ?? null);
   const repeats = noteQueueEntryRepeats(entry);
+  const videoText = useVideoText();
 
   const handlePickImage = useCallback(async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -381,6 +393,11 @@ function QueueItem({
           <Ionicons name="image" size={S.ms(14, 0.4)} color={accentColor} />
         </Pressable>
       )}
+      {onVideo && <Pressable onPress={onVideo} testID={`note-item-video-${index}`} accessibilityRole="button"
+        accessibilityLabel={entry.noteVideo ? videoText("첨부 영상 설정", "Edit attached video") : videoText("영상 첨부", "Attach video")}
+        style={{ padding: 7, minWidth: 32, alignItems: "center" }}>
+        <Ionicons name={entry.noteVideo ? "videocam" : "videocam-outline"} size={19} color={entry.noteVideo ? accentColor : C.textSecondary} />
+      </Pressable>}
       <Pressable onPress={onRemove} hitSlop={8} style={styles.removeBtn}>
         <Ionicons name="close-circle" size={S.ms(18, 0.4)} color={C.textTertiary} />
       </Pressable>
@@ -458,10 +475,14 @@ export function NoteModeView({
   onReset,
   onExitNoteMode,
   onQueueItemImageChange,
+  onQueueItemVideoChange,
+  videoSession, onVideoDriver, onVideoReading, onVideoSeek, onVideoClose,
   onLoadPracticeSources,
   onSourceSelectionChange,
   onOpenSettings,
 }: NoteModeViewProps) {
+  const videoText = useVideoText();
+  const [videoEditor, setVideoEditor] = useState<number | null>(null);
   const playbackVisual = usePlaybackVisual(isPlaying);
   currentBeat = playbackVisual?.beat ?? currentBeat;
   activeSubNote = playbackVisual?.subBeat ?? activeSubNote;
@@ -610,6 +631,36 @@ export function NoteModeView({
       </View>
     </View>
   );
+
+  if (videoSession && currentEntry && onVideoDriver && onVideoReading && onVideoSeek) {
+    const paused = videoSession.paused || (videoSession.reading.phase === "paused" && videoSession.countBeat === null);
+    const label = paused ? videoText("영상과 메트로놈 재개", "Resume video and metronome")
+      : videoText("영상과 메트로놈 일시정지", "Pause video and metronome");
+    return <View style={styles.container}>
+      <NoteVideoStage key={videoSession.key} session={videoSession} driver={onVideoDriver} reading={onVideoReading} seek={onVideoSeek}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: C.text, fontWeight: "700", fontSize: 16 }} numberOfLines={1}>{currentEntry.label}</Text>
+            <Text style={{ color: C.textSecondary }}>{currentEntry.bpm} BPM · {currentIndex + 1}/{queue.length}</Text>
+          </View>
+          <Pressable testID="note-play-button" accessibilityRole="button" accessibilityLabel={label}
+            disabled={videoSession.reading.phase === "error"} onPress={onTogglePlay}
+            style={{ padding: 10, borderRadius: 9, backgroundColor: C.accent, opacity: videoSession.reading.phase === "error" ? 0.5 : 1 }}>
+            <Ionicons name={paused ? "play" : "pause"} size={23} color={C.background} />
+          </Pressable>
+          {queue.length > 1 && <Pressable testID="note-next-entry" accessibilityRole="button"
+            accessibilityLabel={t("noteMode", "nextBeat")} onPress={onManualNext} onLongPress={onManualNextImmediate} style={{ padding: 9 }}>
+            <Ionicons name="play-skip-forward" size={22} color={C.accent} />
+          </Pressable>}
+          <Pressable testID="note-video-close" accessibilityRole="button" accessibilityLabel={videoText("영상 재생 종료", "Exit video playback")}
+            onPress={onVideoClose} style={{ padding: 9 }}>
+            <Ionicons name="close" size={24} color={C.textSecondary} />
+          </Pressable>
+        </View>
+        {renderBeatProgress(true)}
+      </NoteVideoStage>
+    </View>;
+  }
 
   if (isPlaying && queue.length > 0) {
     if (isLandscape) {
@@ -849,6 +900,7 @@ export function NoteModeView({
                 onMoveDown={() => onReorderQueue(index, index + 1)}
                 onImageChange={(uri) => onQueueItemImageChange?.(index, uri)}
                 onImageFrame={(uri, crop) => onQueueItemImageChange?.(index, uri, crop)}
+                onVideo={onQueueItemVideoChange ? () => setVideoEditor(index) : undefined}
                 imageCrop={item.imageCrop}
                 currentMeasureIdx={isPlaying && index === currentIndex ? playingBarIdx : undefined}
                 previewUnit={previewUnit}
@@ -1053,9 +1105,19 @@ export function NoteModeView({
     </View>
   );
 
+  const editorEntry = videoEditor === null ? undefined : queue[videoEditor];
+  const videoEditorModal = editorEntry && videoEditor !== null && <NoteVideoEditor
+    key={`${videoEditor}:${editorEntry.id}`}
+    label={editorEntry.label} video={readNoteVideo(editorEntry.noteVideo)}
+    onClose={() => setVideoEditor(null)} onSave={(video) => {
+      onQueueItemVideoChange?.(videoEditor, video);
+      setVideoEditor(null);
+    }} />;
+
   if (isLandscape) {
     return (
       <View style={[styles.container, { flexDirection: "row" as const, gap: S.ms(8, 0.3) }, S.isTablet && { maxWidth: 900, alignSelf: "center" as const, width: "100%" as const }]}>
+        {videoEditorModal}
         <View
           testID="note-queue-workspace"
           style={[styles.noteQueueWorkspace, { flex: 2, marginTop: 0 }]}
@@ -1072,6 +1134,7 @@ export function NoteModeView({
 
   return (
     <View style={[styles.container, S.isTablet && { maxWidth: 720, alignSelf: "center" as const, width: "100%" as const }]}>
+      {videoEditorModal}
       {renderSourceSection()}
       <View testID="note-queue-workspace" style={styles.noteQueueWorkspace}>
         <HintBanner

@@ -5,6 +5,7 @@ import { loadPracticeBook } from "@/lib/storage";
 import { isNoteSourceEntry } from "@/lib/note-mode-sources";
 import { applyQueueInsert } from "@/lib/index.helpers";
 import { normalizeNoteImageCrop } from "@/lib/note-image-crop";
+import type { NoteVideoAttachment } from "@/lib/note-video";
 
 export type NotePlayMode = "once" | "loop" | "random";
 
@@ -46,6 +47,7 @@ export interface UseNoteSessionResult {
     imageCrop?: NoteImageCrop,
   ) => void;
   handleNoteInsertNext: (entry: PracticeEntry) => void;
+  handleNoteQueueItemVideoChange: (index: number, video?: NoteVideoAttachment) => void;
   handleNoteLoadPracticeSources: () => Promise<PracticeEntry[]>;
   handleNoteSourceSelectionChange: (entries: PracticeEntry[]) => void;
   resetNoteQueue: () => void;
@@ -192,6 +194,14 @@ export function useNoteSession({
     });
   }, []);
 
+  const handleNoteQueueItemVideoChange = useCallback((index: number, video?: NoteVideoAttachment) => {
+    const queue = [...noteQueueRef.current];
+    if (!queue[index] || noteIsPlayingRef.current) return;
+    queue[index] = { ...queue[index], noteVideo: video };
+    noteQueueRef.current = queue;
+    setNoteQueue(queue);
+  }, []);
+
   const handleNoteLoadPracticeSources = useCallback(async () => {
     const book = await loadPracticeBook();
     return book.filter(isNoteSourceEntry);
@@ -223,7 +233,7 @@ export function useNoteSession({
     noteBarEntries, setNoteBarEntries, noteAdvanceQueueRef,
     noteEntryTransitionEpochRef, noteShuffledIndicesRef, noteShuffledPosRef,
     handleNoteAddToQueue, handleNoteRemoveFromQueue, handleNoteReorderQueue,
-    handleNoteQueueItemImageChange, handleNoteInsertNext,
+    handleNoteQueueItemImageChange, handleNoteQueueItemVideoChange, handleNoteInsertNext,
     handleNoteLoadPracticeSources, handleNoteSourceSelectionChange, resetNoteQueue,
   };
 }

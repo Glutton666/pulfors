@@ -673,6 +673,20 @@ export class MetronomeEngine {
     };
   }
 
+  /** Note video transport owns the clock. Do not start the regular timer. */
+  emitVideoClick(tick: ScheduledTick) {
+    if (tick.layerIndex === 0) this.currentBeat = tick.beat;
+    const strong = tick.type === "strong";
+    this.playTickAudio(tick.beat, tick.subBeat, strong, strong || tick.type === "accent",
+      tick.type === "mute", tick.layerIndex, tick.blockIndex, tick.layerSoundSet);
+  }
+
+  emitVideoCountIn(beat: number) {
+    this.currentBeat = beat;
+    if (beat === 0) this.playStrongClick?.();
+    else this.playLowClick?.();
+  }
+
   /**
    * Preselects and returns the next nondeterministic random Bar pass without
    * advancing the active schedule. Calling this repeatedly before rollover

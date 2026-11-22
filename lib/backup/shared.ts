@@ -1,3 +1,4 @@
+import { readNoteVideo } from "../note-video";
 import * as FileSystem from "expo-file-system/legacy";
 import { Platform } from "react-native";
 import type { PracticeEntry } from "../storage";
@@ -492,6 +493,7 @@ export function sanitizePracticeEntry(raw: unknown, depth = 0): PracticeEntry | 
 
   return {
     ...entry,
+    noteVideo: readNoteVideo(entry.noteVideo, false),
     noteSamples: sanitizeNoteSampleUris(entry.noteSamples),
     noteSampleChannels: sanitizeNoteSampleChannelMap(entry.noteSampleChannels),
     noteSampleVolumes: sanitizeNoteSampleVolumeMap(entry.noteSampleVolumes),

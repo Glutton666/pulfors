@@ -52,6 +52,7 @@ export interface UsePracticeBookLoadParams {
   noteQueueRef: React.MutableRefObject<PracticeEntry[]>;
   notePlayModeRef: React.MutableRefObject<"once" | "loop" | "random">;
   noteIsPlayingRef: React.MutableRefObject<boolean>;
+  stopNoteVideoPlayback?: () => void;
 
   /** Externally-owned refs so callers (togglePlayPause, activity logging) can
    *  still reach these values after the hook is called later in the render. */
@@ -157,6 +158,7 @@ export function usePracticeBookLoad({
   noteQueueRef,
   notePlayModeRef,
   noteIsPlayingRef,
+  stopNoteVideoPlayback,
   seamlessNextEntryRef: _seamlessNextEntryRef, // received but not used here; held by caller
   loadedPracticeNoteRef,
   isPlaying,
@@ -303,6 +305,7 @@ export function usePracticeBookLoad({
   const handleLoadPracticeEntry = useCallback((entry: PracticeEntry) => {
     const engine = engineRef.current;
     if (!engine) return;
+    stopNoteVideoPlayback?.();
 
     if (isPlaying) {
       completePracticeSession();
@@ -488,7 +491,7 @@ export function usePracticeBookLoad({
     }
 
     loadedPracticeNoteRef.current = { id: entry.id, label: entry.label };
-  }, [isPlaying, barMode, noteMode, beatsPerMeasure, beatTypes, beatSubdivisions, barRepeats, loopBlocks, noteSamples, noteSampleNames, noteSampleSources, preloadNoteSampleSounds, handleExitNoteMode, completePracticeSession]);
+  }, [isPlaying, barMode, noteMode, beatsPerMeasure, beatTypes, beatSubdivisions, barRepeats, loopBlocks, noteSamples, noteSampleNames, noteSampleSources, preloadNoteSampleSounds, handleExitNoteMode, completePracticeSession, stopNoteVideoPlayback]);
 
   return {
     scorePracticeBookRef,

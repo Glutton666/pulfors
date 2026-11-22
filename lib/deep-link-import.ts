@@ -19,6 +19,7 @@ import { sanitizeNoteSampleChannelMap, sanitizeNoteSampleVolumeMap } from "./bac
 import { logger } from "./logger";
 import type { PracticeEntry } from "./storage";
 import type { BeatType } from "./metronome-engine";
+import { readNoteVideo } from "./note-video";
 
 const MAX_LABEL_LEN = 200;
 const MAX_QUEUE_ENTRIES = 500;
@@ -155,6 +156,7 @@ export function sanitizeDeepLinkEntry(raw: unknown, _depth = 0): PracticeEntry |
       .filter((v): v is string => typeof v === "string")
       .slice(0, MAX_QUEUE_IDS);
   }
+  entry.noteVideo = readNoteVideo(d.noteVideo, false);
 
   if (Array.isArray(d.noteQueueEntries)) {
     entry.noteQueueEntries = (d.noteQueueEntries as unknown[])
