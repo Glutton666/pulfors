@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from "react";
-import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { noteDurations } from "@/lib/notebook-note-picker";
 import { NotebookGlyphPreview } from "./NotebookGlyph";
 import { useNotebookNotationPicker } from "./NotebookNotePicker";
+import { WEB_GESTURE_SURFACE } from "@/lib/web-gesture-style";
 
 type PickerProps = Omit<Parameters<typeof useNotebookNotationPicker>[0], "kind" | "onChoose"> & {
   ko: boolean;
@@ -39,7 +40,7 @@ export function useNotebookRestPicker(props: PickerProps) {
       accessibilityElementsHidden={hideOrigin}
       importantForAccessibility={hideOrigin ? "no-hide-descendants" : "auto"}
       {...picker.panHandlers}
-      style={[styles.origin, hideOrigin && styles.hidden, Platform.OS === "web" && { touchAction: "none", userSelect: "none" }]}
+      style={[styles.origin, hideOrigin && styles.hidden, WEB_GESTURE_SURFACE]}
     >
       <Pressable
         testID="notebook-rest-origin"

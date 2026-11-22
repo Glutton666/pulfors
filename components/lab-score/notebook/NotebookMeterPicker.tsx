@@ -3,6 +3,7 @@ import { Modal, PanResponder, Platform, Pressable, ScrollView, StyleSheet, Text,
 import { Ionicons } from "@expo/vector-icons";
 import { notebookMeterUnits, type NotebookMeter } from "@/lib/notebook-sections";
 import { NotebookGlyphPreview } from "./NotebookGlyph";
+import { WEB_GESTURE_SURFACE } from "@/lib/web-gesture-style";
 
 const beats = Array.from({ length: 12 }, (_, i) => i + 1);
 const stepHeight = 32;
@@ -37,7 +38,7 @@ function Wheel({ id, label, values, value, onChange }: {
       accessibilityValue={{ min: values[0], max: values.at(-1), now: value, text: String(value) }}
       accessibilityActions={[{ name: "increment" }, { name: "decrement" }]} onAccessibilityAction={(event) => {
         select(index + (event.nativeEvent.actionName === "increment" ? 1 : -1));
-      }} {...web} {...responder.panHandlers} style={[styles.wheel, Platform.OS === "web" && { touchAction: "none", userSelect: "none" }]}>
+      }} {...web} {...responder.panHandlers} style={[styles.wheel, WEB_GESTURE_SURFACE]}>
       <Pressable accessible={false} tabIndex={-1} testID={`${id}-previous`} disabled={index <= 0} onPress={() => select(index - 1)} style={styles.step}>
         <Text style={styles.neighbor}>{values[index - 1] ?? " "}</Text>
       </Pressable>

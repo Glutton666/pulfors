@@ -17,6 +17,7 @@ import type { NotebookSelectionUnit } from "@/lib/notebook-editing";
 import { defaultNotationMeter, type NotebookMeter } from "@/lib/notebook-sections";
 import { NotebookMeterPicker } from "./NotebookMeterPicker";
 import { symbolCategories, type NotebookSymbolCategory } from "@/lib/notebook-keyboard";
+import { WEB_GESTURE_SURFACE } from "@/lib/web-gesture-style";
 
 export type NotebookToolsKeyboard = {
   route: (event: KeyboardEvent) => boolean;
@@ -281,7 +282,7 @@ export function NotebookBottomTools(props: Props) {
           <View testID="notebook-note-idle-tools" style={styles.notesDockContent}>
             <View style={styles.categoryRow}>
               {/* Hide the idle control without removing the gesture target or moving the layout. */}
-              <View testID="notebook-note-tile" ref={notePicker.originRef} collapsable={false} pointerEvents={restGestureActive ? "none" : "auto"} aria-hidden={pickerActive || undefined} accessibilityElementsHidden={pickerActive} importantForAccessibility={pickerActive ? "no-hide-descendants" : "auto"} {...notePicker.panHandlers} style={[styles.categoryButton, styles.noteOrigin, pickerActive && styles.hiddenNeighbor, Platform.OS === "web" && { touchAction: "none", userSelect: "none" }]}>
+              <View testID="notebook-note-tile" ref={notePicker.originRef} collapsable={false} pointerEvents={restGestureActive ? "none" : "auto"} aria-hidden={pickerActive || undefined} accessibilityElementsHidden={pickerActive} importantForAccessibility={pickerActive ? "no-hide-descendants" : "auto"} {...notePicker.panHandlers} style={[styles.categoryButton, styles.noteOrigin, pickerActive && styles.hiddenNeighbor, WEB_GESTURE_SURFACE]}>
                 <Pressable testID="notebook-note-origin" disabled={restGestureActive} tabIndex={pickerActive ? -1 : undefined} accessibilityRole="button" accessibilityLabel={ko ? "음표 선택. 좌우로 강도를, 위로 음가를 고르세요." : "Note picker. Swipe sideways for role, up for duration."} accessibilityState={{ expanded: showAccessibleChooser }} accessibilityActions={[{ name: "expand", label: ko ? "음표 선택기 펼치기" : "Expand note chooser" }]} onAccessibilityAction={(event) => { if (!pickerActive && event.nativeEvent.actionName === "expand") setShowAccessibleChooser(true); }} onPress={(event) => {
                   const native = event.nativeEvent as typeof event.nativeEvent & { pointerType?: string; detail?: number };
                   if (pickerActive || (notePicker.consumePress() && native.pointerType !== "keyboard" && native.detail !== 0)) return;
